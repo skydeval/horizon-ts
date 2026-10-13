@@ -1,0 +1,141 @@
+import {type Client} from '@atproto/lex'
+import {type AtUriString} from '@atproto/syntax'
+import {
+  type InfiniteData,
+  type QueryClient,
+  type QueryKey,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query'
+
+import {STARTER_PACK_MAX_SIZE} from '#/lib/constants'
+import {STALE} from '#/state/queries'
+import {useAppviewClient} from '#/state/session'
+import {app} from '#/lexicons'
+
+const PAGE_SIZE = 30
+type RQPageParam = string | undefined
+
+const RQKEY_ROOT = 'list-members'
+const RQKEY_ROOT_ALL = 'list-members-all'
+export const RQKEY = (uri: string) => [RQKEY_ROOT, uri]
+export const RQKEY_ALL = (uri: string) => [RQKEY_ROOT_ALL, uri]
+
+export function useListMembersQuery(uri?: string, limit: number = PAGE_SIZE) {
+  const client = useAppviewClient()
+  return useInfiniteQuery<
+    app.bsky.graph.getList.$OutputBody,
+    Error,
+    InfiniteData<app.bsky.graph.getList.$OutputBody>,
+    QueryKey,
+    RQPageParam
+  >({
+    staleTime: STALE.MINUTES.ONE,
+    queryKey: RQKEY(uri ?? ''),
+    async queryFn({pageParam}: {pageParam: RQPageParam}) {
+      return await client.call(app.bsky.graph.getList, {
+        // the enabled flag will prevent this from running until uri is set
+        list: uri! as AtUriString,
+        limit,
+        cursor: pageParam,
+      })
+    },
+    initialPageParam: undefined,
+    getNextPageParam: lastPage => lastPage.cursor,
+    enabled: Boolean(uri),
+  })
+}
+
+export function useAllListMembersQuery(uri?: string) {
+  const client = useAppviewClient()
+  return useQuery({
+    staleTime: STALE.MINUTES.ONE,
+    queryKey: RQKEY_ALL(uri ?? ''),
+    queryFn: async () => {
+      return getAllListMembers(client, uri!)
+    },
+    enabled: Boolean(uri),
+  })
+}
+
+export async function getAllListMembers(client: Client, uri: string) {
+  let cursor: string | undefined
+  const listItems: app.bsky.graph.defs.ListItemView[] = []
+  const seenCursors = new Set<string>()
+
+  do {
+    const remaining = STARTER_PACK_MAX_SIZE - listItems.length
+    const res = await client.call(app.bsky.graph.getList, {
+      list: uri as AtUriString,
+      limit: Math.min(100, remaining),
+      cursor,
+    })
+    listItems.push(...res.items.slice(0, remaining))
+    cursor = res.cursor
+    if (
+      cursor &&
+      listItems.length < STARTER_PACK_MAX_SIZE &&
+      seenCursors.has(cursor)
+    ) {
+      throw new Error('Repeated cursor while fetching list members')
+    }
+    if (cursor) seenCursors.add(cursor)
+  } while (cursor && listItems.length < STARTER_PACK_MAX_SIZE)
+
+  return listItems
+}
+
+export async function invalidateListMembersQuery({
+  queryClient,
+  uri,
+}: {
+  queryClient: QueryClient
+  uri: string
+}) {
+  await Promise.all([
+    queryClient.invalidateQueries({queryKey: RQKEY(uri)}),
+    queryClient.invalidateQueries({queryKey: RQKEY_ALL(uri)}),
+  ])
+}
+
+export function* findAllProfilesInQueryData(
+  queryClient: QueryClient,
+  did: string,
+): Generator<app.bsky.actor.defs.ProfileView, void> {
+  const queryDatas = queryClient.getQueriesData<
+    InfiniteData<app.bsky.graph.getList.$OutputBody>
+  >({
+    queryKey: [RQKEY_ROOT],
+  })
+  for (const [_queryKey, queryData] of queryDatas) {
+    if (!queryData?.pages) {
+      continue
+    }
+    for (const page of queryData?.pages) {
+      if (page.list.creator.did === did) {
+        yield page.list.creator
+      }
+      for (const item of page.items) {
+        if (item.subject.did === did) {
+          yield item.subject
+        }
+      }
+    }
+  }
+
+  const allQueryData = queryClient.getQueriesData<
+    app.bsky.graph.defs.ListItemView[]
+  >({
+    queryKey: [RQKEY_ROOT_ALL],
+  })
+  for (const [_queryKey, queryData] of allQueryData) {
+    if (!queryData) {
+      continue
+    }
+    for (const item of queryData) {
+      if (item.subject.did === did) {
+        yield item.subject
+      }
+    }
+  }
+}

@@ -1,0 +1,183 @@
+import {useCallback, useEffect, useRef, useState} from 'react'
+import {moderatePost, type ModerationDecision} from '@bsky/sdk/moderation'
+import {msg} from '@lingui/core/macro'
+import {useLingui} from '@lingui/react'
+
+import {useInitialNumToRender} from '#/lib/hooks/useInitialNumToRender'
+import {usePostViewTracking} from '#/lib/hooks/usePostViewTracking'
+import {cleanError} from '#/lib/strings/errors'
+import {logger} from '#/logger'
+import {useModerationOpts} from '#/state/preferences/moderation-opts'
+import {
+  fetchNextNonEmptyPage,
+  type QuotesSort,
+  usePostQuotesQuery,
+} from '#/state/queries/post-quotes'
+import {useResolveUriQuery} from '#/state/queries/resolve-uri'
+import {Post} from '#/view/com/post/Post'
+import {ListFooter, ListMaybePlaceholder} from '#/components/Lists'
+import {app} from '#/lexicons'
+import * as bsky from '#/types/bsky'
+import {List} from '../util/List'
+
+function renderItem({
+  item,
+  index,
+}: {
+  item: {
+    post: app.bsky.feed.defs.PostView
+    moderation: ModerationDecision
+    record: app.bsky.feed.post.Main
+  }
+  index: number
+}) {
+  return <Post post={item.post} hideTopBorder={index === 0} />
+}
+
+function keyExtractor(item: {
+  post: app.bsky.feed.defs.PostView
+  moderation: ModerationDecision
+  record: app.bsky.feed.post.Main
+}) {
+  return item.post.uri
+}
+
+export function PostQuotes({
+  uri,
+  quoteSort,
+  active,
+}: {
+  uri: string
+  quoteSort: QuotesSort
+  /** When false (an unselected pager tab), the list doesn't fetch yet. */
+  active: boolean
+}) {
+  const {_} = useLingui()
+  const initialNumToRender = useInitialNumToRender()
+  const [isPTRing, setIsPTRing] = useState(false)
+  const trackPostView = usePostViewTracking('PostQuotes', quoteSort)
+  const pendingPostViews = useRef(
+    new Map<string, app.bsky.feed.defs.PostView>(),
+  )
+
+  const {
+    data: resolvedUri,
+    error: resolveError,
+    isLoading: isLoadingUri,
+  } = useResolveUriQuery(uri)
+  const {
+    data,
+    isLoading: isLoadingQuotes,
+    isFetched,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    error,
+    refetch,
+  } = usePostQuotesQuery(resolvedUri?.uri, {
+    quoteSort,
+    enabled: active,
+  })
+
+  const moderationOpts = useModerationOpts()
+
+  const isError = Boolean(resolveError || error)
+
+  const quotes =
+    data?.pages
+      .flatMap(page =>
+        page.posts.map(post => {
+          if (
+            !bsky.isType(app.bsky.feed.post, post.record) ||
+            !moderationOpts
+          ) {
+            return null
+          }
+          const moderation = moderatePost(post, moderationOpts)
+          return {post, record: post.record, moderation}
+        }),
+      )
+      .filter(item => item !== null) ?? []
+
+  useEffect(() => {
+    if (active && pendingPostViews.current.size > 0) {
+      const quoteUris = new Set(quotes.map(item => item.post.uri))
+      for (const post of pendingPostViews.current.values()) {
+        if (quoteUris.has(post.uri)) trackPostView(post)
+      }
+      pendingPostViews.current.clear()
+    }
+  }, [active, quotes, trackPostView])
+
+  const onRefresh = useCallback(async () => {
+    setIsPTRing(true)
+    try {
+      await refetch()
+    } catch (err) {
+      logger.error('Failed to refresh quotes', {message: err})
+    }
+    setIsPTRing(false)
+  }, [refetch, setIsPTRing])
+
+  const onEndReached = useCallback(async () => {
+    if (isFetchingNextPage || !hasNextPage || isError) return
+    try {
+      await fetchNextNonEmptyPage(fetchNextPage)
+    } catch (err) {
+      logger.error('Failed to load more quotes', {message: err})
+    }
+  }, [isFetchingNextPage, hasNextPage, isError, fetchNextPage])
+
+  if (quotes.length < 1) {
+    return (
+      <ListMaybePlaceholder
+        // A tab that hasn't fetched yet shows loading, not "No quotes yet".
+        isLoading={
+          isLoadingUri || isLoadingQuotes || (!!resolvedUri && !isFetched)
+        }
+        isError={isError}
+        emptyType="results"
+        emptyTitle={_(msg`No quotes yet`)}
+        emptyMessage={_(
+          msg`Nobody has quoted this yet. Maybe you should be the first!`,
+        )}
+        errorMessage={cleanError(resolveError || error)}
+        sideBorders={false}
+      />
+    )
+  }
+
+  // loaded
+  // =
+  return (
+    <List
+      data={quotes}
+      renderItem={renderItem}
+      keyExtractor={keyExtractor}
+      refreshing={isPTRing}
+      onRefresh={onRefresh}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={4}
+      onItemSeen={(item: (typeof quotes)[number]) => {
+        if (active) {
+          trackPostView(item.post)
+        } else {
+          pendingPostViews.current.set(item.post.uri, item.post)
+        }
+      }}
+      ListFooterComponent={
+        <ListFooter
+          isFetchingNextPage={isFetchingNextPage}
+          error={cleanError(error)}
+          onRetry={fetchNextPage}
+          showEndMessage
+          endMessageText={_(msg`That's all, folks!`)}
+        />
+      }
+      desktopFixedHeight
+      initialNumToRender={initialNumToRender}
+      windowSize={11}
+      sideBorders={false}
+    />
+  )
+}
