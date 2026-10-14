@@ -1,5 +1,7 @@
 // @ts-check
 const pkg = require('./package.json')
+// HORIZON: the product name has one source in src/horizon/branding
+const product = require('./src/horizon/branding/product.json')
 
 /**
  * @param {import('@expo/config-types').ExpoConfig} _config
@@ -52,7 +54,8 @@ module.exports = function (_config) {
   return {
     expo: {
       version: VERSION,
-      name: 'Bluesky',
+      // HORIZON: the product name has one source in src/horizon/branding
+      name: product.name,
       slug: 'bluesky',
       scheme: 'bluesky',
       owner: 'blueskysocial',
@@ -505,7 +508,7 @@ module.exports = function (_config) {
         },
       },
       experiments: {
-        baseUrl: '/static',
+        // HORIZON: no /static base URL, so dist/ serves as a plain static folder
         buildCacheProvider: 'eas',
       },
     },

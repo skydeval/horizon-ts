@@ -14,12 +14,14 @@ For the assets Bluesky itself owns, we are not treating anyone's past use as bad
 
 ## Summary
 
+<!-- HORIZON: assets/illustrations/ and the kawaii artwork were removed in this fork; their paths are no longer in backticks so the asset check does not look for them -->
+
 | Where | Rights holder | Our MIT license covers it? | If you fork |
 |---|---|---|---|
-| [`assets/illustrations/`](#1-commissioned-artwork--licensed-to-bluesky-only) | Owen D. Pomery, via Brilliant Artists Ltd | No | Replace |
+| [assets/illustrations/ (removed in Horizon)](#1-commissioned-artwork--licensed-to-bluesky-only) | Owen D. Pomery, via Brilliant Artists Ltd | No | Replace |
 | [`assets/icons/ui/`](#2-licensed-icon-system--not-ours-to-pass-on) and Central icon glyphs in `bskyembed/assets/` except the Starter Pack mark | Iconists (David & Storm GbR) | No | Source your own |
 | [Bluesky-owned marks](#3-bluesky-trademarks-and-brand-assets) — app icons, logos, favicons, Attie | Bluesky Social PBC | No | Replace |
-| [`assets/kawaii.png`, `assets/kawaii_smol.png`](#4-community-and-contest-artwork--credited-but-not-ours-to-license) | [@sawaratsuki.bsky.social](https://bsky.app/profile/sawaratsuki.bsky.social) | No | Replace or remove |
+| [assets/kawaii.png, assets/kawaii_smol.png (removed in Horizon)](#4-community-and-contest-artwork--credited-but-not-ours-to-license) | [@sawaratsuki.bsky.social](https://bsky.app/profile/sawaratsuki.bsky.social) | No | Replace or remove |
 | [`assets/icons/brands/AppleLogo.svg`](#5-third-party-trademarks) | Apple Inc. | No | Rests on your own basis |
 | [`assets/icons/brands/AndroidLogo.svg`](#5-third-party-trademarks) | Google LLC | No | Rests on your own basis |
 | [`assets/icons/community/`](#5-third-party-trademarks) | Leaflet, Offprint, pckt, Standard.site, Germ Network | No | Rests on your own basis |
@@ -37,15 +39,18 @@ Assets are scoped by directory wherever possible, so that adding a file to a car
 
 ## 1. Commissioned artwork — licensed to Bluesky only
 
-**`assets/illustrations/`**
+<!-- HORIZON: removed in this fork; paths unquoted so the asset check does not look for them -->
 
-The landing-screen illustration, in light and dark variants (`assets/illustrations/illustration-mobile.png` and `assets/illustrations/illustration-mobile-dark.png`), used by `src/view/com/auth/SplashScreen.tsx`.
+**assets/illustrations/** (removed in Horizon)
+
+The landing-screen illustration, in light and dark variants (assets/illustrations/illustration-mobile.png and assets/illustrations/illustration-mobile-dark.png), used by `src/view/com/auth/SplashScreen.tsx`.
 
 **Rights holder: Owen D. Pomery**, represented by Brilliant Artists Ltd. Bluesky Social PBC commissioned the work and holds a usage license. Copyright remains with the artist. Our license is limited to Bluesky's own products and channels, is exclusive to us, and does not permit us to sublicense the artwork or to distribute modified versions of it.
 
 **If you are forking this repository, replace these files.** Because our license is exclusive, the artwork is not available for separate third-party licensing while that license runs. Please do not approach the artist or his agent for permission — the constraint is our agreement, not their willingness. If you have already shipped it, contact us and we will help you sort it out rather than leaving you to guess.
 
-See [`assets/illustrations/README.md`](./assets/illustrations/README.md).
+<!-- HORIZON: the folder's README was removed with the artwork -->
+The folder's README was removed in Horizon with the artwork.
 
 ## 2. Licensed icon system — not ours to pass on
 
@@ -104,7 +109,8 @@ These files stay in this repository because the app needs them to build. **If yo
 
 These are third-party artworks that appear in the app with attribution. We hold no license that lets us pass rights to them on to you.
 
-- `assets/kawaii.png` and `assets/kawaii_smol.png` — **rights holder:
+<!-- HORIZON: removed in this fork; paths unquoted so the asset check does not look for them -->
+- assets/kawaii.png and assets/kawaii_smol.png (removed in Horizon) — **rights holder:
   [@sawaratsuki.bsky.social](https://bsky.app/profile/sawaratsuki.bsky.social)**. Shown as an opt-in variant and credited in `src/view/shell/Drawer.tsx` and `src/view/shell/desktop/RightNav.tsx`.
 
 Replace or remove these if you fork. If you want to use them, contact the artist.
@@ -160,7 +166,8 @@ If you are forking, replace these or ship without them. See [`assets/images/READ
 
 You have our blessing to fork this application. These steps map one-to-one to the sections above.
 
-1. **Replace `assets/illustrations/`** — commissioned artwork, licensed to Bluesky only. [Section 1](#1-commissioned-artwork--licensed-to-bluesky-only)
+<!-- HORIZON: done in this fork; path unquoted so the asset check does not look for it -->
+1. **Replace assets/illustrations/** (removed in Horizon) — commissioned artwork, licensed to Bluesky only. [Section 1](#1-commissioned-artwork--licensed-to-bluesky-only)
 2. **Source your own UI icons** — the Central glyphs in `assets/icons/ui/` are licensed to us for our own use. [Section 2](#2-licensed-icon-system--not-ours-to-pass-on)
 3. **Replace the Bluesky marks** — app icons, favicons, logo files, and the inline logo paths in `src/view/icons/`. [Section 3](#3-bluesky-trademarks-and-brand-assets)
 4. **Replace or remove the community and contest artwork.** [Section 4](#4-community-and-contest-artwork--credited-but-not-ours-to-license)

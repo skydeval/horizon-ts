@@ -9,6 +9,10 @@ import {createGrowthBook, refreshGrowthBook} from '#/analytics/features/client'
 import {Features} from '#/analytics/features/types'
 import {getNavigationMetadata, type Metadata} from '#/analytics/metadata'
 import * as env from '#/env'
+// HORIZON: feature flags come from a local table, not Bluesky's GrowthBook
+import {localFeaturePayload} from '#/horizon/flags'
+// HORIZON: feature flags come from a local table, not Bluesky's GrowthBook
+import {LOCAL_FLAGS} from '#/horizon/switches'
 
 export {Features} from '#/analytics/features/types'
 
@@ -43,7 +47,10 @@ const sdkOptions = {
   clientKey: env.GROWTHBOOK_CLIENT_KEY,
   enableDevMode: env.IS_INTERNAL,
 }
-const bootstrap = readFeatureBootstrap(sdkOptions)
+// HORIZON: feature flags come from a local table, not Bluesky's GrowthBook
+const bootstrap = LOCAL_FLAGS
+  ? localFeaturePayload
+  : readFeatureBootstrap(sdkOptions)
 
 /**
  * Shared SDK instance. Assumes a single active account context, with attributes
@@ -57,21 +64,26 @@ export const features = createGrowthBook(sdkOptions, bootstrap)
  * is available synchronously while this revalidates it. Without one, a slow
  * initialization may cause a flash of uncustomized content.
  */
-export const init = bootstrap
-  ? refreshGrowthBook(features, {timeout: TIMEOUT_INIT})
-  : features.init({timeout: TIMEOUT_INIT}).then(res => {
-      if (!res.success) {
-        logger.warn('GrowthBook initialization failed or timed out', {
-          source: res.source,
-          safeMessage: res.error?.toString(),
-        })
-      }
-    })
+// HORIZON: feature flags come from a local table, not Bluesky's GrowthBook
+export const init: Promise<void> = LOCAL_FLAGS
+  ? Promise.resolve()
+  : bootstrap
+    ? refreshGrowthBook(features, {timeout: TIMEOUT_INIT})
+    : features.init({timeout: TIMEOUT_INIT}).then(res => {
+        if (!res.success) {
+          logger.warn('GrowthBook initialization failed or timed out', {
+            source: res.source,
+            safeMessage: res.error?.toString(),
+          })
+        }
+      })
 
 /**
  * Refresh feature gates from GrowthBook.
  */
 export async function refresh({strategy}: {strategy: FeatureFetchStrategy}) {
+  // HORIZON: feature flags come from a local table, not Bluesky's GrowthBook
+  if (LOCAL_FLAGS) return
   const options = {
     timeout:
       strategy === 'prefer-low-latency'

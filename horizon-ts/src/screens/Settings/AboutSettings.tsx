@@ -27,6 +27,8 @@ import * as Toast from '#/components/Toast'
 import {getDeviceId} from '#/analytics/identifiers'
 import * as env from '#/env'
 import {IS_ANDROID, IS_IOS, IS_NATIVE} from '#/env'
+// HORIZON: hide "Send error report" while error reporting is off
+import {SHOW_ERROR_REPORT} from '#/horizon/switches'
 import {useDemoMode} from '#/storage/hooks/demo-mode'
 import {useDevMode} from '#/storage/hooks/dev-mode'
 import {OTAInfo} from './components/OTAInfo'
@@ -120,14 +122,17 @@ export function AboutSettingsScreen({}: Props) {
               <Trans>System log</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
-          <SettingsList.PressableItem
-            onPress={() => sendErrorReportControl.open()}
-            label={_(msg`Send error report`)}>
-            <SettingsList.ItemIcon icon={BubblesIcon} />
-            <SettingsList.ItemText>
-              <Trans>Send error report</Trans>
-            </SettingsList.ItemText>
-          </SettingsList.PressableItem>
+          {/* HORIZON: hide "Send error report" while error reporting is off */}
+          {SHOW_ERROR_REPORT && (
+            <SettingsList.PressableItem
+              onPress={() => sendErrorReportControl.open()}
+              label={_(msg`Send error report`)}>
+              <SettingsList.ItemIcon icon={BubblesIcon} />
+              <SettingsList.ItemText>
+                <Trans>Send error report</Trans>
+              </SettingsList.ItemText>
+            </SettingsList.PressableItem>
+          )}
           {IS_NATIVE && (
             <SettingsList.PressableItem
               onPress={() => onClearImageCache()}

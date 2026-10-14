@@ -8,9 +8,8 @@ import Svg, {
   Stop,
   type SvgProps,
 } from 'react-native-svg'
-import {Image} from 'expo-image'
 
-import {useLogoVariant} from '#/view/icons/useLogoVariant'
+// HORIZON: the kawaii artwork is not covered by MIT and was removed, with its Image and useLogoVariant imports
 import {flatten, useTheme} from '#/alf'
 
 const ratio = 57 / 64
@@ -32,24 +31,7 @@ export const Logo = forwardRef(function LogoImpl(props: Props, ref) {
   // @ts-expect-error it's fiiiiine
   const size = parseInt(rest.width || 32, 10)
 
-  const logoVariant = useLogoVariant(allowVariants)
-
-  if (logoVariant === 'kawaii') {
-    return (
-      <Image
-        source={
-          size > 100
-            ? require('../../../assets/kawaii.png')
-            : require('../../../assets/kawaii_smol.png')
-        }
-        accessibilityLabel="Bluesky"
-        accessibilityHint=""
-        accessibilityIgnoresInvertColors
-        style={[{height: size, aspectRatio: 1.4}]}
-      />
-    )
-  }
-
+  // HORIZON: the kawaii variant was removed with its artwork
   return (
     <Svg
       fill="none"

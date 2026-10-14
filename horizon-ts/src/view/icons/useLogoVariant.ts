@@ -6,6 +6,7 @@ export function useLogoVariant(allowVariants = true): LogoVariant {
   const kawaii = useKawaiiMode()
 
   if (!allowVariants) return 'default'
-  if (kawaii) return 'kawaii'
+  // HORIZON: the kawaii artwork is not covered by MIT and was removed
+  if (kawaii) return 'default'
   return 'default'
 }

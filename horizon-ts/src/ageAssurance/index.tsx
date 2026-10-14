@@ -21,6 +21,8 @@ import {
   computeAgeAssuranceFlags,
   useAgeAssuranceRegionConfigWithFallback,
 } from '#/ageAssurance/util'
+// HORIZON: age assurance is off for every session
+import {AGE_ASSURANCE_OFF} from '#/horizon/switches'
 
 export {
   prefetchConfig as prefetchAgeAssuranceConfig,
@@ -68,6 +70,8 @@ export function useAgeAssurance() {
 }
 
 export function Provider({children}: {children: React.ReactNode}) {
+  // HORIZON: age assurance is off; the context defaults grant full access
+  if (AGE_ASSURANCE_OFF) return <>{children}</>
   return (
     <AgeAssuranceServerDataProvider>
       <InnerProvider>

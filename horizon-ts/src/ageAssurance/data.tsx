@@ -32,6 +32,8 @@ import {
 } from '#/ageAssurance/util'
 import {IS_DEV} from '#/env'
 import {useGeolocation} from '#/geolocation'
+// HORIZON: age assurance is off for every session
+import {AGE_ASSURANCE_OFF} from '#/horizon/switches'
 import {app, type chat} from '#/lexicons'
 import {device} from '#/storage'
 
@@ -113,6 +115,8 @@ export function getConfigFromCache():
 }
 let configPrefetchPromise: Promise<void> | undefined
 export function prefetchConfig() {
+  // HORIZON: age assurance is off; fetch nothing
+  if (AGE_ASSURANCE_OFF) return
   if (configPrefetchPromise) {
     logger.debug(`prefetchAgeAssuranceConfig: already in progress`)
     return
@@ -694,6 +698,8 @@ export function prefetchAgeAssuranceServerData({
   appviewClient: Client
   accountClient: Client
 }) {
+  // HORIZON: age assurance is off; fetch nothing
+  if (AGE_ASSURANCE_OFF) return Promise.allSettled([])
   return Promise.allSettled([
     // config fetch initiated at the top of the App.platform.tsx files, awaited here
     configPrefetchPromise,

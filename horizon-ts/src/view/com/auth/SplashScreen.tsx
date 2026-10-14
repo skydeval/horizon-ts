@@ -1,7 +1,7 @@
 import {useMemo} from 'react'
-import {Image as RNImage, View} from 'react-native'
+// HORIZON: the commissioned illustration is not covered by MIT and was removed, with its RNImage and Image imports
+import {View} from 'react-native'
 import Animated, {FadeIn, FadeOut} from 'react-native-reanimated'
-import {Image} from 'expo-image'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
@@ -11,14 +11,7 @@ import {Logo} from '#/view/icons/Logo'
 import {Logotype} from '#/view/icons/Logotype'
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
-// @ts-expect-error
-import splashImagePointer from '../../../../assets/illustrations/illustration-mobile.png'
-// @ts-expect-error
-import darkSplashImagePointer from '../../../../assets/illustrations/illustration-mobile-dark.png'
-const splashImageUri = RNImage.resolveAssetSource(splashImagePointer)!.uri
-const darkSplashImageUri = RNImage.resolveAssetSource(
-  darkSplashImagePointer,
-)!.uri
+// HORIZON: the commissioned illustration is not covered by MIT and was removed
 
 export const SplashScreen = ({
   onPressSignin,
@@ -55,12 +48,7 @@ export const SplashScreen = ({
 
   return (
     <>
-      <Image
-        accessibilityIgnoresInvertColors
-        source={{uri: isDarkMode ? darkSplashImageUri : splashImageUri}}
-        style={[a.absolute, a.inset_0]}
-      />
-
+      {/* HORIZON: the commissioned illustration is not covered by MIT and was removed */}
       <Animated.View
         entering={FadeIn.duration(90)}
         exiting={FadeOut.duration(90)}

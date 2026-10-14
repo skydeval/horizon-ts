@@ -16,7 +16,8 @@ import {Text} from '#/components/Typography'
 const avatars: NewPostsPillAuthor[] = [
   {
     did: 'storybook:one',
-    avatar: Asset.fromModule(require('../../../../assets/kawaii.png')).uri,
+    // HORIZON: the kawaii artwork is not covered by MIT and was removed
+    avatar: undefined,
   },
   {
     did: 'storybook:two',
@@ -26,7 +27,8 @@ const avatars: NewPostsPillAuthor[] = [
   },
   {
     did: 'storybook:three',
-    avatar: Asset.fromModule(require('../../../../assets/kawaii_smol.png')).uri,
+    // HORIZON: the kawaii artwork is not covered by MIT and was removed
+    avatar: undefined,
   },
 ]
 

@@ -3,9 +3,12 @@ import {getGlobalScope, init} from '@sentry/react-native'
 import {featureFlagsIntegration} from '#/logger/sentry/featureFlags'
 import {dropExpectedNetworkErrors} from '#/logger/sentry/network-errors'
 import * as env from '#/env'
+// HORIZON: error reporting to Bluesky stays off
+import {TELEMETRY_OFF} from '#/horizon/switches'
 
 init({
-  enabled: !env.IS_DEV && !!env.SENTRY_DSN,
+  // HORIZON: error reporting to Bluesky stays off
+  enabled: !TELEMETRY_OFF && !env.IS_DEV && !!env.SENTRY_DSN,
   enableAutoSessionTracking: false,
   enableTombstone: true,
   dsn: env.SENTRY_DSN,

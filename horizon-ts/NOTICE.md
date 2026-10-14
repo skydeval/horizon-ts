@@ -57,6 +57,18 @@ The OG card build downloads Noto Sans Arabic, Hebrew, HK, JP, KR, SC, TC, and Th
 Copyright (c) 2020 @catamphetamine <purecatamphetamine@gmail.com>
 ```
 
+<!-- HORIZON: Horizon is a fork of Bluesky's social-app; record the base it is built on -->
+
+## Bluesky social-app
+
+Horizon is built on Bluesky's social-app, https://github.com/bluesky-social/social-app.
+
+**License:** MIT — full text at [`LICENSE`](./LICENSE)
+
+```
+Copyright 2023–2026 Bluesky Social PBC
+```
+
 ---
 
 For the licensing position of assets that are **not** covered by our MIT license — commissioned artwork, the licensed icon system, Bluesky trademarks, third-party marks, and the product imagery in `assets/images/` — see [`ASSETS.md`](./ASSETS.md), which names known rights holders and identifies the product imagery whose provenance is still being documented.

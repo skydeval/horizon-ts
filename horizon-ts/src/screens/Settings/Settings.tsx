@@ -68,6 +68,8 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL, IS_IOS, IS_NATIVE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: hide "Beta features"; the local flag table has none
+import {SHOW_BETA_FEATURES} from '#/horizon/switches'
 import {type app} from '#/lexicons'
 import {device, useStorage} from '#/storage'
 import {useActivitySubscriptionsNudged} from '#/storage/hooks/activity-subscriptions-nudged'
@@ -246,14 +248,17 @@ export function SettingsScreen({}: Props) {
               <Trans>Languages</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
-          <SettingsList.LinkItem
-            to="/settings/beta-features"
-            label={l`Beta features`}>
-            <SettingsList.ItemIcon icon={BeakerIcon} />
-            <SettingsList.ItemText>
-              <Trans>Beta features</Trans>
-            </SettingsList.ItemText>
-          </SettingsList.LinkItem>
+          {/* HORIZON: hide "Beta features"; the local flag table has none */}
+          {SHOW_BETA_FEATURES && (
+            <SettingsList.LinkItem
+              to="/settings/beta-features"
+              label={l`Beta features`}>
+              <SettingsList.ItemIcon icon={BeakerIcon} />
+              <SettingsList.ItemText>
+                <Trans>Beta features</Trans>
+              </SettingsList.ItemText>
+            </SettingsList.LinkItem>
+          )}
           <SettingsList.PressableItem
             onPress={() => void Linking.openURL(HELP_DESK_URL)}
             label={l`Help`}

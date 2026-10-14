@@ -3,6 +3,8 @@ import {init} from '@sentry/browser'
 import {featureFlagsIntegration} from '#/logger/sentry/featureFlags'
 import {dropExpectedNetworkErrors} from '#/logger/sentry/network-errors'
 import * as env from '#/env'
+// HORIZON: error reporting to Bluesky stays off
+import {TELEMETRY_OFF} from '#/horizon/switches'
 
 /*
  * Web counterpart of ./index.ts. Initializing `@sentry/browser` directly
@@ -12,7 +14,8 @@ import * as env from '#/env'
  * omitted.
  */
 init({
-  enabled: !env.IS_DEV && !!env.SENTRY_DSN,
+  // HORIZON: error reporting to Bluesky stays off
+  enabled: !TELEMETRY_OFF && !env.IS_DEV && !!env.SENTRY_DSN,
   dsn: env.SENTRY_DSN,
   sendDefaultPii: true,
   debug: false, // If `true`, Sentry will try to print out useful debugging information if something goes wrong with sending the event. Set it to `false` in production
