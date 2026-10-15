@@ -26,6 +26,8 @@ import * as Layout from '#/components/Layout'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
+// HORIZON: reactivating needs a password session
+import {guardPasswordSession} from '#/horizon/auth/PasswordSessionGate'
 import {com} from '#/lexicons'
 
 const COL_WIDTH = 400
@@ -138,7 +140,8 @@ export function Deactivated() {
                 size="large"
                 variant="solid"
                 color="primary"
-                onPress={handleActivate}>
+                // HORIZON: reactivating needs a password session
+                onPress={guardPasswordSession(handleActivate)}>
                 <ButtonText>
                   <Trans>Yes, reactivate my account</Trans>
                 </ButtonText>

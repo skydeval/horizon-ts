@@ -34,3 +34,23 @@ export const SHOW_ERROR_REPORT: boolean = false
  * by default in the local flag table.
  */
 export const SHOW_BETA_FEATURES: boolean = true
+
+/**
+ * Signing out runs Horizon's sign-out sequence (push unregistration, OAuth
+ * revocation, ending the password session on the server) in place of the
+ * reducer's own push-unregistration side effect. `false` restores the stock
+ * side effect and skips Horizon's sequence entirely.
+ */
+export const HORIZON_SIGN_OUT: boolean = true
+
+/**
+ * Switching to an account whose session has ended opens the in-place sign-in
+ * window instead of the signed-out screen.
+ */
+export const IN_PLACE_SIGN_IN: boolean = true
+
+/**
+ * The sign-in screen's description names both sign-in ways (OAuth and
+ * password) instead of only the password.
+ */
+export const SIGN_IN_TABS: boolean = true

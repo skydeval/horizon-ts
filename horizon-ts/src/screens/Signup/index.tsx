@@ -31,6 +31,8 @@ import {ScreenTransition} from '#/components/ScreenTransition'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {GCP_PROJECT_ID, IS_ANDROID} from '#/env'
+// HORIZON: the signup picker can preselect the server
+import {useSignupInitialState} from '#/horizon/auth/signup-service'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -38,10 +40,14 @@ export function Signup({onPressBack}: {onPressBack: () => void}) {
   const ax = useAnalytics()
   const {t: l} = useLingui()
   const t = useTheme()
-  const [state, dispatch] = useReducer(reducer, {
-    ...initialState,
-    analytics: ax,
-  })
+  // HORIZON: the signup picker can preselect the server
+  const [state, dispatch] = useReducer(
+    reducer,
+    useSignupInitialState({
+      ...initialState,
+      analytics: ax,
+    }),
+  )
   const {gtMobile} = useBreakpoints()
   const submit = useSubmitSignup()
 

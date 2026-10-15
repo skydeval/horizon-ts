@@ -16,6 +16,10 @@ import {SetNewPasswordForm} from '#/screens/Login/SetNewPasswordForm'
 import {atoms as a, native} from '#/alf'
 import {ScreenTransition} from '#/components/ScreenTransition'
 import {useAnalytics} from '#/analytics'
+// HORIZON: two sign-in tabs, OAuth and Password (the stock form)
+import {SignInTabs} from '#/horizon/auth/SignInTabs'
+// HORIZON: two sign-in tabs, OAuth and Password (the stock form)
+import {SIGN_IN_TABS} from '#/horizon/switches'
 import {ChooseAccountForm} from './ChooseAccountForm'
 import * as AuthLayout from './components/AuthLayout'
 import {AuthLayoutNavigationContext} from './components/AuthLayout/context'
@@ -141,23 +145,35 @@ export const Login = ({
   switch (currentForm) {
     case Forms.Login:
       title = l`Sign in`
-      description = l`Enter your username and password`
+      // HORIZON: the description names both sign-in ways
+      description = SIGN_IN_TABS
+        ? l`Sign in to your account`
+        : l`Enter your username and password`
       goBack = () =>
         accounts.length ? gotoForm(Forms.ChooseAccount) : handlePressBack()
       content = (
-        <LoginForm
-          error={error}
-          serviceUrl={serviceUrl}
-          serviceDescription={serviceDescription}
+        // HORIZON: two sign-in tabs, OAuth and Password (the stock form)
+        <SignInTabs
           initialHandle={initialHandle}
-          setError={setError}
-          onAttemptFailed={onAttemptFailed}
-          onAttemptSuccess={onAttemptSuccess}
-          setServiceUrl={setServiceUrl}
+          requestedAccount={requestedAccount}
           onPressBack={goBack}
-          onPressForgotPassword={onPressForgotPassword}
-          onPressRetryConnect={() => void refetchService()}
-          onPressCreateAccount={onPressCreateAccount}
+          passwordForm={
+            <LoginForm
+              error={error}
+              serviceUrl={serviceUrl}
+              serviceDescription={serviceDescription}
+              initialHandle={initialHandle}
+              setError={setError}
+              onAttemptFailed={onAttemptFailed}
+              onAttemptSuccess={onAttemptSuccess}
+              setServiceUrl={setServiceUrl}
+              onPressBack={goBack}
+              onPressForgotPassword={onPressForgotPassword}
+              onPressRetryConnect={() => void refetchService()}
+              onPressCreateAccount={onPressCreateAccount}
+            />
+          }
+          // HORIZON: two sign-in tabs, OAuth and Password (the stock form)
         />
       )
       break

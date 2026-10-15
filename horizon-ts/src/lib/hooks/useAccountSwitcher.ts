@@ -9,6 +9,14 @@ import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {type Metrics} from '#/analytics/metrics'
 import {IS_WEB} from '#/env'
+// HORIZON: kind-aware session check and the in-place sign-in window
+import {openInPlaceSignIn} from '#/horizon/auth/InPlaceSignIn'
+// HORIZON: kind-aware session check and the in-place sign-in window
+import {isSignedInAccount} from '#/horizon/session/accounts'
+// HORIZON: kind-aware session check and the in-place sign-in window
+import {isAuthError} from '#/horizon/session/auth-errors'
+// HORIZON: kind-aware session check and the in-place sign-in window
+import {IN_PLACE_SIGN_IN} from '#/horizon/switches'
 
 export function useAccountSwitcher() {
   const ax = useAnalytics()
@@ -28,7 +36,8 @@ export function useAccountSwitcher() {
       }
       try {
         setPendingDid(account.did)
-        if (account.accessJwt) {
+        // HORIZON: an OAuth account has no accessJwt; ask the kind-aware predicate
+        if (isSignedInAccount(account, !!account.accessJwt)) {
           if (IS_WEB) {
             // We're switching accounts, which remounts the entire app.
             // On mobile, this gets us Home, but on the web we also need reset the URL.
@@ -40,6 +49,9 @@ export function useAccountSwitcher() {
           await resumeSession(account, true)
           ax.metric('account:loggedIn', {logContext, withPassword: false})
           Toast.show(_(msg`Signed in as @${account.handle}`))
+          // HORIZON: an ended session opens the in-place sign-in window
+        } else if (IN_PLACE_SIGN_IN) {
+          openInPlaceSignIn(account)
         } else {
           requestSwitchToAccount({requestedAccount: account.did})
           Toast.show(_(msg`Please sign in as @${account.handle}`), {
@@ -50,10 +62,15 @@ export function useAccountSwitcher() {
         logger.error(`switch account: selectAccount failed`, {
           message: e.message,
         })
-        requestSwitchToAccount({requestedAccount: account.did})
-        Toast.show(_(msg`Please sign in as @${account.handle}`), {
-          type: 'warning',
-        })
+        // HORIZON: an ended session opens the in-place sign-in window; a network failure keeps the stock path
+        if (IN_PLACE_SIGN_IN && isAuthError(e)) {
+          openInPlaceSignIn(account, {undoUrlPush: IS_WEB})
+        } else {
+          requestSwitchToAccount({requestedAccount: account.did})
+          Toast.show(_(msg`Please sign in as @${account.handle}`), {
+            type: 'warning',
+          })
+        }
       }
       setPendingDid(null)
     },

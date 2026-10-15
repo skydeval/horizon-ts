@@ -1,5 +1,7 @@
 import {unregisterPushToken} from '#/lib/notifications/notifications'
 import {logger} from '#/lib/notifications/util'
+// HORIZON: signed-out OAuth accounts are marked in the same persisted write
+import {withOAuthSignOutMarks} from '#/horizon/session/reducer'
 import {wrapSessionReducerForLogging} from './logging'
 import {createPublicSessionBundle} from './session-core'
 import {type AtpSessionEvent, type SessionAccount} from './types'
@@ -263,5 +265,6 @@ let reducer = (state: State, action: Action): State => {
     }
   }
 }
-reducer = wrapSessionReducerForLogging(reducer)
+// HORIZON: signed-out OAuth accounts are marked in the same persisted write
+reducer = wrapSessionReducerForLogging(withOAuthSignOutMarks(reducer))
 export {reducer}

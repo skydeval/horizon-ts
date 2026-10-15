@@ -23,6 +23,8 @@ import {atoms as a, native, tokens, useTheme} from '#/alf'
 import {Button, ButtonIcon} from '#/components/Button'
 import {TimesLarge_Stroke2_Corner0_Rounded as XIcon} from '#/components/icons/Times'
 import {useAnalytics} from '#/analytics'
+// HORIZON: signup starts with a server picker (OAuth account creation where offered)
+import {SignupPicker} from '#/horizon/auth/SignupPicker'
 import {app} from '#/lexicons'
 import {SplashScreen} from './SplashScreen'
 
@@ -168,7 +170,11 @@ export function LoggedOut({onDismiss}: {onDismiss?: () => void}) {
           />
         ) : undefined}
         {screenState === ScreenState.S_CreateAccount ? (
-          <Signup onPressBack={onPressBack} />
+          // HORIZON: signup starts with a server picker (OAuth account creation where offered)
+          <SignupPicker
+            onPressBack={onPressBack}
+            passwordSignup={<Signup onPressBack={onPressBack} />}
+          />
         ) : undefined}
       </ErrorBoundary>
     </View>

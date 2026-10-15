@@ -21,6 +21,8 @@ export type SearchParams = {
 
 export type CommonNavigatorParams = {
   NotFound: undefined
+  // HORIZON: the OAuth callback route
+  AuthCallback: undefined
   Lists: undefined
   Moderation: undefined
   ModerationInbox: undefined

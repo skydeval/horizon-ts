@@ -7,6 +7,12 @@ import {
   PUBLIC_BSKY_SERVICE,
 } from '#/lib/constants'
 import {createLexClient} from '#/lib/lexClient'
+// HORIZON: the public AppView is switchable (Bluesky's by default)
+import {
+  getPublicAppviewService,
+  getPublicAppviewUrl,
+  usesBlueskyPublicAppview,
+} from '#/horizon/routing/public-appview'
 import {networkAwareFetch} from './network'
 
 /**
@@ -29,7 +35,8 @@ import {networkAwareFetch} from './network'
  */
 export function buildAppviewClient(agent: Agent): Client {
   return createLexClient(agent, {
-    service: BLUESKY_PROXY_HEADER.get(),
+    // HORIZON: signed-in AppView reads are proxied to the chosen public AppView
+    service: getPublicAppviewService(BLUESKY_PROXY_HEADER.get()),
     includeDeviceSessionHeaders: true,
   })
 }
@@ -154,9 +161,11 @@ let publicLexClient: Client | undefined
 export function getPublicAppviewClient(): Client {
   return (publicLexClient ??= createLexClient(
     {
-      service: PUBLIC_BSKY_SERVICE,
+      // HORIZON: signed-out reads go to the chosen public AppView
+      service: getPublicAppviewUrl(PUBLIC_BSKY_SERVICE),
       fetch: networkAwareFetch,
     },
-    {includeDeviceSessionHeaders: true},
+    // HORIZON: only Bluesky's AppView receives Bluesky's device and session identifiers
+    {includeDeviceSessionHeaders: usesBlueskyPublicAppview()},
   ))
 }

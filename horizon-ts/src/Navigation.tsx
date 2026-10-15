@@ -144,6 +144,8 @@ import {setNavigationMetadata} from '#/analytics/metadata'
 import {IS_LIQUID_GLASS, IS_NATIVE, IS_WEB} from '#/env'
 import {HomeScreen} from '#/features/followingV2/home'
 import {InviteScannerScreen} from '#/features/inviteFriends'
+// HORIZON: the OAuth callback route
+import {AuthCallbackScreen} from '#/horizon/auth/AuthCallbackScreen'
 import {router} from '#/routes'
 
 const navigationRef = createNavigationContainerRef<AllNavigatorParams>()
@@ -172,6 +174,12 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="NotFound"
         getComponent={() => NotFoundScreen}
         options={{title: title(msg`Not Found`)}}
+      />
+      {/* HORIZON: the OAuth callback route */}
+      <Stack.Screen
+        name="AuthCallback"
+        getComponent={() => AuthCallbackScreen}
+        options={{title: title(msg`Signing in`)}}
       />
       <Stack.Screen
         name="Atmosphere"

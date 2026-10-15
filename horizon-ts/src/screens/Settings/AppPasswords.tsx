@@ -33,6 +33,8 @@ import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+// HORIZON: app passwords need a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 import {type com} from '#/lexicons'
 import {AddAppPasswordDialog} from './components/AddAppPasswordDialog'
 import * as SettingsList from './components/SettingsList'
@@ -55,74 +57,78 @@ export function AppPasswordsScreen({}: Props) {
         <Layout.Header.Slot />
       </Layout.Header.Outer>
       <Layout.Content>
-        {error ? (
-          <ErrorScreen
-            title={_(msg`Oops!`)}
-            message={_(msg`There was an issue fetching your app passwords`)}
-            details={cleanError(error)}
-          />
-        ) : (
-          <SettingsList.Container>
-            <SettingsList.Item>
-              <Admonition type="tip" style={[a.flex_1]}>
-                <Trans>
-                  Use app passwords to sign in to other Bluesky clients without
-                  giving full access to your account or password.
-                </Trans>
-              </Admonition>
-            </SettingsList.Item>
-            <SettingsList.Item>
-              <Button
-                label={_(msg`Add App Password`)}
-                size="large"
-                color="primary"
-                variant="solid"
-                onPress={() => createAppPasswordControl.open()}
-                style={[a.flex_1]}>
-                <ButtonIcon icon={PlusIcon} />
-                <ButtonText>
-                  <Trans>Add App Password</Trans>
-                </ButtonText>
-              </Button>
-            </SettingsList.Item>
-            <SettingsList.Divider />
-            <LayoutAnimationConfig skipEntering skipExiting>
-              {appPasswords ? (
-                appPasswords.length > 0 ? (
-                  <View style={[a.overflow_hidden]}>
-                    {appPasswords.map(appPassword => (
-                      <Animated.View
-                        key={appPassword.name}
-                        style={a.w_full}
-                        entering={FadeIn}
-                        exiting={FadeOut}
-                        layout={LinearTransition.delay(150)}>
-                        <SettingsList.Item>
-                          <AppPasswordCard appPassword={appPassword} />
-                        </SettingsList.Item>
-                      </Animated.View>
-                    ))}
-                  </View>
+        {/* HORIZON: app passwords need a password session */}
+        <PasswordSessionGate>
+          {error ? (
+            <ErrorScreen
+              title={_(msg`Oops!`)}
+              message={_(msg`There was an issue fetching your app passwords`)}
+              details={cleanError(error)}
+            />
+          ) : (
+            <SettingsList.Container>
+              <SettingsList.Item>
+                <Admonition type="tip" style={[a.flex_1]}>
+                  <Trans>
+                    Use app passwords to sign in to other Bluesky clients
+                    without giving full access to your account or password.
+                  </Trans>
+                </Admonition>
+              </SettingsList.Item>
+              <SettingsList.Item>
+                <Button
+                  label={_(msg`Add App Password`)}
+                  size="large"
+                  color="primary"
+                  variant="solid"
+                  onPress={() => createAppPasswordControl.open()}
+                  style={[a.flex_1]}>
+                  <ButtonIcon icon={PlusIcon} />
+                  <ButtonText>
+                    <Trans>Add App Password</Trans>
+                  </ButtonText>
+                </Button>
+              </SettingsList.Item>
+              <SettingsList.Divider />
+              <LayoutAnimationConfig skipEntering skipExiting>
+                {appPasswords ? (
+                  appPasswords.length > 0 ? (
+                    <View style={[a.overflow_hidden]}>
+                      {appPasswords.map(appPassword => (
+                        <Animated.View
+                          key={appPassword.name}
+                          style={a.w_full}
+                          entering={FadeIn}
+                          exiting={FadeOut}
+                          layout={LinearTransition.delay(150)}>
+                          <SettingsList.Item>
+                            <AppPasswordCard appPassword={appPassword} />
+                          </SettingsList.Item>
+                        </Animated.View>
+                      ))}
+                    </View>
+                  ) : (
+                    <EmptyState
+                      icon={Growth}
+                      message={_(msg`No app passwords yet`)}
+                    />
+                  )
                 ) : (
-                  <EmptyState
-                    icon={Growth}
-                    message={_(msg`No app passwords yet`)}
-                  />
-                )
-              ) : (
-                <View
-                  style={[
-                    a.flex_1,
-                    a.justify_center,
-                    a.align_center,
-                    a.py_4xl,
-                  ]}>
-                  <Loader size="xl" />
-                </View>
-              )}
-            </LayoutAnimationConfig>
-          </SettingsList.Container>
-        )}
+                  <View
+                    style={[
+                      a.flex_1,
+                      a.justify_center,
+                      a.align_center,
+                      a.py_4xl,
+                    ]}>
+                    <Loader size="xl" />
+                  </View>
+                )}
+              </LayoutAnimationConfig>
+            </SettingsList.Container>
+          )}
+          {/* HORIZON: app passwords need a password session */}
+        </PasswordSessionGate>
       </Layout.Content>
 
       <AddAppPasswordDialog

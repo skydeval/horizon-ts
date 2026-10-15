@@ -18,6 +18,8 @@ import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/
 import {ProfileBadges} from '#/components/ProfileBadges'
 import {Text} from '#/components/Typography'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: an OAuth account has no refreshJwt; ask the kind-aware predicate
+import {isSignedInAccount} from '#/horizon/session/accounts'
 import {type app} from '#/lexicons'
 
 export function AccountList({
@@ -121,7 +123,11 @@ function AccountItem({
     onSelect(account)
   }, [account, onSelect])
 
-  const isLoggedOut = !account.refreshJwt || isJwtExpired(account.refreshJwt)
+  // HORIZON: an OAuth account has no refreshJwt; ask the kind-aware predicate
+  const isLoggedOut = !isSignedInAccount(
+    account,
+    !!account.refreshJwt && !isJwtExpired(account.refreshJwt),
+  )
 
   return (
     <Button

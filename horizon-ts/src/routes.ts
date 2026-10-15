@@ -8,6 +8,8 @@ type AllNavigatableRoutes = Omit<
 
 export const router = new Router<AllNavigatableRoutes>({
   Home: ['/', '/download'],
+  // HORIZON: the OAuth callback route
+  AuthCallback: '/auth/web/callback',
   Search: '/search',
   Atmosphere: '/atmosphere',
   Feeds: '/feeds',

@@ -11,6 +11,20 @@ its logic here and touches Bluesky's files only through small, marked hooks.
 | `flags/` | The local feature-flag table that replaces Bluesky's GrowthBook fetch. |
 | `telemetry/` | The no-op metrics client. |
 | `branding/` | The product name. `product.json` is its one source. |
+| `session/` | Session logic: the OAuth client, its metadata and transport, OAuth bundles and accounts, kind dispatch, refresh, sign-out, session death, cross-tab adoption, Horizon's device keys, and the Horizon session provider. No UI. |
+| `auth/` | Sign-in, callback, in-place sign-in, password gate and signup UI, and `HorizonHost`. |
+| `routing/` | The public AppView choice and switcher, the prism clients, the routing table, and membership. |
+
+Modules that import `@atproto/oauth-client-browser` at runtime are `.web.ts`
+files with a plain `.ts` sibling exporting the same names for native, where
+OAuth is not available yet (`OAUTH_AVAILABLE = false`).
+
+## Switches
+
+`switches.ts` holds every switch, with what it guards. Phase 1 adds
+`HORIZON_SIGN_OUT` (Horizon's sign-out sequence in place of the reducer's
+push side effect), `IN_PLACE_SIGN_IN` (the in-place sign-in window) and
+`SIGN_IN_TABS` (the sign-in description naming both ways).
 
 ## Hook rules
 
@@ -49,6 +63,15 @@ below to that output for the complete ledger.
 |---|---|
 | Deleted `assets/kawaii.png`, `assets/kawaii_smol.png` | Community artwork not covered by MIT (`ASSETS.md`). Deleted files carry no marker. |
 | Deleted `assets/illustrations/illustration-mobile.png`, `illustration-mobile-dark.png`, `README.md` | Commissioned illustration not covered by MIT (`ASSETS.md`). |
+| `package.json`: `"@atproto/oauth-client-browser": "0.5.4"` | JSON has no comments. The OAuth library, pinned exactly like the other `@atproto/*` packages. |
+| `pnpm-lock.yaml` | Follows `package.json`. |
+
+New files that are not hooks (Horizon's own, outside `src/horizon/` because
+they must be served from the site root): `public/oauth-client-metadata.json`
+(the production OAuth client document) and
+`public/oauth-client-metadata-dev.json` (the hosted development document).
+A unit test keeps each equal to the document built in
+`session/oauth-metadata.ts`.
 
 ### Literal copies of the product name
 

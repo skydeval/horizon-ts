@@ -45,6 +45,8 @@ import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {useSimpleVerificationState} from '#/components/verification'
+// HORIZON: changing the handle needs a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 import {type com} from '#/lexicons'
 import {CopyButton} from './CopyButton'
 
@@ -55,7 +57,11 @@ export function ChangeHandleDialog({
 }) {
   return (
     <Dialog.Outer control={control} nativeOptions={{fullHeight: true}}>
-      <ChangeHandleDialogInner />
+      {/* HORIZON: changing the handle needs a password session */}
+      <PasswordSessionGate container="dialog">
+        <ChangeHandleDialogInner />
+        {/* HORIZON: changing the handle needs a password session */}
+      </PasswordSessionGate>
     </Dialog.Outer>
   )
 }

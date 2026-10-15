@@ -69,6 +69,25 @@ Horizon is built on Bluesky's social-app, https://github.com/bluesky-social/soci
 Copyright 2023–2026 Bluesky Social PBC
 ```
 
+<!-- HORIZON: Horizon adapts code from the Witchsky client; MIT credit -->
+
+## Witchsky
+
+Horizon adapts code from the Witchsky client,
+https://tangled.org/jollywhoppers.com/witchsky.app, under the MIT License.
+Adapted files name their Witchsky source in a header comment.
+
+```
+Copyright 2023–2026 Bluesky Social PBC
+Copyright (c) 2025-2026 Jollywhoppers
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
 ---
 
 For the licensing position of assets that are **not** covered by our MIT license — commissioned artwork, the licensed icon system, Bluesky trademarks, third-party marks, and the product imagery in `assets/images/` — see [`ASSETS.md`](./ASSETS.md), which names known rights holders and identifies the product imagery whose provenance is still being documented.

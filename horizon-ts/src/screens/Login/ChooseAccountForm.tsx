@@ -12,6 +12,8 @@ import * as TextField from '#/components/forms/TextField'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: an OAuth account has no accessJwt; ask the kind-aware predicate
+import {isSignedInAccount} from '#/horizon/session/accounts'
 import {FormContainer} from './FormContainer'
 
 export const ChooseAccountForm = ({
@@ -34,7 +36,8 @@ export const ChooseAccountForm = ({
         // The session API isn't resilient to race conditions so let's just ignore this.
         return
       }
-      if (!account.accessJwt) {
+      // HORIZON: an OAuth account has no accessJwt; ask the kind-aware predicate
+      if (!isSignedInAccount(account, !!account.accessJwt)) {
         // Move to login form.
         onSelectAccount(account)
         return

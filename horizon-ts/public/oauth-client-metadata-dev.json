@@ -1,0 +1,12 @@
+{
+  "client_id": "https://nearhorizon.app/oauth-client-metadata-dev.json",
+  "client_name": "Horizon (development)",
+  "client_uri": "https://nearhorizon.app",
+  "redirect_uris": ["http://127.0.0.1:8081/auth/web/callback"],
+  "scope": "atproto transition:generic transition:email transition:chat.bsky",
+  "token_endpoint_auth_method": "none",
+  "response_types": ["code"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "application_type": "web",
+  "dpop_bound_access_tokens": true
+}

@@ -3,6 +3,8 @@ import {PasswordSession} from '@atproto/lex-password-session'
 import {createLexClient} from '#/lib/lexClient'
 import {type TemporaryPushClient} from '#/lib/notifications/notifications'
 import * as persisted from '#/state/persisted'
+// HORIZON: Horizon's sign-out sequence unregisters push itself
+import {HORIZON_SIGN_OUT} from '#/horizon/switches'
 import {networkAwareFetch} from './network'
 import {sessionAccountToSessionData} from './session-data'
 import {type SessionAccount} from './types'
@@ -35,6 +37,8 @@ export function readLastActiveAccount() {
 export async function createTemporaryClientsAndResume(
   accounts: SessionAccount[],
 ): Promise<TemporaryPushClient[]> {
+  // HORIZON: Horizon's sign-out sequence unregisters push itself
+  if (HORIZON_SIGN_OUT) return []
   const settled = await Promise.allSettled(
     accounts.map(async account => {
       const session = await PasswordSession.resume(

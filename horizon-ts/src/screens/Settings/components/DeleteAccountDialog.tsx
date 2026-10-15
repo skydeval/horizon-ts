@@ -28,6 +28,8 @@ import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
 import * as toast from '#/components/Toast'
 import {Span, Text} from '#/components/Typography'
+// HORIZON: deleting the account needs a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 import {chat, com} from '#/lexicons'
 import {resetToTab} from '#/Navigation'
 
@@ -58,10 +60,14 @@ export function DeleteAccountDialog({
 }) {
   return (
     <Prompt.Outer control={control}>
-      <DeleteAccountDialogInner
-        control={control}
-        deactivateDialogControl={deactivateDialogControl}
-      />
+      {/* HORIZON: deleting the account needs a password session */}
+      <PasswordSessionGate container="prompt">
+        <DeleteAccountDialogInner
+          control={control}
+          deactivateDialogControl={deactivateDialogControl}
+        />
+        {/* HORIZON: deleting the account needs a password session */}
+      </PasswordSessionGate>
     </Prompt.Outer>
   )
 }

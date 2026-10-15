@@ -78,10 +78,18 @@ import {
   Provider as LiveEventsProvider,
 } from '#/features/liveEvents/context'
 import * as Geo from '#/geolocation'
+// HORIZON: Horizon's app-wide host, the callback-load check and the dev origin fix
+import {HorizonHost} from '#/horizon/auth/HorizonHost'
+// HORIZON: Horizon's app-wide host, the callback-load check and the dev origin fix
+import {redirectLocalhostToLoopbackIp} from '#/horizon/session/dev-origin'
+// HORIZON: Horizon's app-wide host, the callback-load check and the dev origin fix
+import {isOAuthCallbackLoad} from '#/horizon/session/oauth-callback'
 import {Splash} from '#/Splash'
 import {Provider as HideBottomBarBorderProvider} from './lib/hooks/useHideBottomBarBorder'
 
 void identifyDevice(getDeviceId(), setupDeviceId)
+// HORIZON: keep local development on 127.0.0.1, where OAuth state lives
+redirectLocalhostToLoopbackIp()
 
 /**
  * Begin geolocation ASAP
@@ -113,7 +121,8 @@ function InnerApp() {
       }
       setIsReady(true)
     }
-    const account = readLastActiveAccount()
+    // HORIZON: a window opened on the OAuth callback does not resume; the callback signs in
+    const account = isOAuthCallbackLoad() ? undefined : readLastActiveAccount()
     void onLaunch(account)
   }, [resumeSession])
 
@@ -163,6 +172,8 @@ function InnerApp() {
                                                                 <HotkeysProvider>
                                                                   <Shell />
                                                                   <ToastOutlet />
+                                                                  {/* HORIZON: Horizon's app-wide host (in-place sign-in, password dialog, membership) */}
+                                                                  <HorizonHost />
                                                                 </HotkeysProvider>
                                                               </TranslateOnDeviceProvider>
                                                             </IntentDialogProvider>

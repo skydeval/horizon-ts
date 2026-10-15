@@ -11,6 +11,8 @@ import {Update} from '#/components/dialogs/EmailDialog/screens/Update'
 import {VerificationReminder} from '#/components/dialogs/EmailDialog/screens/VerificationReminder'
 import {Verify} from '#/components/dialogs/EmailDialog/screens/Verify'
 import {type Screen, ScreenID} from '#/components/dialogs/EmailDialog/types'
+// HORIZON: email changes and verification need a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 
 export type {Screen} from '#/components/dialogs/EmailDialog/types'
 export {ScreenID as EmailDialogScreenID} from '#/components/dialogs/EmailDialog/types'
@@ -38,7 +40,11 @@ export function EmailDialog() {
       <Dialog.ScrollableInner
         label={l`Make adjustments to email settings for your account`}
         style={web({maxWidth: 400})}>
-        <Inner control={emailDialogControl} />
+        {/* HORIZON: email changes and verification need a password session */}
+        <PasswordSessionGate inline>
+          <Inner control={emailDialogControl} />
+          {/* HORIZON: email changes and verification need a password session */}
+        </PasswordSessionGate>
         <Dialog.Close />
       </Dialog.ScrollableInner>
     </Dialog.Outer>

@@ -17,6 +17,8 @@ import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {P, Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+// HORIZON: changing email 2FA needs a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 import {com} from '#/lexicons'
 
 enum Stages {
@@ -89,119 +91,123 @@ export function DisableEmail2FADialog({
       <Dialog.ScrollableInner
         accessibilityDescribedBy="dialog-description"
         accessibilityLabelledBy="dialog-title">
-        <View style={[a.relative, a.gap_md, a.w_full]}>
-          <Text
-            nativeID="dialog-title"
-            style={[a.text_2xl, a.font_semi_bold, t.atoms.text]}>
-            <Trans>Disable Email 2FA</Trans>
-          </Text>
-          <P nativeID="dialog-description">
-            {stage === Stages.ConfirmCode ? (
-              <Trans>
-                An email has been sent to{' '}
-                {currentAccount?.email || '(no email)'}. It includes a
-                confirmation code which you can enter below.
-              </Trans>
-            ) : (
-              <Trans>
-                To disable the email 2FA method, please verify your access to
-                the email address.
-              </Trans>
-            )}
-          </P>
+        {/* HORIZON: changing email 2FA needs a password session */}
+        <PasswordSessionGate inline>
+          <View style={[a.relative, a.gap_md, a.w_full]}>
+            <Text
+              nativeID="dialog-title"
+              style={[a.text_2xl, a.font_semi_bold, t.atoms.text]}>
+              <Trans>Disable Email 2FA</Trans>
+            </Text>
+            <P nativeID="dialog-description">
+              {stage === Stages.ConfirmCode ? (
+                <Trans>
+                  An email has been sent to{' '}
+                  {currentAccount?.email || '(no email)'}. It includes a
+                  confirmation code which you can enter below.
+                </Trans>
+              ) : (
+                <Trans>
+                  To disable the email 2FA method, please verify your access to
+                  the email address.
+                </Trans>
+              )}
+            </P>
 
-          {error ? <ErrorMessage message={error} /> : undefined}
+            {error ? <ErrorMessage message={error} /> : undefined}
 
-          {stage === Stages.Email ? (
-            <View
-              style={[
-                a.gap_sm,
-                gtMobile && [a.flex_row, a.justify_end, a.gap_md],
-              ]}>
-              <Button
-                testID="sendEmailButton"
-                variant="solid"
-                color="primary"
-                size={gtMobile ? 'small' : 'large'}
-                onPress={onSendEmail}
-                label={_(msg`Send verification email`)}
-                disabled={isProcessing}>
-                <ButtonText>
-                  <Trans>Send verification email</Trans>
-                </ButtonText>
-                {isProcessing && <ButtonIcon icon={Loader} />}
-              </Button>
-              <Button
-                testID="haveCodeButton"
-                variant="ghost"
-                color="primary"
-                size={gtMobile ? 'small' : 'large'}
-                onPress={() => setStage(Stages.ConfirmCode)}
-                label={_(msg`I have a code`)}
-                disabled={isProcessing}>
-                <ButtonText>
-                  <Trans>I have a code</Trans>
-                </ButtonText>
-              </Button>
-            </View>
-          ) : stage === Stages.ConfirmCode ? (
-            <View>
-              <View style={[a.mb_md]}>
-                <TextField.LabelText>
-                  <Trans>Confirmation code</Trans>
-                </TextField.LabelText>
-                <TextField.Root>
-                  <TextField.Icon icon={Lock} />
-                  <Dialog.Input
-                    testID="confirmationCode"
-                    label={_(msg`Confirmation code`)}
-                    autoCapitalize="none"
-                    autoFocus
-                    autoCorrect={false}
-                    autoComplete="off"
-                    value={confirmationCode}
-                    onChangeText={setConfirmationCode}
-                    onSubmitEditing={onConfirmDisable}
-                    editable={!isProcessing}
-                  />
-                </TextField.Root>
-              </View>
+            {stage === Stages.Email ? (
               <View
                 style={[
                   a.gap_sm,
                   gtMobile && [a.flex_row, a.justify_end, a.gap_md],
                 ]}>
                 <Button
-                  testID="resendCodeBtn"
-                  variant="ghost"
-                  color="primary"
-                  size={gtMobile ? 'small' : 'large'}
-                  onPress={onSendEmail}
-                  label={_(msg`Resend email`)}
-                  disabled={isProcessing}>
-                  <ButtonText>
-                    <Trans>Resend email</Trans>
-                  </ButtonText>
-                </Button>
-                <Button
-                  testID="confirmBtn"
+                  testID="sendEmailButton"
                   variant="solid"
                   color="primary"
                   size={gtMobile ? 'small' : 'large'}
-                  onPress={onConfirmDisable}
-                  label={_(msg`Confirm`)}
+                  onPress={onSendEmail}
+                  label={_(msg`Send verification email`)}
                   disabled={isProcessing}>
                   <ButtonText>
-                    <Trans>Confirm</Trans>
+                    <Trans>Send verification email</Trans>
                   </ButtonText>
                   {isProcessing && <ButtonIcon icon={Loader} />}
                 </Button>
+                <Button
+                  testID="haveCodeButton"
+                  variant="ghost"
+                  color="primary"
+                  size={gtMobile ? 'small' : 'large'}
+                  onPress={() => setStage(Stages.ConfirmCode)}
+                  label={_(msg`I have a code`)}
+                  disabled={isProcessing}>
+                  <ButtonText>
+                    <Trans>I have a code</Trans>
+                  </ButtonText>
+                </Button>
               </View>
-            </View>
-          ) : undefined}
+            ) : stage === Stages.ConfirmCode ? (
+              <View>
+                <View style={[a.mb_md]}>
+                  <TextField.LabelText>
+                    <Trans>Confirmation code</Trans>
+                  </TextField.LabelText>
+                  <TextField.Root>
+                    <TextField.Icon icon={Lock} />
+                    <Dialog.Input
+                      testID="confirmationCode"
+                      label={_(msg`Confirmation code`)}
+                      autoCapitalize="none"
+                      autoFocus
+                      autoCorrect={false}
+                      autoComplete="off"
+                      value={confirmationCode}
+                      onChangeText={setConfirmationCode}
+                      onSubmitEditing={onConfirmDisable}
+                      editable={!isProcessing}
+                    />
+                  </TextField.Root>
+                </View>
+                <View
+                  style={[
+                    a.gap_sm,
+                    gtMobile && [a.flex_row, a.justify_end, a.gap_md],
+                  ]}>
+                  <Button
+                    testID="resendCodeBtn"
+                    variant="ghost"
+                    color="primary"
+                    size={gtMobile ? 'small' : 'large'}
+                    onPress={onSendEmail}
+                    label={_(msg`Resend email`)}
+                    disabled={isProcessing}>
+                    <ButtonText>
+                      <Trans>Resend email</Trans>
+                    </ButtonText>
+                  </Button>
+                  <Button
+                    testID="confirmBtn"
+                    variant="solid"
+                    color="primary"
+                    size={gtMobile ? 'small' : 'large'}
+                    onPress={onConfirmDisable}
+                    label={_(msg`Confirm`)}
+                    disabled={isProcessing}>
+                    <ButtonText>
+                      <Trans>Confirm</Trans>
+                    </ButtonText>
+                    {isProcessing && <ButtonIcon icon={Loader} />}
+                  </Button>
+                </View>
+              </View>
+            ) : undefined}
 
-          {!gtMobile && IS_NATIVE && <View style={{height: 40}} />}
-        </View>
+            {!gtMobile && IS_NATIVE && <View style={{height: 40}} />}
+          </View>
+          {/* HORIZON: changing email 2FA needs a password session */}
+        </PasswordSessionGate>
       </Dialog.ScrollableInner>
     </Dialog.Outer>
   )

@@ -14,6 +14,8 @@ import {CircleInfo_Stroke2_Corner0_Rounded as CircleInfo} from '#/components/ico
 import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
 import {Text} from '#/components/Typography'
+// HORIZON: deactivating needs a password session
+import {PasswordSessionGate} from '#/horizon/auth/PasswordSessionGate'
 import {com} from '#/lexicons'
 
 export function DeactivateAccountDialog({
@@ -23,7 +25,11 @@ export function DeactivateAccountDialog({
 }) {
   return (
     <Prompt.Outer control={control}>
-      <DeactivateAccountDialogInner control={control} />
+      {/* HORIZON: deactivating needs a password session */}
+      <PasswordSessionGate container="prompt">
+        <DeactivateAccountDialogInner control={control} />
+        {/* HORIZON: deactivating needs a password session */}
+      </PasswordSessionGate>
     </Prompt.Outer>
   )
 }

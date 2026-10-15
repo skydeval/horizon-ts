@@ -10,6 +10,8 @@ import {canParseUrl} from '#/lib/strings/url-helpers'
 import {logger} from '#/logger'
 import {prefetchAgeAssuranceServerData} from '#/ageAssurance/data'
 import {features} from '#/analytics'
+// HORIZON: OAuth bundles are disposed through Horizon's side store
+import {disposeOAuthBundle} from '#/horizon/session/oauth-bundles'
 import {
   buildAppviewClient,
   buildChatClient,
@@ -458,6 +460,8 @@ export function sessionDataToSessionAccountOrThrow(
  * its fetch and hooks instead.
  */
 export function disposeBundle(bundle: SessionBundle | PublicSessionBundle) {
+  // HORIZON: an OAuth bundle stops its transport; it has no PasswordSession
+  if (disposeOAuthBundle(bundle)) return
   const session = bundle.session
   if (!session || session.destroyed) {
     return

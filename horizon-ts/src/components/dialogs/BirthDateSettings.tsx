@@ -25,6 +25,8 @@ import {SimpleInlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {Span, Text} from '#/components/Typography'
 import {IS_IOS, IS_WEB} from '#/env'
+// HORIZON: an OAuth session is not an app password, and has no accessJwt to decode
+import {isOauthAccount} from '#/horizon/session/accounts'
 
 export function BirthDateSettingsDialog({
   control,
@@ -36,7 +38,10 @@ export function BirthDateSettingsDialog({
   const {isLoading, error, data: preferences} = usePreferencesQuery()
   const isBirthdateUpdateAllowed = useIsBirthdateUpdateAllowed()
   const {currentAccount} = useSession()
-  const isUsingAppPassword = isAppPassword(currentAccount?.accessJwt || '')
+  // HORIZON: an OAuth session is not an app password, and has no accessJwt to decode
+  const isUsingAppPassword = isOauthAccount(currentAccount)
+    ? false
+    : isAppPassword(currentAccount?.accessJwt || '')
   const cleanError = useCleanError()
   const defaultErrorMessage = l`We were unable to load your birthdate preferences. Please try again.`
   const fetchErrorMessage = useMemo(() => {

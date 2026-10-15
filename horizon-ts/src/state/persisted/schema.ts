@@ -40,6 +40,9 @@ const accountSchema = z.object({
   status: z.string().optional(),
   pdsUrl: z.string().optional(),
   isSelfHosted: z.boolean().optional(),
+  // HORIZON: the account's session kind, and whether an OAuth account was signed out
+  isOauthSession: z.boolean().optional(),
+  oauthSignedOut: z.boolean().optional(),
 })
 export type PersistedAccount = z.infer<typeof accountSchema>
 

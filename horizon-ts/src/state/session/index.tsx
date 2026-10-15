@@ -17,16 +17,32 @@ import {useCloseAllActiveElements} from '#/state/util'
 import {useGlobalDialogsControlContext} from '#/components/dialogs/Context'
 import {AnalyticsContext, useAnalyticsBase, utils} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {isOauthAccount, isSignedInAccount} from '#/horizon/session/accounts'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {adoptOAuthAccount} from '#/horizon/session/adopt'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {HorizonSessionProvider} from '#/horizon/session/HorizonSessionProvider'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {isSignedInBundle} from '#/horizon/session/oauth-bundles'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {refreshOAuthBundle} from '#/horizon/session/refresh'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {resumeAccountBundle} from '#/horizon/session/resume'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {horizonSignOut} from '#/horizon/session/sign-out'
+// HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
+import {HORIZON_SIGN_OUT} from '#/horizon/switches'
 import {com} from '#/lexicons'
 import {emitSessionDropped} from '../events'
 import {getPublicAppviewClient} from './clients'
 import {createSessionBundleAndCreateAccount} from './create-account'
 import {pickExpiryRescueCandidate} from './expiry-rescue'
 import {type Action, getInitialState, reducer, type State} from './reducer'
+// HORIZON: createSessionBundleAndResume is reached through Horizon's kind dispatch (resumeAccountBundle)
 import {
   type AtpSessionEvent,
   createSessionBundleAndLogin,
-  createSessionBundleAndResume,
   createSessionBundleFromStoredAccount,
   disposeBundle,
   type PublicSessionBundle,
@@ -346,6 +362,13 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       store.dispatch({
         type: 'logged-out-current-account',
       })
+      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session)
+      if (HORIZON_SIGN_OUT)
+        void horizonSignOut(
+          prevState.accounts.filter(
+            a => a.did === prevState.currentBundleState.did,
+          ),
+        )
       ax.metric(
         'account:loggedOut',
         {logContext, scope: 'current'},
@@ -380,6 +403,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       store.dispatch({
         type: 'logged-out-every-account',
       })
+      // HORIZON: sign every account out at its server (push, then OAuth revocation or the password session)
+      if (HORIZON_SIGN_OUT) void horizonSignOut(prevState.accounts)
       ax.metric(
         'account:loggedOut',
         {logContext, scope: 'every'},
@@ -410,9 +435,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         account: redactAccount(storedAccount),
       })
       const signal = cancelPendingTask()
-      const {bundle, account} = await createSessionBundleAndResume(
+      // HORIZON: resume by session kind (password or OAuth)
+      const {bundle, account} = await resumeAccountBundle(
         storedAccount,
         onSessionChange,
+        isSwitchingAccounts,
       )
 
       if (signal.aborted) {
@@ -427,7 +454,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
        */
       const latest = store.getState()
       const latestEntry = latest.accounts.find(a => a.did === account.did)
-      if (!latestEntry || !latestEntry.refreshJwt) {
+      // HORIZON: an OAuth account has no refreshJwt; ask the kind-aware predicate
+      if (
+        !latestEntry ||
+        !isSignedInAccount(latestEntry, !!latestEntry.refreshJwt)
+      ) {
         disposeBundle(bundle)
         return
       }
@@ -508,7 +539,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   >(async () => {
     const bundle = store.getState().currentBundleState.bundle as unknown as
       SessionBundle | PublicSessionBundle
-    if (!bundle.session) return undefined // logged out: nothing to refresh
+    // HORIZON: an OAuth bundle refreshes through Horizon; the public bundle still resolves undefined
+    if (!bundle.session) return refreshOAuthBundle(store, bundle)
     const before = bundle.session.session
     const after = await bundle.session.refresh()
     if (after === before) {
@@ -545,6 +577,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         type: 'removed-account',
         accountDid: account.did,
       })
+      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session)
+      if (HORIZON_SIGN_OUT) void horizonSignOut([account])
       addSessionDebugLog({
         type: 'method:end',
         method: 'removeAccount',
@@ -574,20 +608,30 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
        * Cancel pending work when another tab logs out the account this tab
        * considers current. Do not cancel unrelated work between logged-out tabs.
        */
-      const syncedDid = syncedAccount?.refreshJwt
-        ? syncedAccount.did
-        : undefined
+      // HORIZON: an OAuth account has no refreshJwt; ask the kind-aware predicate
+      const syncedDid =
+        syncedAccount &&
+        isSignedInAccount(syncedAccount, !!syncedAccount.refreshJwt)
+          ? syncedAccount.did
+          : undefined
       if (
         syncedDid === undefined &&
         state.currentBundleState.did !== undefined
       ) {
         cancelPendingTask()
       }
-      if (syncedAccount && syncedAccount.refreshJwt) {
+      // HORIZON: an OAuth account has no refreshJwt; ask the kind-aware predicate
+      if (
+        syncedAccount &&
+        isSignedInAccount(syncedAccount, !!syncedAccount.refreshJwt)
+      ) {
         if (syncedAccount.did !== state.currentBundleState.did) {
           // The leader refreshes before broadcasting, so followers receive fresh tokens.
           void resumeSession(syncedAccount)
         } else {
+          // HORIZON: another tab persisted an OAuth account for this DID; adopt it
+          if (isOauthAccount(syncedAccount))
+            return void adoptOAuthAccount(store, syncedAccount, onSessionChange)
           /*
            * PasswordSession cannot be patched in place. Rebuild from the tokens
            * the leader already refreshed, then dispose the previous bundle.
@@ -722,7 +766,13 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
                 stateContext.currentAccount,
               ),
             })}>
-            {children}
+            {/* HORIZON: Horizon's session provider (OAuth login, session death) */}
+            <HorizonSessionProvider
+              store={store}
+              cancelPendingTask={cancelPendingTask}>
+              {children}
+              {/* HORIZON: Horizon's session provider (OAuth login, session death) */}
+            </HorizonSessionProvider>
           </AnalyticsContext>
         </ApiContext.Provider>
       </StateContext.Provider>
@@ -811,7 +861,8 @@ export function useChatClient(): Client {
  */
 export function useMaybePdsClient(): Client | null {
   const bundle = useContext(BundleContext)
-  return bundle?.session ? bundle.pdsClient : null
+  // HORIZON: an OAuth bundle is signed in although it has no PasswordSession
+  return bundle && isSignedInBundle(bundle) ? bundle.pdsClient : null
 }
 
 /**
@@ -819,7 +870,8 @@ export function useMaybePdsClient(): Client | null {
  */
 export function useMaybeChatClient(): Client | null {
   const bundle = useContext(BundleContext)
-  return bundle?.session ? bundle.chatClient : null
+  // HORIZON: an OAuth bundle is signed in although it has no PasswordSession
+  return bundle && isSignedInBundle(bundle) ? bundle.chatClient : null
 }
 
 /**

@@ -68,6 +68,8 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL, IS_IOS, IS_NATIVE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: App servers: prism (always connected) and the public AppView
+import {AppViewSettingsItem} from '#/horizon/routing/AppViewSwitcher'
 // HORIZON: hide "Beta features"; the local flag table has none
 import {SHOW_BETA_FEATURES} from '#/horizon/switches'
 import {type app} from '#/lexicons'
@@ -248,6 +250,8 @@ export function SettingsScreen({}: Props) {
               <Trans>Languages</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
+          {/* HORIZON: App servers: prism (always connected) and the public AppView */}
+          <AppViewSettingsItem />
           {/* HORIZON: hide "Beta features"; the local flag table has none */}
           {SHOW_BETA_FEATURES && (
             <SettingsList.LinkItem
