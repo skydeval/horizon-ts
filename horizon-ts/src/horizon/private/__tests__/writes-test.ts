@@ -1148,7 +1148,7 @@ describe('media spoilers and content warnings (2J, T5)', () => {
       string,
       unknown
     >
-    expect(second.text).toBe('cw\n||\nhello\n||')
+    expect(second.text).toBe('cw\n||hello||')
     expect(second.labels).toEqual({
       $type: 'tools.kryphocron.feed.postPublic#selfLabels',
       values: [{val: 'app.nearhorizon.cw'}],
@@ -1158,7 +1158,7 @@ describe('media spoilers and content warnings (2J, T5)', () => {
         features: [{$type: 'app.nearhorizon.richtext.facet#spoilerMarker'}],
       }),
       expect.objectContaining({
-        index: {byteStart: 6, byteEnd: 11},
+        index: {byteStart: 5, byteEnd: 10},
         features: [
           {$type: 'app.nearhorizon.richtext.facet#spoiler'},
           {$type: 'app.nearhorizon.richtext.facet#contentWarning'},

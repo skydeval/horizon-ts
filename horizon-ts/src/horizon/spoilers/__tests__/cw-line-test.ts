@@ -83,7 +83,9 @@ function lines(layout: SpoilerLayout): string[] {
     .map(p => p.richText.text)
 }
 
-const KEEP = 'memery\n||\nthe body\n||'
+const KEEP = 'memery\n||the body||'
+/** KEEP as written before the markers hugged the body. */
+const KEEP_LINES = 'memery\n||\nthe body\n||'
 const STRIP_FACETS = [facet(7, 15, SPOILER_FEATURE, CONTENT_WARNING_FEATURE)]
 
 describe('contentWarningLineEnd', () => {
@@ -158,6 +160,13 @@ describe('the CW line in the layout', () => {
     expect(lines(buildSpoilerLayout(rt, {compact: true}))).toEqual(['memery'])
   })
 
+  it('keep mode in the earlier shape: the same line', () => {
+    const facets = detectLocalContentWarningFacets(KEEP_LINES)
+    const rt = new RichText({text: KEEP_LINES, facets})
+    expect(lines(buildSpoilerLayout(rt, {compact: false}))).toEqual(['memery'])
+    expect(lines(buildSpoilerLayout(rt, {compact: true}))).toEqual(['memery'])
+  })
+
   it('strip mode with facets, without the label', () => {
     const rt = new RichText({text: 'memery\nthe body', facets: STRIP_FACETS})
     expect(lines(buildSpoilerLayout(rt, {compact: false}))).toEqual(['memery'])
@@ -188,8 +197,8 @@ describe('the CW line in the layout', () => {
   })
 
   it('a body with no line: no CW line', () => {
-    const facets = detectLocalContentWarningFacets('||\nline one\nline two\n||')
-    const rt = fromRecord(record('||\nline one\nline two\n||', facets))
+    const facets = detectLocalContentWarningFacets('||line one\nline two||')
+    const rt = fromRecord(record('||line one\nline two||', facets))
     expect(lines(buildSpoilerLayout(rt, {compact: false}))).toEqual([])
   })
 

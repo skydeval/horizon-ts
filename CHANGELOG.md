@@ -311,6 +311,10 @@ released version yet; everything so far is under `[Unreleased]`.
       video grid); screen readers hear "Content warning:". The stored text
       is unchanged. The post's labels list names the self-label "Content
       warning".
+    - **Markers hug the body:** the `||` markers now sit straight around the
+      body (`cw blood` then `||it was a lot||`), so other apps show an
+      ordinary spoiler instead of `||` on lines of their own; posts written
+      the earlier way still read as before.
 
 ### Fixed
 

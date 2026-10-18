@@ -266,6 +266,15 @@ describe('toBskyRecord of a keep-mode CW without facets (T5)', () => {
     const text = await keepText('the end: ||he dies||', '')
     const adapted = toBskyRecord(record({text, labels}))
     expect(hiddenRanges(adapted?.facets)).toEqual([
+      {range: [2, 11], cw: true},
+      {range: [13, 20], cw: true},
+    ])
+  })
+
+  it('C3 in the earlier shape (markers on their own lines) reads the same', () => {
+    const text = '||\nthe end: ||he dies||\n||'
+    const adapted = toBskyRecord(record({text, labels}))
+    expect(hiddenRanges(adapted?.facets)).toEqual([
       {range: [3, 12], cw: true},
       {range: [14, 21], cw: true},
     ])
@@ -283,6 +292,6 @@ describe('toBskyRecord of a keep-mode CW without facets (T5)', () => {
     mockContentWarnings = false
     const text = await keepText('it was a lot', 'a || b')
     const adapted = toBskyRecord(record({text, labels}))
-    expect(hiddenRanges(adapted?.facets)).toEqual([{range: [10, 22], cw: true}])
+    expect(hiddenRanges(adapted?.facets)).toEqual([{range: [9, 21], cw: true}])
   })
 })

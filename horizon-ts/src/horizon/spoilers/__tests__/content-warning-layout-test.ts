@@ -46,12 +46,15 @@ function facet(start: number, end: number, ...types: string[]): Facet {
   }
 }
 
-const C1 = 'cw blood\n||\nit was a lot\n||'
+const C1 = 'cw blood\n||it was a lot||'
+/** C1 and C3 as written before the markers hugged the body. */
+const C1_LINES = 'cw blood\n||\nit was a lot\n||'
 const C2 = new RichText({
   text: 'cw blood\nit was a lot',
   facets: [facet(9, 21, SPOILER_FEATURE, CONTENT_WARNING_FEATURE)],
 })
-const C3 = '||\nthe end: ||he dies||\n||'
+const C3 = '||the end: ||he dies||||'
+const C3_LINES = '||\nthe end: ||he dies||\n||'
 const C4 = new RichText({
   text: 'the end: he dies',
   facets: [facet(0, 16, SPOILER_FEATURE, CONTENT_WARNING_FEATURE)],
@@ -109,7 +112,7 @@ describe('CW layout (T6)', () => {
   })
 
   it('a two-line body with no line: a "Content warning" label row', () => {
-    const layout = buildSpoilerLayout(keep('||\nline one\nline two\n||'), {
+    const layout = buildSpoilerLayout(keep('||line one\nline two||'), {
       compact: false,
     })
     expect(summary(layout)).toEqual([
@@ -130,6 +133,24 @@ describe('CW layout (T6)', () => {
       expected,
     )
     expect(summary(buildSpoilerLayout(C4, {compact: false}))).toEqual(expected)
+  })
+
+  it('the earlier shape (markers on their own lines) lays out the same', () => {
+    expect(
+      summary(buildSpoilerLayout(keep(C1_LINES), {compact: false})),
+    ).toEqual(lineAndBody)
+    expect(
+      summary(buildSpoilerLayout(keep(C3_LINES), {compact: false})),
+    ).toEqual([{run: [{spoiler: 'the end: he dies', cw: true}], tail: []}])
+    expect(
+      summary(
+        buildSpoilerLayout(keep('||\nline one\nline two\n||'), {
+          compact: false,
+        }),
+      ),
+    ).toEqual([
+      {drawer: [{plain: 'line one\nline two'}], id: 0, label: true, cw: true},
+    ])
   })
 
   it('compact and flattened C1: an inline CW cover, no marker drawn', () => {
@@ -167,7 +188,7 @@ describe('CW layout (T6)', () => {
   })
 
   it('#contentWarning never survives onto a rendered facet', () => {
-    const text = 'see example.com\n||\nx #tag example.com\n||'
+    const text = 'see example.com\n||x #tag example.com||'
     const written = keep(text)
     expect(
       written.facets?.some(f => f.features.some(isContentWarningFeature)),

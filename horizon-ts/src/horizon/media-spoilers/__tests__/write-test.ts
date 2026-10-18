@@ -358,6 +358,8 @@ describe('resolveComposeRT', () => {
     const cw = snap({cw: new Map([['p1', {line: 'cw'}]])})
     const rt = await resolveComposeRT(appview, draft(undefined), cw, 'strip')
     expect(rt?.text).toBe('cw\nbody')
+    const keep = await resolveComposeRT(appview, draft(undefined), cw, 'keep')
+    expect(keep?.text).toBe('cw\n||body||')
     expect(resolveComposeRT(appview, draft(undefined, 'p2'), cw, 'keep')).toBe(
       undefined,
     )
