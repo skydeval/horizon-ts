@@ -6,10 +6,12 @@
  * in the pills row where the stock interaction pill sits, and by the post
  * settings dialog (7.8).
  *
- * On web a checkbox item keeps the menu open (its press is default-prevented,
- * which `Menu.Item` honours), so several reply rules can be set in one
- * opening; radio items and the actions close it. Native menus close on every
- * press.
+ * On web every choice keeps the menu open (its press is default-prevented,
+ * which `Menu.Item` honours): radio and checkbox items in every section, and
+ * saving the defaults, so several settings can be made in one opening
+ * (skydeval, 2026-10-18). The menu closes on a click outside it or on its
+ * trigger. "New audience..." and "New reply list..." close it, since they
+ * open a dialog. Native menus close on every press.
  */
 
 import {useEffect, useRef, useState} from 'react'
@@ -19,7 +21,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useMyListsQuery} from '#/state/queries/my-lists'
 import {type ThreadgateAllowUISetting} from '#/state/queries/threadgate/types'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
-import {atoms as a, useTheme} from '#/alf'
+import {atoms as a, useTheme, web} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
 import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Check'
@@ -289,7 +291,22 @@ export function AudienceMenu({
         ) : (
           trigger
         )}
-        <Menu.Outer style={[{minWidth: 260, maxWidth: 360}]}>
+        <Menu.Outer
+          style={[
+            {minWidth: 260, maxWidth: 360},
+            /*
+             * The menu scrolls when it is taller than the window. A fixed
+             * width and a reserved, thin scrollbar keep its layout the same
+             * whether it scrolls or not: without them, the scrollbar that
+             * appears when the rows change (for example the "Save these
+             * options" row) narrows the content and rewraps it.
+             */
+            web({
+              width: 320,
+              scrollbarGutter: 'stable',
+              scrollbarWidth: 'thin',
+            }),
+          ]}>
           {isPrivate && audience ? (
             <WhoCanSee
               audience={audience}
@@ -349,7 +366,11 @@ export function AudienceMenu({
                   <Menu.Item
                     testID="composerSaveInteractionDefaults"
                     label={l`Save these options for next time`}
-                    onPress={defaults.onSave}>
+                    onPress={(e: GestureResponderEvent) => {
+                      // Stays open; the row turns into the saved note.
+                      e.preventDefault()
+                      defaults.onSave()
+                    }}>
                     <Menu.ItemText>
                       <Trans>Save these options for next time</Trans>
                     </Menu.ItemText>
@@ -411,7 +432,11 @@ function WhoCanSee({
   )
   const isMode = (mode: StandingMode) =>
     audience.kind === 'mode' && audience.mode === mode
-  const pick = (next: ComposeAudience) => onAudience?.(next)
+  // Choosing keeps the menu open on web (see the file comment).
+  const pick = (e: GestureResponderEvent, next: ComposeAudience) => {
+    e.preventDefault()
+    onAudience?.(next)
+  }
 
   return (
     <Menu.Group>
@@ -421,7 +446,7 @@ function WhoCanSee({
       <Menu.Item
         label={l`Everyone`}
         disabled={readOnly}
-        onPress={() => pick({kind: 'mode', mode: 'everyone'})}>
+        onPress={e => pick(e, {kind: 'mode', mode: 'everyone'})}>
         <View style={[a.flex_1, a.gap_2xs]}>
           <Menu.ItemText>
             <Trans>Everyone</Trans>
@@ -436,7 +461,7 @@ function WhoCanSee({
       <Menu.Item
         label={l`Followers`}
         disabled={readOnly}
-        onPress={() => pick({kind: 'mode', mode: 'followers'})}>
+        onPress={e => pick(e, {kind: 'mode', mode: 'followers'})}>
         <Menu.ItemText>
           <Trans>Followers</Trans>
         </Menu.ItemText>
@@ -445,7 +470,7 @@ function WhoCanSee({
       <Menu.Item
         label={l`People you follow`}
         disabled={readOnly}
-        onPress={() => pick({kind: 'mode', mode: 'following'})}>
+        onPress={e => pick(e, {kind: 'mode', mode: 'following'})}>
         <Menu.ItemText>
           <Trans>People you follow</Trans>
         </Menu.ItemText>
@@ -458,7 +483,7 @@ function WhoCanSee({
             key={entry.uri}
             label={l`List: ${name}`}
             disabled={readOnly}
-            onPress={() => pick({kind: 'list', uri: entry.uri})}>
+            onPress={e => pick(e, {kind: 'list', uri: entry.uri})}>
             <Menu.ItemText>{name}</Menu.ItemText>
             <Menu.ItemRadio
               selected={audience.kind === 'list' && audience.uri === entry.uri}
@@ -480,7 +505,7 @@ function WhoCanSee({
       <Menu.Item
         label={l`Only me`}
         disabled={readOnly}
-        onPress={() => pick({kind: 'mode', mode: 'nobody'})}>
+        onPress={e => pick(e, {kind: 'mode', mode: 'nobody'})}>
         <Menu.ItemText>
           <Trans>Only me</Trans>
         </Menu.ItemText>
@@ -519,12 +544,13 @@ function WhoCanReply({
   const anyone = threadgate.some(setting => setting.type === 'everybody')
   const nobody = threadgate.some(setting => setting.type === 'nobody')
 
-  const choose = (choice: ReplyChoice) =>
-    onThreadgate(applyReplyChoice(threadgate, choice))
-  const toggle = (e: GestureResponderEvent, value: ReplyValue) => {
+  // Every choice keeps the menu open on web (see the file comment).
+  const choose = (e: GestureResponderEvent, choice: ReplyChoice) => {
     e.preventDefault()
-    choose({type: 'toggle', value})
+    onThreadgate(applyReplyChoice(threadgate, choice))
   }
+  const toggle = (e: GestureResponderEvent, value: ReplyValue) =>
+    choose(e, {type: 'toggle', value})
   const isChecked = (value: ReplyValue) => checked.includes(value)
   const canToggle = (value: ReplyValue) =>
     !disabled && canToggleReplyValue(threadgate, value)
@@ -553,7 +579,7 @@ function WhoCanReply({
         testID="composerReplyAnyone"
         label={l`Allow anyone to reply`}
         disabled={disabled}
-        onPress={() => choose({type: 'everybody'})}>
+        onPress={e => choose(e, {type: 'everybody'})}>
         <Menu.ItemText>
           <Trans>Anyone</Trans>
         </Menu.ItemText>
@@ -563,7 +589,7 @@ function WhoCanReply({
         testID="composerReplyNobody"
         label={l`Disable replies entirely`}
         disabled={disabled}
-        onPress={() => choose({type: 'nobody'})}>
+        onPress={e => choose(e, {type: 'nobody'})}>
         <Menu.ItemText>
           <Trans>Nobody</Trans>
         </Menu.ItemText>

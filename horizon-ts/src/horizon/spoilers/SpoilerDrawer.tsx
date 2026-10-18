@@ -18,10 +18,22 @@ import {
 } from '#/components/icons/Chevron'
 import {Text} from '#/components/Typography'
 import {onSpoilerKey, onSpoilerPress} from './InlineSpoiler'
+import {spoilerTooltipRef} from './tooltip'
 
 function useDrawerLabels(open: boolean) {
   const {t: l} = useLingui()
   return {
+    tooltip: open
+      ? l({
+          message: 'Click to hide',
+          comment:
+            'Tooltip on the control that closes open spoiler lines in a post, on web',
+        })
+      : l({
+          message: 'Click to reveal',
+          comment:
+            'Tooltip on the control that opens hidden spoiler lines in a post, on web',
+        }),
     label: l({
       message: 'Spoiler',
       comment:
@@ -56,7 +68,7 @@ export function SpoilerArrow({
 }) {
   const t = useTheme()
   const haptics = useHaptics()
-  const {label, hint} = useDrawerLabels(open)
+  const {label, hint, tooltip} = useDrawerLabels(open)
   const [focused, setFocused] = useState(false)
   const toggle = () => {
     haptics.tap()
@@ -65,6 +77,7 @@ export function SpoilerArrow({
   const Chevron = open ? ChevronUp : ChevronDown
   return (
     <Text
+      ref={spoilerTooltipRef(tooltip)}
       style={[
         style,
         web({cursor: 'pointer', userSelect: 'none'}),
@@ -100,10 +113,11 @@ export function SpoilerLabelRow({
 }) {
   const t = useTheme()
   const haptics = useHaptics()
-  const {label, hint} = useDrawerLabels(open)
+  const {label, hint, tooltip} = useDrawerLabels(open)
   const Chevron = open ? ChevronUp : ChevronDown
   return (
     <Pressable
+      ref={spoilerTooltipRef(tooltip)}
       style={[a.flex_row, a.align_center, a.gap_xs, a.self_start, a.py_2xs]}
       accessibilityRole="button"
       accessibilityLabel={label}

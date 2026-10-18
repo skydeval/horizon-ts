@@ -15,6 +15,7 @@ import {flatten, useTheme, web} from '#/alf'
 import {RichText, type RichTextProps} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
+import {spoilerTooltipRef} from './tooltip'
 
 /**
  * What a nested part takes from the caller of `RichText` (6.3, styles of
@@ -100,6 +101,12 @@ export function InlineSpoiler({
   return (
     <Text
       emoji
+      ref={spoilerTooltipRef(
+        l({
+          message: 'Click to reveal',
+          comment: 'Tooltip on covered spoiler text in a post, on web',
+        }),
+      )}
       style={[
         style,
         {backgroundColor: barColor, color: 'transparent'},

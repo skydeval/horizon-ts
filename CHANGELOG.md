@@ -264,6 +264,13 @@ released version yet; everything so far is under `[Unreleased]`.
     text from view only: it is still in the post, in translations, in
     "Copy post text" and in muted-word matching. Posts from other apps that
     happen to contain `||` are shown as written.
+    - **Reddit-style spoilers:** `>!secret!<` also works. It is published as
+      `||secret||`, so every post carries one syntax.
+    - **Hover hint:** on web, hovering a spoiler shows "Click to reveal", or
+      "Click to hide" on an open drawer.
+  - **Who can see and interact:** on web, the drop-down stays open while
+    you choose, in every section, and closes on a click outside it or on its
+    button. It no longer narrows when it grows tall enough to scroll.
 
 ### Fixed
 

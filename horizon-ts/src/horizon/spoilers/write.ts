@@ -9,6 +9,7 @@ import {RichText} from '@bsky/sdk/richtext'
 import {shortenLinks, stripInvalidMentions} from '#/lib/strings/rich-text-manip'
 import {privateFacetsServed} from '#/horizon/private/server-support'
 import {SPOILER_TAGS} from '#/horizon/switches'
+import {convertAltSpoilers} from './alias'
 import {buildSpoilerRichText, type SpoilerWriteMode} from './build'
 import {hasSpoilers, parseSpoilers} from './parse'
 
@@ -19,7 +20,7 @@ export {type SpoilerWriteMode} from './build'
  * on and its text holds a spoiler.
  */
 export function resolvesSpoilers(richtext: RichText): boolean {
-  return SPOILER_TAGS && hasSpoilers(richtext.text)
+  return SPOILER_TAGS && hasSpoilers(convertAltSpoilers(richtext.text))
 }
 
 /**
@@ -49,7 +50,11 @@ export async function resolveSpoilerRT(
     // As stock: trim leading whitespace-only lines and trailing whitespace.
     .replace(/^(\s*\n)+/, '')
     .trimEnd()
-  const cleaned = new RichText({text: trimmed}, {cleanNewlines: true}).text
+  const cleaned = new RichText(
+    // `>!...!<` is published as `||...||`.
+    {text: SPOILER_TAGS ? convertAltSpoilers(trimmed) : trimmed},
+    {cleanNewlines: true},
+  ).text
   const parse = SPOILER_TAGS
     ? parseSpoilers(cleaned, {unescape: mode === 'strip'})
     : undefined
@@ -76,11 +81,12 @@ export function composeGraphemeLength(
   post: {richtext: RichText; shortenedGraphemeLength: number},
   isPrivate: boolean,
 ): number {
-  if (!SPOILER_TAGS || !hasSpoilers(post.richtext.text)) {
+  const text = SPOILER_TAGS ? convertAltSpoilers(post.richtext.text) : ''
+  if (!SPOILER_TAGS || !hasSpoilers(text)) {
     return post.shortenedGraphemeLength
   }
   const mode = spoilerWriteMode(isPrivate)
-  const parse = parseSpoilers(post.richtext.text, {unescape: mode === 'strip'})
+  const parse = parseSpoilers(text, {unescape: mode === 'strip'})
   const rt = new RichText({text: parse.visible})
   rt.detectFacetsWithoutResolution()
   return buildSpoilerRichText(parse, rt, {mode, shorten: true}).graphemeLength
