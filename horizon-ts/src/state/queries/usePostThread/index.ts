@@ -32,6 +32,17 @@ import {useAppviewClient, useSession} from '#/state/session'
 import {useMergeThreadgateHiddenReplies} from '#/state/threadgate-hidden-replies'
 import {useBreakpoints} from '#/alf'
 import {IS_WEB} from '#/env'
+// HORIZON: the private posts a thread quotes arrive with it
+import {resolveThreadQuotes} from '#/horizon/private/quotes/resolve'
+// HORIZON: a private thread is read through prism
+import {fetchPrivateThreadV2} from '#/horizon/private/thread/fetch'
+// HORIZON: private branches under a public anchor, and private replies past the first read
+import {
+  fetchOtherReplies,
+  withPrivateBranches,
+} from '#/horizon/private/thread/replies'
+// HORIZON: a private thread is read through prism
+import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -75,12 +86,33 @@ export function usePostThread({anchor}: {anchor?: string}) {
     queryKey: postThreadQueryKey,
     async queryFn(ctx) {
       const placeholder = getThreadPlaceholder(qc, anchor!)
-      const data = await client.call(app.bsky.unspecced.getPostThreadV2, {
-        anchor: anchor! as AtUriString,
-        branchingFactor: view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
-        below,
-        sort: sort,
-      })
+      // HORIZON: a private thread is read through prism; a public one with its private branches (start)
+      const data = isPrivateRead(anchor)
+        ? await fetchPrivateThreadV2(anchor!, {
+            below,
+            branchingFactor: view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+            sort,
+          })
+        : await withPrivateBranches(
+            anchor!,
+            {
+              below,
+              branchingFactor:
+                view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+              sort,
+            },
+            () =>
+              client.call(app.bsky.unspecced.getPostThreadV2, {
+                anchor: anchor! as AtUriString,
+                branchingFactor:
+                  view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+                below,
+                sort: sort,
+              }),
+          )
+      // HORIZON: a private thread is read through prism; a public one with its private branches (end)
+      // HORIZON: the private posts a thread quotes arrive with it
+      await resolveThreadQuotes(data.thread)
 
       const cachedKnownLikers =
         placeholder &&
@@ -193,9 +225,13 @@ export function usePostThread({anchor}: {anchor?: string}) {
     enabled: additionalQueryEnabled,
     queryKey: postThreadOtherQueryKey,
     async queryFn() {
-      return await client.call(app.bsky.unspecced.getPostThreadOtherV2, {
-        anchor: anchor! as AtUriString,
-      })
+      // HORIZON: private replies past the first read continue here (start)
+      return await fetchOtherReplies(anchor!, () =>
+        client.call(app.bsky.unspecced.getPostThreadOtherV2, {
+          anchor: anchor! as AtUriString,
+        }),
+      )
+      // HORIZON: private replies past the first read continue here (end)
     },
   })
   const serverOtherThreadItems: ThreadItem[] = useMemo(() => {

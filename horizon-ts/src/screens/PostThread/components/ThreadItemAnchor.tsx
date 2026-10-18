@@ -60,6 +60,16 @@ import {Text} from '#/components/Typography'
 import {WhoCanReply} from '#/components/WhoCanReply'
 import {Features, useAnalytics} from '#/analytics'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: a private post shows its badge and audience
+import {PrivatePostDetails} from '#/horizon/private/render/AudienceLabel'
+// HORIZON: private display: counts once prism serves them, who can reply once prism applies gates, links open directly
+import {
+  hidesGateControls,
+  hidesPrivateStatsRow,
+  proxiesPostLinks,
+} from '#/horizon/private/render/controls'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -207,11 +217,23 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
 
   const repostsHref = useMemo(() => {
     const urip = new AtUri(post.uri)
-    return makeProfileLink(post.author, 'post', urip.rkey, 'reposted-by')
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(
+      post.author,
+      postSegment(post.uri),
+      urip.rkey,
+      'reposted-by',
+    )
   }, [post.uri, post.author])
   const quotesHref = useMemo(() => {
     const urip = new AtUri(post.uri)
-    return makeProfileLink(post.author, 'post', urip.rkey, 'quotes')
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(
+      post.author,
+      postSegment(post.uri),
+      urip.rkey,
+      'quotes',
+    )
   }, [post.uri, post.author])
 
   const threadgateHiddenReplies = useMergedThreadgateHiddenReplies({
@@ -408,7 +430,8 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
                   value={richText}
                   style={[a.flex_1, a.text_lg]}
                   authorHandle={post.author.handle}
-                  shouldProxyLinks={true}
+                  // HORIZON: links in a private post open directly
+                  shouldProxyLinks={proxiesPostLinks(post.uri)}
                   suffixOffset={POST_NUMBER_INLINE_OFFSET}
                   suffix={
                     showPostNumber ? (
@@ -437,10 +460,12 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
               post={item.value.post}
               isThreadAuthor={isThreadAuthor}
             />
-            {post.repostCount !== 0 ||
-            post.likeCount !== 0 ||
-            post.quoteCount !== 0 ||
-            post.bookmarkCount !== 0 ? (
+            {/* HORIZON: no stats row on a private post without served counts or with none to show */}
+            {!hidesPrivateStatsRow(post) &&
+            (post.repostCount !== 0 ||
+              post.likeCount !== 0 ||
+              post.quoteCount !== 0 ||
+              post.bookmarkCount !== 0) ? (
               // Show this section unless we're *sure* it has no engagement.
               <View
                 style={[
@@ -568,7 +593,10 @@ function ExpandedPostDetails({
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
           {niceDate(i18n, post.indexedAt, 'dot separated')}
         </Text>
-        {isRootPost && (
+        {/* HORIZON: a private post shows its badge and audience */}
+        <PrivatePostDetails post={post} />
+        {/* HORIZON: who can reply on a private post once prism applies its gates */}
+        {isRootPost && !hidesGateControls(post.uri) && (
           <WhoCanReply post={post} isThreadAuthor={isThreadAuthor} />
         )}
       </View>

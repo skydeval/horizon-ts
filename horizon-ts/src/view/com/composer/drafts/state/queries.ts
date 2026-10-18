@@ -10,6 +10,8 @@ import {useAppviewClient, useChatClient} from '#/state/session'
 import {type ComposerState} from '#/view/com/composer/state/composer'
 import {useAnalytics} from '#/analytics'
 import {getDeviceId} from '#/analytics/identifiers'
+// HORIZON: remember whether a draft was saved Private
+import {recordDraftVisibility} from '#/horizon/private/composer/drafts'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {composerStateToDraft, draftViewToSummary} from './api'
@@ -172,6 +174,9 @@ export function useSaveDraftMutation() {
         draftId = data.id
         logger.debug('created new draft', {draftId})
       }
+
+      // HORIZON: remember whether this draft was saved Private, and its audience
+      recordDraftVisibility(draftId)
 
       // Return data needed for onSuccess
       return {

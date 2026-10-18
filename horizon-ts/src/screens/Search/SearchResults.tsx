@@ -36,6 +36,10 @@ import {ListFooter} from '#/components/Lists'
 import {SearchError} from '#/components/SearchError'
 import {Text} from '#/components/Typography'
 import {type Metrics, useAnalytics} from '#/analytics'
+// HORIZON: private results merge into Top and Latest
+import {PrivateSearchNote} from '#/horizon/private/search/PrivateSearchNote'
+// HORIZON: private results merge into Top and Latest
+import {usePrivateSearchResults} from '#/horizon/private/search/results'
 import {type app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
@@ -336,9 +340,20 @@ let SearchScreenPostResults = ({
     void fetchNextPage()
   }, [isFetching, error, hasNextPage, fetchNextPage])
 
-  const posts = useMemo(() => {
+  // HORIZON: private results merge into Top and Latest (start)
+  const publicPosts = useMemo(() => {
     return results?.pages.flatMap(page => page.posts) || []
   }, [results])
+  const privateSearch = usePrivateSearchResults({
+    query: augmentedV2Query,
+    filters,
+    sort,
+    active,
+    publicPosts,
+    publicHasNextPage: hasNextPage,
+  })
+  const posts = privateSearch.posts
+  // HORIZON: private results merge into Top and Latest (end)
   const items = useMemo(() => {
     let temp: SearchResultSlice[] = []
 
@@ -453,7 +468,15 @@ let SearchScreenPostResults = ({
               onRefresh={() => {
                 void onPullToRefresh()
               }}
-              onEndReached={onEndReached}
+              // HORIZON: the list's end also loads more private results
+              onEndReached={() => {
+                privateSearch.onEndReached()
+                onEndReached()
+              }}
+              // HORIZON: the private part's note heads the merged list
+              ListHeaderComponent={
+                <PrivateSearchNote state={privateSearch.state} />
+              }
               onItemSeen={(item: SearchResultSlice) => {
                 if (item.type === 'post') {
                   trackPostView(item.post)
@@ -468,11 +491,14 @@ let SearchScreenPostResults = ({
               }
             />
           ) : (
+            // HORIZON: the private part's note shows with no results too (start)
             <EmptyState
               messageText={
                 <NoResultsText hasFilters={hasFilters} query={query} />
-              }
-            />
+              }>
+              <PrivateSearchNote state={privateSearch.state} />
+            </EmptyState>
+            // HORIZON: the private part's note shows with no results too (end)
           )}
         </>
       ) : (

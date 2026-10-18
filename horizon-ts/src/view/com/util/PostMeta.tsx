@@ -20,6 +20,8 @@ import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {Text} from '#/components/Typography'
 import {IS_ANDROID} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: a private post carries a lock at the right end of its meta row
+import {PrivateHeaderLock} from '#/horizon/private/render/PrivateBadge'
 import {type app} from '#/lexicons'
 import {TimeElapsed} from './TimeElapsed'
 import {PreviewableUserAvatar} from './UserAvatar'
@@ -169,6 +171,8 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
           )}
         </TimeElapsed>
       </View>
+      {/* HORIZON: a private post carries a lock at the right end of its meta row */}
+      <PrivateHeaderLock postHref={opts.postHref} compact={opts.showAvatar} />
     </View>
   )
 }

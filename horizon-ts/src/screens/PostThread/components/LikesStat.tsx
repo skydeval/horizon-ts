@@ -7,6 +7,8 @@ import {Link} from '#/components/Link'
 import {useFormatPostStatCount} from '#/components/PostControls/util'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 
 /**
@@ -23,7 +25,13 @@ export function LikesStat({post}: {post: app.bsky.feed.defs.PostView}) {
   if (likeCount === 0) return null
 
   const urip = new AtUri(post.uri)
-  const likesHref = makeProfileLink(post.author, 'post', urip.rkey, 'liked-by')
+  // HORIZON: private post links use the ppost segment
+  const likesHref = makeProfileLink(
+    post.author,
+    postSegment(post.uri),
+    urip.rkey,
+    'liked-by',
+  )
 
   return (
     <Link

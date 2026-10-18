@@ -43,6 +43,10 @@ import {SubtleHover} from '#/components/SubtleHover'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: a private post's reply limits are checked on press
+import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
+// HORIZON: links in a private post open directly
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {makePostLink} from '../links'
@@ -306,7 +310,8 @@ export function PostBody({post}: {post: PostView}) {
           enableTags
           value={richText}
           authorHandle={post.author.handle}
-          shouldProxyLinks
+          // HORIZON: links in a private post open directly
+          shouldProxyLinks={proxiesPostLinks(post.uri)}
           // No colour here: it would override the links' and mentions'
           style={[a.text_md, a.leading_snug]}
         />
@@ -648,28 +653,32 @@ function PostActionsInner({
     }
     if (replyDisabled) return
     haptics.tap()
-    requireAuth(() => {
-      ax.metric('post:clickReply', {
-        uri: post.uri,
-        authorDid: post.author.did,
-        logContext: 'Post',
-      })
-      openComposer({
-        replyTo: {
+    // HORIZON: a private post's reply limits are checked on press (start)
+    requireAuth(() =>
+      guardPrivateInteraction(post, 'reply', () => {
+        ax.metric('post:clickReply', {
           uri: post.uri,
-          cid: post.cid,
-          text: record.text,
-          author: post.author,
-          embed: post.embed,
-          moderation: moderationOpts
-            ? moderatePost(post, moderationOpts)
-            : undefined,
-          langs: record.langs,
-        },
-        onPost: () => setHasReplied(true),
-        logContext: 'PostReply',
-      })
-    })
+          authorDid: post.author.did,
+          logContext: 'Post',
+        })
+        openComposer({
+          replyTo: {
+            uri: post.uri,
+            cid: post.cid,
+            text: record.text,
+            author: post.author,
+            embed: post.embed,
+            moderation: moderationOpts
+              ? moderatePost(post, moderationOpts)
+              : undefined,
+            langs: record.langs,
+          },
+          onPost: () => setHasReplied(true),
+          logContext: 'PostReply',
+        })
+      }),
+    )
+    // HORIZON: a private post's reply limits are checked on press (end)
   }
 
   return (

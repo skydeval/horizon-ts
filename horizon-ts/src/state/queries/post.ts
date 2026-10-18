@@ -16,6 +16,17 @@ import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {useAnalytics} from '#/analytics'
 import {type Metrics, toClout} from '#/analytics/metrics'
+// HORIZON: a private root's thread mute goes to prism; a public root's is mirrored there
+import {
+  mirrorThreadMute,
+  muteThreadOnPrism,
+} from '#/horizon/private/api/thread-mute'
+// HORIZON: a private post is deleted through its own procedure
+import {deletePrivatePost} from '#/horizon/private/api/writes'
+// HORIZON: a private post is read through prism
+import {fetchPrivatePost} from '#/horizon/private/links'
+// HORIZON: private posts are read through prism and deleted through their own procedure
+import {isPrivatePostUri, isPrivateRead} from '#/horizon/private/uri'
 import {app, com} from '#/lexicons'
 import {useIsThreadMuted, useSetThreadMute} from '../cache/thread-mutes'
 import {findProfileQueryData} from './profile'
@@ -52,6 +63,8 @@ async function fetchPost(
   client: Client,
   uri: string,
 ): Promise<app.bsky.feed.defs.PostView | undefined> {
+  // HORIZON: a private post is read through prism
+  if (isPrivateRead(uri)) return fetchPrivatePost(client, uri)
   const urip = new AtUri(uri)
 
   if (!urip.host.startsWith('did:')) {
@@ -363,6 +376,8 @@ export function usePostDeleteMutation() {
   const pdsClient = usePdsClient()
   return useMutation<void, Error, {uri: string}>({
     mutationFn: async ({uri}) => {
+      // HORIZON: stock would delete app.bsky.feed.post at a private post's rkey; not switched
+      if (isPrivatePostUri(uri)) return deletePrivatePost(pdsClient, uri)
       await pdsClient.call(deletePost, uri as AtUriString)
     },
     onSuccess(_, variables) {
@@ -424,9 +439,13 @@ function useThreadMuteMutation() {
     {uri: string} // the root post's uri
   >({
     mutationFn: async ({uri}) => {
+      // HORIZON: a private root's thread mute goes to prism
+      if (isPrivateRead(uri)) return muteThreadOnPrism(uri, true)
       await appviewClient.call(app.bsky.graph.muteThread, {
         root: uri as AtUriString,
       })
+      // HORIZON: a public root's thread mute is mirrored to prism for private branches
+      mirrorThreadMute(uri, true)
       return {}
     },
   })
@@ -436,9 +455,13 @@ function useThreadUnmuteMutation() {
   const appviewClient = useAppviewClient()
   return useMutation<{}, Error, {uri: string}>({
     mutationFn: async ({uri}) => {
+      // HORIZON: a private root's thread unmute goes to prism
+      if (isPrivateRead(uri)) return muteThreadOnPrism(uri, false)
       await appviewClient.call(app.bsky.graph.unmuteThread, {
         root: uri as AtUriString,
       })
+      // HORIZON: a public root's thread unmute is mirrored to prism for private branches
+      mirrorThreadMute(uri, false)
       return {}
     },
   })

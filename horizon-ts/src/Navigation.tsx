@@ -146,6 +146,14 @@ import {HomeScreen} from '#/features/followingV2/home'
 import {InviteScannerScreen} from '#/features/inviteFriends'
 // HORIZON: the OAuth callback route
 import {AuthCallbackScreen} from '#/horizon/auth/AuthCallbackScreen'
+// HORIZON: private posting screens
+import {AudiencesSettingsScreen} from '#/horizon/private/audiences/AudiencesScreen'
+import {
+  PrivatePostLikedByScreen,
+  PrivatePostQuotesScreen,
+  PrivatePostRepostedByScreen,
+  PrivatePostThreadScreen,
+} from '#/horizon/private/thread/screens'
 import {router} from '#/routes'
 
 const navigationRef = createNavigationContainerRef<AllNavigatorParams>()
@@ -324,6 +332,40 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         options={({route}) => ({
           title: title(msg`Post by @${route.params.name}`),
         })}
+      />
+      {/* HORIZON: private posting screens */}
+      <Stack.Screen
+        name="PrivatePostThread"
+        getComponent={() => PrivatePostThreadScreen}
+        options={({route}) => ({
+          title: title(msg`Private post by @${route.params.name}`),
+        })}
+      />
+      <Stack.Screen
+        name="PrivatePostLikedBy"
+        getComponent={() => PrivatePostLikedByScreen}
+        options={({route}) => ({
+          title: title(msg`Private post by @${route.params.name}`),
+        })}
+      />
+      <Stack.Screen
+        name="PrivatePostRepostedBy"
+        getComponent={() => PrivatePostRepostedByScreen}
+        options={({route}) => ({
+          title: title(msg`Private post by @${route.params.name}`),
+        })}
+      />
+      <Stack.Screen
+        name="PrivatePostQuotes"
+        getComponent={() => PrivatePostQuotesScreen}
+        options={({route}) => ({
+          title: title(msg`Private post by @${route.params.name}`),
+        })}
+      />
+      <Stack.Screen
+        name="AudiencesSettings"
+        getComponent={() => AudiencesSettingsScreen}
+        options={{title: title(msg`Audiences`), requireAuth: true}}
       />
       <Stack.Screen
         name="CustomFeed"

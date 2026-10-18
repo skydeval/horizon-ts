@@ -29,6 +29,12 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+// HORIZON: a private compose takes the private write path
+import {postPrivate} from '#/horizon/private/api/writes'
+// HORIZON: a private compose takes the private write path
+import {routesPrivate} from '#/horizon/private/composer/state'
+// HORIZON: a post with `||` spoilers is written with spoiler facets
+import {resolveSpoilerRT, resolvesSpoilers} from '#/horizon/spoilers/write'
 import {app, chat, com} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {createGIFDescription} from '../gif-alt-text'
@@ -37,7 +43,8 @@ import {uploadBlob} from './upload-blob'
 
 export {uploadBlob}
 
-interface PostOpts {
+// HORIZON: exported for the private write path, which takes the same options
+export interface PostOpts {
   thread: ThreadDraft
   replyTo?: string
   onStateChange?: (state: string) => void
@@ -62,6 +69,8 @@ interface PostOpts {
 }
 
 export async function post(queryClient: QueryClient, opts: PostOpts) {
+  // HORIZON: a private compose, or any reply to a private post, never posts publicly
+  if (routesPrivate(opts.replyTo)) return postPrivate(queryClient, opts)
   const thread = opts.thread
   opts.onStateChange?.(t`Processing...`)
 
@@ -202,7 +211,12 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
   return {uris}
 }
 
-async function resolveRT(appviewClient: Client, richtext: RichText) {
+// HORIZON: exported; the spoiler pipeline's tests check it gives this function's result
+export async function resolveRT(appviewClient: Client, richtext: RichText) {
+  // HORIZON: a post with `||` spoilers is written with spoiler facets
+  if (resolvesSpoilers(richtext)) {
+    return resolveSpoilerRT(appviewClient, richtext, 'keep')
+  }
   const trimmedText = richtext.text
     // Trim leading whitespace-only lines (but don't break ASCII art).
     .replace(/^(\s*\n)+/, '')
@@ -222,7 +236,8 @@ export class ReplyDeletedError extends Error {
   }
 }
 
-async function resolveReply(appviewClient: Client, replyTo: string) {
+// HORIZON: exported for the private write path
+export async function resolveReply(appviewClient: Client, replyTo: string) {
   const data = await appviewClient.call(app.bsky.feed.getPosts, {
     uris: [replyTo as AtUriString],
   })
@@ -249,7 +264,8 @@ async function resolveReply(appviewClient: Client, replyTo: string) {
   }
 }
 
-async function resolveEmbed(
+// HORIZON: exported for the private write path
+export async function resolveEmbed(
   appviewClient: Client,
   chatClient: Client,
   pdsClient: Client,

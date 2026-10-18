@@ -40,6 +40,8 @@ import {normalizeTextStyles} from '#/alf/typography'
 import {type Emoji} from '#/components/EmojiPicker'
 import {Portal} from '#/components/Portal'
 import {Text} from '#/components/Typography'
+// HORIZON: the spoiler button wraps this editor's selection in spoiler markers
+import {useSpoilerWrapCommand} from '#/horizon/spoilers/editor'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {type TextInputProps} from './TextInput.types'
@@ -304,6 +306,8 @@ export function TextInput({
       textInputWebEmitter.removeListener('emoji-inserted', onEmojiInserted)
     }
   }, [onEmojiInserted, isActive])
+  // HORIZON: the spoiler button wraps this editor's selection in spoiler markers
+  useSpoilerWrapCommand(editor, isActive)
 
   useImperativeHandle(ref, () => ({
     focus: () => {

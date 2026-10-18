@@ -9,6 +9,8 @@ import {
   type ThreadItem,
   type TraversalMetadata,
 } from '#/state/queries/usePostThread/types'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 
 export function threadPostNoUnauthenticated({
@@ -109,7 +111,8 @@ export function readMore({
       did: urip.host,
       handle: postData.authorHandle,
     },
-    'post',
+    // HORIZON: private post links use the ppost segment
+    postSegment(postData.uri),
     urip.rkey,
   )
   return {
@@ -131,7 +134,8 @@ export function readMoreUp({
       did: urip.host,
       handle: postData.authorHandle,
     },
-    'post',
+    // HORIZON: private post links use the ppost segment
+    postSegment(postData.uri),
     urip.rkey,
   )
   return {

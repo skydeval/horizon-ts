@@ -37,6 +37,12 @@ import {isStandardSiteEmbed} from '#/components/Post/Embed/StandardSiteEmbed/uti
 import {RichText} from '#/components/RichText'
 import {Embed as StarterPackCard} from '#/components/StarterPack/StarterPackCard'
 import {SubtleHover} from '#/components/SubtleHover'
+// HORIZON: a private post's link card is the plain card, whose link is not proxied
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: a quoted private post is resolved for readers who may view it
+import {PrivateQuote} from '#/horizon/private/render/PrivateQuote'
+// HORIZON: private post links use the ppost segment; quoted private posts are read through prism
+import {isPrivateRead, postSegment} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -112,7 +118,11 @@ function MediaEmbed({
     }
     case 'link': {
       const atProvider = getAtCardProvider(embed.view.external.uri)
-      if (atProvider || isStandardSiteEmbed(embed.view.external)) {
+      if (
+        // HORIZON: a private post's link card is the plain card, whose link is not proxied
+        proxiesPostLinks(rest.post?.uri) &&
+        (atProvider || isStandardSiteEmbed(embed.view.external))
+      ) {
         return (
           <ExternalCardEmbed
             embed={embed}
@@ -254,6 +264,27 @@ function RecordEmbed({
       )
     }
     case 'post_not_found': {
+      // HORIZON: a quoted private post is resolved for readers who may view it (start)
+      if (isPrivateRead(embed.view.uri)) {
+        if (rest.isWithinQuote && !rest.allowNestedQuotes) {
+          return null
+        }
+        return (
+          <PrivateQuote
+            uri={embed.view.uri}
+            render={quote => (
+              <QuoteEmbed
+                {...rest}
+                embed={quote}
+                viewContext={rest.viewContext}
+                isWithinQuote={rest.isWithinQuote}
+                allowNestedQuotes={rest.allowNestedQuotes}
+              />
+            )}
+          />
+        )
+      }
+      // HORIZON: a quoted private post is resolved for readers who may view it (end)
       return (
         <PostPlaceholderText>
           <Trans>Deleted</Trans>
@@ -331,7 +362,12 @@ export function QuoteEmbed({
   const t = useTheme()
   const queryClient = useQueryClient()
   const itemUrip = new AtUri(quote.uri)
-  const itemHref = makeProfileLink(quote.author, 'post', itemUrip.rkey)
+  // HORIZON: private post links use the ppost segment
+  const itemHref = makeProfileLink(
+    quote.author,
+    postSegment(quote.uri),
+    itemUrip.rkey,
+  )
   const itemTitle = `Post by ${quote.author.handle}`
   const postNumbering = embed.view
   const showPostNumber = useHasThreadItemPostNumber(embed.view)

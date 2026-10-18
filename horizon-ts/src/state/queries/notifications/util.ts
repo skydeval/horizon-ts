@@ -11,6 +11,8 @@ import chunk from 'lodash.chunk'
 import {labelIsHideableOffense} from '#/lib/moderation'
 import {isInGroupedFeed} from '#/state/queries/notifications/grouped/membership'
 import {type GroupedNotificationsFeed} from '#/state/queries/notifications/grouped/types'
+// HORIZON: the private posts a notification's post quotes arrive with it
+import {resolvePrivateQuotes} from '#/horizon/private/quotes/resolve'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {precacheProfile} from '../profile'
@@ -76,6 +78,8 @@ export async function fetchPage({
   // in the UI to avoid relayouts
   if (fetchAdditionalData) {
     const subjects = await fetchSubjects(client, notifsGrouped)
+    // HORIZON: the private posts a notification's post quotes arrive with it
+    await resolvePrivateQuotes(subjects.posts.values())
     for (const notif of notifsGrouped) {
       if (notif.subjectUri) {
         if (

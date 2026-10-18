@@ -12,6 +12,8 @@ import {InlineLinkText, Link} from '#/components/Link'
 import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {Text} from '#/components/Typography'
 import {type Features, useAnalytics} from '#/analytics'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 
 /**
@@ -47,7 +49,13 @@ export function KnownLikers({
   }
 
   const urip = new AtUri(post.uri)
-  const likesHref = makeProfileLink(post.author, 'post', urip.rkey, 'liked-by')
+  // HORIZON: private post links use the ppost segment
+  const likesHref = makeProfileLink(
+    post.author,
+    postSegment(post.uri),
+    urip.rkey,
+    'liked-by',
+  )
   const aviStackProfiles = knownLikersAndModeration
     .slice(0, 3)
     .map(({actor}) => actor)

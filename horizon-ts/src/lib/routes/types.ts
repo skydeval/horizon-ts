@@ -45,6 +45,12 @@ export type CommonNavigatorParams = {
   PostLikedBy: {name: string; rkey: string}
   PostRepostedBy: {name: string; rkey: string}
   PostQuotes: {name: string; rkey: string}
+  // HORIZON: private posting routes
+  PrivatePostThread: {name: string; rkey: string}
+  PrivatePostLikedBy: {name: string; rkey: string}
+  PrivatePostRepostedBy: {name: string; rkey: string}
+  PrivatePostQuotes: {name: string; rkey: string}
+  AudiencesSettings: undefined
   CustomFeed: {
     name: string
     rkey: string

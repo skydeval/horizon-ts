@@ -7,6 +7,10 @@ import {
 } from '@tanstack/react-query'
 
 import {useAppviewClient} from '#/state/session'
+// HORIZON: a private post's likes are listed by prism
+import {fetchPrivateLikesPage} from '#/horizon/private/api/interactions'
+// HORIZON: a private post's likes are listed by prism
+import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 
 const PAGE_SIZE = 30
@@ -27,6 +31,9 @@ export function useLikedByQuery(resolvedUri: string | undefined) {
   >({
     queryKey: RQKEY(resolvedUri || ''),
     async queryFn({pageParam}: {pageParam: RQPageParam}) {
+      // HORIZON: a private post's likes are listed by prism
+      if (isPrivateRead(resolvedUri))
+        return fetchPrivateLikesPage(resolvedUri!, pageParam, PAGE_SIZE)
       return await client.call(app.bsky.feed.getLikes, {
         // the enabled flag prevents this from running until resolvedUri is set
         uri: (resolvedUri || '') as AtUriString,

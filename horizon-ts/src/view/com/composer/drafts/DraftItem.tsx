@@ -20,6 +20,8 @@ import * as Prompt from '#/components/Prompt'
 import {RichText} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
+// HORIZON: a draft saved Private shows a lock
+import {PrivateDraftLock} from '#/horizon/private/composer/PrivateDraftLock'
 import {type DraftPostDisplay, type DraftSummary} from './state/schema'
 import * as storage from './state/storage'
 
@@ -233,6 +235,9 @@ export function DraftItem({
             )}
           </Button>
         </View>
+
+        {/* HORIZON: a draft saved Private shows a lock */}
+        <PrivateDraftLock draftId={draft.id} />
       </View>
 
       <Prompt.Basic

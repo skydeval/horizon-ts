@@ -22,6 +22,8 @@ import * as Menu from '#/components/Menu'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 import {usePostBookmark} from '../BookmarkButton'
 
@@ -145,7 +147,10 @@ export function PostMenuControlItems({
       ax.metric('share:press:nativeShare', {})
     }
     const {rkey} = new AtUri(post.uri)
-    void shareUrl(toShareUrl(makeProfileLink(post.author, 'post', rkey)))
+    void shareUrl(
+      // HORIZON: private post links use the ppost segment
+      toShareUrl(makeProfileLink(post.author, postSegment(post.uri), rkey)),
+    )
     sendInteraction({
       item: post.uri,
       event: 'app.bsky.feed.defs#interactionShare',

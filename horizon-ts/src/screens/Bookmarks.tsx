@@ -37,6 +37,12 @@ import * as toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: Saved's Public | Private tabs, for members
+import {usePrivateSavedMode} from '#/horizon/private/saved/mode'
+// HORIZON: the Private tab lists private bookmarks
+import {PrivateSavedList} from '#/horizon/private/saved/PrivateSavedList'
+// HORIZON: Saved's Public | Private tabs, for members
+import {SavedModeTabs} from '#/horizon/private/saved/SavedModeTabs'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -44,6 +50,8 @@ type Props = NativeStackScreenProps<CommonNavigatorParams, 'Bookmarks'>
 
 export function BookmarksScreen({}: Props) {
   const ax = useAnalytics()
+  // HORIZON: Saved's Public | Private tabs, for members
+  const privateSaved = usePrivateSavedMode()
 
   useFocusEffect(
     useCallback(() => {
@@ -62,7 +70,10 @@ export function BookmarksScreen({}: Props) {
         </Layout.Header.Content>
         <Layout.Header.Slot />
       </Layout.Header.Outer>
-      <BookmarksInner />
+      {/* HORIZON: Saved's Public | Private tabs, for members */}
+      <SavedModeTabs />
+      {/* HORIZON: the Private tab lists private bookmarks */}
+      {privateSaved ? <PrivateSavedList /> : <BookmarksInner />}
     </Layout.Screen>
   )
 }

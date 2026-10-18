@@ -24,6 +24,11 @@ import {type ComposerImage} from '#/state/gallery'
 import {createComposerImage} from '#/state/gallery'
 import {type ChatInvitePreview} from '#/state/queries/join-links'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: a pasted private post link resolves through prism
+import {
+  isPrivatePostLink,
+  resolvePrivatePostLink,
+} from '#/horizon/private/links'
 import {app, chat, com} from '#/lexicons'
 import {createGIFDescription} from '../gif-alt-text'
 
@@ -111,6 +116,8 @@ export async function resolveLink(
   if (isShortLink(uri)) {
     uri = await resolveShortLink(uri)
   }
+  // HORIZON: a pasted private post link resolves through prism
+  if (isPrivatePostLink(uri)) return resolvePrivatePostLink(appviewClient, uri)
   if (isBskyPostUrl(uri)) {
     uri = convertBskyAppUrlIfNeeded(uri)
     const [_0, user, _1, rkey] = uri.split('/').filter(Boolean)

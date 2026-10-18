@@ -24,6 +24,8 @@ import {
   suggestLinkCardUri,
 } from '#/view/com/composer/text-input/text-input-util'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: a pasted private post link becomes a quote
+import {isPrivatePostLink} from '#/horizon/private/links'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -522,7 +524,8 @@ function postReducer(state: PostDraft, action: PostAction): PostDraft {
       const prevLink = state.embed.link
       let nextQuote = prevQuote
       let nextLink = prevLink
-      if (isBskyPostUrl(action.uri)) {
+      // HORIZON: a pasted private post link becomes a quote
+      if (isBskyPostUrl(action.uri) || isPrivatePostLink(action.uri)) {
         if (!prevQuote) {
           nextQuote = {
             type: 'link',
@@ -681,7 +684,8 @@ export function createComposerState({
       for (const facet of initRichText.facets) {
         for (const feature of facet.features) {
           if (bsky.isType(app.bsky.richtext.facet.link, feature)) {
-            if (isBskyPostUrl(feature.uri)) {
+            // HORIZON: a private post link in a compose intent becomes a quote
+            if (isBskyPostUrl(feature.uri) || isPrivatePostLink(feature.uri)) {
               detectedPostUris.set(feature.uri, {facet, rt: initRichText})
             } else {
               detectedExtUris.set(feature.uri, {facet, rt: initRichText})

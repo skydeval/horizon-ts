@@ -5,6 +5,8 @@ import {
   type ThreadItem,
   type TraversalMetadata,
 } from '#/state/queries/usePostThread/types'
+// HORIZON: a private post without served counts draws its reply line from the replies shown
+import {threadRepliesCount} from '#/horizon/private/render/controls'
 import {app} from '#/lexicons'
 import {isDevMode} from '#/storage/hooks/dev-mode'
 import * as bsky from '#/types/bsky'
@@ -49,7 +51,13 @@ export function getTraversalMetadata({
   if (!bsky.isType(app.bsky.unspecced.defs.threadItemPost, item.value)) {
     throw new Error(`Expected thread item to be a post`)
   }
-  const repliesCount = item.value.post.replyCount || 0
+  // HORIZON: a private post without served counts draws its reply line from the replies shown
+  const repliesCount = threadRepliesCount(
+    item.uri,
+    item.value.post.replyCount,
+    item.depth,
+    nextItem?.depth,
+  )
   const repliesUnhydrated = item.value.moreReplies || 0
   const metadata = {
     depth: item.depth,

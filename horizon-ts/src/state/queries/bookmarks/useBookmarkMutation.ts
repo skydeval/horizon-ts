@@ -9,6 +9,12 @@ import {
   optimisticallySaveBookmark,
 } from '#/state/queries/bookmarks/useBookmarksQuery'
 import {useAppviewClient} from '#/state/session'
+// HORIZON: private posts are saved with prism and listed apart
+import {
+  isPrivateBookmarkArgs,
+  onPrivateBookmarkSuccess,
+  privateBookmarkMutationFn,
+} from '#/horizon/private/api/bookmarks'
 import {app} from '#/lexicons'
 
 type MutationArgs =
@@ -28,6 +34,9 @@ export function useBookmarkMutation() {
 
   return useMutation({
     async mutationFn(args: MutationArgs) {
+      // HORIZON: a private post is saved with prism, not the AppView
+      if (isPrivateBookmarkArgs(args))
+        return privateBookmarkMutationFn(qc, args)
       if (args.action === 'create') {
         updatePostShadow(qc, args.post.uri, {bookmarked: true})
         await client.call(app.bsky.bookmark.createBookmark, {
@@ -42,6 +51,8 @@ export function useBookmarkMutation() {
       }
     },
     onSuccess(_, args) {
+      // HORIZON: a private bookmark goes into the private list's cache only
+      if (isPrivateBookmarkArgs(args)) return onPrivateBookmarkSuccess(qc, args)
       if (args.action === 'create') {
         optimisticallySaveBookmark(qc, args.post)
       } else if (args.action === 'delete') {

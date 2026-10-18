@@ -3,6 +3,8 @@ import {type Service} from '@atproto/lex'
 import {api} from '@bsky/sdk'
 
 import {BLUESKY_PROXY_DID, CHAT_PROXY_DID, IS_DEV} from '#/env'
+// HORIZON: the video service is set in one Horizon constant
+import {HORIZON_VIDEO_SERVICE} from '#/horizon/video/service'
 import {type app} from '#/lexicons'
 
 export const LOCAL_DEV_SERVICE =
@@ -192,8 +194,10 @@ export const GIF_KLIPY_FEATURED = (params: string) =>
 
 export const MAX_LABELERS = 20
 
-export const VIDEO_SERVICE = 'https://video.bsky.app'
-export const VIDEO_SERVICE_DID = 'did:web:video.bsky.app'
+// HORIZON: the video service is set in one Horizon constant, so it can be switched or given a fallback
+export const VIDEO_SERVICE = HORIZON_VIDEO_SERVICE.url
+// HORIZON: the video service is set in one Horizon constant, so it can be switched or given a fallback
+export const VIDEO_SERVICE_DID = HORIZON_VIDEO_SERVICE.did
 
 export const VIDEO_MAX_DURATION_MS = 10 * 60 * 1000 // 10 minutes in milliseconds
 /**

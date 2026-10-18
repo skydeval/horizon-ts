@@ -13,6 +13,8 @@ import {
   getEmbeddedPost,
 } from '#/state/queries/util'
 import {useAppviewClient} from '#/state/session'
+// HORIZON: the private posts a page of bookmarks quotes arrive with it
+import {withBookmarkQuotes} from '#/horizon/private/quotes/resolve'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -31,9 +33,12 @@ export function useBookmarksQuery() {
   >({
     queryKey: createBookmarksQueryKey(),
     async queryFn({pageParam}) {
-      return await client.call(app.bsky.bookmark.getBookmarks, {
-        cursor: pageParam,
-      })
+      // HORIZON: the private posts a page of bookmarks quotes arrive with it
+      return await withBookmarkQuotes(
+        await client.call(app.bsky.bookmark.getBookmarks, {
+          cursor: pageParam,
+        }),
+      )
     },
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,

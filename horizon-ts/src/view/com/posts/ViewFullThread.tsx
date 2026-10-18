@@ -9,12 +9,19 @@ import {atoms as a, select, useTheme} from '#/alf'
 import {Link} from '#/components/Link'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Text} from '#/components/Typography'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 
 export function ViewFullThread({uri}: {uri: string}) {
   const t = useTheme()
   const itemHref = useMemo(() => {
     const urip = new AtUri(uri)
-    return makeProfileLink({did: urip.hostname, handle: ''}, 'post', urip.rkey)
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(
+      {did: urip.hostname, handle: ''},
+      postSegment(uri),
+      urip.rkey,
+    )
   }, [uri])
   const {t: l} = useLingui()
 

@@ -33,6 +33,8 @@ import {
 } from '#/state/queries/util'
 import {useAppviewClient, useSession} from '#/state/session'
 import {useThreadgateHiddenReplyUris} from '#/state/threadgate-hidden-replies'
+// HORIZON: a page whose grouped request fails is read from listNotifications
+import {withGroupedFallback} from '#/horizon/notifications/grouped-fallback'
 import {app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
@@ -140,15 +142,21 @@ export function useGroupedNotificationsQuery({
     queryKey: createGroupedNotificationsQueryKey({feed}),
     async queryFn({pageParam}): Promise<LoadedGroupedNotificationsPage> {
       const requestedAt = Date.now()
-      const res = await client.call(
-        app.bsky.notification.getGroupedNotifications,
-        {
-          feed,
-          limit: PAGE_SIZE,
-          cursor: pageParam,
+      // HORIZON: a page whose grouped request fails is read from listNotifications
+      return withGroupedFallback(
+        {client, feed, cursor: pageParam, viewerDid, requestedAt},
+        async () => {
+          const res = await client.call(
+            app.bsky.notification.getGroupedNotifications,
+            {
+              feed,
+              limit: PAGE_SIZE,
+              cursor: pageParam,
+            },
+          )
+          return {...hydratePage(res, {viewerDid}), requestedAt}
         },
       )
-      return {...hydratePage(res, {viewerDid}), requestedAt}
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.cursor,

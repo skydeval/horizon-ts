@@ -15,6 +15,8 @@ import {
 import {Trash_Stroke2_Corner0_Rounded as TrashIcon} from '#/components/icons/Trash'
 import * as toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
+// HORIZON: a private post is saved only once prism answers that it stores private bookmarks
+import {refusesPrivateBookmark} from '#/horizon/private/api/bookmarks'
 import {type app} from '#/lexicons'
 import {PostControlButton, PostControlButtonIcon} from './PostControlButton'
 
@@ -133,6 +135,8 @@ export function usePostBookmark({
    * themselves. Removing confirms with its own toast.
    */
   const toggleBookmark = async (): Promise<'saved' | undefined> => {
+    // HORIZON: a private post is saved only once prism answers that it stores private bookmarks
+    if (refusesPrivateBookmark(post.uri)) return
     if (isBookmarked) {
       await remove()
     } else if (await save()) {

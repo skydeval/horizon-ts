@@ -16,6 +16,8 @@ import {atoms as a} from '#/alf'
 import {AltBadgeWithDialog} from '#/components/AltBadgeWithDialog'
 import {useFullscreen} from '#/components/hooks/useFullscreen'
 import {useReportDialogMetadataContext} from '#/components/moderation/ReportDialog/ReportDialogMetadataContext'
+// HORIZON: a playlist that is not HLS plays as the video element's own source
+import {attachDirectSource, playsAsDirectSource} from '#/horizon/video/playback'
 import * as BandwidthEstimate from './bandwidth-estimate'
 import {loadHls} from './loadHls'
 import {
@@ -293,6 +295,9 @@ function useHLS({
 
   useEffect(() => {
     if (!videoRef.current) return
+    // HORIZON: a playlist that is not HLS (a private video's MP4 on its PDS) plays as the element's own source
+    if (playsAsDirectSource(playlist))
+      return attachDirectSource(videoRef.current, playlist)
     if (!Hls) return
     if (!Hls.isSupported() || !canPlayBskyVideoCodecs()) {
       throw new HLSUnsupportedError()

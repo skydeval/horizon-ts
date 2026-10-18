@@ -92,6 +92,19 @@ import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL} from '#/env'
+// HORIZON: menu items that govern public-only machinery are absent on private posts
+import {
+  hidesDetachQuote,
+  hidesGateControls,
+  hideThreadMute,
+  isPrivateDisplay,
+} from '#/horizon/private/render/controls'
+// HORIZON: a private post's settings open the private dialog
+import {PrivatePostSettingsDialog} from '#/horizon/private/settings/PrivatePostSettingsDialog'
+// HORIZON: a private post's settings open the private dialog
+import {PrivatePostSettingsMenuItem} from '#/horizon/private/settings/PrivatePostSettingsMenuItem'
+// HORIZON: private post links use the ppost segment; delete navigates back from a ppost thread
+import {postSegment, postThreadRouteName} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 import {PostMenuControlItems} from './PostMenuControlItems'
 
@@ -194,7 +207,8 @@ let PostMenuItems = ({
 
   const href = useMemo(() => {
     const urip = new AtUri(postUri)
-    return makeProfileLink(postAuthor, 'post', urip.rkey)
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(postAuthor, postSegment(postUri), urip.rkey)
   }, [postUri, postAuthor])
 
   const onDeletePost = () => {
@@ -203,7 +217,8 @@ let PostMenuItems = ({
         Toast.show(l({message: 'Post deleted', context: 'toast'}))
 
         const route = getCurrentRoute(navigation.getState())
-        if (route.name === 'PostThread') {
+        // HORIZON: deleting from a ppost thread goes back as from a public one
+        if (route.name === postThreadRouteName(postUri)) {
           const params = route.params as CommonNavigatorParams['PostThread']
           if (
             currentAccount &&
@@ -211,7 +226,12 @@ let PostMenuItems = ({
             (params.name === currentAccount.handle ||
               params.name === currentAccount.did)
           ) {
-            const currentHref = makeProfileLink(postAuthor, 'post', params.rkey)
+            // HORIZON: private post links use the ppost segment
+            const currentHref = makeProfileLink(
+              postAuthor,
+              postSegment(postUri),
+              params.rkey,
+            )
             if (currentHref === href && navigation.canGoBack()) {
               navigation.goBack()
             }
@@ -363,9 +383,18 @@ let PostMenuItems = ({
   }
 
   const canHidePostForMe = !isAuthor && !isPostHidden
+  // HORIZON: hide reply on a private post once prism applies the gates of its private root
   const canHideReplyForEveryone =
-    !isAuthor && isRootPostAuthor && !isPostHidden && isReply
-  const canDetachQuote = quoteEmbed && quoteEmbed.isOwnedByViewer
+    !hidesGateControls(postUri, rootUri, {forWrite: true}) &&
+    !isAuthor &&
+    isRootPostAuthor &&
+    !isPostHidden &&
+    isReply
+  // HORIZON: detach quote on a private post once prism applies gates to the private post it quotes
+  const canDetachQuote =
+    !hidesDetachQuote(postUri, quoteEmbed?.uri) &&
+    quoteEmbed &&
+    quoteEmbed.isOwnedByViewer
 
   const onToggleReplyVisibility = async () => {
     // TODO no threadgate?
@@ -650,18 +679,22 @@ let PostMenuItems = ({
           <>
             <Menu.Divider />
             <Menu.Group>
-              <Menu.Item
-                testID="postDropdownMuteThreadBtn"
-                label={isThreadMuted ? l`Unmute thread` : l`Mute thread`}
-                onPress={onToggleThreadMute}>
-                <Menu.ItemText>
-                  {isThreadMuted ? l`Unmute thread` : l`Mute thread`}
-                </Menu.ItemText>
-                <Menu.ItemIcon
-                  icon={isThreadMuted ? Unmute : Mute}
-                  position="right"
-                />
-              </Menu.Item>
+              {/* HORIZON: Mute thread on a private root once prism serves its thread mutes (start) */}
+              {!hideThreadMute(rootUri) && (
+                <Menu.Item
+                  testID="postDropdownMuteThreadBtn"
+                  label={isThreadMuted ? l`Unmute thread` : l`Mute thread`}
+                  onPress={onToggleThreadMute}>
+                  <Menu.ItemText>
+                    {isThreadMuted ? l`Unmute thread` : l`Mute thread`}
+                  </Menu.ItemText>
+                  <Menu.ItemIcon
+                    icon={isThreadMuted ? Unmute : Mute}
+                    position="right"
+                  />
+                </Menu.Item>
+              )}
+              {/* HORIZON: Mute thread on a private root once prism serves its thread mutes (end) */}
 
               <Menu.Item
                 testID="postDropdownMuteWordsBtn"
@@ -785,37 +818,53 @@ let PostMenuItems = ({
                     </Menu.Item>
                   )}
 
-                  <Menu.Item
-                    testID="postDropdownReportBtn"
-                    label={l`Report post`}
-                    onPress={() => reportDialogControl.open()}>
-                    <Menu.ItemText>{l`Report post`}</Menu.ItemText>
-                    <Menu.ItemIcon icon={Warning} position="right" />
-                  </Menu.Item>
+                  {/* HORIZON: reporting private posts waits on its own design (start) */}
+                  {!isPrivateDisplay(postUri) && (
+                    <Menu.Item
+                      testID="postDropdownReportBtn"
+                      label={l`Report post`}
+                      onPress={() => reportDialogControl.open()}>
+                      <Menu.ItemText>{l`Report post`}</Menu.ItemText>
+                      <Menu.ItemIcon icon={Warning} position="right" />
+                    </Menu.Item>
+                  )}
+                  {/* HORIZON: reporting private posts waits on its own design (end) */}
                 </>
               )}
 
               {isAuthor && (
                 <>
-                  <Menu.Item
-                    testID="postDropdownEditPostInteractions"
-                    label={l`Edit interaction settings`}
-                    onPress={() => postInteractionSettingsDialogControl.open()}
-                    {...(isAuthor
-                      ? Platform.select({
-                          web: {
-                            onHoverIn: prefetchPostInteractionSettings,
-                          },
-                          native: {
-                            onPressIn: prefetchPostInteractionSettings,
-                          },
-                        })
-                      : {})}>
-                    <Menu.ItemText>
-                      {l`Edit interaction settings`}
-                    </Menu.ItemText>
-                    <Menu.ItemIcon icon={Gear} position="right" />
-                  </Menu.Item>
+                  {/* HORIZON: a private post's settings open the private dialog (start) */}
+                  {isPrivateDisplay(postUri) ? (
+                    <PrivatePostSettingsMenuItem
+                      onPress={() =>
+                        postInteractionSettingsDialogControl.open()
+                      }
+                    />
+                  ) : (
+                    <Menu.Item
+                      testID="postDropdownEditPostInteractions"
+                      label={l`Edit interaction settings`}
+                      onPress={() =>
+                        postInteractionSettingsDialogControl.open()
+                      }
+                      {...(isAuthor
+                        ? Platform.select({
+                            web: {
+                              onHoverIn: prefetchPostInteractionSettings,
+                            },
+                            native: {
+                              onPressIn: prefetchPostInteractionSettings,
+                            },
+                          })
+                        : {})}>
+                      <Menu.ItemText>
+                        {l`Edit interaction settings`}
+                      </Menu.ItemText>
+                      <Menu.ItemIcon icon={Gear} position="right" />
+                    </Menu.Item>
+                  )}
+                  {/* HORIZON: a private post's settings open the private dialog (end) */}
                   <Menu.Item
                     testID="postDropdownDeleteBtn"
                     label={l`Delete post`}
@@ -859,12 +908,24 @@ let PostMenuItems = ({
           })
         }}
       />
-      <PostInteractionSettingsDialog
-        control={postInteractionSettingsDialogControl}
-        postUri={post.uri}
-        rootPostUri={rootUri}
-        initialThreadgateView={post.threadgate}
-      />
+      {/* HORIZON: a private post's settings open the private dialog (start) */}
+      {isPrivateDisplay(post.uri) ? (
+        <PrivatePostSettingsDialog
+          control={postInteractionSettingsDialogControl}
+          postUri={post.uri}
+          rootPostUri={rootUri}
+          postCid={postCid}
+          parentUri={record.reply?.parent?.uri}
+        />
+      ) : (
+        <PostInteractionSettingsDialog
+          control={postInteractionSettingsDialogControl}
+          postUri={post.uri}
+          rootPostUri={rootUri}
+          initialThreadgateView={post.threadgate}
+        />
+      )}
+      {/* HORIZON: a private post's settings open the private dialog (end) */}
       <Prompt.Basic
         control={quotePostDetachConfirmControl}
         title={l`Detach quote post?`}

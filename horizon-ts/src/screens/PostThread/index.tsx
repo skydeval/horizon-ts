@@ -57,6 +57,10 @@ import * as Layout from '#/components/Layout'
 import {ListFooter} from '#/components/Lists'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
+// HORIZON: a private post the reader may not view shows the stand-in
+import {isPrivateDisplay} from '#/horizon/private/render/controls'
+// HORIZON: a private post the reader may not view shows the stand-in
+import {StandIn} from '#/horizon/private/render/StandIn'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -515,7 +519,12 @@ export function PostThread({uri}: {uri: string}) {
       } else if (item.type === 'threadPostBlocked') {
         return <ThreadItemPostTombstone type="blocked" />
       } else if (item.type === 'threadPostNotFound') {
-        return <ThreadItemPostTombstone type="not-found" />
+        // HORIZON: a private post the reader may not view shows the stand-in
+        return isPrivateDisplay(item.uri) ? (
+          <StandIn variant="thread" />
+        ) : (
+          <ThreadItemPostTombstone type="not-found" />
+        )
       } else if (item.type === 'replyComposer') {
         return (
           <View>

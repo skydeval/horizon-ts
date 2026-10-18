@@ -25,6 +25,8 @@ import * as Toast from '#/components/Toast'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: private post links use the ppost segment
+import {hidesBlueskyShare, postSegment} from '#/horizon/private/uri'
 import {useDevMode} from '#/storage/hooks/dev-mode'
 import {RecentChats} from './RecentChats'
 import {type ShareMenuItemsProps} from './ShareMenuItems.types'
@@ -47,7 +49,8 @@ let ShareMenuItems = ({
 
   const href = useMemo(() => {
     const urip = new AtUri(postUri)
-    return makeProfileLink(postAuthor, 'post', urip.rkey)
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(postAuthor, postSegment(postUri), urip.rkey)
   }, [postUri, postAuthor])
 
   const hideInPWI = useMemo(() => {
@@ -109,28 +112,31 @@ let ShareMenuItems = ({
   return (
     <>
       <Menu.Outer>
-        {hasSession && aa.state.access === aa.Access.Full && (
-          <Menu.Group>
-            <Menu.ContainerItem>
-              <RecentChats
-                postUri={postUri}
-                onBeforePress={onBeforeShareViaChat}
-              />
-            </Menu.ContainerItem>
-            <Menu.Item
-              testID="postDropdownSendViaDMBtn"
-              label={l`Send via chat`}
-              onPress={() => {
-                ax.metric('share:press:openDmSearch', {})
-                sendViaChatControl.open()
-              }}>
-              <Menu.ItemText>
-                <Trans>Send via chat</Trans>
-              </Menu.ItemText>
-              <Menu.ItemIcon icon={PaperPlaneIcon} position="right" />
-            </Menu.Item>
-          </Menu.Group>
-        )}
+        {/* HORIZON: a chat recipient's client cannot resolve a private post */}
+        {!hidesBlueskyShare(postUri) &&
+          hasSession &&
+          aa.state.access === aa.Access.Full && (
+            <Menu.Group>
+              <Menu.ContainerItem>
+                <RecentChats
+                  postUri={postUri}
+                  onBeforePress={onBeforeShareViaChat}
+                />
+              </Menu.ContainerItem>
+              <Menu.Item
+                testID="postDropdownSendViaDMBtn"
+                label={l`Send via chat`}
+                onPress={() => {
+                  ax.metric('share:press:openDmSearch', {})
+                  sendViaChatControl.open()
+                }}>
+                <Menu.ItemText>
+                  <Trans>Send via chat</Trans>
+                </Menu.ItemText>
+                <Menu.ItemIcon icon={PaperPlaneIcon} position="right" />
+              </Menu.Item>
+            </Menu.Group>
+          )}
 
         <Menu.Group>
           <Menu.Item

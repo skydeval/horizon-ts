@@ -24,6 +24,10 @@ import {useFormatPostStatCount} from '#/components/PostControls/util'
 import * as Skele from '#/components/Skeleton'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
+// HORIZON: a private post's reply and quote limits are checked before the composer opens
+import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
+// HORIZON: a private post shows counts only when prism served them
+import {privateControlsFor} from '#/horizon/private/render/controls'
 import {type app} from '#/lexicons'
 import {BookmarkButton} from './BookmarkButton'
 import {
@@ -93,6 +97,8 @@ let PostControls = ({
     post.author.viewer?.blockedBy ||
     post.author.viewer?.blockingByList,
   )
+  // HORIZON: a private post shows counts only when prism served them
+  const privateControls = privateControlsFor(post.uri)
   const replyDisabled = post.viewer?.replyDisabled
   const {gtPhone} = useBreakpoints()
   const formatPostStatCount = useFormatPostStatCount()
@@ -231,7 +237,8 @@ let PostControls = ({
                         logContext,
                         feedDescriptor,
                       })
-                      onPressReply()
+                      // HORIZON: a private post's reply limit is checked before the composer opens
+                      guardPrivateInteraction(post, 'reply', onPressReply)
                     })
                 : undefined
             }
@@ -245,19 +252,28 @@ let PostControls = ({
             })}
             big={big}>
             <PostControlButtonIcon icon={Bubble} />
-            {typeof post.replyCount !== 'undefined' && post.replyCount > 0 && (
-              <PostControlButtonText>
-                {formatPostStatCount(post.replyCount)}
-              </PostControlButtonText>
-            )}
+            {/* HORIZON: no reply count on a private post without served counts */}
+            {!privateControls.hideCounts &&
+              typeof post.replyCount !== 'undefined' &&
+              post.replyCount > 0 && (
+                <PostControlButtonText>
+                  {formatPostStatCount(post.replyCount)}
+                </PostControlButtonText>
+              )}
           </PostControlButton>
         </View>
         <View style={[a.flex_1, a.align_start]}>
           <RepostButton
             isReposted={!!post.viewer?.repost}
-            repostCount={(post.repostCount ?? 0) + (post.quoteCount ?? 0)}
+            // HORIZON: no repost count on a private post without served counts
+            repostCount={
+              privateControls.hideCounts
+                ? undefined
+                : (post.repostCount ?? 0) + (post.quoteCount ?? 0)
+            }
             onRepost={() => void onRepost()}
-            onQuote={onQuote}
+            // HORIZON: a private post's quote limit is checked before the composer opens
+            onQuote={() => guardPrivateInteraction(post, 'quote', onQuote)}
             big={big}
             embeddingDisabled={Boolean(post.viewer?.embeddingDisabled)}
           />
@@ -293,16 +309,20 @@ let PostControls = ({
               big={big}
               hasBeenToggled={hasLikeIconBeenToggled}
             />
-            <CountWheel
-              count={post.likeCount ?? 0}
-              isToggled={Boolean(post.viewer?.like)}
-              hasBeenToggled={hasLikeIconBeenToggled}
-              renderCount={({count}) => (
-                <PostControlButtonText testID="likeCount">
-                  {formatPostStatCount(count)}
-                </PostControlButtonText>
-              )}
-            />
+            {/* HORIZON: no like count on a private post without served counts; the heart stays (start) */}
+            {!privateControls.hideCounts && (
+              <CountWheel
+                count={post.likeCount ?? 0}
+                isToggled={Boolean(post.viewer?.like)}
+                hasBeenToggled={hasLikeIconBeenToggled}
+                renderCount={({count}) => (
+                  <PostControlButtonText testID="likeCount">
+                    {formatPostStatCount(count)}
+                  </PostControlButtonText>
+                )}
+              />
+            )}
+            {/* HORIZON: no like count on a private post without served counts; the heart stays (end) */}
           </PostControlButton>
         </View>
         {/* Spacer! */}

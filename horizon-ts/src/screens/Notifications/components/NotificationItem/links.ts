@@ -1,6 +1,8 @@
 import {AtUri} from '@atproto/syntax'
 
 import {makeProfileLink} from '#/lib/routes/links'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 
 /**
  * `getPosts`, which backs the activity list screen, takes at most 25 URIs.
@@ -17,7 +19,8 @@ export function makePostLink(
 ) {
   return makeProfileLink(
     post.author,
-    'post',
+    // HORIZON: private post links use the ppost segment
+    postSegment(post.uri),
     new AtUri(post.uri).rkey,
     ...segments,
   )

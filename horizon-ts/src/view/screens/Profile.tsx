@@ -50,6 +50,10 @@ import {VideoClip_Stroke1_Corner0_Rounded as VideoIcon} from '#/components/icons
 import * as Layout from '#/components/Layout'
 import {ScreenHider} from '#/components/moderation/ScreenHider'
 import {ProfileStarterPacks} from '#/components/StarterPack/ProfileStarterPacks'
+// HORIZON: the Private tab
+import {PrivateProfileSection} from '#/horizon/private/profile/PrivateProfileSection'
+// HORIZON: the Private tab
+import {useShowPrivateTab} from '#/horizon/private/profile/useShowPrivateTab'
 import {type app} from '#/lexicons'
 import {navigate} from '#/Navigation'
 
@@ -201,6 +205,8 @@ function ProfileScreenLoaded({
   const listsSectionRef = useRef<SectionRef>(null)
   const starterPacksSectionRef = useRef<SectionRef>(null)
   const labelsSectionRef = useRef<SectionRef>(null)
+  // HORIZON: the Private tab scrolls to top like the stock tabs
+  const privateSectionRef = useRef<SectionRef>(null)
 
   useSetTitle(combinedDisplayName(profile))
 
@@ -228,11 +234,15 @@ function ProfileScreenLoaded({
   // subtract starterpack count from list count, since starterpacks are a type of list
   const listCount = (profile.associated?.lists || 0) - starterPackCount
   const showListsTab = hasSession && (isMe || listCount > 0)
+  // HORIZON: the Private tab, for a signed-in member
+  const showPrivateTab = useShowPrivateTab()
 
   const sectionTitles = [
     showFiltersTab ? _(msg`Labels`) : undefined,
     showListsTab && hasLabeler ? _(msg`Lists`) : undefined,
     showPostsTab ? _(msg`Posts`) : undefined,
+    // HORIZON: the Private tab sits between Posts and Replies
+    showPrivateTab ? _(msg`Private`) : undefined,
     showRepliesTab ? _(msg`Replies`) : undefined,
     showMediaTab ? _(msg`Media`) : undefined,
     showVideosTab ? _(msg`Videos`) : undefined,
@@ -252,11 +262,17 @@ function ProfileScreenLoaded({
   let feedsIndex: number | null = null
   let starterPacksIndex: number | null = null
   let listsIndex: number | null = null
+  // HORIZON: the Private tab sits between Posts and Replies
+  let privateIndex: number | null = null
   if (showFiltersTab) {
     filtersIndex = nextIndex++
   }
   if (showPostsTab) {
     postsIndex = nextIndex++
+  }
+  // HORIZON: the Private tab sits between Posts and Replies
+  if (showPrivateTab) {
+    privateIndex = nextIndex++
   }
   if (showRepliesTab) {
     repliesIndex = nextIndex++
@@ -286,6 +302,9 @@ function ProfileScreenLoaded({
         labelsSectionRef.current?.scrollToTop()
       } else if (index === postsIndex) {
         postsSectionRef.current?.scrollToTop()
+        // HORIZON: the Private tab scrolls to top like the stock tabs
+      } else if (index === privateIndex) {
+        privateSectionRef.current?.scrollToTop()
       } else if (index === repliesIndex) {
         repliesSectionRef.current?.scrollToTop()
       } else if (index === mediaIndex) {
@@ -312,6 +331,8 @@ function ProfileScreenLoaded({
       feedsIndex,
       listsIndex,
       starterPacksIndex,
+      // HORIZON: the Private tab scrolls to top like the stock tabs
+      privateIndex,
     ],
   )
 
@@ -453,6 +474,19 @@ function ProfileScreenLoaded({
                     : undefined
                 }
                 postFeedRef={postFeedRef}
+              />
+            )
+          : null}
+        {/* HORIZON: the Private tab sits between Posts and Replies */}
+        {showPrivateTab
+          ? ({headerHeight, isFocused, scrollElRef}) => (
+              <PrivateProfileSection
+                ref={privateSectionRef}
+                did={profile.did}
+                headerHeight={headerHeight}
+                isFocused={isFocused}
+                scrollElRef={scrollElRef}
+                setScrollViewTag={setScrollViewTag}
               />
             )
           : null}

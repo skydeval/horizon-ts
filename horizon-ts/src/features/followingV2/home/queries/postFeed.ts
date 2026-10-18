@@ -50,6 +50,12 @@ import {
   type ReasonFeedSource,
 } from '#/features/followingV2/home/api/types'
 import {type NewPostsCheckTrigger} from '#/features/followingV2/home/useNewPostsCheck'
+// HORIZON: private posts in Following
+import {withPrivateKey} from '#/horizon/private/feed/keys'
+// HORIZON: private posts in Following
+import {withPrivateTimeline} from '#/horizon/private/feed/timeline-merge'
+// HORIZON: private posts in Following
+import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {type app} from '#/lexicons'
 
 type ActorDid = string
@@ -89,7 +95,8 @@ type RQPageParam = undefined | {cursor: string; source?: FeedSource}
  * must keep a `feed` of `FeedViewPost`s.
  */
 export function RQKEY(feedDesc: FeedDescriptor, params?: FeedParams) {
-  return [RQKEY_ROOT, `v2|${feedDesc}`, params || {}]
+  // HORIZON: a member's feeds that carry private posts are keyed by membership
+  return withPrivateKey(feedDesc, [RQKEY_ROOT, `v2|${feedDesc}`, params || {}])
 }
 
 export interface FeedPostSliceItem {
@@ -408,6 +415,8 @@ export function usePostFeedFetcher(feedDesc: FeedDescriptor) {
   const enableFollowingToDiscoverFallback = followingPinnedIndex === 0
   const {hasSession} = useSession()
   const client = useAppviewClient()
+  // HORIZON: a member's private timeline source, when its clients are current
+  const privateSource = usePrivateFeedSource()
 
   /**
    * The number of posts to fetch in a single request. Because we filter
@@ -416,15 +425,21 @@ export function usePostFeedFetcher(feedDesc: FeedDescriptor) {
    */
   const fetchLimit = MIN_POSTS
 
+  // HORIZON: Following merges the member's private timeline (start)
   const createFeedApi = () =>
-    createApi({
+    withPrivateTimeline(
       feedDesc,
-      client,
-      // Not in the query key because they don't change:
-      userInterests,
-      // Not in the query key. Reacting to it switching isn't important:
-      enableFollowingToDiscoverFallback,
-    })
+      privateSource,
+      createApi({
+        feedDesc,
+        client,
+        // Not in the query key because they don't change:
+        userInterests,
+        // Not in the query key. Reacting to it switching isn't important:
+        enableFollowingToDiscoverFallback,
+      }),
+    )
+  // HORIZON: Following merges the member's private timeline (end)
 
   const fetchPage = async (
     pageParam: RQPageParam,

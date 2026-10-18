@@ -54,6 +54,12 @@ import {Link} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {useAnalytics} from '#/analytics'
 import {IS_LIQUID_GLASS, IS_WEB} from '#/env'
+// HORIZON: the Public | Private switch and the Private view for members
+import {usePrivateNotificationsMode} from '#/horizon/private/notifications/mode'
+// HORIZON: the Public | Private switch and the Private view for members
+import {NotificationsModeSwitch} from '#/horizon/private/notifications/ModeSwitch'
+// HORIZON: the Public | Private switch and the Private view for members
+import {PrivateNotificationsContent} from '#/horizon/private/notifications/PrivateNotificationsContent'
 
 type Props = NativeStackScreenProps<
   NotificationsTabNavigatorParams,
@@ -85,6 +91,8 @@ export function NewNotificationsScreen({}: Props) {
 
 function NewNotificationsScreenInner() {
   const {t: l} = useLingui()
+  // HORIZON: the Private view replaces the pills and the pager content
+  const privateMode = usePrivateNotificationsMode()
   const headerMode = useHomeHeaderMode()
   const initialHeaderOffset = useHeaderOffset()
   const [headerOffset, setHeaderOffset] = useState(initialHeaderOffset)
@@ -175,7 +183,10 @@ function NewNotificationsScreenInner() {
         onTitleLayout={onTitleLayout}
         onHeightChange={setHeaderOffset}
         loadingLatestPages={loadingLatestPages}>
-        {!hasNoNotifications && (
+        {/* HORIZON: the Public | Private switch above the pills, for members */}
+        <NotificationsModeSwitch />
+        {/* HORIZON: the Private view has its own pills */}
+        {!hasNoNotifications && !privateMode && (
           <Pager.TabBar>
             {({selectedPage, selectPage, dragProgress}) => (
               <TabPills
@@ -198,44 +209,50 @@ function NewNotificationsScreenInner() {
           </Pager.TabBar>
         )}
       </NotificationsHeader>
-      <Pager.Content
-        manageDrawerGesture
-        scrollEnabled={!hasNoNotifications}
-        testID="notificationsPagerView">
-        {tabs.map((tab, pageIndex) => (
-          <PageList
-            key={tab.key}
-            feed={tab.key}
-            pageIndex={pageIndex}
-            headerOffset={headerOffset}
-            titleHeight={titleHeight}
-            seenAt={seenAt}
-            onFirstLoad={onFirstLoad}
-            refresh={refresh}
-            onLoadingLatestChange={isLoading => {
-              setLoadingLatestPages(pages => {
-                const next = new Set(pages)
-                if (isLoading) {
-                  next.add(pageIndex)
+      {/* HORIZON: the Private view replaces the pager content (start) */}
+      {privateMode ? (
+        <PrivateNotificationsContent headerOffset={headerOffset} />
+      ) : (
+        <Pager.Content
+          manageDrawerGesture
+          scrollEnabled={!hasNoNotifications}
+          testID="notificationsPagerView">
+          {tabs.map((tab, pageIndex) => (
+            <PageList
+              key={tab.key}
+              feed={tab.key}
+              pageIndex={pageIndex}
+              headerOffset={headerOffset}
+              titleHeight={titleHeight}
+              seenAt={seenAt}
+              onFirstLoad={onFirstLoad}
+              refresh={refresh}
+              onLoadingLatestChange={isLoading => {
+                setLoadingLatestPages(pages => {
+                  const next = new Set(pages)
+                  if (isLoading) {
+                    next.add(pageIndex)
+                  } else {
+                    next.delete(pageIndex)
+                  }
+                  return next
+                })
+              }}
+              onScrolledDownChange={isScrolledDown => {
+                if (isScrolledDown) {
+                  scrolledDownFeeds.current.add(tab.key)
                 } else {
-                  next.delete(pageIndex)
+                  scrolledDownFeeds.current.delete(tab.key)
                 }
-                return next
-              })
-            }}
-            onScrolledDownChange={isScrolledDown => {
-              if (isScrolledDown) {
-                scrolledDownFeeds.current.add(tab.key)
-              } else {
-                scrolledDownFeeds.current.delete(tab.key)
+              }}
+              onEmptyChange={
+                tab.key === 'all' ? setHasNoNotifications : undefined
               }
-            }}
-            onEmptyChange={
-              tab.key === 'all' ? setHasNoNotifications : undefined
-            }
-          />
-        ))}
-      </Pager.Content>
+            />
+          ))}
+        </Pager.Content>
+      )}
+      {/* HORIZON: the Private view replaces the pager content (end) */}
     </Pager.Root>
   )
 }

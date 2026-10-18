@@ -11,6 +11,10 @@ import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {RichTextTag} from '#/components/RichTextTag'
 import {Text, type TextProps} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+// HORIZON: post text with spoiler facets renders its spoilers covered
+import {rendersSpoilers} from '#/horizon/spoilers/layout'
+// HORIZON: post text with spoiler facets renders its spoilers covered
+import {SpoilerRichText} from '#/horizon/spoilers/SpoilerRichText'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -83,6 +87,30 @@ export function RichText({
       return rt
     }
   }, [value])
+
+  // HORIZON: post text with spoiler facets renders its spoilers covered
+  if (rendersSpoilers(richText)) {
+    return (
+      <SpoilerRichText
+        richText={richText}
+        testID={testID}
+        style={style}
+        numberOfLines={numberOfLines}
+        disableLinks={disableLinks}
+        selectable={selectable}
+        enableTags={enableTags}
+        authorHandle={authorHandle}
+        onLinkPress={onLinkPress}
+        interactiveStyle={interactiveStyle}
+        onLayout={onLayout}
+        onTextLayout={onTextLayout}
+        shouldProxyLinks={shouldProxyLinks}
+        suffix={suffix}
+        suffixOffset={suffixOffset}
+        disableMentionFacetValidation={disableMentionFacetValidation}
+      />
+    )
+  }
 
   const {text, facets} = richText
   const plainStyles: StyleProp<TextStyle> = [

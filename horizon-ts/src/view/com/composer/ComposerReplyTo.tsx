@@ -13,6 +13,10 @@ import {atoms as a, useTheme, utils, web} from '#/alf'
 import {QuoteEmbed} from '#/components/Post/Embed'
 import {ProfileBadges} from '#/components/ProfileBadges'
 import {Text} from '#/components/Typography'
+// HORIZON: the replied-to post's spoilers are drawn covered
+import {coversReplyToSpoilers} from '#/horizon/spoilers/reply-preview'
+// HORIZON: the replied-to post's spoilers are drawn covered
+import {ReplyToText} from '#/horizon/spoilers/ReplyToText'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {parseEmbed} from '#/types/bsky/post'
@@ -120,12 +124,22 @@ export function ComposerReplyTo({replyTo}: {replyTo: ComposerOptsPostRef}) {
         </View>
         <View style={[a.flex_row, a.gap_md]}>
           <View style={[a.flex_1, a.flex_grow]}>
-            <Text
-              style={[a.text_md, a.leading_snug, t.atoms.text_contrast_high]}
-              numberOfLines={!showFull ? 6 : undefined}
-              emoji>
-              {replyTo.text}
-            </Text>
+            {/* HORIZON: the replied-to post's spoilers are drawn covered (start) */}
+            {coversReplyToSpoilers() ? (
+              <ReplyToText
+                replyTo={replyTo}
+                numberOfLines={!showFull ? 6 : undefined}
+                style={[a.text_md, a.leading_snug, t.atoms.text_contrast_high]}
+              />
+            ) : (
+              <Text
+                style={[a.text_md, a.leading_snug, t.atoms.text_contrast_high]}
+                numberOfLines={!showFull ? 6 : undefined}
+                emoji>
+                {replyTo.text}
+              </Text>
+            )}
+            {/* HORIZON: the replied-to post's spoilers are drawn covered (end) */}
           </View>
           {images && !replyTo.moderation?.ui('contentMedia').blur && (
             <ComposerReplyToImages images={images} totalNumber={totalNumber} />

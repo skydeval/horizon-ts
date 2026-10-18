@@ -9,6 +9,8 @@ import {
   NotificationQuoteSmall_Filled_Corner0_Rounded as QuoteIcon,
   NotificationReplySmall_Filled_Corner0_Rounded as ReplyIcon,
 } from '#/components/icons/Notification'
+// HORIZON: a private post's row carries the corner lock
+import {PrivateAuthorRow} from '#/horizon/private/notifications/PrivateAuthorRow'
 import * as Item from '../Item'
 import {makePostLink} from '../links'
 import {type NotificationOf} from '../types'
@@ -98,7 +100,11 @@ function PostNotification({
       <Item.Avatar profile={post.author} icon={icon} tone="conversation" />
       <Item.Content style={[a.gap_sm]}>
         <View style={[a.gap_xs]}>
-          <Item.Author profile={post.author} />
+          {/* HORIZON: a private post's row carries the corner lock (start) */}
+          <PrivateAuthorRow uri={post.uri}>
+            <Item.Author profile={post.author} />
+          </PrivateAuthorRow>
+          {/* HORIZON: a private post's row carries the corner lock (end) */}
           {parent && (
             <Item.ReplyContext parent={parent} variant={replyVariant} />
           )}

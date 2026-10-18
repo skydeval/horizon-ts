@@ -13,7 +13,12 @@ its logic here and touches Bluesky's files only through small, marked hooks.
 | `branding/` | The product name. `product.json` is its one source. |
 | `session/` | Session logic: the OAuth client, its metadata and transport, OAuth bundles and accounts, kind dispatch, refresh, sign-out, session death, cross-tab adoption, Horizon's device keys, and the Horizon session provider. No UI. |
 | `auth/` | Sign-in, callback, in-place sign-in, password gate and signup UI, and `HorizonHost`. |
-| `routing/` | The public AppView choice and switcher, the prism clients, the routing table, and membership. |
+| `routing/` | The public AppView choice and switcher, the prism clients, the routing table, membership (asked of prism's `app.nearhorizon.actor.getMembership`, with the Phase 2 probe and its private-timeline fallback for a prism without it; persisted per account with prism's features in a v2 device record, `membership-record.ts`, and re-checked at every start and on a private 501 `MethodNotImplemented`), the per-account feature store (`features.ts`: `servesFeature`, `servesFeatureForWrite`), and the current-clients record that code outside React reads. |
+| `lexicons/` | Hand-written schemas for the kryphocron procedures and records (`tools.kryphocron.*`) and prism's private reads and `requestRecord` (`app.nearhorizon.*`), until generated ones exist; and Horizon's own spoiler facet features (`richtext.ts`, `app.nearhorizon.richtext.facet#spoiler` and `#spoilerMarker`), which the private record's closed facet union lists. |
+| `spoilers/` | Spoiler tags, both tiers: the feature constants (`nsid.ts`), the one `\|\|...\|\|` parser (`parse.ts`), the write pipeline (`build.ts`, `write.ts`: markers kept in the text with `#spoilerMarker` facets on public posts and, until prism answers `private.embeds` in this run (`privateFacetsServed`), on private ones; stripped from private posts after; the composer's count), local detection of a served private text's markers (`local.ts`), the render layout (`layout.ts`: hidden markers, inline covers, block drawers, compact renderings) and its state (`state.ts`), the renderer (`SpoilerRichText.tsx`, `InlineSpoiler.tsx`, `SpoilerDrawer.tsx`), the composer's reply preview found by URI in the cache (`ReplyToText.tsx`, `reply-preview.ts`), the video card's placeholder text (`plain.ts`), and the web composer button and editor command (`SpoilerButton.tsx`, `editor.ts`). |
+| `notifications/` | The redesigned notifications' fallback (`grouped-fallback.ts`): a page whose `getGroupedNotifications` request fails with a 5xx or a network error is read from `listNotifications`, grouped on the client with the stock grouping and hydrated by the stock `hydratePage`, so the rows and the five pills render unchanged; a page on the fallback keeps its list there, and a failure holds the grouped request back for five minutes per account and feed. |
+| `video/` | The video service's DID and URL in one constant (`service.ts`, read by the stock `VIDEO_SERVICE` and `VIDEO_SERVICE_DID`), and web playback of a non-HLS `playlist` as a direct source (`playback.ts`). |
+| `private/` | Private posting: URI helpers, side stores, the server-support table, membership for private features, the write path and local validation (languages and self-labels included), where a private reply goes (`api/reply-anchor.ts`: its thread root or branch root and that anchor's current audience), changing a post's audience in place (`api/update-audience.ts`), reply and quote limits as stock gate records (`api/gates.ts`: written at compose, read and evaluated for readers until prism applies them; `api/gate-guard.ts`: the reply and quote press guard), reply lists (`api/reply-lists.ts`), audiences, the composer's visibility record, its Public \| Private control and the audience drop-down in the pills row (`composer/VisibilityControl.tsx`, `composer/AudienceMenu.tsx`, `composer/interaction.ts`, `composer/useReplyAnchor.ts`), blockers and draft table (with the drafts list's lock on a draft saved Private, `composer/PrivateDraftLock.tsx`), and the Audiences screen. After posting: the post settings dialog and its menu item (`settings/`: who can see changed in place on a top-level post or branch root and read-only on other replies, who can reply and quote saved as the stock gates). Reading: the adapter (`adapt/`: private views as stock post views and feed items, the author merge, reply hydration, local links and hashtags, embed views and self-labels built from the record), the merge core shared by the Following merge and the profile Posts and Replies merges, its cursor, paging through prism's short or empty pages (`feed/paging.ts`), and the profile feeds (`feed/`), private threads with the readers' gate check and the four `ppost` screens (`thread/`), the Private tab (`profile/`), the post query and pasted-link resolver (`links.ts`, whose batched read starts the authors' profile and PDS lookups with `getPosts`), and quoted private posts resolved inside the page fetch (`quotes/`: the persisted quote cache, collecting a page's unhydrated private quotes, and one batched read per page with a two-second deadline, wired into the feed wrappers, the thread query, both Saved lists and the notification subjects). Display (`render/`): the lock (alone, 16px, 14px in a quote's row, at the right end of the post meta row on every rendering but the thread anchor, quotes included, `PrivateHeaderLock` in `PrivateBadge.tsx`) and the anchor's mark, the border helper (uncalled since v2 round 2), the audience label and the anchor's private details, the private quote (with its loading placeholder) and the stand-in, and `controls.ts`, which says what a private post's controls, menu and links leave out. The Public \| Private folder tabs and their per-account mode stores (`tabs/`), used by Notifications (`notifications/`: the tabs and the Private view) and Saved (`saved/`: the tabs and the private bookmarks list); private bookmarks through prism (`api/bookmarks.ts`, with the bookmark press guard `refusesPrivateBookmark`). Following prism's features (2H): the hooks `usePrismFeature` and `usePrismFeatureForWrite` (`features-hooks.ts`), served counts, viewer state, threadgates and audiences read by the adapter into the post facts (with the audience pin of a move), the served gate path of the thread and the press guard, `caughtUp` after a move or a compose (`api/request-record.ts`), repost items of private posts in the merges (`feed/merge-core.ts` `itemKey`), and thread mutes with prism (`api/thread-mute.ts`: private roots on prism, a public root's mute mirrored and re-synced). The 2H screens: the likes, reposts and quotes lists of a private post (`api/interactions.ts`, the stock list components on the `ppost` screens), private thread read-more and continuation and private branches under a public anchor (`thread/fetch.ts`, `thread/replies.ts`, `thread/continuation.ts`), the Private notifications list with the stock rows, its unread counts, the corner lock on a private row (`notifications/page.ts`, `query.ts`, `PrivateNotificationsList.tsx`, `PrivateAuthorRow.tsx`) and the Private tab's badge (`tabs/FolderTabs.tsx`), private results merged into the search's Top and Latest (`search/query.ts`, `merge.ts`, `results.ts`, `PrivateSearchNote.tsx`), the post shadow's finder for those lists (`cache-finders.ts`), and the branch walk through prism's thread view (`api/reply-anchor.ts`). |
 
 Modules that import `@atproto/oauth-client-browser` at runtime are `.web.ts`
 files with a plain `.ts` sibling exporting the same names for native, where
@@ -24,7 +29,120 @@ OAuth is not available yet (`OAUTH_AVAILABLE = false`).
 `switches.ts` holds every switch, with what it guards. Phase 1 adds
 `HORIZON_SIGN_OUT` (Horizon's sign-out sequence in place of the reducer's
 push side effect), `IN_PLACE_SIGN_IN` (the in-place sign-in window) and
-`SIGN_IN_TABS` (the sign-in description naming both ways).
+`SIGN_IN_TABS` (the sign-in description naming both ways). Phase 2 adds
+`PRIVATE_POSTING`, `PRIVATE_READING`, `PRIVATE_POST_DISPLAY`,
+`PRIVATE_POST_LINKS`, `PRIVATE_NOTIFICATIONS_SWITCH`,
+`MEMBERSHIP_PROBE_FALLBACK`, `MEMBERSHIP_QUERY` (the probe asks
+`getMembership` first; off, the Phase 2 probe with no features, so every
+family but `private` reads as absent), `COMPOSER_AUDIENCE_MENU` (the footer
+drop-down in place of the stock interaction pill, and the gate records of a
+private compose), `PRIVATE_SAVED_SWITCH` (Saved's Public \| Private tabs
+and its private list) and `PRIVATE_SEARCH_SWITCH` (private results in the
+search's Top and Latest tabs; off, the stock results); `PRIVATE_POST_DISPLAY` and `PRIVATE_POST_LINKS` only
+make sense with `PRIVATE_READING` on. `GROUPED_NOTIFICATIONS_FALLBACK`
+guards the grouped notifications query's fallback
+(`notifications/grouped-fallback.ts`, hooked in
+`state/queries/notifications/grouped/index.ts`); off, a failed grouped
+request reaches the screen as in Bluesky. `SPOILER_TAGS` guards spoiler
+tags; off, `resolveRT` and the private write produce stock text and facets,
+`RichText` renders as stock with the markers visible, the counter reads the
+stored length, the button is absent, the editor command does not listen,
+the reply preview is the stock `Text`, the video card shows the stock text,
+and local detection does not parse markers. Not switched: the private facet
+union's spoiler features and their pass-through in the record adapter,
+which with the switch off only keep data that stock renders as plain text.
+
+The delete guard in `src/state/queries/post.ts` is not switched: the stock
+line would delete `app.bsky.feed.post` at a private post's rkey. The route
+registrations are not switched either.
+
+Each reading hook calls a helper that reads its switch: `withPrivateKey`,
+`withPrivateTimeline` and `horizonFeedApi` (feeds), `isPrivateRead` (the post
+query, the thread, the private quote; the page fetches' quote resolution reads `PRIVATE_READING` itself), `isPrivatePostLink` (pasted links),
+`postSegment` and `postThreadRouteName` (links and "View post"),
+`hidesBlueskyShare` (Embed post and Send via chat), `useShowPrivateTab` (the
+profile tab), `isPrivateBookmarkArgs` and `findPrivateBookmarkPosts` (the
+bookmark mutation and the post shadow; nothing reaches them until prism
+answers `private.bookmarks` in this run, because `refusesPrivateBookmark` in
+the stock `usePostBookmark` refuses a private post's bookmark press, from the
+button or the menu item, with a toast first), `muteThreadOnPrism` and
+`mirrorThreadMute` (the thread mute mutations; the guard is `isPrivateRead`),
+`fetchPrivateLikesPage`, `fetchPrivateRepostedByPage` and
+`fetchPrivateQuotesPage` (the stock list queries; the guard is
+`isPrivateRead`), `withPrivateBranches` and `fetchOtherReplies` (the thread
+and other-replies queries; `PRIVATE_READING` inside), and
+`findHorizonPrivatePosts` (the post shadow). `toShareUrl`'s guard tests for a `ppost` path,
+which only exists while `PRIVATE_POST_LINKS` is on.
+
+Display hooks call the helpers in `private/render/controls.ts`, which read
+`PRIVATE_POST_DISPLAY`: `isPrivateDisplay` (the thread stand-in, who can
+reply, the menu's public-only items, and Who 1's private settings dialog),
+`privateControlsFor` (counts, by the post's `countsServed` fact),
+`hidesPrivateStatsRow` (the stats row), `hideThreadMute` (by
+`private.interactions` answered in this run), `hidesGateControls` (who can
+reply on the anchor, hide reply for everyone; back once prism applies the
+gates of a private root) and `hidesDetachQuote` (detach quote of a private
+quoted post),
+`proxiesPostLinks` (link proxying), `isPrivateBadgeHref` (the lock at the
+right end of the post meta row, through `PrivateHeaderLock`), and
+`threadRepliesCount` (thread reply lines). `privatePostStyle` in
+`render/styles.ts` (the border) has no callers since v2 round 2: its six
+hooks were taken out with the border. The drafts list's lock reads
+`PRIVATE_POSTING` through `composer/drafts.ts` (`isPrivateDraft`).
+The composer hooks read `PRIVATE_POSTING` and `COMPOSER_AUDIENCE_MENU` through
+`composer/state.ts`, `composer/interaction.ts` (`hidesStockInteractionPill`),
+`composer/blockers.ts` (`privateAssetTypes`) and the pieces in
+`composer/VisibilityControl.tsx` (the Public | Private control in the
+footer, and the audience drop-down in the pills row where the stock
+interaction pill sits). The web player's non-HLS hook reads
+`PRIVATE_READING` through `video/playback.ts` (`playsAsDirectSource`). The
+video service constant is not switched: its value is the stock one. The
+reply and quote press guard (`guardPrivateInteraction`) and the post menu's
+private settings item and dialog read `PRIVATE_POST_DISPLAY`. The
+notifications hooks read `PRIVATE_NOTIFICATIONS_SWITCH` through
+`notifications/mode.ts` and, for the badge, `usePrivateOnlyUnreadCount`; a
+notification row's lock (`PrivateAuthorRow`), link proxying and reply guard
+read `PRIVATE_POST_DISPLAY`; the search hooks read `PRIVATE_SEARCH_SWITCH`
+through `usePrivateSearchResults`; and the Saved hooks `PRIVATE_SAVED_SWITCH` through
+`saved/mode.ts`. The spoiler hooks read `SPOILER_TAGS` through
+`rendersSpoilers` (`RichText`), `resolvesSpoilers` (`resolveRT`),
+`composeGraphemeLength` (the composer's Publish check and counter),
+`SpoilerButton` (the footer button), `useSpoilerWrapCommand` (the web
+editor), `coversReplyToSpoilers` (the reply preview) and `spoilerSafeText`
+(the video grid card).
+
+## Server support
+
+`private/server-support.ts` is not a switch table. prism's support is read
+at run time, per account, from the feature families its membership query
+answers (`routing/features.ts`, 2H design 4): `privateFacetsServed`
+(`private.embeds`), `privateBookmarksServed`, `privateGatesServed`,
+`privateInteractionsServed`, `privateNotificationsServed`,
+`privatePagingServed`, `privateSearchServed` and `threadAudienceServed`,
+each with `{forWrite: true}` for a decision that writes (this run's answer
+only; a list read from the device never unlocks a write). A field prism
+serves on a view (counts, viewer state, threadgate, audience, repost reason,
+embed) is used when present, whatever the list says. Without a list (a
+prism without the membership query, or never answered) only `private` is
+served. A change of the list for the current account invalidates every
+query once.
+
+The constants that remain name a dependency no feature family covers;
+flipping one moves a private feature from its interim behaviour to its
+intended one. On (kryphocron-lexicons 0.3.1 and locus): `PRIVATE_VIDEO`
+(K-6, A-11), `PRIVATE_GALLERY` (K-7), `PRIVATE_LANGS_LABELS` (K-1),
+`PRIVATE_QUOTE_WITH_MEDIA` (K-2), `PRIVATE_MEDIA_EXTRAS` (K-4),
+`PRIVATE_AUDIENCE_CHANGE` (A-9, A-13, A-1). Off: `AUDIENCE_EDIT` (A-4).
+
+What each family unlocks: `private.interactions` the likes, reposts and
+quotes lists of a private post (`api/interactions.ts`, through the stock
+list queries) and thread mutes; `private.paging` the author-feed filter,
+replies past a private thread's first read and private branches under a
+public post (`thread/replies.ts`); `private.notifications` the Private
+notifications list, its unread counts and mark-seen
+(`notifications/page.ts`, `query.ts`); `private.search` private results in
+the search's Top and Latest tabs (`search/`); `private.threadAudience` the
+move warning without its interim line.
 
 ## Hook rules
 

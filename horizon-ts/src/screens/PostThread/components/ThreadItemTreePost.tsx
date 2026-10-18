@@ -46,6 +46,10 @@ import {RichText} from '#/components/RichText'
 import * as Skele from '#/components/Skeleton'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Text} from '#/components/Typography'
+// HORIZON: links in a private post open directly
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 
 /**
@@ -285,7 +289,8 @@ const ThreadItemTreePostInner = memo(function ThreadItemTreePostInner({
   const threadRootUri = record.reply?.root?.uri || post.uri
   const postHref = useMemo(() => {
     const urip = new AtUri(post.uri)
-    return makeProfileLink(post.author, 'post', urip.rkey)
+    // HORIZON: private post links use the ppost segment
+    return makeProfileLink(post.author, postSegment(post.uri), urip.rkey)
   }, [post.uri, post.author])
   const threadgateHiddenReplies = useMergedThreadgateHiddenReplies({
     threadgateRecord,
@@ -365,7 +370,8 @@ const ThreadItemTreePostInner = memo(function ThreadItemTreePostInner({
                         style={[a.flex_1, a.text_md]}
                         numberOfLines={limitLines ? MAX_POST_LINES : undefined}
                         authorHandle={post.author.handle}
-                        shouldProxyLinks={true}
+                        // HORIZON: links in a private post open directly
+                        shouldProxyLinks={proxiesPostLinks(post.uri)}
                         suffixOffset={POST_NUMBER_INLINE_OFFSET}
                         suffix={
                           !limitLines && showPostNumber ? (

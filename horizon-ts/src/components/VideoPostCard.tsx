@@ -20,6 +20,8 @@ import {Link} from '#/components/Link'
 import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import * as Hider from '#/components/moderation/Hider'
 import {Text} from '#/components/Typography'
+// HORIZON: a spoiler shows as a placeholder in the card and its label
+import {spoilerSafeText} from '#/horizon/spoilers/plain'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -74,7 +76,8 @@ export function VideoPostCard({
 
   const author = post.author
   const text = bsky.isType(app.bsky.feed.post, post.record)
-    ? post.record?.text
+    ? // HORIZON: a spoiler shows as a placeholder in the card and its label
+      spoilerSafeText(post.record)
     : ''
   const likeCount = post?.likeCount ?? 0
   const repostCount = post?.repostCount ?? 0

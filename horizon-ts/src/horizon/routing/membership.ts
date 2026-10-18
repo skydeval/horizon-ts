@@ -1,15 +1,42 @@
 /*
  * Membership in Horizon's network, per account, driven by prism's answers.
- * In memory only: `not-member` is never persisted, because several of prism's
- * refusal reasons are transient, so every sign-in, resume and app start asks
- * again.
+ *
+ * The last answered state (`member`, `not-member` or `indexing`) is kept per
+ * account in Horizon's device keys, with the private-tier features prism
+ * answered alongside it (`membership-record.ts`), so a launch starts from it
+ * at once and private reads begin without waiting for the probe. Every
+ * sign-in, resume and app start still asks again in the background (several
+ * of prism's refusal reasons are transient), and a changed answer replaces it
+ * as any answer does. A persisted state is never confirmation: it only lets
+ * reads start, which prism checks on every call; anything that writes on the
+ * strength of membership asks `isMembershipConfirmed`.
  */
 
 import {useSyncExternalStore} from 'react'
-import {type Client, XrpcResponseError} from '@atproto/lex'
+import {
+  type Client,
+  XrpcInvalidResponseError,
+  XrpcResponseError,
+} from '@atproto/lex'
 
 import {logger} from '#/logger'
+import {nearhorizon} from '#/horizon/lexicons'
+import {
+  answerPrismFeatures,
+  getPrismFeatures,
+  loadPrismFeatures,
+  type PrismFeatureList,
+  servesFeature,
+} from '#/horizon/routing/features'
+import {
+  type AnsweredMembershipState,
+  readMembershipRecord,
+  writeMembershipRecord,
+} from '#/horizon/routing/membership-record'
+import {MEMBERSHIP_PROBE_FALLBACK, MEMBERSHIP_QUERY} from '#/horizon/switches'
 import {app} from '#/lexicons'
+
+export {membershipStorageKey} from '#/horizon/routing/membership-record'
 
 /**
  * - `unknown`: not answered yet (default experience).
@@ -40,13 +67,57 @@ export const RETRY_STEADY_MS = 60_000
  */
 export const MAX_UNKNOWN_ATTEMPTS = 10
 
+/**
+ * A recheck (`requestMembershipRecheck`) asks again only when the probe's
+ * last answer is at least this old.
+ */
+export const MEMBERSHIP_RECHECK_MIN_MS = 60_000
+
 const states = new Map<string, MembershipState>()
+/** Accounts whose state prism answered in this run. */
+const confirmed = new Set<string>()
 const listeners = new Set<() => void>()
 const enteredIndexingListeners = new Set<(did: string) => void>()
+/** One more ask, per account with a running probe. */
+const rechecks = new Map<string, () => void>()
 
-function setState(did: string, next: MembershipState) {
-  const previous = states.get(did) ?? 'unknown'
-  if (previous === next) return
+/**
+ * The state held for `did`, loading the persisted record on first use (its
+ * features go to the feature store, silently).
+ */
+function stateOf(did: string): MembershipState {
+  const held = states.get(did)
+  if (held) return held
+  const record = readMembershipRecord(did)
+  loadPrismFeatures(did, record?.features)
+  const persisted = record?.state ?? 'unknown'
+  states.set(did, persisted)
+  return persisted
+}
+
+/**
+ * Record an answer naming a state. `features` is the list answered with it
+ * (`null` from a prism without the membership query); `undefined` when the
+ * answer carried none (a private read's `NotEnrolled`), which keeps the
+ * held list.
+ */
+function setState(
+  did: string,
+  next: MembershipState,
+  features?: PrismFeatureList,
+) {
+  const newlyConfirmed = !confirmed.has(did)
+  confirmed.add(did)
+  const previous = stateOf(did)
+  if (features !== undefined) answerPrismFeatures(did, features)
+  if (next !== 'unknown') {
+    writeMembershipRecord(did, {state: next, features: getPrismFeatures(did)})
+  }
+  if (previous === next) {
+    // The same state, now answered in this run.
+    if (newlyConfirmed) listeners.forEach(listener => listener())
+    return
+  }
   states.set(did, next)
   logger.info('membership', {did, state: next})
   listeners.forEach(listener => listener())
@@ -56,10 +127,32 @@ function setState(did: string, next: MembershipState) {
 }
 
 /**
- * The membership state of an account (`unknown` when never answered).
+ * The membership state of an account: the last one prism answered, in this
+ * run or a previous one (`unknown` when never answered).
  */
 export function getMembership(did: string | undefined): MembershipState {
-  return (did && states.get(did)) || 'unknown'
+  return did ? stateOf(did) : 'unknown'
+}
+
+/**
+ * Whether `did` is a member of a prism that serves the private read methods
+ * (the `private` family; a prism without the membership query serves them).
+ * A member of a prism whose answered list lacks `private` gets the default
+ * experience. Lives here rather than in `features.ts` so that module stays
+ * free of this one.
+ */
+export function isPrivateMember(did: string | undefined): did is string {
+  return (
+    !!did && getMembership(did) === 'member' && servesFeature('private', did)
+  )
+}
+
+/**
+ * Whether `did`'s state was answered by prism in this run, rather than read
+ * from the device. Writes that rely on membership need this.
+ */
+export function isMembershipConfirmed(did: string | undefined): boolean {
+  return !!did && confirmed.has(did)
 }
 
 /**
@@ -91,10 +184,22 @@ export function useMembership(did: string | undefined): MembershipState {
 }
 
 /**
- * Forget every state (tests).
+ * Whether `did` is a member answered by prism in this run, kept current.
+ */
+export function useConfirmedMember(did: string | undefined): boolean {
+  return useSyncExternalStore(
+    subscribeMembership,
+    () => getMembership(did) === 'member' && isMembershipConfirmed(did),
+  )
+}
+
+/**
+ * Forget every state held in memory (tests); persisted states are read again
+ * on next use.
  */
 export function resetMembership() {
   states.clear()
+  confirmed.clear()
 }
 
 /**
@@ -114,23 +219,49 @@ export function membershipFromError(
 }
 
 /**
- * For later phases: a private or Thread Lens call answered with an error that
- * may move the state (`NotEnrolled`, `NotReady`).
+ * prism's answer for a feature-gated method it does not serve (any more):
+ * 501 `MethodNotImplemented`.
+ */
+function isMethodNotImplemented(error: unknown) {
+  return (
+    error instanceof XrpcResponseError &&
+    error.status === 501 &&
+    error.error === 'MethodNotImplemented'
+  )
+}
+
+/**
+ * A private or Thread Lens call answered with an error that may move the
+ * state (`NotEnrolled`, `NotReady`), or with 501 `MethodNotImplemented`,
+ * which asks the probe to read the feature list again.
  */
 export function reportPrismError(did: string, error: unknown) {
   const next = membershipFromError(error)
   if (next) setState(did, next)
+  if (isMethodNotImplemented(error)) requestMembershipRecheck(did)
 }
 
-function retryAfterMs(error: unknown): number | undefined {
-  if (!(error instanceof XrpcResponseError)) return undefined
-  const value = error.headers.get('retry-after')
+/**
+ * Ask `did`'s running probe once more (2H design 3.4), when it is not
+ * cancelled, has no retry pending and last answered at least
+ * {@link MEMBERSHIP_RECHECK_MIN_MS} ago. Without a running probe, nothing.
+ */
+export function requestMembershipRecheck(did: string) {
+  rechecks.get(did)?.()
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
   if (!value) return undefined
   const seconds = Number(value)
   if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000
   const date = Date.parse(value)
   if (Number.isFinite(date)) return Math.max(0, date - Date.now())
   return undefined
+}
+
+function retryAfterMs(error: unknown): number | undefined {
+  if (!(error instanceof XrpcResponseError)) return undefined
+  return parseRetryAfter(error.headers.get('retry-after'))
 }
 
 /**
@@ -142,6 +273,8 @@ export type ProbeEnvironment = {
   isHidden: () => boolean
   /** Call `callback` whenever the page becomes visible; returns unsubscribe. */
   onVisible: (callback: () => void) => () => void
+  /** The clock for the recheck's minimum age (default `Date.now`). */
+  now?: () => number
 }
 
 function defaultEnvironment(): ProbeEnvironment {
@@ -163,20 +296,121 @@ function defaultEnvironment(): ProbeEnvironment {
 }
 
 /**
- * Start asking prism about `did` through `prismClient`. Until prism has a
- * membership query, the probe is `app.bsky.feed.getTimeline` with `limit: 1`,
- * which also enrolls an eligible account; its body is discarded. Returns the
- * cancel function; any account change must call it.
+ * prism answers every public method with 501 `NotImplemented` while its
+ * public indexing is off.
+ */
+function isNotImplemented(error: unknown) {
+  return error instanceof XrpcResponseError && error.error === 'NotImplemented'
+}
+
+/**
+ * The server has no `getMembership`: 404, or 501 with any error name (prism's
+ * catch-all for an unknown method is `MethodNotImplemented`), whether or not
+ * the body is XRPC JSON.
+ */
+function isMembershipQueryAbsent(error: unknown) {
+  const status =
+    error instanceof XrpcResponseError
+      ? error.status
+      : error instanceof XrpcInvalidResponseError
+        ? error.response.status
+        : undefined
+  return status === 404 || status === 501
+}
+
+/**
+ * What one ask learned.
+ * - `state`: an answer naming a state, with the features answered with it.
+ * - `features`: a `getMembership` answer with a status Horizon does not
+ *   know: features recorded, retried as an unanswered attempt.
+ */
+type ProbeOutcome =
+  | {
+      kind: 'state'
+      state: AnsweredMembershipState
+      features: PrismFeatureList
+      retryMs?: number
+    }
+  | {kind: 'features'; features: PrismFeatureList; retryMs?: number}
+
+/**
+ * Start asking prism about `did` through `prismClient`. Returns the cancel
+ * function; any account change must call it.
+ *
+ * With `MEMBERSHIP_QUERY`, the probe asks
+ * `app.nearhorizon.actor.getMembership`, which answers the status and the
+ * private-tier features and enrolls an eligible account. `member` ends the
+ * probe for this run, `indexing` retries after the response's `Retry-After`
+ * (else the client schedule), `notEligible` stops until the next start; an
+ * unknown status or a 429 retries as an unanswered attempt.
+ *
+ * Where that method is absent (404 or 501), or with `MEMBERSHIP_QUERY` off,
+ * the probe is the Phase 2 one for the rest of this run, with no features:
+ * `app.bsky.feed.getTimeline` with `limit: 1`, which also enrolls; and when
+ * prism's public indexing is off (501 `NotImplemented`) and
+ * `MEMBERSHIP_PROBE_FALLBACK` is on, `app.nearhorizon.private.getTimeline`,
+ * which never enrolls (P-10).
+ *
+ * While the probe runs, `requestMembershipRecheck` asks once more (3.4).
  */
 export function startMembershipProbe(
   did: string,
   prismClient: Client,
   env: ProbeEnvironment = defaultEnvironment(),
 ): () => void {
+  const now = env.now ?? Date.now
   let cancelled = false
   let timer: unknown
   let attempt = 0
   let waitingForVisible = false
+  let inFlight = false
+  let lastAnswerAt: number | undefined
+  let legacy = !MEMBERSHIP_QUERY
+  let privateProbe = false
+
+  const askLegacy = async (): Promise<ProbeOutcome> => {
+    const member: ProbeOutcome = {
+      kind: 'state',
+      state: 'member',
+      features: null,
+    }
+    if (privateProbe) {
+      await prismClient.call(nearhorizon.privateGetTimeline, {limit: 1})
+      return member
+    }
+    try {
+      await prismClient.call(app.bsky.feed.getTimeline, {limit: 1})
+    } catch (error) {
+      if (!MEMBERSHIP_PROBE_FALLBACK || !isNotImplemented(error)) throw error
+      privateProbe = true
+      if (cancelled) throw error
+      await prismClient.call(nearhorizon.privateGetTimeline, {limit: 1})
+    }
+    return member
+  }
+
+  const ask = async (): Promise<ProbeOutcome> => {
+    if (legacy) return askLegacy()
+    let res
+    try {
+      res = await prismClient.xrpc(nearhorizon.getMembership)
+    } catch (error) {
+      if (!isMembershipQueryAbsent(error)) throw error
+      legacy = true
+      if (cancelled) throw error
+      return askLegacy()
+    }
+    const {status, features} = res.body
+    const retryMs = parseRetryAfter(res.headers.get('retry-after'))
+    if (status === 'member') return {kind: 'state', state: 'member', features}
+    if (status === 'indexing') {
+      return {kind: 'state', state: 'indexing', features, retryMs}
+    }
+    if (status === 'notEligible') {
+      return {kind: 'state', state: 'not-member', features}
+    }
+    return {kind: 'features', features, retryMs}
+  }
 
   const schedule = (ms: number) => {
     timer = env.setTimeout(() => {
@@ -185,8 +419,17 @@ export function startMembershipProbe(
     }, ms)
   }
 
-  const nextDelay = (error: unknown) =>
-    retryAfterMs(error) ?? RETRY_SCHEDULE_MS[attempt - 1] ?? RETRY_STEADY_MS
+  const scheduleDelay = () => RETRY_SCHEDULE_MS[attempt - 1] ?? RETRY_STEADY_MS
+
+  /** Retry an unanswered attempt, or wait for visibility past the cap. */
+  const retryUnanswered = (ms: number | undefined) => {
+    if (attempt >= MAX_UNKNOWN_ATTEMPTS) {
+      // Give up until the tab becomes visible again.
+      waitingForVisible = true
+      return
+    }
+    schedule(ms ?? scheduleDelay())
+  }
 
   const run = () => {
     if (cancelled) return
@@ -195,25 +438,50 @@ export function startMembershipProbe(
       return
     }
     attempt += 1
-    prismClient.call(app.bsky.feed.getTimeline, {limit: 1}).then(
-      () => {
+    inFlight = true
+    ask().then(
+      outcome => {
+        inFlight = false
         if (cancelled) return
-        setState(did, 'member')
-      },
-      (error: unknown) => {
-        if (cancelled) return
-        const next = membershipFromError(error)
-        if (next) setState(did, next)
-        if (next === 'not-member') return
-        if (next !== 'indexing' && attempt >= MAX_UNKNOWN_ATTEMPTS) {
-          // Give up until the tab becomes visible again.
-          waitingForVisible = true
+        lastAnswerAt = now()
+        if (outcome.kind === 'features') {
+          answerPrismFeatures(did, outcome.features)
+          retryUnanswered(outcome.retryMs)
           return
         }
-        schedule(nextDelay(error))
+        setState(did, outcome.state, outcome.features)
+        if (outcome.state === 'indexing') {
+          schedule(outcome.retryMs ?? scheduleDelay())
+        }
+      },
+      (error: unknown) => {
+        inFlight = false
+        if (cancelled) return
+        const next = membershipFromError(error)
+        if (next) {
+          lastAnswerAt = now()
+          setState(did, next, legacy ? null : undefined)
+        }
+        if (next === 'not-member') return
+        if (next === 'indexing') {
+          schedule(retryAfterMs(error) ?? scheduleDelay())
+          return
+        }
+        retryUnanswered(retryAfterMs(error))
       },
     )
   }
+
+  const recheck = () => {
+    if (cancelled || inFlight || timer !== undefined) return
+    if (lastAnswerAt !== undefined) {
+      if (now() - lastAnswerAt < MEMBERSHIP_RECHECK_MIN_MS) return
+    }
+    waitingForVisible = false
+    attempt = 0
+    run()
+  }
+  rechecks.set(did, recheck)
 
   const unsubscribeVisible = env.onVisible(() => {
     if (cancelled || !waitingForVisible || timer !== undefined) return
@@ -227,6 +495,7 @@ export function startMembershipProbe(
   return () => {
     cancelled = true
     if (timer !== undefined) env.clearTimeout(timer)
+    if (rechecks.get(did) === recheck) rechecks.delete(did)
     unsubscribeVisible()
   }
 }

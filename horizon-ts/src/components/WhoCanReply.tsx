@@ -27,6 +27,10 @@ import {InlineLinkText} from '#/components/Link'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
+// HORIZON: a private root's who can reply opens the private post settings dialog
+import {isPrivateDisplay} from '#/horizon/private/render/controls'
+// HORIZON: a private root's who can reply opens the private post settings dialog
+import {PrivatePostSettingsDialog} from '#/horizon/private/settings/PrivatePostSettingsDialog'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -144,7 +148,15 @@ export function WhoCanReply({post, isThreadAuthor, style}: WhoCanReplyProps) {
         )}
       </Button>
 
-      {isThreadAuthor ? (
+      {/* HORIZON: a private root's who can reply opens the private post settings dialog (start) */}
+      {isThreadAuthor && isPrivateDisplay(post.uri) ? (
+        <PrivatePostSettingsDialog
+          control={editDialogControl}
+          postUri={post.uri}
+          rootPostUri={rootUri}
+          postCid={post.cid}
+        />
+      ) : isThreadAuthor ? (
         <PostInteractionSettingsDialog
           postUri={post.uri}
           rootPostUri={rootUri}
@@ -159,6 +171,7 @@ export function WhoCanReply({post, isThreadAuthor, style}: WhoCanReplyProps) {
           embeddingDisabled={Boolean(post.viewer?.embeddingDisabled)}
         />
       )}
+      {/* HORIZON: a private root's who can reply opens the private post settings dialog (end) */}
     </>
   )
 }

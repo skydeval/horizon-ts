@@ -68,6 +68,8 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL, IS_IOS, IS_NATIVE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: Audiences for private posts, for members
+import {AudiencesSettingsItem} from '#/horizon/private/audiences/AudiencesSettingsItem'
 // HORIZON: App servers: prism (always connected) and the public AppView
 import {AppViewSettingsItem} from '#/horizon/routing/AppViewSwitcher'
 // HORIZON: hide "Beta features"; the local flag table has none
@@ -252,6 +254,8 @@ export function SettingsScreen({}: Props) {
           </SettingsList.LinkItem>
           {/* HORIZON: App servers: prism (always connected) and the public AppView */}
           <AppViewSettingsItem />
+          {/* HORIZON: Audiences for private posts, for members */}
+          <AudiencesSettingsItem />
           {/* HORIZON: hide "Beta features"; the local flag table has none */}
           {SHOW_BETA_FEATURES && (
             <SettingsList.LinkItem

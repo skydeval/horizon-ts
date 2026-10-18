@@ -16,6 +16,8 @@ import {ArrowShareRight_Stroke2_Corner2_Rounded as ArrowShareRightIcon} from '#/
 import * as Menu from '#/components/Menu'
 import {useMenuControl} from '#/components/Menu'
 import {useAnalytics} from '#/analytics'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 import {PostControlButton, PostControlButtonIcon} from '../PostControlButton'
 import {ShareMenuItems} from './ShareMenuItems'
@@ -82,7 +84,8 @@ let ShareMenuButton = ({
   const onNativeLongPress = () => {
     ax.metric('share:press:nativeShare', {})
     const urip = new AtUri(post.uri)
-    const href = makeProfileLink(post.author, 'post', urip.rkey)
+    // HORIZON: private post links use the ppost segment
+    const href = makeProfileLink(post.author, postSegment(post.uri), urip.rkey)
     const url = toShareUrl(href)
     void shareUrl(url).then(result => {
       if (!result) return

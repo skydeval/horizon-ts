@@ -40,6 +40,12 @@ export const router = new Router<AllNavigatableRoutes>({
   PostLikedBy: '/profile/:name/post/:rkey/liked-by',
   PostRepostedBy: '/profile/:name/post/:rkey/reposted-by',
   PostQuotes: '/profile/:name/post/:rkey/quotes',
+  // HORIZON: private posting routes
+  PrivatePostThread: '/profile/:name/ppost/:rkey',
+  PrivatePostLikedBy: '/profile/:name/ppost/:rkey/liked-by',
+  PrivatePostRepostedBy: '/profile/:name/ppost/:rkey/reposted-by',
+  PrivatePostQuotes: '/profile/:name/ppost/:rkey/quotes',
+  AudiencesSettings: '/settings/audiences',
   CustomFeed: '/profile/:name/feed/:rkey',
   CustomFeedLikedBy: '/profile/:name/feed/:rkey/liked-by',
   ProfileLabelerLikedBy: '/profile/:name/labeler/liked-by',

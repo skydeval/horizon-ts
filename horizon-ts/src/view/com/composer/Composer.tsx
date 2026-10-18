@@ -45,7 +45,8 @@ import {scheduleOnUI} from 'react-native-worklets'
 import * as FileSystem from 'expo-file-system'
 import {type ImagePickerAsset} from 'expo-image-picker'
 import {type Client, type UriString} from '@atproto/lex'
-import {AtUri, type AtUriString} from '@atproto/syntax'
+// HORIZON: AtUri is no longer used here once "View post" goes through navigateToPost
+import {type AtUriString} from '@atproto/syntax'
 import {BottomSheetPortalProvider} from '@bsky.app/bottom-sheet'
 import {type RichText} from '@bsky/sdk/richtext'
 import {plural} from '@lingui/core/macro'
@@ -144,6 +145,38 @@ import {
   IS_WEB_SAFARI,
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: private composing
+import {
+  privateAssetTypes,
+  privateComposeAllows,
+} from '#/horizon/private/composer/blockers'
+// HORIZON: private composing
+import {applyDraftVisibility} from '#/horizon/private/composer/drafts'
+// HORIZON: private composing
+import {hidesStockInteractionPill} from '#/horizon/private/composer/interaction'
+// HORIZON: private composing
+import {
+  useIsPrivateCompose,
+  usePrivateComposeSession,
+} from '#/horizon/private/composer/state'
+// HORIZON: private composing
+import {privatePostSuccessData} from '#/horizon/private/composer/success'
+// HORIZON: private composing
+import {
+  ComposerAudiencePill,
+  ComposerAudienceProvider,
+  ComposerAudienceRow,
+  ComposerAudienceSlot,
+  useShowsComposerAudiencePill,
+} from '#/horizon/private/composer/VisibilityControl'
+// HORIZON: private composing
+import {skipQuoteCountWait} from '#/horizon/private/links'
+// HORIZON: private composing
+import {isPrivatePostUri, navigateToPost} from '#/horizon/private/uri'
+// HORIZON: spoiler tags
+import {SpoilerButton} from '#/horizon/spoilers/SpoilerButton'
+// HORIZON: spoiler tags
+import {composeGraphemeLength} from '#/horizon/spoilers/write'
 import {app, chat} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -272,6 +305,8 @@ export const ComposePost = ({
   const client = useAppviewClient()
   const chatClient = useChatClient()
   const pdsClient = usePdsClient()
+  // HORIZON: the composer owns the Public | Private record for its lifetime
+  const isPrivate = usePrivateComposeSession(replyTo)
   const queryClient = useQueryClient()
   /*
    * The host the video service-auth token is minted for. This is the same value
@@ -690,6 +725,8 @@ export const ComposePost = ({
         loadedMedia,
         originalLocalRefs,
       })
+      // HORIZON: a draft saved Private comes back Private, with its audience
+      applyDraftVisibility(draftSummary.id)
 
       // Track when the draft was created for metrics
       setLoadedDraftCreatedAt(draftSummary.createdAt)
@@ -976,13 +1013,16 @@ export const ComposePost = ({
   )
 
   const canPost =
+    // HORIZON: Publish is disabled while a private-post blocker applies
+    privateComposeAllows(thread, isPrivate) &&
     !missingAltError &&
     !hasUnavailableChatInvite &&
     thread.posts.some(post => !isEmptyPost(post)) &&
     thread.posts.every(
       post =>
         isEmptyPost(post) ||
-        (post.shortenedGraphemeLength <= MAX_GRAPHEME_LENGTH &&
+        // HORIZON: the length a post's spoilers will be written with
+        (composeGraphemeLength(post, isPrivate) <= MAX_GRAPHEME_LENGTH &&
           !(
             post.embed.media?.type === 'video' &&
             post.embed.media.video.status === 'error'
@@ -1081,7 +1121,11 @@ export const ComposePost = ({
        * ok, because the post _was_ actually published above.
        */
       try {
-        if (postUri) {
+        // HORIZON: the public AppView never serves a private post; its success data comes from the pending posts
+        if (postUri && isPrivatePostUri(postUri)) {
+          postSuccessData = privatePostSuccessData(replyTo?.uri, postUri)
+          // HORIZON: end of the private branch; the stock wait follows
+        } else if (postUri) {
           logger.info(`composer: waiting for app view`)
 
           const posts = await retry(
@@ -1208,7 +1252,8 @@ export const ComposePost = ({
       })
     }
     setLangPrefs.savePostLanguageToHistory(fromPostLanguages(currentLanguages))
-    if (initQuote) {
+    // HORIZON: the quote count never changes for a private post or a private quote
+    if (initQuote && !skipQuoteCountWait(postUri, initQuote.uri)) {
       // We want to wait for the quote count to update before we call `onPost`, which will refetch data
       void whenAppViewReady(client, initQuote.uri, res => {
         const anchor = res?.thread.at(0)
@@ -1242,8 +1287,8 @@ export const ComposePost = ({
             <Toast.Action
               label={l`View post`}
               onPress={() => {
-                const {host: name, rkey} = new AtUri(postUri)
-                navigation.navigate('PostThread', {name, rkey})
+                // HORIZON: a private post opens on its own thread route
+                navigateToPost(navigation, postUri)
               }}>
               <Trans context="Action to view the post the user just created">
                 View
@@ -1385,32 +1430,40 @@ export const ComposePost = ({
         onAcceptSuggestedLanguage={setSelectedPostLanguage}
         onNudge={onLanguageNudge}
       />
-      <ComposerPills
-        isReply={!!replyTo}
-        post={activePost}
+      {/* HORIZON: the Public | Private control and the audience drop-down in the pills row read the compose through this provider (start) */}
+      <ComposerAudienceProvider
+        replyTo={replyTo}
         thread={composerState.thread}
-        dispatch={composerDispatch}
-        bottomBarAnimatedStyle={bottomBarAnimatedStyle}
-      />
-      <ComposerFooter
-        post={activePost}
-        dispatch={dispatch}
-        showAddButton={
-          !isEmptyPost(activePost) && (!nextPost || !isEmptyPost(nextPost))
-        }
-        onError={setError}
-        onSelectVideo={selectVideo}
-        onAddPost={() => {
-          composerDispatch({
-            type: 'add_post',
-          })
-        }}
-        currentLanguages={currentLanguages}
-        onSelectLanguage={onSelectLanguage}
-        languageNudgeAt={languageNudgeAt}
-        openGallery={openGallery}
-        textInputRef={textInputRef}
-      />
+        dispatch={composerDispatch}>
+        <ComposerAudienceRow />
+        <ComposerPills
+          isReply={!!replyTo}
+          post={activePost}
+          thread={composerState.thread}
+          dispatch={composerDispatch}
+          bottomBarAnimatedStyle={bottomBarAnimatedStyle}
+        />
+        <ComposerFooter
+          post={activePost}
+          dispatch={dispatch}
+          showAddButton={
+            !isEmptyPost(activePost) && (!nextPost || !isEmptyPost(nextPost))
+          }
+          onError={setError}
+          onSelectVideo={selectVideo}
+          onAddPost={() => {
+            composerDispatch({
+              type: 'add_post',
+            })
+          }}
+          currentLanguages={currentLanguages}
+          onSelectLanguage={onSelectLanguage}
+          languageNudgeAt={languageNudgeAt}
+          openGallery={openGallery}
+          textInputRef={textInputRef}
+        />
+        {/* HORIZON: the Public | Private control and the audience drop-down in the pills row read the compose through this provider (end) */}
+      </ComposerAudienceProvider>
     </>
   )
 
@@ -2059,6 +2112,10 @@ function ComposerPills({
   bottomBarAnimatedStyle: AnimatedStyle<ViewStyle>
 }) {
   const t = useTheme()
+  // HORIZON: the audience drop-down takes the stock interaction pill's place in this row
+  const isPrivate = useIsPrivateCompose()
+  // HORIZON: the audience drop-down takes the stock interaction pill's place in this row
+  const audiencePill = useShowsComposerAudiencePill()
   const media = post.embed.media
   const hasMedia =
     media?.type === 'images' ||
@@ -2068,7 +2125,13 @@ function ComposerPills({
   const hasLink = !!post.embed.link
 
   // Don't render anything if no pills are going to be displayed
-  if (isReply && !hasMedia && !hasLink) {
+  // HORIZON: the row also shows for the audience drop-down, and not for a hidden stock pill
+  if (
+    (isReply || hidesStockInteractionPill(isPrivate)) &&
+    !audiencePill &&
+    !hasMedia &&
+    !hasLink
+  ) {
     return null
   }
 
@@ -2081,7 +2144,10 @@ function ComposerPills({
         bounces={false}
         keyboardShouldPersistTaps="always"
         showsHorizontalScrollIndicator={false}>
-        {isReply ? null : (
+        {/* HORIZON: the audience drop-down sets who can see, reply and quote in place of the stock pill */}
+        {audiencePill ? (
+          <ComposerAudiencePill />
+        ) : isReply || hidesStockInteractionPill(isPrivate) ? null : (
           <ThreadgateBtn
             postgate={thread.postgate}
             onChangePostgate={nextPostgate => {
@@ -2147,6 +2213,8 @@ function ComposerFooter({
   const t = useTheme()
   const {t: l} = useLingui()
   const {gtPhone} = useBreakpoints()
+  // HORIZON: the media picker offers what a private post can carry
+  const isPrivate = useIsPrivateCompose()
   /*
    * Once we've allowed a certain type of asset to be selected, we don't allow
    * other types of media to be selected.
@@ -2252,7 +2320,11 @@ function ComposerFooter({
             <ToolbarWrapper style={[a.flex_row, a.align_center, a.gap_xs]}>
               <SelectMediaButton
                 disabled={isMediaSelectionDisabled}
-                allowedAssetTypes={selectedAssetsType}
+                // HORIZON: the media picker offers what a private post can carry
+                allowedAssetTypes={privateAssetTypes(
+                  selectedAssetsType,
+                  isPrivate,
+                )}
                 selectedAssetsCount={selectedAssetsCount}
                 onSelectAssets={onSelectAssets}
                 autoOpen={openGallery}
@@ -2266,6 +2338,8 @@ function ComposerFooter({
                 onAdd={onImageAdd}
               />
               <SelectGifBtn onSelectGif={onSelectGif} disabled={!!media} />
+              {/* HORIZON: the spoiler button wraps the selection in spoiler markers */}
+              <SpoilerButton />
               {IS_WEB && gtPhone ? (
                 <EmojiPicker.Root nextFocusRef={textInputRef}>
                   <EmojiPicker.Trigger label={l`Open emoji picker`}>
@@ -2288,6 +2362,8 @@ function ComposerFooter({
           )}
         </LayoutAnimationConfig>
       </View>
+      {/* HORIZON: the Public | Private control, centred between the tools and the right-hand group */}
+      <ComposerAudienceSlot />
       <View style={[a.flex_row, a.align_center, a.justify_between]}>
         {showAddButton && (
           <Button
@@ -2306,7 +2382,8 @@ function ComposerFooter({
           nudgeAt={languageNudgeAt}
         />
         <CharProgress
-          count={post.shortenedGraphemeLength}
+          // HORIZON: the length a post's spoilers will be written with
+          count={composeGraphemeLength(post, isPrivate)}
           style={{width: 65}}
         />
       </View>

@@ -7,6 +7,10 @@ import {
 } from '@tanstack/react-query'
 
 import {useAppviewClient} from '#/state/session'
+// HORIZON: a private post's quotes are listed by prism
+import {fetchPrivateQuotesPage} from '#/horizon/private/api/interactions'
+// HORIZON: a private post's quotes are listed by prism
+import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -60,6 +64,9 @@ export function usePostQuotesQuery(
   >({
     queryKey: RQKEY(resolvedUri || '', quoteSort),
     async queryFn({pageParam}: {pageParam: RQPageParam}) {
+      // HORIZON: a private post's quotes are listed by prism
+      if (isPrivateRead(resolvedUri))
+        return fetchPrivateQuotesPage(resolvedUri!, pageParam, PAGE_SIZE)
       return await client.call(app.bsky.feed.getQuotes, {
         // the enabled flag prevents this from running until resolvedUri is set
         uri: (resolvedUri || '') as AtUriString,

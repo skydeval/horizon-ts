@@ -6,6 +6,12 @@ import {BSKY_SERVICE} from '#/lib/constants'
 import {isInvalidHandle} from '#/lib/strings/handles'
 import {startUriToStarterPackUri} from '#/lib/strings/starter-pack'
 import {logger} from '#/logger'
+// HORIZON: private post paths and share links
+import {
+  isPrivatePostPath,
+  postSegment,
+  privateShareUrl,
+} from '#/horizon/private/uri'
 
 export const BSKY_APP_HOST = 'https://bsky.app'
 export const BSKY_HOSTING_ENDSWITH = '.host.bsky.network'
@@ -89,6 +95,8 @@ export function toShortUrl(url: string): string {
 }
 
 export function toShareUrl(url: string): string {
+  // HORIZON: a private post is shared on Horizon's own host
+  if (isPrivatePostPath(url)) return privateShareUrl(url)
   if (!url.startsWith('https')) {
     const urlp = new URL('https://bsky.app')
     urlp.pathname = url
@@ -295,7 +303,8 @@ export function postUriToRelativePath(
       options?.handle && !isInvalidHandle(options.handle)
         ? options.handle
         : hostname
-    return `/profile/${handleOrDid}/post/${rkey}`
+    // HORIZON: a private post's path uses the ppost segment
+    return `/profile/${handleOrDid}/${postSegment(uri)}/${rkey}`
   } catch {
     return undefined
   }

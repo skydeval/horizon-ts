@@ -20,6 +20,10 @@ import {resetBadgeCount} from '#/lib/notifications/notifications'
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {truncateAndInvalidate} from '#/state/queries/util'
 import {useAppviewClient, useSession} from '#/state/session'
+// HORIZON: the badge adds private notifications the public count cannot hold
+import {usePrivateOnlyUnreadCount} from '#/horizon/private/notifications/query'
+// HORIZON: the badge adds private notifications the public count cannot hold
+import {composeUnreadCount} from '#/horizon/private/notifications/unread'
 import {app} from '#/lexicons'
 import {RQKEY as RQKEY_NOTIFS} from './feed'
 import {type CachedFeedPage, type FeedPage, type UnreadCheck} from './types'
@@ -258,7 +262,11 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
 }
 
 export function useUnreadNotifications() {
-  return useContext(stateContext)
+  // HORIZON: the badge adds private notifications the public count cannot hold
+  return composeUnreadCount(
+    useContext(stateContext),
+    usePrivateOnlyUnreadCount(),
+  )
 }
 
 /**

@@ -54,6 +54,10 @@ import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Features, useAnalytics} from '#/analytics'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: links in a private post open directly
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {PostFeedReason} from './PostFeedReason'
@@ -180,7 +184,11 @@ let FeedItemInner = ({
 
   const [href] = useMemo(() => {
     const urip = new AtUri(post.uri)
-    return [makeProfileLink(post.author, 'post', urip.rkey), urip.rkey]
+    // HORIZON: private post links use the ppost segment
+    return [
+      makeProfileLink(post.author, postSegment(post.uri), urip.rkey),
+      urip.rkey,
+    ]
   }, [post.uri, post.author])
   const {sendInteraction, feedSourceInfo, feedDescriptor} =
     useFeedFeedbackContext()
@@ -529,7 +537,8 @@ let PostContent = ({
             numberOfLines={limitLines ? MAX_POST_LINES : undefined}
             style={[a.flex_1, a.text_md]}
             authorHandle={postAuthor.handle}
-            shouldProxyLinks={true}
+            // HORIZON: links in a private post open directly
+            shouldProxyLinks={proxiesPostLinks(post.uri)}
             suffixOffset={POST_NUMBER_INLINE_OFFSET}
             suffix={
               !limitLines && showPostNumber ? (

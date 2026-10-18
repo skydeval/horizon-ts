@@ -34,6 +34,10 @@ import {TranslatedPost} from '#/components/Post/Translated'
 import {PostControls} from '#/components/PostControls'
 import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
+// HORIZON: links in a private post open directly
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: private post links use the ppost segment
+import {postSegment} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -119,7 +123,12 @@ function PostInner({
     () => countLines(richText?.text) >= MAX_POST_LINES,
   )
   const itemUrip = new AtUri(post.uri)
-  const itemHref = makeProfileLink(post.author, 'post', itemUrip.rkey)
+  // HORIZON: private post links use the ppost segment
+  const itemHref = makeProfileLink(
+    post.author,
+    postSegment(post.uri),
+    itemUrip.rkey,
+  )
   let replyAuthorDid = ''
   if (record.reply) {
     const urip = new AtUri(record.reply.parent?.uri || record.reply.root.uri)
@@ -229,7 +238,8 @@ function PostInner({
                     numberOfLines={limitLines ? MAX_POST_LINES : undefined}
                     style={[a.flex_1, a.text_md]}
                     authorHandle={post.author.handle}
-                    shouldProxyLinks={true}
+                    // HORIZON: links in a private post open directly
+                    shouldProxyLinks={proxiesPostLinks(post.uri)}
                   />
                   {limitLines && (
                     <ShowMoreTextButton

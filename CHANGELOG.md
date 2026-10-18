@@ -75,6 +75,195 @@ released version yet; everything so far is under `[Unreleased]`.
     sign-in cancelled at the server says so.
   - `scripts/silonew-dev.sh`, which runs the web dev server on a build host
     for testing through an SSH tunnel at `http://127.0.0.1:8081`.
+- **Phase 2, private posting** (design: internal,
+  `docs/internal/design/phase-2-private-posting.md`, steps 2A to 2D, 2F-1
+  to 2F-5, the v2 fix batch and its round 2 and round 3 fixes, 2G
+  spoiler tags, and 2H, adopting what prism serves
+  (`docs/internal/design/phase-2h-prism-features.md`, 2H-1 to 2H-9); the
+  parts that wait on server support are switched off until it lands).
+  - **Writing private posts.** Members get **Public | Private** in the
+    composer, with an audience: Everyone, Followers, People you follow, a
+    list, a new list, or Only me. A reply in a private conversation is
+    Private and cannot be made public; it is visible to whoever can see the
+    conversation's first post now, and the composer says who that is. A
+    private reply to a public post starts a private branch under the
+    audience its author picks, and replies in that branch follow the
+    branch's first post. Private posts and private threads are written to
+    the account's own server through the kryphocron procedures, checked
+    locally before they are sent, and never fall through to a public post; a
+    failed private thread removes whatever was written. Private posts carry their languages and content warnings,
+    and readers' clients apply the warnings as for a public post.
+  - **The composer.** The **Public | Private** control sits centred in the
+    composer's footer, between the media tools and the language and
+    character count, as in the old Horizon client (on a phone it takes its
+    own centred row above). Bluesky's interaction button stays where it is,
+    above the footer, but opens one drop-down for both modes in place of
+    Bluesky's pop-up, for every account: who can see (Private), who can
+    reply (Anyone, Nobody, your followers, people you follow, people you
+    mention, your lists, and "New reply list..." made right there), whether
+    quotes are allowed, and "Save these options for next time"; while
+    Private, Who can see offers "New audience...". Its label is "Anyone can
+    interact" or "Interaction limited" in both modes, with the audience shown
+    inside under Who can see; only a private reply that starts a branch,
+    which has no reply settings, is labelled with its audience.
+  - **Reply and quote limits on private posts.** A private post's limits are
+    written as Bluesky's own threadgate and postgate records naming the
+    private post, before the post itself; if they cannot be saved, nothing is
+    posted. Until prism applies them, readers' clients read them: an opened
+    private post dims reply and quote for a reader who is not allowed, and
+    pressing reply or quote elsewhere says "Replies to this post are
+    limited." or "Quote posts of this post are turned off." Rules the client
+    cannot decide (lists, mentions) let the reader through.
+  - **Editing a private post's settings.** The author's post menu offers
+    "Edit who can see and interact": the same drop-down. Who can see can be
+    changed in place on a post that starts a conversation or a private
+    branch, keeping its link, replies and interactions; the dialog warns
+    first that replies from people outside the new audience, and the
+    replies under them, will be hidden from others, while the author's own
+    stay visible. Other replies show who can see read-only. Who can reply
+    (for the thread's author) and who can quote are saved as the stock
+    records.
+  - **Media in private posts.** Private mode offers the full media picker: a
+    video (or a GIF from the photo library) uploads through Bluesky's video
+    service as for a public post and is written into the private post, five
+    to ten images are written as a gallery, a quote can carry images, a
+    gallery, a video or a link card, and images keep their aspect ratio and
+    link cards their thumbnail.
+  - **Deleting a private post** deletes the private record, never a public
+    post that shares its key.
+  - **Drafts saved Private come back Private**, with their audience, and
+    show a small lock in the drafts list.
+  - **Audiences** in Settings, for members: the account's audiences, the
+    people on each list, and New list.
+  - **Network membership is found with prism's public indexing off**: the
+    membership check falls back to prism's private timeline when the public
+    one answers "not implemented".
+  - **Reading private posts.** For members, Following merges the private
+    posts of the accounts they follow (and their own) with the public
+    timeline by time, and the author's just-written private posts show at
+    once. Profiles gain a **Private** tab between Posts and Replies; Posts
+    also merges the profile's private posts (and its own private
+    self-threads) the reader may view, Replies its private posts and
+    replies, both by time, and a pinned private post shows first on Posts,
+    once. Private lists keep loading through pages that come back empty
+    while more remain. Private threads open at
+    `/profile/<handle>/ppost/<rkey>` with their public parent; "View post"
+    after posting privately opens them. A quoted private post shows for
+    readers who may view it and as a "Private post" card for everyone else.
+    It arrives with the post that quotes it, in feeds, profiles, threads,
+    Saved and notifications: every private quote on a page is read in one
+    request before the page shows (waiting at most two seconds), and quotes
+    already seen paint at once from the device while they are read again.
+    A quote that still has to load holds its card's space with a quiet
+    placeholder. Membership is remembered per account, so private reads
+    start at launch while it is checked again in the background; composing
+    privately waits for that check. Authors' servers are remembered for six
+    hours. A private GIF-style video plays as a GIF.
+    A pasted private post link becomes a quote. Private post links are
+    shared on `https://nearhorizon.app`, and Embed post and Send via chat
+    are not offered for them.
+  - **How private posts look.** Every private post carries a lock the size
+    of the header row's other icons, alone, at the right end of its header
+    row (its top right corner), in
+    feeds, thread replies, profiles, Saved and quotes; the name, handle and
+    time truncate before it. There is no border (a trial look). An opened
+    private post shows the lock, **Private** and who can see it ("Visible to Your followers",
+    "Visible to Book club", "Visible to Followers of @alice"), read from the
+    audience record; a reply to a private post shows the same in the
+    composer. Links and hashtags in private posts are linked (found on the
+    device until prism serves them), and links open directly instead of
+    through Bluesky's redirect. Images, link cards, quotes, videos and
+    galleries in private posts are shown from the post itself until prism
+    serves their views.
+  - **Controls on private posts.** Like, repost and quote work as on any
+    post. Counts and the stats row under an opened post show when prism
+    serves them, and the reader's own like, repost, bookmark and thread
+    mute show as prism has them. The bookmark button and the menu's save
+    item save the post with prism once prism says it stores private
+    bookmarks; before that, pressing them says "Saving private posts isn't
+    available yet." and saves nothing. Mute thread on a private thread,
+    Hide reply for everyone and Detach quote are offered once prism says it
+    applies them; Report post is not offered. On an opened private post that
+    starts its thread, the author's who-can-reply line opens the post's
+    settings. Deleting from a private
+    post's thread goes back as from a public one. A private post the reader
+    may not view shows a "Private post" card in its thread instead of "Post
+    not found", and reply lines in private threads connect replies to their
+    replies.
+  - **Public | Private notifications** for members: a pair of folder tabs
+    above the notification pills. Private has its own All and Replies pills
+    and says "Activity on private posts will show here." until prism serves
+    private notifications. Public notifications load when Bluesky's grouped
+    notifications fail (as they do for a like or repost of a private post):
+    that page is read from the plain notification list and grouped on the
+    device instead, with the same rows and pills.
+  - **Public | Private on Saved** for members, as the same folder tabs,
+    under the Saved header in the centre column. Private lists saved private
+    posts and replies, saved and removed through prism instead of Bluesky;
+    when prism does not serve private bookmarks it says "Saved private posts
+    will show here."
+  - **Following what prism serves** (step 2H). Membership is
+    asked of prism's own membership query, which also enrolls a new account,
+    and prism's answer says which private features it serves; Horizon
+    remembers that per account and turns each feature on or off from it, so
+    a prism that gains or loses a feature is followed without a new release
+    (the old check stays for a prism without the query). A feature list
+    remembered from the last launch lets reading start at once, but nothing
+    that writes uses it until prism answers again. With prism serving them:
+    counts and the reader's state on private posts; private bookmarks;
+    reply and quote limits applied by prism (the device's own check stays
+    for a private branch under a public post); the profile's Posts tab
+    filtered by prism; who can see read from prism, so a reply in a moved
+    thread names its thread's audience, and a move made in Horizon holds
+    against older answers for a minute; a moved or new post read back at
+    once when prism says it has caught up; reposts of private posts by
+    members shown as repost rows in Following and on profiles; and Mute
+    thread on private threads, with a public thread's mute also sent to
+    prism so private replies under it stop notifying (and brought back in
+    line when Horizon sees the two disagree).
+  - **Private activity, lists and search** (step 2H, second half), each
+    while prism serves it. Liked by, Reposted by and Quotes on a private
+    post list the members who did so (members only: prism neither counts
+    nor lists anyone else), with public quotes shown as the public AppView
+    has them. A private thread with more replies than one read brings shows
+    "Show more replies" and "read more" rows that load the rest. Opening a
+    public post shows the private replies under it that the reader may see,
+    with their lock, for Top first under the post, for Newest and Oldest in
+    time order among the public replies. The Private notifications view
+    lists replies, quotes and mentions in private posts and members' likes,
+    reposts, replies and quotes of the reader's private posts, with the
+    stock rows (a lock in the corner of a private post's row, its links
+    opened directly, and its reply button checking the post's reply
+    limits); the Private tab shows prism's unread count, the notifications
+    badge adds the private replies, quotes and mentions the public count
+    cannot hold, and opening the view marks them seen. Search lists private
+    posts the reader may see among the public results in Top and Latest
+    (Latest by time, Top one private result after every two public ones),
+    searching words and the author (`from:`, the author filter, Me); other
+    filters apply to public results only, with a note. When recent private
+    posts hold no match, "Search older posts" looks further back, up to a
+    year. Moving a post's audience no longer carries the "until the server
+    fully supports this" line, and a branch root's warning says the
+    author's own replies inside it are checked too. Placing a reply deep in
+    a private branch reads the branch in one request instead of one per
+    level.
+  - **Spoiler tags** (design: internal,
+    `docs/internal/design/phase-2-spoilers.md`, step 2G), for everyone.
+    Write `||secret||`, or select text and press the composer's spoiler
+    button (web), and the text is covered until the reader presses it, in
+    feeds, threads, quotes, notifications, Saved, search, the video feed and
+    the reply preview; the video grid shows "[spoiler]" in its place. A
+    spoiler on lines of its own is a closed drawer under the line above,
+    opened by an arrow (or a "Spoiler" row when nothing comes before it).
+    Public posts keep the `||` markers in their text, so other apps show
+    them as written, and carry the spoilers as facets
+    (`app.nearhorizon.richtext.facet`) so links and mentions inside stay
+    linked everywhere. Private posts are written the same way until prism
+    serves facets, then without the markers, which then no longer count
+    toward the 300 characters. `\|` writes a literal pipe. A cover hides the
+    text from view only: it is still in the post, in translations, in
+    "Copy post text" and in muted-word matching. Posts from other apps that
+    happen to contain `||` are shown as written.
 
 ### Fixed
 

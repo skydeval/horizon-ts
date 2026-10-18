@@ -52,7 +52,8 @@ export const ROUTES: readonly Route[] = [
     firstCallerPhase: 2,
   },
   {
-    calls: 'membership probe (app.bsky.feed.getTimeline)',
+    calls:
+      'membership probe (app.nearhorizon.actor.getMembership; app.bsky.feed.getTimeline on a prism without it)',
     destination: 'prism',
     firstCallerPhase: 1,
   },

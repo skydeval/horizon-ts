@@ -1,22 +1,62 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
+// The suite mocks multiformats globally; CID validation needs the real one.
+jest.unmock('multiformats/cid')
+jest.unmock('multiformats/hashes/hasher')
+
 const mockPersistedWrite = jest.fn()
 jest.mock('#/state/persisted', () => ({
   write: (...args: unknown[]) => mockPersistedWrite(...args),
 }))
-const mockWriteLocal = jest.fn()
+const mockLocal = new Map<string, string>()
+const mockWriteLocal = jest.fn((key: string, value: string | undefined) => {
+  if (value === undefined) mockLocal.delete(key)
+  else mockLocal.set(key, value)
+})
 jest.mock('#/horizon/session/local-store', () => ({
-  readLocal: () => undefined,
-  writeLocal: (...args: unknown[]) => mockWriteLocal(...args),
+  readLocal: (key: string) => mockLocal.get(key),
+  writeLocal: (key: string, value: string | undefined) =>
+    mockWriteLocal(key, value),
   subscribeLocal: () => () => {},
 }))
+let mockProbeFallback = true
+/*
+ * The Phase 2 cases run on the legacy probe (`MEMBERSHIP_QUERY` off); the
+ * 2H cases turn it on.
+ */
+let mockMembershipQuery = false
+// Live getters, so each test can flip the switches.
+jest.mock('#/horizon/switches', () =>
+  Object.defineProperties(
+    {...jest.requireActual<object>('#/horizon/switches')},
+    {
+      MEMBERSHIP_PROBE_FALLBACK: {
+        get: () => mockProbeFallback,
+        enumerable: true,
+      },
+      MEMBERSHIP_QUERY: {get: () => mockMembershipQuery, enumerable: true},
+    },
+  ),
+)
 
 import {createLexClient} from '#/lib/lexClient'
+import {nearhorizon} from '#/horizon/lexicons'
+import {reportedPrismCall} from '#/horizon/private/api/reads'
+import {
+  clearCurrentClients,
+  type CurrentClients,
+  publishCurrentClients,
+} from '../current-clients'
+import {featuresAnswered, resetPrismFeatures, servesFeature} from '../features'
 import {
   getMembership,
+  isMembershipConfirmed,
   MAX_UNKNOWN_ATTEMPTS,
+  MEMBERSHIP_RECHECK_MIN_MS,
+  membershipStorageKey,
   onEnteredIndexing,
   type ProbeEnvironment,
+  requestMembershipRecheck,
   resetMembership,
   RETRY_SCHEDULE_MS,
   RETRY_STEADY_MS,
@@ -56,6 +96,7 @@ const prism = createLexClient(
 function manualEnvironment() {
   const timers: {callback: () => void; ms: number}[] = []
   let hidden = false
+  const clock = {now: 1_000_000}
   const visibleListeners = new Set<() => void>()
   const env: ProbeEnvironment = {
     setTimeout: (callback, ms) => {
@@ -72,10 +113,12 @@ function manualEnvironment() {
       visibleListeners.add(callback)
       return () => visibleListeners.delete(callback)
     },
+    now: () => clock.now,
   }
   return {
     env,
     timers,
+    clock,
     fireNext() {
       const timer = timers.shift()
       if (!timer) throw new Error('no timer scheduled')
@@ -94,12 +137,24 @@ async function settle() {
   await new Promise(resolve => setTimeout(resolve, 0))
 }
 
+/** The v2 device record. */
+function record(
+  state: string,
+  features: readonly string[] | null = null,
+): string {
+  return JSON.stringify({v: 2, state, features})
+}
+
 beforeEach(() => {
   resetMembership()
+  resetPrismFeatures()
+  mockProbeFallback = true
+  mockMembershipQuery = false
   replies = []
   requests.length = 0
   mockPersistedWrite.mockReset()
-  mockWriteLocal.mockReset()
+  mockWriteLocal.mockClear()
+  mockLocal.clear()
 })
 
 describe('the membership machine', () => {
@@ -228,12 +283,370 @@ describe('the membership machine', () => {
     expect(clock.timers).toHaveLength(0)
   })
 
-  it('writes nothing to persisted storage', async () => {
-    replies.push({status: 400, body: {error: 'NotEnrolled'}})
-    startMembershipProbe(DID, prism, manualEnvironment().env)
-    await settle()
-    expect(getMembership(DID)).toBe('not-member')
-    expect(mockPersistedWrite).not.toHaveBeenCalled()
-    expect(mockWriteLocal).not.toHaveBeenCalled()
+  describe('with public indexing off (501 NotImplemented)', () => {
+    const notImplemented: Reply = {
+      status: 501,
+      body: {error: 'NotImplemented', message: 'public indexing is off'},
+    }
+
+    it('falls back to the private timeline, and its success means member', async () => {
+      replies.push(notImplemented, {status: 200, body: {feed: []}})
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(requests).toHaveLength(2)
+      expect(requests[0]).toContain('/xrpc/app.bsky.feed.getTimeline')
+      expect(requests[1]).toContain('/xrpc/app.nearhorizon.private.getTimeline')
+      expect(requests[1]).toContain('limit=1')
+      expect(getMembership(DID)).toBe('member')
+      expect(clock.timers).toHaveLength(0)
+    })
+
+    it('NotReady from the fallback means indexing, and retries ask the private timeline', async () => {
+      replies.push(notImplemented, {status: 400, body: {error: 'NotReady'}})
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('indexing')
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+
+      replies.push({status: 200, body: {feed: []}})
+      clock.fireNext()
+      await settle()
+      expect(requests).toHaveLength(3)
+      expect(requests[2]).toContain('/xrpc/app.nearhorizon.private.getTimeline')
+      expect(getMembership(DID)).toBe('member')
+    })
+
+    it('NotEnrolled from the fallback means not-member, and stops', async () => {
+      replies.push(notImplemented, {status: 400, body: {error: 'NotEnrolled'}})
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('not-member')
+      expect(clock.timers).toHaveLength(0)
+    })
+
+    it('with the switch off a 501 stays unknown', async () => {
+      mockProbeFallback = false
+      replies.push(notImplemented)
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(requests).toHaveLength(1)
+      expect(getMembership(DID)).toBe('unknown')
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+    })
+  })
+
+  describe('persisted per account', () => {
+    /** A new app start: memory is gone, the device keys stay. */
+    function relaunch() {
+      resetMembership()
+      resetPrismFeatures()
+    }
+
+    it('keeps each answered state in its own device key, never in Bluesky storage', async () => {
+      for (const [error, state] of [
+        [undefined, 'member'],
+        ['NotReady', 'indexing'],
+        ['NotEnrolled', 'not-member'],
+      ] as const) {
+        relaunch()
+        replies.push(
+          error
+            ? {status: 400, body: {error}}
+            : {status: 200, body: {feed: []}},
+        )
+        const cancel = startMembershipProbe(DID, prism, manualEnvironment().env)
+        await settle()
+        cancel()
+        expect(mockLocal.get(membershipStorageKey(DID))).toBe(record(state))
+      }
+      expect(mockPersistedWrite).not.toHaveBeenCalled()
+    })
+
+    it('starts from the persisted state at once, unconfirmed, before any answer', () => {
+      mockLocal.set(membershipStorageKey(DID), 'member')
+      relaunch()
+      expect(getMembership(DID)).toBe('member')
+      expect(isMembershipConfirmed(DID)).toBe(false)
+      expect(getMembership('did:plc:someoneelseaaaaaaaaaaaaa')).toBe('unknown')
+    })
+
+    it('re-checks in the background: the same answer confirms it', async () => {
+      mockLocal.set(membershipStorageKey(DID), 'member')
+      relaunch()
+      replies.push({status: 200, body: {feed: []}})
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      expect(getMembership(DID)).toBe('member')
+      await settle()
+      expect(getMembership(DID)).toBe('member')
+      expect(isMembershipConfirmed(DID)).toBe(true)
+      // The plain round 3 value is upgraded to the v2 record, once.
+      expect(mockWriteLocal).toHaveBeenCalledTimes(1)
+      expect(mockLocal.get(membershipStorageKey(DID))).toBe(record('member'))
+    })
+
+    it('re-checks in the background: a changed answer replaces it, in memory and on the device', async () => {
+      mockLocal.set(membershipStorageKey(DID), 'member')
+      relaunch()
+      replies.push({status: 400, body: {error: 'NotEnrolled'}})
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      await settle()
+      expect(getMembership(DID)).toBe('not-member')
+      expect(mockLocal.get(membershipStorageKey(DID))).toBe(
+        record('not-member'),
+      )
+    })
+
+    it('a failed re-check keeps the persisted state, unconfirmed', async () => {
+      mockLocal.set(membershipStorageKey(DID), 'member')
+      relaunch()
+      replies.push(new TypeError('Failed to fetch'))
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      await settle()
+      expect(getMembership(DID)).toBe('member')
+      expect(isMembershipConfirmed(DID)).toBe(false)
+    })
+
+    it('ignores a value it did not write', () => {
+      mockLocal.set(membershipStorageKey(DID), 'admin')
+      relaunch()
+      expect(getMembership(DID)).toBe('unknown')
+    })
+  })
+
+  describe('the membership query (2H, MEMBERSHIP_QUERY on)', () => {
+    const FEATURES = ['private', 'private.embeds', 'private.bookmarks']
+    const answer = (status: string, headers?: Record<string, string>) => ({
+      status: 200,
+      body: {status, features: FEATURES},
+      headers,
+    })
+
+    beforeEach(() => {
+      mockMembershipQuery = true
+    })
+
+    it('member: one getMembership, no getTimeline, features recorded and persisted', async () => {
+      replies.push(answer('member'))
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(requests).toHaveLength(1)
+      expect(requests[0]).toContain('/xrpc/app.nearhorizon.actor.getMembership')
+      expect(getMembership(DID)).toBe('member')
+      expect(isMembershipConfirmed(DID)).toBe(true)
+      expect(featuresAnswered(DID)).toBe(true)
+      expect(servesFeature('private.bookmarks', DID)).toBe(true)
+      expect(servesFeature('private.search', DID)).toBe(false)
+      expect(clock.timers).toHaveLength(0)
+      expect(mockLocal.get(membershipStorageKey(DID))).toBe(
+        record('member', FEATURES),
+      )
+    })
+
+    it('indexing retries after Retry-After, else the schedule', async () => {
+      replies.push(answer('indexing', {'retry-after': '7'}))
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('indexing')
+      expect(servesFeature('private.embeds', DID)).toBe(true)
+      expect(clock.timers.map(t => t.ms)).toEqual([7_000])
+
+      relaunchProbe()
+      replies.push(answer('indexing'))
+      const clock2 = manualEnvironment()
+      startMembershipProbe(DID, prism, clock2.env)
+      await settle()
+      expect(clock2.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+    })
+
+    it('notEligible is not-member, with no retry, features still recorded', async () => {
+      replies.push(answer('notEligible'))
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('not-member')
+      expect(featuresAnswered(DID)).toBe(true)
+      expect(clock.timers).toHaveLength(0)
+    })
+
+    it('an unknown status keeps the state, records the features, and retries as an attempt', async () => {
+      replies.push(answer('somethingNew'))
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('unknown')
+      expect(servesFeature('private.embeds', DID)).toBe(true)
+      expect(mockLocal.get(membershipStorageKey(DID))).toBeUndefined()
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+    })
+
+    it('a 429 keeps everything and waits for Retry-After, else the schedule', async () => {
+      replies.push({
+        status: 429,
+        body: {error: 'RateLimitExceeded'},
+        headers: {'retry-after': '30'},
+      })
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('unknown')
+      expect(featuresAnswered(DID)).toBe(false)
+      expect(clock.timers.map(t => t.ms)).toEqual([30_000])
+
+      replies.push({status: 429, body: {error: 'RateLimitExceeded'}})
+      clock.fireNext()
+      await settle()
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[1]])
+    })
+
+    for (const [label, reply] of [
+      ['404', {status: 404, body: {error: 'NotFound'}}],
+      [
+        '501 MethodNotImplemented',
+        {status: 501, body: {error: 'MethodNotImplemented'}},
+      ],
+      ['a non-XRPC 404', {status: 404, body: 'Not Found'}],
+    ] as const) {
+      it(`${label} falls back to getTimeline, then the private timeline, with no features`, async () => {
+        replies.push(
+          reply,
+          {status: 501, body: {error: 'NotImplemented'}},
+          {status: 200, body: {feed: []}},
+        )
+        const clock = manualEnvironment()
+        startMembershipProbe(DID, prism, clock.env)
+        await settle()
+        expect(requests).toHaveLength(3)
+        expect(requests[1]).toContain('/xrpc/app.bsky.feed.getTimeline')
+        expect(requests[2]).toContain(
+          '/xrpc/app.nearhorizon.private.getTimeline',
+        )
+        expect(getMembership(DID)).toBe('member')
+        expect(featuresAnswered(DID)).toBe(true)
+        expect(servesFeature('private', DID)).toBe(true)
+        expect(servesFeature('private.embeds', DID)).toBe(false)
+        expect(mockLocal.get(membershipStorageKey(DID))).toBe(record('member'))
+      })
+    }
+
+    it('a network failure stays unknown and retries', async () => {
+      replies.push(new TypeError('Failed to fetch'))
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('unknown')
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+    })
+
+    it('a 200 that does not parse is an unanswered attempt', async () => {
+      replies.push({status: 200, body: {status: 'member', features: [1, 2]}})
+      const clock = manualEnvironment()
+      startMembershipProbe(DID, prism, clock.env)
+      await settle()
+      expect(getMembership(DID)).toBe('unknown')
+      expect(featuresAnswered(DID)).toBe(false)
+      expect(clock.timers.map(t => t.ms)).toEqual([RETRY_SCHEDULE_MS[0]])
+    })
+
+    it('MEMBERSHIP_QUERY off asks no getMembership', async () => {
+      mockMembershipQuery = false
+      replies.push({status: 200, body: {feed: []}})
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      await settle()
+      expect(requests).toHaveLength(1)
+      expect(requests[0]).toContain('/xrpc/app.bsky.feed.getTimeline')
+    })
+
+    it('writes the record once per change and reads it back', async () => {
+      replies.push(answer('member'))
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      await settle()
+      expect(mockWriteLocal).toHaveBeenCalledTimes(1)
+      relaunchProbe()
+      expect(getMembership(DID)).toBe('member')
+      expect(servesFeature('private.bookmarks', DID)).toBe(true)
+      expect(featuresAnswered(DID)).toBe(false)
+      replies.push(answer('member'))
+      startMembershipProbe(DID, prism, manualEnvironment().env)
+      await settle()
+      expect(mockWriteLocal).toHaveBeenCalledTimes(1)
+    })
+
+    it('a round 3 plain value reads with features never answered; malformed JSON is ignored', () => {
+      mockLocal.set(membershipStorageKey(DID), 'member')
+      relaunchProbe()
+      expect(getMembership(DID)).toBe('member')
+      expect(servesFeature('private', DID)).toBe(true)
+      expect(servesFeature('private.embeds', DID)).toBe(false)
+      mockLocal.set(membershipStorageKey(DID), '{"v":2,"state":')
+      relaunchProbe()
+      expect(getMembership(DID)).toBe('unknown')
+      mockLocal.set(membershipStorageKey(DID), record('admin'))
+      relaunchProbe()
+      expect(getMembership(DID)).toBe('unknown')
+    })
+
+    describe('the recheck (3.4)', () => {
+      it('asks once more after 60 s, not before, and not while a retry is pending', async () => {
+        replies.push(answer('member'))
+        const clock = manualEnvironment()
+        startMembershipProbe(DID, prism, clock.env)
+        await settle()
+        expect(requests).toHaveLength(1)
+
+        requestMembershipRecheck(DID)
+        await settle()
+        expect(requests).toHaveLength(1)
+
+        clock.clock.now += MEMBERSHIP_RECHECK_MIN_MS
+        replies.push(answer('indexing'))
+        requestMembershipRecheck(DID)
+        await settle()
+        expect(requests).toHaveLength(2)
+        expect(clock.timers).toHaveLength(1)
+
+        clock.clock.now += MEMBERSHIP_RECHECK_MIN_MS
+        requestMembershipRecheck(DID)
+        await settle()
+        expect(requests).toHaveLength(2)
+      })
+
+      it('a private 501 MethodNotImplemented (a bookmark write) asks again', async () => {
+        replies.push(answer('member'))
+        const clock = manualEnvironment()
+        startMembershipProbe(DID, prism, clock.env)
+        await settle()
+        clock.clock.now += MEMBERSHIP_RECHECK_MIN_MS
+        publishCurrentClients({did: DID} as unknown as CurrentClients)
+        replies.push(
+          {status: 501, body: {error: 'MethodNotImplemented'}},
+          {status: 200, body: {status: 'member', features: ['private']}},
+        )
+        await expect(
+          reportedPrismCall(() =>
+            prism.call(nearhorizon.privateCreateBookmark, {
+              uri: `at://${DID}/tools.kryphocron.feed.postPrivate/3kx`,
+              cid: 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm',
+            }),
+          ),
+        ).rejects.toThrow()
+        await settle()
+        expect(requests).toHaveLength(3)
+        expect(requests[2]).toContain('getMembership')
+        expect(servesFeature('private.bookmarks', DID)).toBe(false)
+        clearCurrentClients()
+      })
+    })
+
+    /** A new app start: memory is gone, the device keys stay. */
+    function relaunchProbe() {
+      resetMembership()
+      resetPrismFeatures()
+    }
   })
 })

@@ -39,6 +39,12 @@ import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
 import {useAppviewClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+// HORIZON: private posts on profile feeds
+import {withPrivateKey} from '#/horizon/private/feed/keys'
+// HORIZON: private posts on profile feeds
+import {horizonFeedApi} from '#/horizon/private/feed/legacy'
+// HORIZON: private posts on profile feeds
+import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {useFeedTuners} from '../preferences/feed-tuners'
@@ -80,7 +86,8 @@ type RQPageParam = {cursor: string | undefined; api: FeedAPI} | undefined
 
 export const RQKEY_ROOT = 'post-feed'
 export function RQKEY(feedDesc: FeedDescriptor, params?: FeedParams) {
-  return [RQKEY_ROOT, feedDesc, params || {}]
+  // HORIZON: a member's feeds that carry private posts are keyed by membership
+  return withPrivateKey(feedDesc, [RQKEY_ROOT, feedDesc, params || {}])
 }
 
 export interface FeedPostSliceItem {
@@ -157,6 +164,8 @@ export function usePostFeedQuery(
   const enableFollowingToDiscoverFallback = followingPinnedIndex === 0
   const {hasSession} = useSession()
   const client = useAppviewClient()
+  // HORIZON: a member's private source, for the Private tab and the Posts and Replies merges
+  const privateSource = usePrivateFeedSource()
   const lastRun = useRef<{
     data: InfiniteData<FeedPageUnselected>
     args: typeof selectArgs
@@ -197,16 +206,22 @@ export function usePostFeedQuery(
       const {api, cursor} = pageParam
         ? pageParam
         : {
-            api: createApi({
+            // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (start)
+            api: horizonFeedApi(
               feedDesc,
-              feedParams: params || {},
-              feedTuners,
-              client,
-              // Not in the query key because they don't change:
-              userInterests,
-              // Not in the query key. Reacting to it switching isn't important:
-              enableFollowingToDiscoverFallback,
-            }),
+              privateSource,
+              createApi({
+                feedDesc,
+                feedParams: params || {},
+                feedTuners,
+                client,
+                // Not in the query key because they don't change:
+                userInterests,
+                // Not in the query key. Reacting to it switching isn't important:
+                enableFollowingToDiscoverFallback,
+              }),
+            ),
+            // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (end)
             cursor: undefined,
           }
 

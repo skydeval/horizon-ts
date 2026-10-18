@@ -19,6 +19,8 @@ import {Earth_Stroke2_Corner0_Rounded as Globe} from '#/components/icons/Globe'
 import {Link} from '#/components/Link'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+// HORIZON: links in a private post open directly
+import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {type app} from '#/lexicons'
 import {ExternalGif} from './ExternalGif'
 import {ExternalPlayer} from './ExternalPlayer'
@@ -89,7 +91,8 @@ export const ExternalEmbed = ({
     <Link
       label={link.title || _(msg`Open link to ${niceUrl}`)}
       to={link.uri}
-      shouldProxy={true}
+      // HORIZON: links in a private post open directly
+      shouldProxy={proxiesPostLinks(post?.uri)}
       peek
       style={[a.rounded_md]}
       onPress={onPress}
