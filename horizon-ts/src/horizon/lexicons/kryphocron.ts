@@ -20,7 +20,7 @@
 
 import {l} from '@atproto/lex'
 
-import {spoiler, spoilerMarker} from './richtext'
+import {contentWarning, spoiler, spoilerMarker} from './richtext'
 
 const POST_PUBLIC = 'tools.kryphocron.feed.postPublic'
 
@@ -48,10 +48,18 @@ export const aspectRatio = l.object({
   height: l.integer({minimum: 1}),
 })
 
+/**
+ * Horizon's per-item media spoiler flag (2J design, 3.1), written only as
+ * `true`. Listed so a value of another type fails validation; the lexicon's
+ * objects are open, so other readers keep or ignore it.
+ */
+const mediaSpoilerFlag = l.optional(l.boolean())
+
 const image = l.object({
   image: l.blob({accept: ['image/*'], maxSize: 2_000_000}),
   alt: l.string(),
   aspectRatio: l.optional(aspectRatio),
+  'app.nearhorizon.spoiler': mediaSpoilerFlag,
 })
 
 /**
@@ -92,6 +100,7 @@ export const galleryImage = l.typedObject(
     image: l.blob({accept: ['image/*'], maxSize: 2_000_000}),
     alt: l.string(),
     aspectRatio,
+    'app.nearhorizon.spoiler': mediaSpoilerFlag,
   }),
 )
 
@@ -127,6 +136,7 @@ export const embedVideo = l.typedObject(
     alt: l.optional(l.string()),
     aspectRatio: l.optional(aspectRatio),
     presentation: l.optional(l.string()),
+    'app.nearhorizon.spoiler': mediaSpoilerFlag,
   }),
 )
 
@@ -190,8 +200,9 @@ export const tag = l.typedObject(
 /**
  * `tools.kryphocron.feed.postPublic#facet`. The lexicon's feature union is
  * open; this one is closed and lists, beside kryphocron's own features,
- * Horizon's spoiler features (`app.nearhorizon.richtext.facet`), so a
- * private record carries only features Horizon writes.
+ * Horizon's spoiler and content warning features
+ * (`app.nearhorizon.richtext.facet`), so a private record carries only
+ * features Horizon writes.
  */
 export const facet = l.typedObject(
   POST_PUBLIC,
@@ -209,6 +220,7 @@ export const facet = l.typedObject(
           l.typedRef(() => tag),
           l.typedRef(() => spoiler),
           l.typedRef(() => spoilerMarker),
+          l.typedRef(() => contentWarning),
         ],
         true,
       ),

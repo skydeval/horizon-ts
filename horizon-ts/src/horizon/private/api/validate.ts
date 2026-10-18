@@ -9,7 +9,8 @@
  * always-present `text`, the empty-post rule, the audience URI's shape, the
  * facet byte bounds and layout (sorted, non-overlapping, spoiler facets
  * non-empty, marker facets over `||` only, the whole within prism's cap),
- * the language and self-label counts, and the embeds
+ * the language and self-label counts, the media spoiler flag's value and a
+ * content warning facet's spoiler (2J design 4.7), and the embeds
  * whose server-support constant is off, which are rejected as unknown
  * embeds.
  */
@@ -18,6 +19,7 @@ import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {kryphocron} from '#/horizon/lexicons'
 import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
+import {MEDIA_SPOILER_FIELD} from '#/horizon/media-spoilers/nsid'
 import {
   PRIVATE_GALLERY,
   PRIVATE_LANGS_LABELS,
@@ -25,7 +27,11 @@ import {
   PRIVATE_VIDEO,
 } from '#/horizon/private/server-support'
 import {isAudienceUri, PP_COLLECTION} from '#/horizon/private/uri'
-import {isSpoilerFeature, isSpoilerMarkerFeature} from '#/horizon/spoilers/nsid'
+import {
+  isContentWarningFeature,
+  isSpoilerFeature,
+  isSpoilerMarkerFeature,
+} from '#/horizon/spoilers/nsid'
 
 const ALLOWED_KEYS = new Set([
   '$type',
@@ -112,6 +118,15 @@ function checkImageBlob(blob: unknown, path: string) {
 }
 
 /**
+ * The media spoiler flag, when present, is `true`.
+ */
+function checkMediaFlag(item: Record<string, unknown>, path: string) {
+  if (MEDIA_SPOILER_FIELD in item && item[MEDIA_SPOILER_FIELD] !== true) {
+    fail(`${path}.${MEDIA_SPOILER_FIELD}`, 'must be true when present')
+  }
+}
+
+/**
  * The rules of one media embed (or a quote), at `path`. A video or a gallery
  * is an unknown embed while its constant is off.
  */
@@ -127,6 +142,7 @@ function checkMedia(embed: Record<string, unknown>, path: string) {
         if (!isObject(image)) fail(at, 'not an object')
         if (typeof image.alt !== 'string') fail(`${at}.alt`, 'not a string')
         checkImageBlob(image.image, `${at}.image`)
+        checkMediaFlag(image, at)
       })
       return
     }
@@ -145,6 +161,7 @@ function checkMedia(embed: Record<string, unknown>, path: string) {
         if (typeof item.alt !== 'string') fail(`${at}.alt`, 'not a string')
         if (!isObject(item.aspectRatio)) fail(`${at}.aspectRatio`, 'missing')
         checkImageBlob(item.image, `${at}.image`)
+        checkMediaFlag(item, at)
       })
       return
     }
@@ -158,6 +175,7 @@ function checkMedia(embed: Record<string, unknown>, path: string) {
       if (typeof blob.size !== 'number' || blob.size > MAX_VIDEO_BYTES) {
         fail(`${path}.video.size`, `over ${MAX_VIDEO_BYTES} bytes`)
       }
+      checkMediaFlag(embed, path)
       return
     }
     default:
@@ -239,6 +257,12 @@ export function validatePrivateRecord(record: unknown): PostPrivate {
         f => isSpoilerFeature(f) || isSpoilerMarkerFeature(f),
       )
       if (isSpoiler && byteStart >= byteEnd) fail(path, 'empty spoiler')
+      if (
+        features.some(isContentWarningFeature) &&
+        !features.some(isSpoilerFeature)
+      ) {
+        fail(`facets[${i}]`, 'content warning without a spoiler')
+      }
       if (
         features.some(isSpoilerMarkerFeature) &&
         !SPOILER_MARKER_BYTES.has(utf8Slice(text, byteStart, byteEnd))

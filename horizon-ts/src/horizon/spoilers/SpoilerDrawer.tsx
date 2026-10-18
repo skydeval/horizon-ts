@@ -20,7 +20,7 @@ import {Text} from '#/components/Typography'
 import {onSpoilerKey, onSpoilerPress} from './InlineSpoiler'
 import {spoilerTooltipRef} from './tooltip'
 
-function useDrawerLabels(open: boolean) {
+function useDrawerLabels(open: boolean, cw: boolean) {
   const {t: l} = useLingui()
   return {
     tooltip: open
@@ -34,11 +34,17 @@ function useDrawerLabels(open: boolean) {
           comment:
             'Tooltip on the control that opens hidden spoiler lines in a post, on web',
         }),
-    label: l({
-      message: 'Spoiler',
-      comment:
-        'Screen reader label of the control that opens hidden spoiler lines in a post',
-    }),
+    label: cw
+      ? l({
+          message: 'Content warning',
+          comment:
+            'Screen reader label of the control that opens the hidden body of a post behind a content warning',
+        })
+      : l({
+          message: 'Spoiler',
+          comment:
+            'Screen reader label of the control that opens hidden spoiler lines in a post',
+        }),
     hint: open
       ? l({
           message: 'Hides the lines',
@@ -55,20 +61,22 @@ function useDrawerLabels(open: boolean) {
 
 /**
  * The arrow at the end of the line above a block spoiler, inside that line's
- * text.
+ * text. `cw`: the block is a content warning's body.
  */
 export function SpoilerArrow({
   open,
   onToggle,
   style,
+  cw = false,
 }: {
   open: boolean
   onToggle: () => void
   style: StyleProp<TextStyle>
+  cw?: boolean
 }) {
   const t = useTheme()
   const haptics = useHaptics()
-  const {label, hint, tooltip} = useDrawerLabels(open)
+  const {label, hint, tooltip} = useDrawerLabels(open, cw)
   const [focused, setFocused] = useState(false)
   const toggle = () => {
     haptics.tap()
@@ -102,18 +110,21 @@ export function SpoilerArrow({
 }
 
 /**
- * The row that opens a block spoiler with nothing above it.
+ * The row that opens a block spoiler with nothing above it: "Spoiler", or
+ * "Content warning" for a content warning's body.
  */
 export function SpoilerLabelRow({
   open,
   onToggle,
+  cw = false,
 }: {
   open: boolean
   onToggle: () => void
+  cw?: boolean
 }) {
   const t = useTheme()
   const haptics = useHaptics()
-  const {label, hint, tooltip} = useDrawerLabels(open)
+  const {label, hint, tooltip} = useDrawerLabels(open, cw)
   const Chevron = open ? ChevronUp : ChevronDown
   return (
     <Pressable
@@ -128,9 +139,15 @@ export function SpoilerLabelRow({
         onToggle()
       })}>
       <Text style={[a.text_sm, a.font_medium, t.atoms.text_contrast_medium]}>
-        <Trans comment="Label of a closed or open block of spoiler lines in a post">
-          Spoiler
-        </Trans>
+        {cw ? (
+          <Trans comment="Label of the closed or open body of a post behind a content warning">
+            Content warning
+          </Trans>
+        ) : (
+          <Trans comment="Label of a closed or open block of spoiler lines in a post">
+            Spoiler
+          </Trans>
+        )}
       </Text>
       <Chevron size="sm" fill={t.atoms.text_contrast_medium.color} />
     </Pressable>

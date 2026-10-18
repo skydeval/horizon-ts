@@ -16,6 +16,8 @@ import {useThrottledValue} from '#/components/hooks/useThrottledValue'
 import {ConstrainedImage} from '#/components/images/AutoSizedImage'
 import {PlayButtonIcon} from '#/components/video/PlayButtonIcon'
 import {useAnalytics} from '#/analytics'
+// HORIZON: a flagged video is covered until pressed
+import {MediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerCell'
 import {type app} from '#/lexicons'
 import {GifPresentationControls} from './GifPresentationControls'
 import {VideoEmbedInnerNative} from './VideoEmbedInner/VideoEmbedInnerNative'
@@ -64,7 +66,11 @@ export function VideoEmbed({embed, post}: Props) {
         // slightly smaller max height than images
         // images use 16 / 9, for reference
         minMobileAspectRatio={14 / 9}>
-        {contents}
+        {/* HORIZON: a flagged video is covered until pressed (start) */}
+        <MediaSpoilerCell thumb={embed.thumbnail} kind="video" style={a.flex_1}>
+          {contents}
+        </MediaSpoilerCell>
+        {/* HORIZON: a flagged video is covered until pressed (end) */}
       </ConstrainedImage>
     </View>
   )

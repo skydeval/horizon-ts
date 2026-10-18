@@ -13,6 +13,8 @@ import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import {ImageContextMenu} from '#/components/Post/Embed/ImageContextMenu'
 import {type PostEmbedViewContext} from '#/components/Post/Embed/types'
 import {Text} from '#/components/Typography'
+// HORIZON: a flagged image is covered until pressed
+import {MediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerCell'
 import {type app} from '#/lexicons'
 
 type EventFunction = (index: number) => void
@@ -69,76 +71,80 @@ export function GalleryItem({
       style={a.flex_1}
       ref={containerRefs[index]}
       collapsable={false}>
-      <ImageContextMenu
-        fullsizeUri={image.fullsize}
-        thumbUri={image.thumb}
-        aspectRatio={aspect}
-        borderRadius={tokens.borderRadius.md}
-        onPreviewPress={openLightboxAtIndex}
-        style={a.flex_1}>
-        <Pressable
-          onPress={openLightboxAtIndex}
-          onPressIn={onPressIn ? () => onPressIn(index) : undefined}
-          onLongPress={onLongPress ? () => onLongPress(index) : undefined}
-          android_ripple={{
-            color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
-            foreground: true,
-          }}
-          style={[
-            a.flex_1,
-            a.overflow_hidden,
-            t.atoms.bg_contrast_25,
-            imageStyle,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={image.alt || _(msg`Image`)}
-          accessibilityHint="">
-          <Image
-            source={{uri: image.thumb}}
-            style={[a.flex_1]}
-            accessible={true}
-            accessibilityLabel={image.alt}
-            accessibilityHint=""
-            accessibilityIgnoresInvertColors
-            onLoad={e => {
-              thumbDimsRef.current[index] = {
-                width: e.source.width,
-                height: e.source.height,
-              }
+      {/* HORIZON: a flagged image is covered until pressed; the grid clips the corners (start) */}
+      <MediaSpoilerCell thumb={image.thumb} style={a.flex_1} rounded={false}>
+        <ImageContextMenu
+          fullsizeUri={image.fullsize}
+          thumbUri={image.thumb}
+          aspectRatio={aspect}
+          borderRadius={tokens.borderRadius.md}
+          onPreviewPress={openLightboxAtIndex}
+          style={a.flex_1}>
+          <Pressable
+            onPress={openLightboxAtIndex}
+            onPressIn={onPressIn ? () => onPressIn(index) : undefined}
+            onLongPress={onLongPress ? () => onLongPress(index) : undefined}
+            android_ripple={{
+              color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
+              foreground: true,
             }}
-            loading="lazy"
-            useAppleWebpCodec
-          />
-          <MediaInsetBorder style={insetBorderStyle} />
-        </Pressable>
-      </ImageContextMenu>
-      {hasAlt ? (
-        <View
-          accessible={false}
-          style={[
-            a.absolute,
-            a.flex_row,
-            a.align_center,
-            a.rounded_sm,
-            a.p_xs,
-            t.atoms.bg_contrast_25,
-            {
-              bottom: a.p_xs.padding,
-              right: a.p_xs.padding,
-              opacity: 0.8,
-            },
-            largeAltBadge && [
+            style={[
+              a.flex_1,
+              a.overflow_hidden,
+              t.atoms.bg_contrast_25,
+              imageStyle,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={image.alt || _(msg`Image`)}
+            accessibilityHint="">
+            <Image
+              source={{uri: image.thumb}}
+              style={[a.flex_1]}
+              accessible={true}
+              accessibilityLabel={image.alt}
+              accessibilityHint=""
+              accessibilityIgnoresInvertColors
+              onLoad={e => {
+                thumbDimsRef.current[index] = {
+                  width: e.source.width,
+                  height: e.source.height,
+                }
+              }}
+              loading="lazy"
+              useAppleWebpCodec
+            />
+            <MediaInsetBorder style={insetBorderStyle} />
+          </Pressable>
+        </ImageContextMenu>
+        {hasAlt ? (
+          <View
+            accessible={false}
+            style={[
+              a.absolute,
+              a.flex_row,
+              a.align_center,
+              a.rounded_sm,
+              a.p_xs,
+              t.atoms.bg_contrast_25,
               {
-                padding: 6,
+                bottom: a.p_xs.padding,
+                right: a.p_xs.padding,
+                opacity: 0.8,
               },
-            ],
-          ]}>
-          <Text
-            style={[a.font_bold, largeAltBadge ? a.text_xs : {fontSize: 8}]}>
-            <Trans>ALT</Trans>
-          </Text>
-        </View>
-      ) : null}
+              largeAltBadge && [
+                {
+                  padding: 6,
+                },
+              ],
+            ]}>
+            <Text
+              style={[a.font_bold, largeAltBadge ? a.text_xs : {fontSize: 8}]}>
+              <Trans>ALT</Trans>
+            </Text>
+          </View>
+        ) : null}
+        {/* HORIZON: a flagged image is covered until pressed; the grid clips the corners (end) */}
+      </MediaSpoilerCell>
     </Animated.View>
   )
 }

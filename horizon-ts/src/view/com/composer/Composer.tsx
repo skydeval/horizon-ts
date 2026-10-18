@@ -145,6 +145,21 @@ import {
   IS_WEB_SAFARI,
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: media spoilers and content warnings
+import {
+  bindRestoredVideoSpoiler,
+  useComposeSpoilers,
+  useComposeSpoilerSession,
+} from '#/horizon/media-spoilers/compose-store'
+// HORIZON: media spoilers and content warnings
+import {
+  ComposerVideoSpoilerBadge,
+  ContentWarningButton,
+  ContentWarningField,
+  VideoSpoilerKey,
+} from '#/horizon/media-spoilers/ComposerControls'
+// HORIZON: media spoilers and content warnings
+import {applyDraftSpoilers} from '#/horizon/media-spoilers/drafts'
 // HORIZON: private composing
 import {
   privateAssetTypes,
@@ -307,6 +322,8 @@ export const ComposePost = ({
   const pdsClient = usePdsClient()
   // HORIZON: the composer owns the Public | Private record for its lifetime
   const isPrivate = usePrivateComposeSession(replyTo)
+  // HORIZON: the composer owns the media spoiler and content warning snapshot for its lifetime
+  const composeSpoilers = useComposeSpoilerSession()
   const queryClient = useQueryClient()
   /*
    * The host the video service-auth token is minted for. This is the same value
@@ -607,6 +624,8 @@ export const ComposePost = ({
             telemetry,
           },
         })
+        // HORIZON: a video saved flagged in the draft is flagged again
+        bindRestoredVideoSpoiler(postId, abortController)
 
         if (asset.duration != null && asset.duration > VIDEO_MAX_DURATION_MS) {
           composerDispatch({
@@ -727,6 +746,8 @@ export const ComposePost = ({
       })
       // HORIZON: a draft saved Private comes back Private, with its audience
       applyDraftVisibility(draftSummary.id)
+      // HORIZON: a draft's media spoilers and content warnings come back with it
+      applyDraftSpoilers(draftSummary.id, posts)
 
       // Track when the draft was created for metrics
       setLoadedDraftCreatedAt(draftSummary.createdAt)
@@ -1021,8 +1042,9 @@ export const ComposePost = ({
     thread.posts.every(
       post =>
         isEmptyPost(post) ||
-        // HORIZON: the length a post's spoilers will be written with
-        (composeGraphemeLength(post, isPrivate) <= MAX_GRAPHEME_LENGTH &&
+        // HORIZON: the length a post's spoilers and content warning will be written with
+        (composeGraphemeLength(post, isPrivate, composeSpoilers) <=
+          MAX_GRAPHEME_LENGTH &&
           !(
             post.embed.media?.type === 'video' &&
             post.embed.media.video.status === 'error'
@@ -1741,6 +1763,8 @@ let ComposerPost = memo(function ComposerPost({
         !isActive && styles.inactivePost,
         isTextOnly && isLastPost && IS_NATIVE && a.flex_grow,
       ]}>
+      {/* HORIZON: the content warning line above the editor, while the post has one */}
+      <ContentWarningField post={post} textInputRef={textInputRef} />
       <View style={[a.flex_row, IS_NATIVE && a.flex_1]}>
         <UserAvatar
           avatar={currentProfile?.avatar}
@@ -2035,48 +2059,54 @@ function ComposerEmbeds({
             style={[a.w_full, a.mt_lg]}
             entering={native(ZoomIn)}
             exiting={native(ZoomOut)}>
-            {video.asset &&
-              (video.status === 'compressing' ? (
-                <VideoTranscodeProgress
-                  asset={video.asset}
-                  progress={videoProgressWithinPhase(
-                    'compressing',
-                    video.progress,
-                  )}
-                  clear={clearVideo}
-                />
-              ) : video.video ? (
-                <VideoPreview
-                  asset={video.asset}
-                  video={video.video}
-                  isActivePost={isActivePost}
-                  clear={clearVideo}
-                />
-              ) : null)}
-            <SubtitleDialogBtn
-              defaultAltText={video.altText}
-              saveAltText={altText =>
-                dispatch({
-                  type: 'embed_update_video',
-                  videoAction: {
-                    type: 'update_alt_text',
-                    altText,
-                    signal: video.abortController.signal,
-                  },
-                })
-              }
-              captions={video.captions}
-              setCaptions={updater => {
-                dispatch({
-                  type: 'embed_update_video',
-                  videoAction: {
-                    type: 'update_captions',
-                    updater,
-                    signal: video.abortController.signal,
-                  },
-                })
-              }}
-            />
+            {/* HORIZON: the video's spoiler key for its badge and captions dialog (start) */}
+            <VideoSpoilerKey video={video}>
+              {video.asset &&
+                (video.status === 'compressing' ? (
+                  <VideoTranscodeProgress
+                    asset={video.asset}
+                    progress={videoProgressWithinPhase(
+                      'compressing',
+                      video.progress,
+                    )}
+                    clear={clearVideo}
+                  />
+                ) : video.video ? (
+                  <VideoPreview
+                    asset={video.asset}
+                    video={video.video}
+                    isActivePost={isActivePost}
+                    clear={clearVideo}
+                  />
+                ) : null)}
+              <SubtitleDialogBtn
+                defaultAltText={video.altText}
+                saveAltText={altText =>
+                  dispatch({
+                    type: 'embed_update_video',
+                    videoAction: {
+                      type: 'update_alt_text',
+                      altText,
+                      signal: video.abortController.signal,
+                    },
+                  })
+                }
+                captions={video.captions}
+                setCaptions={updater => {
+                  dispatch({
+                    type: 'embed_update_video',
+                    videoAction: {
+                      type: 'update_captions',
+                      updater,
+                      signal: video.abortController.signal,
+                    },
+                  })
+                }}
+              />
+              {/* HORIZON: the "Spoiler" badge, last so it paints above the preview */}
+              <ComposerVideoSpoilerBadge />
+              {/* HORIZON: the video's spoiler key for its badge and captions dialog (end) */}
+            </VideoSpoilerKey>
           </Animated.View>
         )}
       </LayoutAnimationConfig>
@@ -2215,6 +2245,8 @@ function ComposerFooter({
   const {gtPhone} = useBreakpoints()
   // HORIZON: the media picker offers what a private post can carry
   const isPrivate = useIsPrivateCompose()
+  // HORIZON: the counter reads the post's content warning
+  const composeSpoilers = useComposeSpoilers()
   /*
    * Once we've allowed a certain type of asset to be selected, we don't allow
    * other types of media to be selected.
@@ -2340,6 +2372,8 @@ function ComposerFooter({
               <SelectGifBtn onSelectGif={onSelectGif} disabled={!!media} />
               {/* HORIZON: the spoiler button wraps the selection in spoiler markers */}
               <SpoilerButton />
+              {/* HORIZON: the content warning toggle for the active post */}
+              <ContentWarningButton postId={post.id} />
               {IS_WEB && gtPhone ? (
                 <EmojiPicker.Root nextFocusRef={textInputRef}>
                   <EmojiPicker.Trigger label={l`Open emoji picker`}>
@@ -2382,8 +2416,8 @@ function ComposerFooter({
           nudgeAt={languageNudgeAt}
         />
         <CharProgress
-          // HORIZON: the length a post's spoilers will be written with
-          count={composeGraphemeLength(post, isPrivate)}
+          // HORIZON: the length a post's spoilers and content warning will be written with
+          count={composeGraphemeLength(post, isPrivate, composeSpoilers)}
           style={{width: 65}}
         />
       </View>

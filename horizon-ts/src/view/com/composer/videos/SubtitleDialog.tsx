@@ -18,6 +18,12 @@ import {TimesLarge_Stroke2_Corner0_Rounded as X} from '#/components/icons/Times'
 import {Warning_Stroke2_Corner0_Rounded as WarningIcon} from '#/components/icons/Warning'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
+// HORIZON: the video's "Mark as spoiler" checkbox and its key across the dialog's portal
+import {
+  useVideoSpoilerKey,
+  VideoSpoilerCheckbox,
+  VideoSpoilerKeyProvider,
+} from '#/horizon/media-spoilers/ComposerControls'
 import {SubtitleFilePicker} from './SubtitleFilePicker'
 
 const MAX_NUM_CAPTIONS = 1
@@ -34,6 +40,8 @@ interface Props {
 export function SubtitleDialogBtn(props: Props) {
   const control = Dialog.useDialogControl()
   const {_} = useLingui()
+  // HORIZON: the video's spoiler key, read before the dialog's portal
+  const videoSpoilerKey = useVideoSpoilerKey()
 
   return (
     <View style={[a.flex_row, a.my_xs]}>
@@ -62,7 +70,11 @@ export function SubtitleDialogBtn(props: Props) {
       </Button>
       <Dialog.Outer control={control} nativeOptions={{preventExpansion: true}}>
         <Dialog.Handle />
-        <SubtitleDialogInner {...props} />
+        {/* HORIZON: the video's spoiler key inside the dialog's portal (start) */}
+        <VideoSpoilerKeyProvider value={videoSpoilerKey}>
+          <SubtitleDialogInner {...props} />
+          {/* HORIZON: the video's spoiler key inside the dialog's portal (end) */}
+        </VideoSpoilerKeyProvider>
       </Dialog.Outer>
     </View>
   )
@@ -141,6 +153,9 @@ function SubtitleDialogInner({
             />
           </Text>
         )}
+
+        {/* HORIZON: the video's "Mark as spoiler" checkbox */}
+        <VideoSpoilerCheckbox />
 
         {IS_WEB && (
           <>

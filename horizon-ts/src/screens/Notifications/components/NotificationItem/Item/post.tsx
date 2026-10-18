@@ -43,6 +43,8 @@ import {SubtleHover} from '#/components/SubtleHover'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: a post with spoiler media or a content warning has its thumbnails blurred
+import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 // HORIZON: a private post's reply limits are checked on press
 import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 // HORIZON: links in a private post open directly
@@ -411,7 +413,11 @@ function EmbedPreview({
     <InlineImages
       embed={embed}
       size={80}
-      blurred={moderation?.ui('contentMedia').blur ?? false}
+      blurred={
+        (moderation?.ui('contentMedia').blur ?? false) ||
+        // HORIZON: a post with spoiler media or a content warning has its thumbnails blurred
+        hasMediaSpoilers(post)
+      }
     />
   )
 }
@@ -563,7 +569,11 @@ function QuoteCardPost({view}: {view: app.bsky.embed.record.ViewRecord}) {
               <InlineImages
                 embed={quote.embed}
                 size={60}
-                blurred={moderation?.ui('contentMedia').blur ?? false}
+                blurred={
+                  (moderation?.ui('contentMedia').blur ?? false) ||
+                  // HORIZON: a quoted post with spoiler media or a content warning has its thumbnails blurred
+                  hasMediaSpoilers(quote)
+                }
               />
             )}
           </Card>

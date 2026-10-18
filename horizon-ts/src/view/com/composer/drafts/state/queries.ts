@@ -10,6 +10,8 @@ import {useAppviewClient, useChatClient} from '#/state/session'
 import {type ComposerState} from '#/view/com/composer/state/composer'
 import {useAnalytics} from '#/analytics'
 import {getDeviceId} from '#/analytics/identifiers'
+// HORIZON: remember a draft's media spoilers and content warnings
+import {recordDraftSpoilers} from '#/horizon/media-spoilers/drafts'
 // HORIZON: remember whether a draft was saved Private
 import {recordDraftVisibility} from '#/horizon/private/composer/drafts'
 import {app} from '#/lexicons'
@@ -177,6 +179,8 @@ export function useSaveDraftMutation() {
 
       // HORIZON: remember whether this draft was saved Private, and its audience
       recordDraftVisibility(draftId)
+      // HORIZON: remember this draft's media spoilers and content warnings
+      recordDraftSpoilers(draftId, composerState.thread.posts)
 
       // Return data needed for onSuccess
       return {

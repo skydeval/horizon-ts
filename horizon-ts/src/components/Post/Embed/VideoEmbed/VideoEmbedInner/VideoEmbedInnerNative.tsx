@@ -17,6 +17,8 @@ import {KeepAwake} from '#/components/KeepAwake'
 import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import {useReportDialogMetadataContext} from '#/components/moderation/ReportDialog/ReportDialogMetadataContext'
 import {useVideoMuteState} from '#/components/Post/Embed/VideoEmbed/VideoVolumeContext'
+// HORIZON: a flagged video never plays on its own
+import {useMediaSpoilerHoldsAutoplay} from '#/horizon/media-spoilers/MediaSpoilerScope'
 import {type app} from '#/lexicons'
 import {GifPresentationControls} from '../GifPresentationControls'
 import {TimeIndicator} from './TimeIndicator'
@@ -44,7 +46,10 @@ export function VideoEmbedInnerNative({
 }) {
   const {t: l} = useLingui()
   const videoRef = useRef<BlueskyVideoView>(null)
-  const autoplayDisabled = useAutoplayDisabled()
+  // HORIZON: a flagged video never plays on its own
+  const spoilerHeld = useMediaSpoilerHoldsAutoplay()
+  // HORIZON: a flagged video never plays on its own
+  const autoplayDisabled = useAutoplayDisabled() || spoilerHeld
   const isWithinMessage = useIsWithinMessage()
   const [muted, setMuted] = useVideoMuteState()
   const reportDialogMetadata = useReportDialogMetadataContext()

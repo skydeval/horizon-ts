@@ -20,6 +20,10 @@ import {Link} from '#/components/Link'
 import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import * as Hider from '#/components/moderation/Hider'
 import {Text} from '#/components/Typography'
+// HORIZON: a flagged video's card shows the spoiler pill
+import {MediaSpoilerPill} from '#/horizon/media-spoilers/MediaSpoilerCover'
+// HORIZON: a flagged video's card thumbnail is blurred
+import {mediaSpoilerCardBlur} from '#/horizon/media-spoilers/read'
 // HORIZON: a spoiler shows as a placeholder in the card and its label
 import {spoilerSafeText} from '#/horizon/spoilers/plain'
 import {app} from '#/lexicons'
@@ -193,8 +197,12 @@ export function VideoPostCard({
               source={{uri: thumbnail}}
               style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
               accessibilityIgnoresInvertColors
+              // HORIZON: a flagged video's card thumbnail is blurred
+              blurRadius={mediaSpoilerCardBlur(post)}
             />
             <MediaInsetBorder />
+            {/* HORIZON: a flagged video's card shows the spoiler pill */}
+            <MediaSpoilerPill post={post} />
 
             <View style={[a.absolute, a.inset_0]}>
               <View
@@ -473,8 +481,12 @@ export function CompactVideoPostCard({
               source={{uri: thumbnail}}
               style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
               accessibilityIgnoresInvertColors
+              // HORIZON: a flagged video's card thumbnail is blurred
+              blurRadius={mediaSpoilerCardBlur(post)}
             />
             <MediaInsetBorder />
+            {/* HORIZON: a flagged video's card shows the spoiler pill */}
+            <MediaSpoilerPill post={post} />
 
             <View style={[a.absolute, a.inset_0, t.atoms.shadow_md]}>
               <View style={[a.absolute, a.inset_0, a.p_sm, {bottom: 'auto'}]}>

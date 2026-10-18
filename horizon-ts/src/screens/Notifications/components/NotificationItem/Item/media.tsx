@@ -5,6 +5,8 @@ import {moderatePost} from '@bsky/sdk/moderation'
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {atoms as a, tokens, useTheme} from '#/alf'
 import {IS_WEB} from '#/env'
+// HORIZON: a post with spoiler media or a content warning has its thumbnails blurred
+import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {useItemContext} from './Root'
@@ -27,9 +29,13 @@ const BLUR_RADIUS = IS_WEB ? 10 : 100
  */
 export function usePostMediaBlurred(post: app.bsky.feed.defs.PostView) {
   const moderationOpts = useModerationOpts()
-  return moderationOpts
-    ? moderatePost(post, moderationOpts).ui('contentMedia').blur
-    : false
+  return (
+    (moderationOpts
+      ? moderatePost(post, moderationOpts).ui('contentMedia').blur
+      : false) ||
+    // HORIZON: a post with spoiler media or a content warning has its thumbnails blurred
+    hasMediaSpoilers(post)
+  )
 }
 
 /**

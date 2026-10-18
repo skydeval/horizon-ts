@@ -11,7 +11,11 @@ import {type Facet, RichText, UnicodeString} from '@bsky/sdk/richtext'
 import {shortenLinks, stripInvalidMentions} from '#/lib/strings/rich-text-manip'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
-import {spoilerFeature, spoilerMarkerFeature} from './nsid'
+import {
+  contentWarningFeature,
+  spoilerFeature,
+  spoilerMarkerFeature,
+} from './nsid'
 import {type SpoilerInsertion, type SpoilerParse} from './parse'
 
 /**
@@ -44,12 +48,22 @@ function strictlyInside(point: number, facet: Facet): boolean {
  * `RichText` of `parse.visible` with its facets detected (with or without
  * resolution). `shorten` shortens links as the stock write does; the
  * counter shortens, local detection on served text does not.
+ * `contentWarning` adds `#contentWarning` after `#spoiler` on every facet
+ * that receives `#spoiler` (2J design, 4.3 step 7).
  */
 export function buildSpoilerRichText(
   parse: SpoilerParse,
   detected: RichText,
-  {mode, shorten}: {mode: SpoilerWriteMode; shorten: boolean},
+  {
+    mode,
+    shorten,
+    contentWarning = false,
+  }: {mode: SpoilerWriteMode; shorten: boolean; contentWarning?: boolean},
 ): RichText {
+  const hidden = () =>
+    contentWarning
+      ? [spoilerFeature(), contentWarningFeature()]
+      : [spoilerFeature()]
   const visible = new UnicodeString(parse.visible)
   let spans: ByteRange[] = parse.spans.map(span => ({
     start: visible.utf16IndexToUtf8Index(span.start),
@@ -113,9 +127,7 @@ export function buildSpoilerRichText(
       s => s.start <= facet.index.byteStart && facet.index.byteEnd <= s.end,
     )
     facets.push(
-      span
-        ? {...facet, features: [...facet.features, spoilerFeature()]}
-        : facet,
+      span ? {...facet, features: [...facet.features, ...hidden()]} : facet,
     )
   }
   for (const span of spans) {
@@ -133,7 +145,7 @@ export function buildSpoilerRichText(
 
   if (mode === 'strip') {
     for (const piece of pieces) {
-      facets.push(spoilerFacet(piece.start, piece.end))
+      facets.push(spoilerFacet(piece.start, piece.end, hidden()))
     }
     return new RichText({text: rt.text, facets: sortFacets(facets)})
   }
@@ -164,7 +176,9 @@ export function buildSpoilerRichText(
     },
   }))
   for (const piece of split) {
-    placed.push(spoilerFacet(mapStart(piece.start), mapEnd(piece.end)))
+    placed.push(
+      spoilerFacet(mapStart(piece.start), mapEnd(piece.end), hidden()),
+    )
   }
   let text = ''
   let from = 0
@@ -185,8 +199,12 @@ export function buildSpoilerRichText(
   return new RichText({text, facets: sortFacets(placed)})
 }
 
-function spoilerFacet(byteStart: number, byteEnd: number): Facet {
-  return {index: {byteStart, byteEnd}, features: [spoilerFeature()]}
+function spoilerFacet(
+  byteStart: number,
+  byteEnd: number,
+  features: Facet['features'],
+): Facet {
+  return {index: {byteStart, byteEnd}, features}
 }
 
 function sortFacets(facets: Facet[]): Facet[] {

@@ -37,6 +37,8 @@ import {isStandardSiteEmbed} from '#/components/Post/Embed/StandardSiteEmbed/uti
 import {RichText} from '#/components/RichText'
 import {Embed as StarterPackCard} from '#/components/StarterPack/StarterPackCard'
 import {SubtleHover} from '#/components/SubtleHover'
+// HORIZON: a post's flagged images and videos are covered until pressed
+import {MediaSpoilerScope} from '#/horizon/media-spoilers/MediaSpoilerScope'
 // HORIZON: a private post's link card is the plain card, whose link is not proxied
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: a quoted private post is resolved for readers who may view it
@@ -112,7 +114,11 @@ function MediaEmbed({
         <ContentHider
           modui={rest.moderation?.ui('contentMedia')}
           activeStyle={[a.mt_sm]}>
-          <ImageEmbed embed={embed} {...rest} />
+          {/* HORIZON: a post's flagged images are covered until pressed (start) */}
+          <MediaSpoilerScope post={rest.post} embed={embed}>
+            <ImageEmbed embed={embed} {...rest} />
+          </MediaSpoilerScope>
+          {/* HORIZON: a post's flagged images are covered until pressed (end) */}
         </ContentHider>
       )
     }
@@ -164,7 +170,11 @@ function MediaEmbed({
         <ContentHider
           modui={rest.moderation?.ui('contentMedia')}
           activeStyle={[a.mt_sm]}>
-          <VideoEmbed embed={embed.view} post={rest.post} />
+          {/* HORIZON: a post's flagged video is covered until pressed (start) */}
+          <MediaSpoilerScope post={rest.post} embed={embed}>
+            <VideoEmbed embed={embed.view} post={rest.post} />
+          </MediaSpoilerScope>
+          {/* HORIZON: a post's flagged video is covered until pressed (end) */}
         </ContentHider>
       )
     }

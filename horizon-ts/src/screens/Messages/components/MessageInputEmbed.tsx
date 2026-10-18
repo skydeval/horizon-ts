@@ -32,6 +32,10 @@ import {ContentHider} from '#/components/moderation/ContentHider'
 import {PostAlerts} from '#/components/moderation/PostAlerts'
 import {RichText} from '#/components/RichText'
 import {Text} from '#/components/Typography'
+// HORIZON: a shared post's spoiler media are not previewed
+import {MediaSpoilerNote} from '#/horizon/media-spoilers/MediaSpoilerCover'
+// HORIZON: a shared post's spoiler media are not previewed
+import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -244,7 +248,12 @@ function MessageInputPostEmbed({
                 numberOfLines={3}
               />
             )}
-            <MediaPreview.Embed embed={post.embed} style={a.mt_sm} />
+            {/* HORIZON: a shared post's spoiler media are not previewed */}
+            {hasMediaSpoilers(post) ? (
+              <MediaSpoilerNote />
+            ) : (
+              <MediaPreview.Embed embed={post.embed} style={a.mt_sm} />
+            )}
           </ContentHider>
         </View>
       )

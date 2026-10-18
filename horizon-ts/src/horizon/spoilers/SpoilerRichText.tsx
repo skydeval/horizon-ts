@@ -132,6 +132,7 @@ export function SpoilerRichText({
           revealed={reveal.isRevealed(part.id)}
           onReveal={() => reveal.reveal(part.id)}
           nested={nested}
+          cw={part.cw}
         />
       ),
     )
@@ -155,6 +156,12 @@ export function SpoilerRichText({
     )
   }
 
+  // The drawers that hold a content warning's body, for their arrows.
+  const cwDrawers = new Set(
+    layout.items.flatMap(item =>
+      item.kind === 'drawer' && item.cw ? [item.id] : [],
+    ),
+  )
   const lastIndex = layout.items.length - 1
   const suffixInRun = suffixInLastRun(layout)
   const firstRunIndex = layout.items.findIndex(item => item.kind === 'run')
@@ -189,6 +196,7 @@ export function SpoilerRichText({
                       reveal.toggle(item.arrowFor)
                   }}
                   style={runStyle}
+                  cw={cwDrawers.has(item.arrowFor)}
                 />
               ) : null}
               {renderParts(item.tail)}
@@ -202,6 +210,7 @@ export function SpoilerRichText({
               <SpoilerLabelRow
                 open={reveal.isOpen(item.id)}
                 onToggle={() => reveal.toggle(item.id)}
+                cw={item.cw}
               />
             ) : null}
             <SpoilerDrawerBody open={reveal.isOpen(item.id)}>

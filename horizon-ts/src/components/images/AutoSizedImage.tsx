@@ -17,6 +17,8 @@ import {ArrowsDiagonalOut_Stroke2_Corner0_Rounded as Fullscreen} from '#/compone
 import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+// HORIZON: a flagged image is covered until pressed
+import {MediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerCell'
 import {type app} from '#/lexicons'
 
 export function ConstrainedImage({
@@ -226,38 +228,8 @@ export function AutoSizedImage({
 
   if (cropDisabled) {
     return (
-      <Pressable
-        onPress={() => onPress?.(containerRef, fetchedDimsRef.current)}
-        onLongPress={onLongPress}
-        onPressIn={onPressIn}
-        // alt here is what screen readers actually use
-        accessibilityLabel={image.alt}
-        accessibilityHint={_(msg`Views full image`)}
-        accessibilityRole="button"
-        android_ripple={{
-          color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
-          foreground: true,
-        }}
-        style={({pressed}) => [
-          a.w_full,
-          a.rounded_md,
-          a.overflow_hidden,
-          {aspectRatio: max ?? 1},
-          web([
-            a.transition_transform,
-            {transitionDuration: '200ms'},
-            pressed && {transform: [{scale: 0.99}]},
-          ]),
-        ]}>
-        {contents}
-      </Pressable>
-    )
-  } else {
-    return (
-      <ConstrainedImage
-        fullBleed={crop === 'square'}
-        aspectRatio={constrained ?? 1}
-        showPlaceholder={false}>
+      // HORIZON: a flagged image is covered until pressed (start)
+      <MediaSpoilerCell thumb={image.thumb} style={a.w_full}>
         <Pressable
           onPress={() => onPress?.(containerRef, fetchedDimsRef.current)}
           onLongPress={onLongPress}
@@ -271,9 +243,10 @@ export function AutoSizedImage({
             foreground: true,
           }}
           style={({pressed}) => [
-            a.h_full,
+            a.w_full,
             a.rounded_md,
             a.overflow_hidden,
+            {aspectRatio: max ?? 1},
             web([
               a.transition_transform,
               {transitionDuration: '200ms'},
@@ -282,6 +255,43 @@ export function AutoSizedImage({
           ]}>
           {contents}
         </Pressable>
+        {/* HORIZON: a flagged image is covered until pressed (end) */}
+      </MediaSpoilerCell>
+    )
+  } else {
+    return (
+      <ConstrainedImage
+        fullBleed={crop === 'square'}
+        aspectRatio={constrained ?? 1}
+        showPlaceholder={false}>
+        {/* HORIZON: a flagged image is covered until pressed (start) */}
+        <MediaSpoilerCell thumb={image.thumb} style={a.h_full}>
+          <Pressable
+            onPress={() => onPress?.(containerRef, fetchedDimsRef.current)}
+            onLongPress={onLongPress}
+            onPressIn={onPressIn}
+            // alt here is what screen readers actually use
+            accessibilityLabel={image.alt}
+            accessibilityHint={_(msg`Views full image`)}
+            accessibilityRole="button"
+            android_ripple={{
+              color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
+              foreground: true,
+            }}
+            style={({pressed}) => [
+              a.h_full,
+              a.rounded_md,
+              a.overflow_hidden,
+              web([
+                a.transition_transform,
+                {transitionDuration: '200ms'},
+                pressed && {transform: [{scale: 0.99}]},
+              ]),
+            ]}>
+            {contents}
+          </Pressable>
+        </MediaSpoilerCell>
+        {/* HORIZON: a flagged image is covered until pressed (end) */}
       </ConstrainedImage>
     )
   }

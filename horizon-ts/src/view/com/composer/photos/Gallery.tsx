@@ -30,6 +30,8 @@ import {MediaInsetBorder} from '#/components/MediaInsetBorder'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS, IS_NATIVE} from '#/env'
+// HORIZON: the "Spoiler" badge on a flagged thumbnail
+import {ComposerImageSpoilerBadge} from '#/horizon/media-spoilers/ComposerControls'
 import {type PostAction} from '../state/composer'
 import {EditImageDialog} from './EditImageDialog'
 import {ImageAltTextDialog} from './ImageAltTextDialog'
@@ -254,6 +256,9 @@ const GalleryItem = ({
       />
 
       <MediaInsetBorder />
+
+      {/* HORIZON: the "Spoiler" badge on a flagged thumbnail */}
+      <ComposerImageSpoilerBadge imageId={image.source.id} />
 
       <ImageAltTextDialog
         control={altTextControl}

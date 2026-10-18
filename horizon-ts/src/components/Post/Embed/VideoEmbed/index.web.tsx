@@ -24,6 +24,8 @@ import {
 } from '#/components/Post/Embed/VideoEmbed/VideoEmbedInner/VideoEmbedInnerWeb'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB_FIREFOX} from '#/env'
+// HORIZON: a flagged video is covered until pressed
+import {MediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerCell'
 import {type app} from '#/lexicons'
 import {useActiveVideoWeb} from './ActiveVideoWebContext'
 import * as VideoFallback from './VideoEmbedInner/VideoFallback'
@@ -233,7 +235,14 @@ export function VideoEmbed({
           // slightly smaller max height than images
           // images use 16 / 9, for reference
           minMobileAspectRatio={14 / 9}>
-          {contents}
+          {/* HORIZON: a flagged video is covered until pressed (start) */}
+          <MediaSpoilerCell
+            thumb={embed.thumbnail}
+            kind="video"
+            style={a.flex_1}>
+            {contents}
+          </MediaSpoilerCell>
+          {/* HORIZON: a flagged video is covered until pressed (end) */}
           <MediaInsetBorder />
         </ConstrainedImage>
       </ViewportObserver>

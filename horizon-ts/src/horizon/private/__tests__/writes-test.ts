@@ -47,6 +47,10 @@ import {computeCid} from '#/lib/api/computeCid'
 import {type PostOpts} from '#/lib/api/index'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
 import {
+  EMPTY_COMPOSE_SPOILERS,
+  replaceComposeSpoilers,
+} from '#/horizon/media-spoilers/compose-store'
+import {
   clearCurrentClients,
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
@@ -67,6 +71,7 @@ import {PUBLIC_COMPOSE, setComposeVisibility} from '../composer/state'
 import {clearPrivateStores, getPendingBatch, getPendingPost} from '../store'
 import {
   AUDIENCE,
+  blob,
   type Call,
   DID,
   fakeClient,
@@ -1081,5 +1086,89 @@ describe('languages and content warnings (K-1)', () => {
       $type: 'com.atproto.label.defs#selfLabels',
       values: [{val: 'nudity'}],
     })
+  })
+})
+
+describe('media spoilers and content warnings (2J, T5)', () => {
+  afterEach(() => {
+    replaceComposeSpoilers(EMPTY_COMPOSE_SPOILERS)
+  })
+
+  it('writes the captured snapshot: CW text, flags and the CW label', async () => {
+    const withMedia = opts(['hello'])
+    ;(withMedia.thread.posts[0] as {embed: unknown}).embed = {
+      quote: undefined,
+      link: undefined,
+      media: {
+        type: 'images',
+        images: [{source: {id: 'img-1'}}, {source: {id: 'img-2'}}],
+      },
+    }
+    mockResolveEmbed.mockImplementationOnce(() =>
+      Promise.resolve({
+        $type: 'app.bsky.embed.images',
+        images: [
+          {image: blob(), alt: 'one'},
+          {image: blob(), alt: 'two'},
+        ],
+      } as never),
+    )
+    replaceComposeSpoilers({
+      ...EMPTY_COMPOSE_SPOILERS,
+      images: new Set(['img-2']),
+      cw: new Map([['other-post', {line: 'not this one'}]]),
+    })
+    const pending = postPrivate(new QueryClient(), withMedia)
+    // Changed after the call: the write keeps what it captured.
+    replaceComposeSpoilers({
+      ...EMPTY_COMPOSE_SPOILERS,
+      cw: new Map([['hello', {line: 'cw'}]]),
+    })
+    await pending
+    const first = pds.calls.find(
+      c => c.nsid === 'tools.kryphocron.feed.createPostPrivate',
+    )?.body?.record as Record<string, unknown>
+    expect(first.text).toBe('hello')
+    expect(first.labels).toBeUndefined()
+    const images = (first.embed as {images: Record<string, unknown>[]}).images
+    expect(images.map(i => i['app.nearhorizon.spoiler'])).toEqual([
+      undefined,
+      true,
+    ])
+
+    replaceComposeSpoilers({
+      ...EMPTY_COMPOSE_SPOILERS,
+      cw: new Map([['hello', {line: 'cw'}]]),
+    })
+    await postPrivate(new QueryClient(), opts(['hello']))
+    const creates = pds.calls.filter(
+      c => c.nsid === 'tools.kryphocron.feed.createPostPrivate',
+    )
+    const second = creates[creates.length - 1]?.body?.record as Record<
+      string,
+      unknown
+    >
+    expect(second.text).toBe('cw\n||\nhello\n||')
+    expect(second.labels).toEqual({
+      $type: 'tools.kryphocron.feed.postPublic#selfLabels',
+      values: [{val: 'app.nearhorizon.cw'}],
+    })
+    expect(second.facets).toEqual([
+      expect.objectContaining({
+        features: [{$type: 'app.nearhorizon.richtext.facet#spoilerMarker'}],
+      }),
+      expect.objectContaining({
+        index: {byteStart: 6, byteEnd: 11},
+        features: [
+          {$type: 'app.nearhorizon.richtext.facet#spoiler'},
+          {$type: 'app.nearhorizon.richtext.facet#contentWarning'},
+        ],
+      }),
+      expect.objectContaining({
+        features: [{$type: 'app.nearhorizon.richtext.facet#spoilerMarker'}],
+      }),
+    ])
+    // Only the first post, which has no content warning.
+    expect(mockResolveSpoilerRT).toHaveBeenCalledTimes(1)
   })
 })

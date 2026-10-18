@@ -3,6 +3,9 @@
  * colour over the words, in their normal space, that a press, Enter or Space
  * reveals in place. Revealed, it is the part's text, links included, on a
  * light background. There is no re-hide.
+ *
+ * A content warning's body drawn inline (2J design, 6.9) is covered not by a
+ * bar but by the words "Content warning" and a down arrow.
  */
 
 import {useState} from 'react'
@@ -11,7 +14,8 @@ import {type RichText as RichTextAPI} from '@bsky/sdk/richtext'
 import {useLingui} from '@lingui/react/macro'
 
 import {useHaptics} from '#/lib/haptics'
-import {flatten, useTheme, web} from '#/alf'
+import {atoms as a, flatten, useTheme, web} from '#/alf'
+import {ChevronBottom_Stroke2_Corner0_Rounded as ChevronDown} from '#/components/icons/Chevron'
 import {RichText, type RichTextProps} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
@@ -69,11 +73,13 @@ export function InlineSpoiler({
   revealed,
   onReveal,
   nested,
+  cw = false,
 }: {
   richText: RichTextAPI
   revealed: boolean
   onReveal: () => void
   nested: NestedRichTextProps
+  cw?: boolean
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -97,6 +103,67 @@ export function InlineSpoiler({
     haptics.tap()
     onReveal()
   }
+
+  if (cw) {
+    const color = t.atoms.text_contrast_medium.color
+    return (
+      <Text
+        ref={spoilerTooltipRef(
+          l({
+            message: 'Click to reveal',
+            comment:
+              'Tooltip on the covered body of a post behind a content warning, on web',
+          }),
+        )}
+        style={[
+          style,
+          a.font_medium,
+          {color},
+          web({userSelect: 'none', cursor: 'pointer'}),
+          hovered && {opacity: 0.8},
+          focused && web({boxShadow: `0 0 0 2px ${t.palette.primary_500}`}),
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          IS_WEB
+            ? l({
+                message: 'Content warning, tap to reveal',
+                comment:
+                  'Screen reader label of the covered body of a post behind a content warning, on web',
+              })
+            : l({
+                message: 'Content warning',
+                comment:
+                  'Screen reader label of the covered body of a post behind a content warning',
+              })
+        }
+        accessibilityHint={l({
+          message: 'Tap to reveal',
+          comment:
+            'Screen reader hint of the covered body of a post behind a content warning',
+        })}
+        onPress={onSpoilerPress(reveal)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        {...web({
+          onMouseEnter: () => setHovered(true),
+          onMouseLeave: () => setHovered(false),
+          onKeyDown: onSpoilerKey(reveal),
+        })}>
+        {l({
+          message: 'Content warning',
+          comment:
+            'Shown in place of the hidden body of a post behind a content warning',
+        })}{' '}
+        <ChevronDown
+          size="sm"
+          fill={color}
+          style={web({verticalAlign: 'middle'})}
+        />
+      </Text>
+    )
+  }
+
   const barColor = flatten(style).color ?? t.atoms.text.color
   return (
     <Text

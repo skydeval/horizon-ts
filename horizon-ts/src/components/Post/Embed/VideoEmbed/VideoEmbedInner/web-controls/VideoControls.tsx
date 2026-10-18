@@ -28,6 +28,8 @@ import {Play_Filled_Corner0_Rounded as PlayIcon} from '#/components/icons/Play'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {IS_WEB_MOBILE_IOS, IS_WEB_TOUCH_DEVICE} from '#/env'
+// HORIZON: a flagged video never plays on its own
+import {useMediaSpoilerHoldsAutoplay} from '#/horizon/media-spoilers/MediaSpoilerScope'
 import {GifPresentationControls} from '../../GifPresentationControls'
 import {TimeIndicator} from '../TimeIndicator'
 import {ControlButton} from './ControlButton'
@@ -117,7 +119,11 @@ export function Controls({
 
   // autoplay/pause based on visibility
   const isWithinMessage = useIsWithinMessage()
-  const autoplayDisabled = useAutoplayDisabled() || isWithinMessage
+  // HORIZON: a flagged video never plays on its own
+  const spoilerHeld = useMediaSpoilerHoldsAutoplay()
+  // HORIZON: a flagged video never plays on its own
+  const autoplayDisabled =
+    useAutoplayDisabled() || isWithinMessage || spoilerHeld
   useEffect(() => {
     if (active) {
       // GIFs play immediately, videos wait until onScreen

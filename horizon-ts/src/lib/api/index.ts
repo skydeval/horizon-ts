@@ -29,6 +29,14 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+// HORIZON: media spoiler flags and content warnings are read from the composer's snapshot
+import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
+// HORIZON: media spoiler flags, the content warning's text and its self-label
+import {
+  resolveComposeRT,
+  withContentWarningLabel,
+  withMediaSpoilers,
+} from '#/horizon/media-spoilers/write'
 // HORIZON: a private compose takes the private write path
 import {postPrivate} from '#/horizon/private/api/writes'
 // HORIZON: a private compose takes the private write path
@@ -71,6 +79,8 @@ export interface PostOpts {
 export async function post(queryClient: QueryClient, opts: PostOpts) {
   // HORIZON: a private compose, or any reply to a private post, never posts publicly
   if (routesPrivate(opts.replyTo)) return postPrivate(queryClient, opts)
+  // HORIZON: the media spoiler flags and content warnings, captured before the first await
+  const composeSpoilers = getComposeSpoilers()
   const thread = opts.thread
   opts.onStateChange?.(t`Processing...`)
 
@@ -100,7 +110,10 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
     const draft = thread.posts[i]
 
     // Not awaited to avoid waterfalls.
-    const rtPromise = resolveRT(opts.appviewClient, draft.richtext)
+    // HORIZON: a post with a content warning is written with its CW text
+    const rtPromise =
+      resolveComposeRT(opts.appviewClient, draft, composeSpoilers, 'keep') ??
+      resolveRT(opts.appviewClient, draft.richtext)
     const embedPromise = resolveEmbed(
       opts.appviewClient,
       opts.chatClient,
@@ -116,6 +129,8 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
         values: draft.labels.map(val => ({val})),
       }
     }
+    // HORIZON: a post with a content warning carries the CW self-label
+    labels = withContentWarningLabel(labels, draft, composeSpoilers)
 
     // The sorting behavior for multiple posts sharing the same createdAt time is
     // undefined, so what we'll do here is increment the time by 1 for every post
@@ -126,7 +141,8 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
     uris.push(uri)
 
     const rt = await rtPromise
-    const embed = await embedPromise
+    // HORIZON: flagged images and videos carry the media spoiler flag
+    const embed = withMediaSpoilers(await embedPromise, draft, composeSpoilers)
     const reply = await replyPromise
     const record: app.bsky.feed.post.Main = {
       // IMPORTANT: $type has to exist, CID is calculated with the `$type` field

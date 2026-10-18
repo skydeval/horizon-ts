@@ -14,8 +14,9 @@
  * which every stock renderer takes, with its languages and self-labels (K-1).
  * Until prism serves facets (P-1), links and hashtags are detected locally in
  * a record that has none (6.1.2), and so are spoilers written with their
- * markers kept. Horizon's spoiler features (`app.nearhorizon.richtext.facet`)
- * pass through unchanged both ways.
+ * markers kept (a content warning's by its shape, 2J design 4.3). Horizon's
+ * spoiler and content warning features (`app.nearhorizon.richtext.facet`)
+ * and its per-item media spoiler flag pass through unchanged both ways.
  */
 
 import {type $Typed} from '@atproto/lex'
@@ -27,6 +28,7 @@ import {
   type PostPrivateEmbed,
   type PostPrivateFacet,
 } from '#/horizon/lexicons/kryphocron'
+import {CW_SELF_LABEL, isFlagged, withFlag} from '#/horizon/media-spoilers/nsid'
 import {
   PRIVATE_GALLERY,
   PRIVATE_LANGS_LABELS,
@@ -35,8 +37,12 @@ import {
   PRIVATE_VIDEO,
   privateFacetsServed,
 } from '#/horizon/private/server-support'
+import {detectLocalContentWarningFacets} from '#/horizon/spoilers/content-warning'
 import {detectLocalSpoilerFacets} from '#/horizon/spoilers/local'
 import {
+  CONTENT_WARNING_FEATURE,
+  contentWarningFeature,
+  isContentWarningFeature,
   isSpoilerFeature,
   isSpoilerMarkerFeature,
   SPOILER_FEATURE,
@@ -83,6 +89,8 @@ export function toPrivateFacets(
         features.push({$type: SPOILER_FEATURE})
       } else if (isSpoilerMarkerFeature(feature)) {
         features.push({$type: SPOILER_MARKER_FEATURE})
+      } else if (isContentWarningFeature(feature)) {
+        features.push({$type: CONTENT_WARNING_FEATURE})
       }
     }
     if (features.length === 0) continue
@@ -157,13 +165,15 @@ function toPrivateImages(
 ): $Typed<PrivateMediaEmbed> {
   return {
     $type: `${POST_PUBLIC}#embedImage`,
-    images: embed.images.map(image => ({
-      image: image.image,
-      alt: image.alt,
-      ...(PRIVATE_MEDIA_EXTRAS && image.aspectRatio
-        ? {aspectRatio: image.aspectRatio}
-        : {}),
-    })),
+    images: embed.images.map(image =>
+      keepFlag(image, {
+        image: image.image,
+        alt: image.alt,
+        ...(PRIVATE_MEDIA_EXTRAS && image.aspectRatio
+          ? {aspectRatio: image.aspectRatio}
+          : {}),
+      }),
+    ),
   }
 }
 
@@ -190,7 +200,7 @@ function toPrivateExternal(
 function toPrivateVideo(
   embed: app.bsky.embed.video.Main,
 ): $Typed<PrivateMediaEmbed> {
-  return {
+  return keepFlag(embed, {
     $type: `${POST_PUBLIC}#embedVideo`,
     video: embed.video,
     ...(embed.captions?.length
@@ -206,7 +216,7 @@ function toPrivateVideo(
     ...(embed.presentation !== undefined
       ? {presentation: embed.presentation}
       : {}),
-  }
+  })
 }
 
 /**
@@ -222,12 +232,12 @@ function toPrivateGallery(
       if (!bsky.isType(app.bsky.embed.gallery.image, item)) {
         throw new PrivateEmbedUnsupportedError(String(item.$type))
       }
-      return {
+      return keepFlag(item, {
         $type: `${POST_PUBLIC}#galleryImage` as const,
         image: item.image,
         alt: item.alt,
         aspectRatio: item.aspectRatio,
-      }
+      })
     }),
   }
 }
@@ -255,6 +265,13 @@ function toPrivateRecord(
     $type: `${POST_PUBLIC}#embedRecord`,
     record: {uri: ref.uri, cid: ref.cid},
   }
+}
+
+/**
+ * `converted` with the media spoiler flag when `source` carries it.
+ */
+function keepFlag<T extends object>(source: unknown, converted: T): T {
+  return isFlagged(source) ? withFlag(converted) : converted
 }
 
 /**
@@ -310,6 +327,8 @@ function toBskyFacets(
         features.push(spoilerFeature())
       } else if (isSpoilerMarkerFeature(feature)) {
         features.push(spoilerMarkerFeature())
+      } else if (isContentWarningFeature(feature)) {
+        features.push(contentWarningFeature())
       }
     }
     if (features.length === 0) continue
@@ -330,11 +349,13 @@ function toBskyMedia(
   if (!isObject(embed)) return undefined
   const typed = embed as PostPrivateEmbed
   if (typed.$type === `${POST_PUBLIC}#embedImage`) {
-    const images: app.bsky.embed.images.Image[] = typed.images.map(image => ({
-      image: image.image,
-      alt: image.alt,
-      ...(image.aspectRatio ? {aspectRatio: image.aspectRatio} : {}),
-    }))
+    const images: app.bsky.embed.images.Image[] = typed.images.map(image =>
+      keepFlag(image, {
+        image: image.image,
+        alt: image.alt,
+        ...(image.aspectRatio ? {aspectRatio: image.aspectRatio} : {}),
+      }),
+    )
     return {$type: 'app.bsky.embed.images', images}
   }
   if (typed.$type === `${POST_PUBLIC}#embedExternal`) {
@@ -349,8 +370,8 @@ function toBskyMedia(
     }
   }
   if (typed.$type === `${POST_PUBLIC}#embedVideo`) {
-    return {
-      $type: 'app.bsky.embed.video',
+    return keepFlag(typed, {
+      $type: 'app.bsky.embed.video' as const,
       video: typed.video,
       ...(typed.captions ? {captions: typed.captions} : {}),
       ...(typed.alt !== undefined ? {alt: typed.alt} : {}),
@@ -358,18 +379,20 @@ function toBskyMedia(
       ...(typed.presentation !== undefined
         ? {presentation: typed.presentation}
         : {}),
-    }
+    })
   }
   if (typed.$type === `${POST_PUBLIC}#embedGallery`) {
     const items: $Typed<app.bsky.embed.gallery.Image>[] = []
     for (const item of typed.items) {
       if (item.$type !== `${POST_PUBLIC}#galleryImage`) continue
-      items.push({
-        $type: 'app.bsky.embed.gallery#image',
-        image: item.image,
-        alt: item.alt,
-        aspectRatio: item.aspectRatio,
-      })
+      items.push(
+        keepFlag(item, {
+          $type: 'app.bsky.embed.gallery#image' as const,
+          image: item.image,
+          alt: item.alt,
+          aspectRatio: item.aspectRatio,
+        }),
+      )
     }
     return {$type: 'app.bsky.embed.gallery', items}
   }
@@ -441,6 +464,24 @@ export function detectLocalFacets(
 }
 
 /**
+ * Local detection for a served record without facets: a record with the CW
+ * self-label is split by a keep-mode CW's shape first (2J design 4.3), so no
+ * `||` in its line or body pairs with the outer markers; any other text, or
+ * one without that shape, takes `detectLocalFacets`. Gated on spoiler tags
+ * (inside), not on content warnings, so the body stays hidden either way.
+ */
+function detectLocalRecordFacets(
+  record: unknown,
+  text: string,
+): app.bsky.richtext.facet.Main[] | undefined {
+  if (privateSelfLabelValues(record).includes(CW_SELF_LABEL)) {
+    const facets = detectLocalContentWarningFacets(text)
+    if (facets) return facets
+  }
+  return detectLocalFacets(text)
+}
+
+/**
  * A private record as an `app.bsky.feed.post` record: text, `createdAt`,
  * facets, reply refs and embed converted. A record without `facets` gains
  * locally detected links and hashtags while prism does not serve facets
@@ -462,7 +503,7 @@ export function toBskyRecord(
   }
   const facets =
     typed.facets === undefined && !privateFacetsServed()
-      ? detectLocalFacets(record.text)
+      ? detectLocalRecordFacets(record, record.text)
       : toBskyFacets(typed.facets)
   if (facets) converted.facets = facets
   const embed = toBskyEmbed(typed.embed)

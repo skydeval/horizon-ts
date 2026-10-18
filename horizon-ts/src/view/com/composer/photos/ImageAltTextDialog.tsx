@@ -17,6 +17,8 @@ import * as TextField from '#/components/forms/TextField'
 import {CircleInfo_Stroke2_Corner0_Rounded as CircleInfo} from '#/components/icons/CircleInfo'
 import {Text} from '#/components/Typography'
 import {IS_LIQUID_GLASS, IS_WEB} from '#/env'
+// HORIZON: the image's "Mark as spoiler" checkbox
+import {ImageSpoilerCheckbox} from '#/horizon/media-spoilers/ComposerControls'
 
 type Props = {
   control: Dialog.DialogOuterProps['control']
@@ -157,6 +159,9 @@ const ImageAltTextInner = ({
             </View>
           )}
         </View>
+
+        {/* HORIZON: the image's "Mark as spoiler" checkbox */}
+        <ImageSpoilerCheckbox imageId={image.source.id} />
 
         <AltTextCounterWrapper altText={altText}>
           <Button

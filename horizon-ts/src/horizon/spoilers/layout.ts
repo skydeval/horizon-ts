@@ -9,8 +9,13 @@
 
 import {type Facet, RichText as RichTextAPI} from '@bsky/sdk/richtext'
 
+import {contentWarningsOn} from '#/horizon/media-spoilers/switches-read'
 import {SPOILER_TAGS} from '#/horizon/switches'
-import {isSpoilerFeature, isSpoilerMarkerFeature} from './nsid'
+import {
+  isContentWarningFeature,
+  isSpoilerFeature,
+  isSpoilerMarkerFeature,
+} from './nsid'
 
 /**
  * A rendering of at most this many lines (a notification line, the DM post
@@ -32,9 +37,13 @@ export function rendersSpoilers(richText: RichTextAPI): boolean {
   )
 }
 
+/**
+ * A part of a run. A spoiler with `cw` is part of a content warning's body
+ * (2J design, 6.9).
+ */
 export type SpoilerPart =
   | {kind: 'plain'; richText: RichTextAPI}
-  | {kind: 'spoiler'; id: number; richText: RichTextAPI}
+  | {kind: 'spoiler'; id: number; cw: boolean; richText: RichTextAPI}
 
 /**
  * Inline text: `parts`, then, when a block follows, the arrow that opens it
@@ -49,12 +58,14 @@ export type SpoilerRun = {
 
 /**
  * A block spoiler's drawer. `label`: nothing precedes it, so it opens from a
- * "Spoiler" row of its own.
+ * "Spoiler" row of its own. `cw`: it holds a content warning's body, so the
+ * row and the labels read "Content warning".
  */
 export type SpoilerDrawer = {
   kind: 'drawer'
   id: number
   label: boolean
+  cw: boolean
   parts: SpoilerPart[]
 }
 
@@ -68,6 +79,12 @@ export type SpoilerLayout = {
 }
 
 type ByteRange = {start: number; end: number}
+
+/**
+ * A spoiler span. `cw`: a facet merged into it carried `#contentWarning`
+ * while content warnings are on.
+ */
+export type SpoilerSpan = ByteRange & {cw: boolean}
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -103,11 +120,14 @@ function rangeOf(facet: Facet): ByteRange {
 /**
  * The visible text of a post with spoiler facets: marker facets hidden,
  * spoiler spans found and merged, and the other facets that remain, all
- * against the visible bytes.
+ * against the visible bytes. A span is a content warning's body when a
+ * facet merged into it carried `#contentWarning` and content warnings are
+ * on; `#contentWarning` is removed from the remaining facets with
+ * `#spoiler`, so it never reaches a facet that renders.
  */
 export function visibleSpoilerText(richText: RichTextAPI): {
   bytes: Uint8Array
-  spans: ByteRange[]
+  spans: SpoilerSpan[]
   facets: Facet[]
 } {
   const source = encoder.encode(richText.text)
@@ -166,15 +186,23 @@ export function visibleSpoilerText(richText: RichTextAPI): {
     hidden.reduce((sum, h) => (h.end <= b ? sum + (h.end - h.start) : sum), 0)
 
   // 3. Spans, merged, without whitespace-only ones.
-  const raw: ByteRange[] = []
+  const cwOn = contentWarningsOn()
+  const raw: SpoilerSpan[] = []
   const others: Facet[] = []
   for (const facet of shown) {
     const range = {
       start: shift(facet.index.byteStart),
       end: shift(facet.index.byteEnd),
     }
-    const features = facet.features.filter(f => !isSpoilerFeature(f))
-    if (features.length < facet.features.length) raw.push(range)
+    const features = facet.features.filter(
+      f => !isSpoilerFeature(f) && !isContentWarningFeature(f),
+    )
+    if (facet.features.some(isSpoilerFeature)) {
+      raw.push({
+        ...range,
+        cw: cwOn && facet.features.some(isContentWarningFeature),
+      })
+    }
     if (features.length) {
       others.push({
         ...facet,
@@ -184,11 +212,15 @@ export function visibleSpoilerText(richText: RichTextAPI): {
     }
   }
   raw.sort((x, y) => x.start - y.start)
-  const merged: ByteRange[] = []
+  const merged: SpoilerSpan[] = []
   for (const span of raw) {
     const last = merged[merged.length - 1]
-    if (last && last.end >= span.start) last.end = Math.max(last.end, span.end)
-    else merged.push({...span})
+    if (last && last.end >= span.start) {
+      last.end = Math.max(last.end, span.end)
+      last.cw = last.cw || span.cw
+    } else {
+      merged.push({...span})
+    }
   }
   const spans = merged.filter(span =>
     /\S/u.test(decoder.decode(bytes.slice(span.start, span.end))),
@@ -260,7 +292,12 @@ export function buildSpoilerLayout(
         if (from > cursor) {
           parts.push({kind: 'plain', richText: partOf(cursor, from)})
         }
-        parts.push({kind: 'spoiler', id: span.id, richText: partOf(from, to)})
+        parts.push({
+          kind: 'spoiler',
+          id: span.id,
+          cw: span.cw,
+          richText: partOf(from, to),
+        })
         cursor = to
       }
     }
@@ -296,6 +333,7 @@ export function buildSpoilerLayout(
       kind: 'drawer',
       id: block.id,
       label: headEnd === undefined,
+      cw: block.cw,
       parts: partsOf(block.start, block.end, false),
     })
     cursor = block.end < length ? block.end + 1 : block.end

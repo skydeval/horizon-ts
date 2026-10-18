@@ -31,6 +31,12 @@ import {RQKEY as profileQueryKey} from '#/state/queries/profile'
 import {RQKEY_LINK} from '#/state/queries/resolve-link'
 import {kryphocron} from '#/horizon/lexicons'
 import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
+import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
+import {
+  contentWarningLabelValues,
+  resolveComposeRT,
+  withMediaSpoilers,
+} from '#/horizon/media-spoilers/write'
 import {embedViewFromRecord} from '#/horizon/private/adapt/embed-view'
 import {toPostView} from '#/horizon/private/adapt/post-view'
 import {
@@ -428,6 +434,11 @@ export async function postPrivate(
   opts: PostOpts,
 ): Promise<{uris: string[]}> {
   const thread = opts.thread
+  /*
+   * The media spoiler flags and content warnings, captured before the first
+   * await (2J design, 4.6).
+   */
+  const composeSpoilers = getComposeSpoilers()
   opts.onStateChange?.(t`Processing...`)
 
   const did = opts.pdsClient.assertDid
@@ -473,11 +484,17 @@ export async function postPrivate(
   try {
     for (const [index, draft] of thread.posts.entries()) {
       const [rt, embed] = await Promise.all([
-        resolveSpoilerRT(
+        resolveComposeRT(
           opts.appviewClient,
-          draft.richtext,
+          draft,
+          composeSpoilers,
           spoilerWriteMode(true),
-        ),
+        ) ??
+          resolveSpoilerRT(
+            opts.appviewClient,
+            draft.richtext,
+            spoilerWriteMode(true),
+          ),
         resolveEmbed(
           opts.appviewClient,
           opts.chatClient,
@@ -494,8 +511,12 @@ export async function postPrivate(
       const uri = postUris[index]
 
       const facets = toPrivateFacets(rt.facets)
-      const privateEmbed = toPrivateEmbed(embed)
-      const labels = toPrivateSelfLabels(draft.labels)
+      const privateEmbed = toPrivateEmbed(
+        withMediaSpoilers(embed, draft, composeSpoilers),
+      )
+      const labels = toPrivateSelfLabels(
+        contentWarningLabelValues(draft, composeSpoilers),
+      )
       const record = validatePrivateRecord({
         $type: PP_COLLECTION,
         text: rt.text,

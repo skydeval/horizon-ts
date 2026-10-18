@@ -15,6 +15,10 @@ import {type Dimensions} from '#/components/Lightbox/types'
 import {ImageContextMenu} from '#/components/Post/Embed/ImageContextMenu'
 import {PostEmbedViewContext} from '#/components/Post/Embed/types'
 import {useAnalytics} from '#/analytics'
+// HORIZON: covered images are left out of the lightbox
+import {withoutCoveredImages} from '#/horizon/media-spoilers/lightbox'
+// HORIZON: covered images are left out of the lightbox
+import {useMediaSpoilerScope} from '#/horizon/media-spoilers/MediaSpoilerScope'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {type EmbedType} from '#/types/bsky/post'
@@ -30,6 +34,8 @@ export function ImageEmbed({
 }) {
   const ax = useAnalytics()
   const {openLightbox} = useLightboxControls()
+  // HORIZON: covered images are left out of the lightbox
+  const mediaSpoilers = useMediaSpoilerScope()
   const images: app.bsky.embed.images.ViewImage[] =
     embed.type === 'gallery'
       ? embed.view.items
@@ -86,19 +92,22 @@ export function ImageEmbed({
           ...postContext,
         })
       }
-      openLightbox({
+      // HORIZON: covered images are left out of the lightbox (start)
+      const lightbox = withoutCoveredImages(mediaSpoilers, {
         images: items.map((item, i) => ({
           ...item,
           thumbRect: null,
           thumbRef: refs[i] ?? null,
           thumbDimensions: fetchedDims[i] ?? null,
           thumbBorderRadius: tokens.borderRadius.md,
-          type: 'image',
+          type: 'image' as const,
         })),
         index,
         metricsContext,
         onIndexChange,
       })
+      if (lightbox) openLightbox(lightbox)
+      // HORIZON: covered images are left out of the lightbox (end)
     }
     const onPressIn = (_: number) => {
       InteractionManager.runAfterInteractions(() => {

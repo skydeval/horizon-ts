@@ -13,6 +13,8 @@ import {atoms as a, useTheme, utils, web} from '#/alf'
 import {QuoteEmbed} from '#/components/Post/Embed'
 import {ProfileBadges} from '#/components/ProfileBadges'
 import {Text} from '#/components/Typography'
+// HORIZON: the replied-to post's spoiler images are not drawn
+import {useReplyToMediaCovered} from '#/horizon/media-spoilers/reply-preview'
 // HORIZON: the replied-to post's spoilers are drawn covered
 import {coversReplyToSpoilers} from '#/horizon/spoilers/reply-preview'
 // HORIZON: the replied-to post's spoilers are drawn covered
@@ -25,6 +27,8 @@ export function ComposerReplyTo({replyTo}: {replyTo: ComposerOptsPostRef}) {
   const t = useTheme()
   const {_} = useLingui()
   const {embed} = replyTo
+  // HORIZON: the replied-to post's spoiler images are not drawn
+  const replyToMediaCovered = useReplyToMediaCovered(replyTo)
 
   const [showFull, setShowFull] = useState(false)
 
@@ -141,9 +145,15 @@ export function ComposerReplyTo({replyTo}: {replyTo: ComposerOptsPostRef}) {
             )}
             {/* HORIZON: the replied-to post's spoilers are drawn covered (end) */}
           </View>
-          {images && !replyTo.moderation?.ui('contentMedia').blur && (
-            <ComposerReplyToImages images={images} totalNumber={totalNumber} />
-          )}
+          {images &&
+            !replyTo.moderation?.ui('contentMedia').blur &&
+            // HORIZON: the replied-to post's spoiler images are not drawn
+            !replyToMediaCovered && (
+              <ComposerReplyToImages
+                images={images}
+                totalNumber={totalNumber}
+              />
+            )}
         </View>
         {showFull && parsedQuoteEmbed && parsedQuoteEmbed.type === 'post' && (
           <QuoteEmbed embed={parsedQuoteEmbed} linkDisabled />

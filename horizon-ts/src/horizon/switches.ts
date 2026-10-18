@@ -142,3 +142,22 @@ export const GROUPED_NOTIFICATIONS_FALLBACK: boolean = true
  * button is absent.
  */
 export const SPOILER_TAGS: boolean = true
+
+/**
+ * Per-item media spoilers (`media-spoilers/`, 2J design): the "Mark as
+ * spoiler" checkboxes and thumbnail badges in the composer, the flags written
+ * at publish (a content warning's flags too), and the covers, autoplay hold,
+ * lightbox filter and compact blurs that read them. `false` writes no flag
+ * and renders flagged media as stock.
+ */
+export const MEDIA_SPOILERS: boolean = true
+
+/**
+ * Whole-post content warnings (2J design): the composer's CW toggle and line,
+ * the CW text pipeline, the `app.nearhorizon.cw` self-label, and the "Content
+ * warning" wording of drawers and pills. Effective only with `SPOILER_TAGS`
+ * on, since the body is written as a spoiler. `false` removes the toggle and
+ * field, writes stock text and no label, and renders a CW post's body as a
+ * plain spoiler.
+ */
+export const CONTENT_WARNINGS: boolean = true

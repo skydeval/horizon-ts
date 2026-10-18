@@ -271,6 +271,41 @@ released version yet; everything so far is under `[Unreleased]`.
   - **Who can see and interact:** on web, the drop-down stays open while
     you choose, in every section, and closes on a click outside it or on its
     button. It no longer narrows when it grows tall enough to scroll.
+  - **Media spoilers and content warnings** (design: internal,
+    `docs/internal/design/phase-2j-media-spoilers-cw.md`, step 2J).
+    - **Mark as spoiler:** the image alt text dialog and the video captions
+      dialog have a "Mark as spoiler" checkbox, and a flagged thumbnail in
+      the composer shows a "Spoiler" badge. The post records the flag on
+      that image or video (`app.nearhorizon.spoiler`), public and private.
+    - **Content warning** (web): a CW button in the composer's tools adds an
+      optional line above the post ("cw blood"). The post is published as
+      that line followed by the body as one hidden block, every image and
+      video is flagged, and the post carries the `app.nearhorizon.cw`
+      self-label. Other apps show the line, then the body between `||`
+      markers. Spoilers already in the body are opened with the warning. The
+      character count includes the line and the markers.
+    - Drafts keep their spoiler flags and content warning on this device.
+    - **Covers:** Horizon draws a flagged image or video under a heavy blur
+      with a "Spoiler" pill, in feeds, threads, quotes, search, Saved and
+      chats; one press (or Enter or Space) reveals it without opening the
+      post, and on web hovering shows "Click to reveal". In a gallery each
+      flagged image is covered on its own. A flagged video never plays on
+      its own: the first press reveals it, the next plays it. The lightbox
+      lists only the images already revealed. A covered image's alt text is
+      not read out until it is revealed. Labelled media still show the
+      moderation "Show" row first.
+    - **Content warnings, shown:** a CW post shows its line with the drawer
+      arrow, or a "Content warning" row when the line is empty; a one-line
+      body with no line reads "Content warning" in place, and opens there.
+      Every image and video of a CW post is covered with a "Content
+      warning" pill; opening the text reveals no media, and the reverse. A
+      post the CW post quotes is not covered unless it has its own flags or
+      CW. Link cards and GIFs are never covered.
+    - **Small previews:** notification thumbnails, the video cards and the
+      reply preview's images of a post with spoiler media or a CW are
+      blurred or left out (all of them), and sharing such a post into a
+      chat shows "Media marked as spoiler" in place of its images. The video
+      grid shows "[content warning]" in place of a CW's body.
 
 ### Fixed
 

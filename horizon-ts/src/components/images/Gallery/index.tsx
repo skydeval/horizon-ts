@@ -45,6 +45,10 @@ import {PostEmbedViewContext} from '#/components/Post/Embed/types'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_ANDROID, IS_WEB} from '#/env'
+// HORIZON: a flagged image is covered until pressed
+import {MediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerCell'
+// HORIZON: a covered slide is named by its cover, not its alt text
+import {useMediaSpoilerCell} from '#/horizon/media-spoilers/MediaSpoilerScope'
 import {type app} from '#/lexicons'
 
 export * from './const'
@@ -456,6 +460,8 @@ function GalleryImage({
   )
   const {isCropped, ...dims} = computeDims({height, aspectRatio})
   const hasAlt = !!image.alt
+  // HORIZON: a covered slide is named by its cover, not its alt text
+  const mediaSpoiler = useMediaSpoilerCell(image.thumb)
 
   useEffect(() => {
     onWidthChange(index, dims.width)
@@ -470,176 +476,185 @@ function GalleryImage({
       ref={containerRef}
       collapsable={false}
       aria-roledescription={l`slide`}
-      aria-label={image.alt || l`Image ${index + 1} of ${imageCount}`}>
-      <ImageContextMenu
-        fullsizeUri={image.fullsize}
-        thumbUri={image.thumb}
-        aspectRatio={aspectRatio}
-        borderRadius={tokens.borderRadius.md}
-        onPreviewPress={onPreviewPress}>
-        <Pressable
-          ref={itemRef}
-          tabIndex={index === 0 ? 0 : -1}
-          onPress={onPress}
-          onPressIn={onPressIn}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          accessibilityRole="button"
-          accessibilityLabel={image.alt || l`Image ${index + 1}`}
-          accessibilityHint={l`Opens full image`}
-          android_ripple={{
-            color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
-            foreground: true,
-          }}
-          style={({pressed}) => [
-            a.rounded_md,
-            a.overflow_hidden,
-            t.atoms.bg_contrast_25,
-            web([
-              {
-                cursor: 'inherit',
-                outline: 0,
-                border: 0,
-              },
-              a.transition_transform,
-              {transitionDuration: '200ms'},
-              pressed && {transform: [{scale: 0.99}]},
-            ]),
-          ]}>
-          <Image
-            source={{uri: image.thumb}}
-            contentFit="cover"
-            accessible={true}
-            accessibilityLabel={image.alt}
-            accessibilityHint=""
-            accessibilityIgnoresInvertColors
-            loading={index === 0 ? 'eager' : 'lazy'}
-            style={[dims]}
-            onLoad={e => {
-              /*
-               * Only sync from the loaded thumb if we don't already have a
-               * ratio from the record. The CDN scales thumbs to integer pixel
-               * dims, so its reported ratio drifts a fraction from the
-               * record's - re-syncing would jiggle the FlatList item widths.
-               */
-              if (aspectRatio === undefined) {
-                const ar = getAspectRatio(e.source)
-                if (ar !== undefined) {
-                  setAspectRatio(ar)
+      // HORIZON: a covered slide is named by its cover, not its alt text
+      aria-label={
+        mediaSpoiler.covered
+          ? mediaSpoiler.coverLabel
+          : image.alt || l`Image ${index + 1} of ${imageCount}`
+      }>
+      {/* HORIZON: a flagged image is covered until pressed (start) */}
+      <MediaSpoilerCell thumb={image.thumb}>
+        <ImageContextMenu
+          fullsizeUri={image.fullsize}
+          thumbUri={image.thumb}
+          aspectRatio={aspectRatio}
+          borderRadius={tokens.borderRadius.md}
+          onPreviewPress={onPreviewPress}>
+          <Pressable
+            ref={itemRef}
+            tabIndex={index === 0 ? 0 : -1}
+            onPress={onPress}
+            onPressIn={onPressIn}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            accessibilityRole="button"
+            accessibilityLabel={image.alt || l`Image ${index + 1}`}
+            accessibilityHint={l`Opens full image`}
+            android_ripple={{
+              color: utils.alpha(t.atoms.bg.backgroundColor, 0.2),
+              foreground: true,
+            }}
+            style={({pressed}) => [
+              a.rounded_md,
+              a.overflow_hidden,
+              t.atoms.bg_contrast_25,
+              web([
+                {
+                  cursor: 'inherit',
+                  outline: 0,
+                  border: 0,
+                },
+                a.transition_transform,
+                {transitionDuration: '200ms'},
+                pressed && {transform: [{scale: 0.99}]},
+              ]),
+            ]}>
+            <Image
+              source={{uri: image.thumb}}
+              contentFit="cover"
+              accessible={true}
+              accessibilityLabel={image.alt}
+              accessibilityHint=""
+              accessibilityIgnoresInvertColors
+              loading={index === 0 ? 'eager' : 'lazy'}
+              style={[dims]}
+              onLoad={e => {
+                /*
+                 * Only sync from the loaded thumb if we don't already have a
+                 * ratio from the record. The CDN scales thumbs to integer pixel
+                 * dims, so its reported ratio drifts a fraction from the
+                 * record's - re-syncing would jiggle the FlatList item widths.
+                 */
+                if (aspectRatio === undefined) {
+                  const ar = getAspectRatio(e.source)
+                  if (ar !== undefined) {
+                    setAspectRatio(ar)
+                  }
+                }
+                onThumbDims(index, {
+                  width: e.source.width,
+                  height: e.source.height,
+                })
+              }}
+              useAppleWebpCodec
+            />
+
+            {imageCount > 1 ? (
+              <View
+                accessible={false}
+                pointerEvents="none"
+                style={[
+                  a.absolute,
+                  a.justify_center,
+                  a.rounded_sm,
+                  a.p_xs,
+                  t.atoms.bg_contrast_25,
+                  {
+                    top: a.p_xs.padding,
+                    right: a.p_xs.padding,
+                    opacity: 0.8,
+                  },
+                  largeAltBadge && {
+                    padding: 6,
+                  },
+                ]}>
+                <Text
+                  style={[
+                    a.font_bold,
+                    largeAltBadge ? a.text_xs : {fontSize: 8},
+                  ]}>
+                  <Trans
+                    context="gallery-badge-image-position-numbers"
+                    comment="Badge showing the current image position out of the total number of images in a gallery.">
+                    {index + 1}/{imageCount}
+                  </Trans>
+                </Text>
+              </View>
+            ) : null}
+
+            {hasAlt || isCropped ? (
+              <View
+                accessible={false}
+                style={[
+                  a.absolute,
+                  a.flex_row,
+                  {
+                    bottom: a.p_xs.padding,
+                    right: a.p_xs.padding,
+                    gap: 3,
+                  },
+                  largeAltBadge && {
+                    gap: 4,
+                  },
+                ]}>
+                {isCropped && (
+                  <View
+                    accessible={false}
+                    style={[
+                      a.rounded_sm,
+                      a.p_xs,
+                      t.atoms.bg_contrast_25,
+                      {
+                        opacity: 0.8,
+                      },
+                      largeAltBadge && {
+                        padding: 6,
+                      },
+                    ]}>
+                    <Fullscreen
+                      fill={t.atoms.text_contrast_high.color}
+                      width={largeAltBadge ? 18 : 12}
+                    />
+                  </View>
+                )}
+                {hasAlt && (
+                  <View
+                    accessible={false}
+                    style={[
+                      a.justify_center,
+                      a.rounded_sm,
+                      a.p_xs,
+                      t.atoms.bg_contrast_25,
+                      {
+                        opacity: 0.8,
+                      },
+                      largeAltBadge && {
+                        padding: 6,
+                      },
+                    ]}>
+                    <Text
+                      style={[
+                        a.font_bold,
+                        largeAltBadge ? a.text_xs : {fontSize: 8},
+                      ]}>
+                      <Trans>ALT</Trans>
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            <MediaInsetBorder
+              style={
+                focused && {
+                  borderWidth: 2,
                 }
               }
-              onThumbDims(index, {
-                width: e.source.width,
-                height: e.source.height,
-              })
-            }}
-            useAppleWebpCodec
-          />
-
-          {imageCount > 1 ? (
-            <View
-              accessible={false}
-              pointerEvents="none"
-              style={[
-                a.absolute,
-                a.justify_center,
-                a.rounded_sm,
-                a.p_xs,
-                t.atoms.bg_contrast_25,
-                {
-                  top: a.p_xs.padding,
-                  right: a.p_xs.padding,
-                  opacity: 0.8,
-                },
-                largeAltBadge && {
-                  padding: 6,
-                },
-              ]}>
-              <Text
-                style={[
-                  a.font_bold,
-                  largeAltBadge ? a.text_xs : {fontSize: 8},
-                ]}>
-                <Trans
-                  context="gallery-badge-image-position-numbers"
-                  comment="Badge showing the current image position out of the total number of images in a gallery.">
-                  {index + 1}/{imageCount}
-                </Trans>
-              </Text>
-            </View>
-          ) : null}
-
-          {hasAlt || isCropped ? (
-            <View
-              accessible={false}
-              style={[
-                a.absolute,
-                a.flex_row,
-                {
-                  bottom: a.p_xs.padding,
-                  right: a.p_xs.padding,
-                  gap: 3,
-                },
-                largeAltBadge && {
-                  gap: 4,
-                },
-              ]}>
-              {isCropped && (
-                <View
-                  accessible={false}
-                  style={[
-                    a.rounded_sm,
-                    a.p_xs,
-                    t.atoms.bg_contrast_25,
-                    {
-                      opacity: 0.8,
-                    },
-                    largeAltBadge && {
-                      padding: 6,
-                    },
-                  ]}>
-                  <Fullscreen
-                    fill={t.atoms.text_contrast_high.color}
-                    width={largeAltBadge ? 18 : 12}
-                  />
-                </View>
-              )}
-              {hasAlt && (
-                <View
-                  accessible={false}
-                  style={[
-                    a.justify_center,
-                    a.rounded_sm,
-                    a.p_xs,
-                    t.atoms.bg_contrast_25,
-                    {
-                      opacity: 0.8,
-                    },
-                    largeAltBadge && {
-                      padding: 6,
-                    },
-                  ]}>
-                  <Text
-                    style={[
-                      a.font_bold,
-                      largeAltBadge ? a.text_xs : {fontSize: 8},
-                    ]}>
-                    <Trans>ALT</Trans>
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : null}
-
-          <MediaInsetBorder
-            style={
-              focused && {
-                borderWidth: 2,
-              }
-            }
-          />
-        </Pressable>
-      </ImageContextMenu>
+            />
+          </Pressable>
+        </ImageContextMenu>
+        {/* HORIZON: a flagged image is covered until pressed (end) */}
+      </MediaSpoilerCell>
     </Animated.View>
   )
 }

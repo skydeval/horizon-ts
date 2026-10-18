@@ -7,10 +7,16 @@ import {type Client} from '@atproto/lex'
 import {RichText} from '@bsky/sdk/richtext'
 
 import {shortenLinks, stripInvalidMentions} from '#/lib/strings/rich-text-manip'
+import {
+  type ComposeSpoilers,
+  contentWarningOf,
+} from '#/horizon/media-spoilers/compose-store'
+import {contentWarningsOn} from '#/horizon/media-spoilers/switches-read'
 import {privateFacetsServed} from '#/horizon/private/server-support'
 import {SPOILER_TAGS} from '#/horizon/switches'
 import {convertAltSpoilers} from './alias'
 import {buildSpoilerRichText, type SpoilerWriteMode} from './build'
+import {contentWarningGraphemeLength} from './content-warning'
 import {hasSpoilers, parseSpoilers} from './parse'
 
 export {type SpoilerWriteMode} from './build'
@@ -75,12 +81,26 @@ export async function resolveSpoilerRT(
 /**
  * The length the composer counts and checks for a post: without its markers
  * when they will be stripped, with them when kept, links shortened as stock.
- * With the switch off or no spoiler, the stock stored length.
+ * A post with a content warning in `snap` counts its CW text (line, outer
+ * markers in keep mode, body; 2J design 4.8). With the switch off or no
+ * spoiler, the stock stored length.
  */
 export function composeGraphemeLength(
-  post: {richtext: RichText; shortenedGraphemeLength: number},
+  post: {id?: string; richtext: RichText; shortenedGraphemeLength: number},
   isPrivate: boolean,
+  snap?: ComposeSpoilers,
 ): number {
+  const cw =
+    snap && post.id !== undefined && contentWarningsOn()
+      ? contentWarningOf(snap, post.id)
+      : undefined
+  if (cw) {
+    return contentWarningGraphemeLength(
+      post.richtext.text,
+      cw.line,
+      spoilerWriteMode(isPrivate),
+    )
+  }
   const text = SPOILER_TAGS ? convertAltSpoilers(post.richtext.text) : ''
   if (!SPOILER_TAGS || !hasSpoilers(text)) {
     return post.shortenedGraphemeLength
