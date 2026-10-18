@@ -12,6 +12,7 @@ import {type ComposerOptsPostRef} from '#/state/shell/composer'
 import {RichText} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {isPrivatePostUri} from '#/horizon/private/uri'
+import {withContentWarningRecord} from './cw-line'
 import {rendersSpoilers} from './layout'
 import {
   coversWhileLoading,
@@ -41,10 +42,10 @@ export function ReplyToText({
   )
 
   if (record) {
-    const richText = new RichTextAPI({
-      text: record.text,
-      facets: record.facets,
-    })
+    const richText = withContentWarningRecord(
+      new RichTextAPI({text: record.text, facets: record.facets}),
+      record,
+    )
     if (!rendersSpoilers(richText)) return stock
     return (
       <RichText

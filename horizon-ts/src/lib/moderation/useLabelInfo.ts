@@ -11,6 +11,8 @@ import {
   useGlobalLabelStrings,
 } from '#/lib/moderation/useGlobalLabelStrings'
 import {useLabelDefinitions} from '#/state/preferences'
+// HORIZON: the CW self-label reads "Content warning"
+import {horizonLabelStrings} from '#/horizon/media-spoilers/label-strings'
 import {type app, type com} from '#/lexicons'
 
 export interface LabelInfo {
@@ -91,6 +93,9 @@ export function getLabelStrings(
       return def.locales[0]
     }
   }
+  // HORIZON: the CW self-label reads "Content warning"
+  const cw = horizonLabelStrings(locale, globalLabelStrings, def)
+  if (cw) return cw
   return {
     lang: locale,
     name: def.identifier,

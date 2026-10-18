@@ -45,6 +45,8 @@ import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {PrivateQuote} from '#/horizon/private/render/PrivateQuote'
 // HORIZON: private post links use the ppost segment; quoted private posts are read through prism
 import {isPrivateRead, postSegment} from '#/horizon/private/uri'
+// HORIZON: a CW post's line reads as a warning
+import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -386,7 +388,11 @@ export function QuoteEmbed({
     if (!bsky.isType(app.bsky.feed.post, quote.record)) return undefined
     const {text, facets} = quote.record
     return text.trim()
-      ? new RichTextAPI({text: text, facets: facets})
+      ? // HORIZON: a CW post's line reads as a warning
+        withContentWarningRecord(
+          new RichTextAPI({text: text, facets: facets}),
+          quote.record,
+        )
       : undefined
   }, [quote.record])
 

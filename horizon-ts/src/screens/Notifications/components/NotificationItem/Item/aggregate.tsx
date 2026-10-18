@@ -13,6 +13,8 @@ import {ArrowRight_Stroke2_Corner0_Rounded as ArrowRightIcon} from '#/components
 import {Link} from '#/components/Link'
 import {RichText} from '#/components/RichText'
 import {Text} from '#/components/Typography'
+// HORIZON: a CW post's line reads as a warning
+import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {Card, getPostThumbnails} from './media'
@@ -152,7 +154,13 @@ export function PostPreview({
   if (record?.text.trim()) {
     return (
       <RichText
-        value={new RichTextAPI({text: record.text, facets: record.facets})}
+        value={
+          // HORIZON: a CW post's line reads as a warning
+          withContentWarningRecord(
+            new RichTextAPI({text: record.text, facets: record.facets}),
+            record,
+          )
+        }
         authorHandle={post.author.handle}
         numberOfLines={numberOfLines}
         style={[a.text_md, a.leading_snug, t.atoms.text_contrast_medium, style]}

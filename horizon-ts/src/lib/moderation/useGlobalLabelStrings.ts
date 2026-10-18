@@ -2,6 +2,9 @@ import {useMemo} from 'react'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 
+// HORIZON: the CW self-label reads "Content warning"
+import {horizonGlobalLabelStrings} from '#/horizon/media-spoilers/label-strings'
+
 export type GlobalLabelStrings = Record<
   string,
   {
@@ -50,6 +53,8 @@ export function useGlobalLabelStrings(): GlobalLabelStrings {
         name: _(msg`Graphic Media`),
         description: _(msg`Explicit or potentially disturbing media.`),
       },
+      // HORIZON: the CW self-label reads "Content warning"
+      ...horizonGlobalLabelStrings(_),
     }),
     [_],
   )

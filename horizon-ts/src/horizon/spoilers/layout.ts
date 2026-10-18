@@ -11,6 +11,7 @@ import {type Facet, RichText as RichTextAPI} from '@bsky/sdk/richtext'
 
 import {contentWarningsOn} from '#/horizon/media-spoilers/switches-read'
 import {SPOILER_TAGS} from '#/horizon/switches'
+import {cwLineEndOf, rendersContentWarningLine} from './cw-line'
 import {
   isContentWarningFeature,
   isSpoilerFeature,
@@ -24,25 +25,28 @@ import {
 export const COMPACT_MAX_LINES = 3
 
 /**
- * The text carries a spoiler facet and the switch is on. Texts without one
+ * The text carries a spoiler facet and the switch is on, or it is a CW
+ * post's text with a CW line and no body (`cw-line.ts`). Texts without one
  * (bios, DMs, descriptions, posts without spoilers) render as stock.
  */
 export function rendersSpoilers(richText: RichTextAPI): boolean {
   return (
     SPOILER_TAGS &&
-    !!richText.facets?.some(
+    (!!richText.facets?.some(
       facet =>
         Array.isArray(facet.features) && facet.features.some(isSpoilerFeature),
-    )
+    ) ||
+      rendersContentWarningLine(richText))
   )
 }
 
 /**
  * A part of a run. A spoiler with `cw` is part of a content warning's body
- * (2J design, 6.9).
+ * (2J design, 6.9). A plain part with `cwLine` is the CW line, drawn with
+ * its "CW:" prefix (`cw-line.ts`).
  */
 export type SpoilerPart =
-  | {kind: 'plain'; richText: RichTextAPI}
+  | {kind: 'plain'; richText: RichTextAPI; cwLine?: boolean}
   | {kind: 'spoiler'; id: number; cw: boolean; richText: RichTextAPI}
 
 /**
@@ -247,6 +251,8 @@ export function buildSpoilerLayout(
   const {bytes, spans, facets} = visibleSpoilerText(richText)
   const length = bytes.length
   const hasNewline = bytes.includes(NEWLINE)
+  // The CW line, from 0 (before any span), as a part of its own.
+  const cwLineEnd = cwLineEndOf(richText, bytes, spans)
 
   // 4. Blocks occupy whole lines of a text with more than one line.
   const isBlock = (span: ByteRange) =>
@@ -283,15 +289,28 @@ export function buildSpoilerLayout(
   }
   const partsOf = (start: number, end: number, covers: boolean) => {
     const parts: SpoilerPart[] = []
+    const pushPlain = (from: number, to: number) => {
+      if (cwLineEnd !== undefined && from < cwLineEnd) {
+        const lineTo = Math.min(to, cwLineEnd)
+        parts.push({
+          kind: 'plain',
+          richText: partOf(from, lineTo),
+          cwLine: true,
+        })
+        if (to > lineTo) {
+          parts.push({kind: 'plain', richText: partOf(lineTo, to)})
+        }
+        return
+      }
+      parts.push({kind: 'plain', richText: partOf(from, to)})
+    }
     let cursor = start
     if (covers) {
       for (const span of inline) {
         const from = Math.max(span.start, start)
         const to = Math.min(span.end, end)
         if (from >= to) continue
-        if (from > cursor) {
-          parts.push({kind: 'plain', richText: partOf(cursor, from)})
-        }
+        if (from > cursor) pushPlain(cursor, from)
         parts.push({
           kind: 'spoiler',
           id: span.id,
@@ -301,7 +320,7 @@ export function buildSpoilerLayout(
         cursor = to
       }
     }
-    if (end > cursor) parts.push({kind: 'plain', richText: partOf(cursor, end)})
+    if (end > cursor) pushPlain(cursor, end)
     return parts
   }
 

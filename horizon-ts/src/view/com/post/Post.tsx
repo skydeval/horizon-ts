@@ -38,6 +38,8 @@ import {SubtleHover} from '#/components/SubtleHover'
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
+// HORIZON: a CW post's line reads as a warning
+import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -64,10 +66,14 @@ export function Post({
   const richText = useMemo(
     () =>
       record
-        ? new RichTextAPI({
-            text: record.text,
-            facets: record.facets,
-          })
+        ? // HORIZON: a CW post's line reads as a warning
+          withContentWarningRecord(
+            new RichTextAPI({
+              text: record.text,
+              facets: record.facets,
+            }),
+            record,
+          )
         : undefined,
     [record],
   )

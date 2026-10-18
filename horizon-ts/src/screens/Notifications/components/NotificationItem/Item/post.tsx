@@ -49,6 +49,8 @@ import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 // HORIZON: links in a private post open directly
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: a CW post's line reads as a warning
+import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {makePostLink} from '../links'
@@ -247,10 +249,14 @@ function ReplyContextPost({
     record && preview && !isHidden ? (
       <RichText
         value={
-          new RichTextAPI({
-            text: flattenLines(record.text),
-            facets: record.facets,
-          })
+          // HORIZON: a CW post's line reads as a warning
+          withContentWarningRecord(
+            new RichTextAPI({
+              text: flattenLines(record.text),
+              facets: record.facets,
+            }),
+            record,
+          )
         }
         authorHandle={post.author.handle}
         disableLinks
@@ -292,7 +298,11 @@ export function PostBody({post}: {post: PostView}) {
     : undefined
   const richText =
     record && record.text.trim()
-      ? new RichTextAPI({text: record.text, facets: record.facets})
+      ? // HORIZON: a CW post's line reads as a warning
+        withContentWarningRecord(
+          new RichTextAPI({text: record.text, facets: record.facets}),
+          record,
+        )
       : undefined
   const moderation = moderationOpts
     ? moderatePost(post, moderationOpts)
@@ -554,10 +564,14 @@ function QuoteCardPost({view}: {view: app.bsky.embed.record.ViewRecord}) {
             {quotedRecord?.text.trim() ? (
               <RichText
                 value={
-                  new RichTextAPI({
-                    text: quotedRecord.text,
-                    facets: quotedRecord.facets,
-                  })
+                  // HORIZON: a CW post's line reads as a warning
+                  withContentWarningRecord(
+                    new RichTextAPI({
+                      text: quotedRecord.text,
+                      facets: quotedRecord.facets,
+                    }),
+                    quotedRecord,
+                  )
                 }
                 authorHandle={view.author.handle}
                 // The whole card is already a link

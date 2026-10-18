@@ -136,7 +136,12 @@ describe('CW layout (T6)', () => {
     const compact = buildSpoilerLayout(keep(C1), {compact: true})
     expect(summary(compact)).toEqual([
       {
-        run: [{plain: 'cw blood\n'}, {spoiler: 'it was a lot', cw: true}],
+        // The CW line is a part of its own (2J follow-up, cw-line-test.ts).
+        run: [
+          {plain: 'cw blood'},
+          {plain: '\n'},
+          {spoiler: 'it was a lot', cw: true},
+        ],
         tail: [],
       },
     ])
@@ -202,7 +207,7 @@ describe('CW layout (T6)', () => {
       facets: written.facets,
       createdAt: '2026-10-18T12:00:00.000Z',
     } as app.bsky.feed.post.Main
-    expect(spoilerSafeText(record)).toBe('cw blood\n[content warning]')
+    expect(spoilerSafeText(record)).toBe('CW: cw blood\n[content warning]')
     mockContentWarnings = false
     expect(spoilerSafeText(record)).toBe('cw blood\n[spoiler]')
   })

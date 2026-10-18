@@ -18,6 +18,8 @@ import {android, flatten} from '#/alf'
 import {RichText, type RichTextProps} from '#/components/RichText'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+import {ContentWarningLine, useCwLineStrings} from './ContentWarningLine'
+import {cwLineRunLabel} from './cw-line'
 import {InlineSpoiler, type NestedRichTextProps} from './InlineSpoiler'
 import {
   buildSpoilerLayout,
@@ -116,9 +118,27 @@ export function SpoilerRichText({
     disableMentionFacetValidation,
   }
 
+  const cwLineStrings = useCwLineStrings()
+  /*
+   * On native, a run's text that holds the CW line is read as "Content
+   * warning:" and the line (nested texts have no labels of their own).
+   */
+  const runLabel = (parts: SpoilerPart[]) =>
+    IS_NATIVE
+      ? cwLineRunLabel(parts, cwLineStrings.spoken, part =>
+          part.kind === 'spoiler' && !reveal.isRevealed(part.id)
+            ? part.cw
+              ? cwLineStrings.coveredCw
+              : cwLineStrings.coveredSpoiler
+            : undefined,
+        )
+      : undefined
+
   const renderParts = (parts: SpoilerPart[]) =>
     parts.map((part, i) =>
-      part.kind === 'plain' ? (
+      part.kind === 'plain' && part.cwLine ? (
+        <ContentWarningLine key={i} richText={part.richText} nested={nested} />
+      ) : part.kind === 'plain' ? (
         <RichText
           key={i}
           value={part.richText}
@@ -149,6 +169,10 @@ export function SpoilerRichText({
         numberOfLines={numberOfLines}
         onLayout={onLayout}
         onTextLayout={onTextLayout}
+        accessibilityLabel={
+          run?.kind === 'run' ? runLabel(run.parts) : undefined
+        }
+        accessibilityHint=""
         dataSet={WORD_WRAP}>
         {run?.kind === 'run' ? renderParts(run.parts) : null}
         {suffixNodes}
@@ -186,6 +210,8 @@ export function SpoilerRichText({
               style={[runStyle, withSuffix && suffixStyles]}
               numberOfLines={numberOfLines}
               onTextLayout={isFirst ? onTextLayout : undefined}
+              accessibilityLabel={runLabel([...item.parts, ...item.tail])}
+              accessibilityHint=""
               dataSet={WORD_WRAP}>
               {renderParts(item.parts)}
               {item.arrowFor !== undefined ? (

@@ -306,6 +306,11 @@ released version yet; everything so far is under `[Unreleased]`.
       blurred or left out (all of them), and sharing such a post into a
       chat shows "Media marked as spoiler" in place of its images. The video
       grid shows "[content warning]" in place of a CW's body.
+    - **The line reads as a warning:** "CW: cw blood", set apart from the
+      text, wherever the post shows (a line with only media too, and the
+      video grid); screen readers hear "Content warning:". The stored text
+      is unchanged. The post's labels list names the self-label "Content
+      warning".
 
 ### Fixed
 
