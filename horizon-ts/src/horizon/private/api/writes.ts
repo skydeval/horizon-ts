@@ -390,7 +390,50 @@ async function rollBack(
 }
 
 /**
- * Write the compose's reply and quote limits before its posts (4.5 step 0).
+ * Resolve each post's text and embed, one post at a time (as stock, a post's
+ * images upload together), before anything is written. The embed is the
+ * stock `resolveEmbed`'s, which uploads every blob the post carries; the
+ * video itself was uploaded through the video service while composing.
+ */
+async function resolveComposePosts(
+  queryClient: QueryClient,
+  opts: PostOpts,
+  composeSpoilers: ReturnType<typeof getComposeSpoilers>,
+) {
+  const resolved: {
+    rt: Awaited<ReturnType<typeof resolveSpoilerRT>>
+    embed: Awaited<ReturnType<typeof resolveEmbed>>
+  }[] = []
+  for (const draft of opts.thread.posts) {
+    const [rt, embed] = await Promise.all([
+      resolveComposeRT(
+        opts.appviewClient,
+        draft,
+        composeSpoilers,
+        spoilerWriteMode(true),
+      ) ??
+        resolveSpoilerRT(
+          opts.appviewClient,
+          draft.richtext,
+          spoilerWriteMode(true),
+        ),
+      resolveEmbed(
+        opts.appviewClient,
+        opts.chatClient,
+        opts.pdsClient,
+        queryClient,
+        draft,
+        opts.onStateChange,
+      ),
+    ])
+    resolved.push({rt, embed})
+  }
+  return resolved
+}
+
+/**
+ * Write the compose's reply and quote limits before its posts (4.5 step 0,
+ * after the media uploads: D2-151).
  * A failure has written no post; the gates already created are deleted, and
  * any that cannot be are logged by URI.
  */
@@ -452,10 +495,18 @@ export async function postPrivate(
   const plan = await planFirstPost(queryClient, clients, opts)
 
   /*
+   * Every post's text and embed, resolved before any gate or post is
+   * written: every blob of the compose (images, gallery items, video
+   * captions, GIF and link-card thumbnails) is uploaded here, so a failed
+   * upload has written nothing and rolls nothing back.
+   */
+  const resolved = await resolveComposePosts(queryClient, opts, composeSpoilers)
+
+  /*
    * The rkeys are chosen client-side, so the whole compose's URIs are known
    * before anything is written, and the reply and quote limits (4.14) are
-   * written first: a private post is never published without the limits its
-   * author chose.
+   * written before any post: a private post is never published without the
+   * limits its author chose.
    */
   let tid: TID | undefined
   const rkeys = thread.posts.map(() => {
@@ -483,27 +534,7 @@ export async function postPrivate(
 
   try {
     for (const [index, draft] of thread.posts.entries()) {
-      const [rt, embed] = await Promise.all([
-        resolveComposeRT(
-          opts.appviewClient,
-          draft,
-          composeSpoilers,
-          spoilerWriteMode(true),
-        ) ??
-          resolveSpoilerRT(
-            opts.appviewClient,
-            draft.richtext,
-            spoilerWriteMode(true),
-          ),
-        resolveEmbed(
-          opts.appviewClient,
-          opts.chatClient,
-          opts.pdsClient,
-          queryClient,
-          draft,
-          opts.onStateChange,
-        ),
-      ])
+      const {rt, embed} = resolved[index]
 
       // As stock: posts of one compose are 1 ms apart, so they sort in order.
       now.setMilliseconds(now.getMilliseconds() + 1)

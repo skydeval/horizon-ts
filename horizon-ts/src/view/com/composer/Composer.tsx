@@ -192,6 +192,8 @@ import {isPrivatePostUri, navigateToPost} from '#/horizon/private/uri'
 import {SpoilerButton} from '#/horizon/spoilers/SpoilerButton'
 // HORIZON: spoiler tags
 import {composeGraphemeLength} from '#/horizon/spoilers/write'
+// HORIZON: an upload refused for a rate limit or load reads as such
+import {uploadErrorMessage} from '#/horizon/uploads/messages'
 import {app, chat} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -1198,6 +1200,8 @@ export const ComposePost = ({
       })
 
       let err = e instanceof Error ? cleanError(e.message) : String(e)
+      // HORIZON: an upload refused for a rate limit or load reads as such
+      err = uploadErrorMessage(e) ?? err
       if (
         e instanceof apilib.ReplyDeletedError ||
         err.includes('not locate record')

@@ -323,6 +323,12 @@ released version yet; everything so far is under `[Unreleased]`.
   OAuth.
 - A failed OAuth sign-in reopens the sign-in form on the OAuth tab, where its
   error is shown.
+- **Uploads the server refuses read clearly:** a rate-limited upload says
+  "The server is limiting uploads right now" with when to try again (from
+  `Retry-After`, else "later"), and a 502/503/504 says the server couldn't
+  take the upload, on public and private posts. A private post now uploads
+  all its media before writing its reply and quote limits, so a failed
+  upload writes nothing.
 
 ### Changed
 

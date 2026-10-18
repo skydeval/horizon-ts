@@ -964,6 +964,49 @@ describe('postPrivate: reply and quote limits (4.14)', () => {
     ).toEqual([{$type: 'app.bsky.feed.postgate#disableRule'}])
   })
 
+  it('resolves every post’s media before the first gate or post write (D2-151)', async () => {
+    const writesSoFar = () =>
+      pds.calls.filter(
+        c =>
+          c.nsid === 'com.atproto.repo.createRecord' ||
+          c.nsid === 'tools.kryphocron.feed.createPostPrivate',
+      ).length
+    const seen: number[] = []
+    const record = () => {
+      seen.push(writesSoFar())
+      return Promise.resolve(undefined)
+    }
+    mockResolveEmbed
+      .mockImplementationOnce(record)
+      .mockImplementationOnce(record)
+      .mockImplementationOnce(record)
+    await postPrivate(
+      new QueryClient(),
+      opts(['one', 'two', 'three'], undefined, LIMITS),
+    )
+    expect(seen).toEqual([0, 0, 0])
+    expect(writesSoFar()).toBe(7)
+  })
+
+  it('a failed upload in a later post writes no gate or post and deletes nothing', async () => {
+    const failure = new Error('upload refused')
+    mockResolveEmbed
+      .mockImplementationOnce(() => Promise.resolve(undefined))
+      .mockImplementationOnce(() => Promise.reject(failure))
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['one', 'two'], undefined, LIMITS),
+    ).catch((e: unknown) => e)
+    expect(error).toBe(failure)
+    const order = nsids(pds.calls)
+    expect(order).not.toContain('com.atproto.repo.createRecord')
+    expect(order).not.toContain('com.atproto.repo.deleteRecord')
+    expect(order).not.toContain('tools.kryphocron.feed.createPostPrivate')
+    expect(order).not.toContain('tools.kryphocron.feed.deletePostPrivate')
+    expect(pds.gates.size).toBe(0)
+    expect(pds.repo.size).toBe(0)
+  })
+
   it('writes no gate with Anyone and quotes on', async () => {
     await postPrivate(new QueryClient(), opts(['one', 'two']))
     expect(nsids(pds.calls)).not.toContain('com.atproto.repo.createRecord')
