@@ -14,7 +14,7 @@ import {networkAwareFetch} from '#/state/session/network'
  * prism's DID. `EXPO_PUBLIC_PRISM_DID` overrides it for development.
  */
 export const PRISM_DID = (process.env.EXPO_PUBLIC_PRISM_DID ||
-  'did:web:api.nearhorizon.app') as DidString
+  'did:web:prism.nearhorizon.app') as DidString
 
 /**
  * The `atproto-proxy` target for calls proxied to prism through the PDS.
@@ -26,7 +26,7 @@ export const PRISM_SERVICE = `${PRISM_DID}#bsky_appview` as Service
  * overrides it for development.
  */
 export const PRISM_URL: string =
-  process.env.EXPO_PUBLIC_PRISM_URL || 'https://api.nearhorizon.app'
+  process.env.EXPO_PUBLIC_PRISM_URL || 'https://prism.nearhorizon.app'
 
 const prismClients = new WeakMap<Client, Client>()
 

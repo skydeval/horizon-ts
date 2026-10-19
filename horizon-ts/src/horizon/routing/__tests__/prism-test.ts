@@ -78,6 +78,6 @@ describe('prism clients', () => {
     await prism.call(app.bsky.feed.getTimeline, {limit: 1})
     expect(sent[0].url.startsWith('https://pds.example/')).toBe(true)
     expect(sent[0].headers.get('atproto-proxy')).toBe(PRISM_SERVICE)
-    expect(PRISM_SERVICE).toBe('did:web:api.nearhorizon.app#bsky_appview')
+    expect(PRISM_SERVICE).toBe('did:web:prism.nearhorizon.app#bsky_appview')
   })
 })

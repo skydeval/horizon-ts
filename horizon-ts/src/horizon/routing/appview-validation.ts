@@ -21,7 +21,7 @@ import {com} from '#/lexicons'
 /**
  * prism's production DID, which can never be the public AppView.
  */
-const HORIZON_PRISM_DID = 'did:web:api.nearhorizon.app'
+const HORIZON_PRISM_DID = 'did:web:prism.nearhorizon.app'
 
 /**
  * Whether a DID is prism's (the production DID or the development override).

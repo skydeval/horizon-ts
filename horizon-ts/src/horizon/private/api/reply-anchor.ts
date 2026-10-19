@@ -45,7 +45,7 @@ import {type app, com} from '#/lexicons'
 
 /**
  * How many private posts a branch walk reads before giving up: aurora's
- * bound for threads and branches (A-13), and prism's on api.nearhorizon.app
+ * bound for threads and branches (A-13), and prism's on prism.nearhorizon.app
  * (P-23).
  */
 export const MAX_ANCHOR_WALK = 100

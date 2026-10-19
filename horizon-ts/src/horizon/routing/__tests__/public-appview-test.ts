@@ -53,10 +53,12 @@ describe('the switcher validator', () => {
   it('rejects prism by its DID, without looking it up', async () => {
     const lookups = deps(undefined)
     await expect(
-      validatePublicAppview('api.nearhorizon.app', lookups),
+      validatePublicAppview('prism.nearhorizon.app', lookups),
     ).resolves.toEqual({ok: false, reason: 'prism'})
     expect(lookups.fetchDocument).not.toHaveBeenCalled()
-    expect(isPrismDid('did:web:api.nearhorizon.app')).toBe(true)
+    expect(isPrismDid('did:web:prism.nearhorizon.app')).toBe(true)
+    // The retired name is no longer prism's.
+    expect(isPrismDid('did:web:api.nearhorizon.app')).toBe(false)
   })
 
   it('accepts an AppView with a #bsky_appview service of type BskyAppView', async () => {
