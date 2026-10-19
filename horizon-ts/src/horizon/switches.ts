@@ -193,3 +193,32 @@ export const COMPACT_FRAME_WINDOWS: boolean = true
  * Guards Horizon code only. `false` keeps the appearance on this device only.
  */
 export const APPEARANCE_SYNC: boolean = true
+
+/**
+ * "Interaction settings" as a main Settings row, between "Moderation and
+ * content filters" and "Notifications" (Phase 3, batch B). It opens the same
+ * screen as the Moderation screen's row, which stays. `false` removes the
+ * main row.
+ */
+export const INTERACTION_SETTINGS_ROW: boolean = true
+
+/**
+ * The private posting defaults (Phase 3, batch B): the Interaction settings
+ * screen's "Public posts" heading and "Private posts" section for members
+ * ("New posts start as", "Default audience", the reply and quote note and
+ * the Audiences link), the record that holds them
+ * (`app.nearhorizon.actor.postingDefaults/self`, read and written in the
+ * account's own repo), and the composer starting a member's new post from
+ * them. Audiences moves into that section, so its own Settings row is not
+ * shown. `false` restores the stock Interaction settings screen, the
+ * composer starts Public with Everyone, and the Audiences row comes back.
+ */
+export const PRIVATE_POSTING_DEFAULTS: boolean = true
+
+/**
+ * The Public | Private folder tabs on the Notifications settings screen,
+ * for members (Phase 3, batch B). Public is the stock screen; Private holds
+ * the private notification settings. `false` restores the stock screen
+ * with no tabs.
+ */
+export const PRIVATE_NOTIFICATION_SETTINGS: boolean = true

@@ -399,6 +399,31 @@ released version yet; everything so far is under `[Unreleased]`.
     header buttons and the compose button paint the backdrop the same way
     (under the theme's glass with Bars, whose bare bars are web only for
     now). Built, not yet tried on a device.
+  - **Settings: "App views".** The "App servers" row and dialog are now
+    "App views", in the atproto ecosystem's terms: Horizon's own app view
+    (prism, always connected) and the public app view. The sign-in form's
+    quiet button reads "App view".
+  - **Settings: "Interaction settings" is a main row,** between "Moderation
+    and content filters" and "Notifications" (the Moderation screen's row
+    still opens it). For members it has two sections. **Public posts:** the
+    stock reply and quote defaults. **Private posts:** "New posts start as"
+    Public or Private, "Default audience" (Everyone, Followers, People you
+    follow, Only me, or one of your list audiences, with "New audience..."),
+    a note that private posts share the reply and quote defaults above, and
+    Audiences, moved here from its own Settings row. The composer opens a
+    new post on these defaults, and each post can still change them; a reply
+    to a public post starts Public with the default audience ready, and a
+    reply to a private post stays private under its thread. The defaults
+    follow you to other devices as a record in your own repo,
+    `app.nearhorizon.actor.postingDefaults/self`, with a copy on this device
+    for an instant start. Non-members see the stock screen and the composer
+    always starts Public for them.
+  - **Settings > Notifications has Public | Private tabs** for members, the
+    same folder tabs as the Notifications page. Public is the stock screen.
+    Private lists likes, replies, mentions, quotes and reposts of private
+    posts, shown disabled with "Private notification settings arrive with
+    server support" until prism offers private notification preferences;
+    nothing is stored meanwhile. Non-members see the stock screen.
 
 ### Fixed
 

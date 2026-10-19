@@ -3,15 +3,24 @@
  * because the stock composer never opens a second composer over an open one.
  *
  * The record lives as long as the composer, not as long as the control:
- * `usePrivateComposeSession`, called once in `ComposePost`, sets it up on
- * mount and resets it on unmount. On web the footer that holds the control
- * moves into the active post once a compose has two posts, so the control
- * remounts and must never touch the record's lifetime.
+ * `usePrivateComposeSession` (`session.ts`), called once in `ComposePost`,
+ * sets it up on mount and resets it on unmount. On web the footer that holds
+ * the control moves into the active post once a compose has two posts, so
+ * the control remounts and must never touch the record's lifetime.
+ *
+ * A member's new compose starts from the private posting defaults
+ * (Interaction settings > Private posts, `defaults/`): a top-level post
+ * starts Public or Private as "New posts start as" says, and every compose
+ * that is not locked starts with the "Default audience", used once it is
+ * Private. Defaults that arrive after the composer opened (the record read
+ * in the background, membership confirmed late) still apply, until anything
+ * else sets the record: a choice in the control, or a restored draft.
  */
 
-import {useLayoutEffect, useSyncExternalStore} from 'react'
+import {useSyncExternalStore} from 'react'
 
 import {type StandingMode} from '#/horizon/private/api/audiences'
+import {type PrivateDefaults} from '#/horizon/private/defaults/record'
 import {getPrivatePostFacts} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {PRIVATE_POSTING} from '#/horizon/switches'
@@ -45,6 +54,11 @@ export const PUBLIC_COMPOSE: ComposeVisibility = {
 }
 
 let state: ComposeVisibility = PUBLIC_COMPOSE
+/**
+ * Whether the record is still the one the compose session started with, so
+ * defaults arriving late may replace it.
+ */
+let startedFresh = false
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void) {
@@ -58,13 +72,19 @@ export function getComposeVisibility(): ComposeVisibility {
   return state
 }
 
-/**
- * Replace the record. Listeners are called.
- */
-export function setComposeVisibility(next: ComposeVisibility) {
+function replace(next: ComposeVisibility) {
   if (next === state) return
   state = next
   listeners.forEach(listener => listener())
+}
+
+/**
+ * Replace the record. Listeners are called. Defaults arriving later no
+ * longer apply.
+ */
+export function setComposeVisibility(next: ComposeVisibility) {
+  startedFresh = false
+  replace(next)
 }
 
 /**
@@ -75,6 +95,42 @@ export function chooseComposeVisibility(
 ) {
   if (state.locked) return
   setComposeVisibility({...state, ...change})
+}
+
+function sameAudience(x: ComposeAudience, y: ComposeAudience): boolean {
+  if (x.kind === 'mode' && y.kind === 'mode') return x.mode === y.mode
+  if (x.kind === 'list' && y.kind === 'list') return x.uri === y.uri
+  if (x.kind === 'parent' && y.kind === 'parent') return x.uri === y.uri
+  return false
+}
+
+function sameVisibility(x: ComposeVisibility, y: ComposeVisibility): boolean {
+  return (
+    x.visibility === y.visibility &&
+    x.locked === y.locked &&
+    sameAudience(x.audience, y.audience)
+  )
+}
+
+/**
+ * Start a compose session's record (the composer opening).
+ */
+export function startComposeVisibility(initial: ComposeVisibility) {
+  replace(initial)
+  startedFresh = true
+}
+
+/**
+ * Apply defaults that arrived after the session started, while nothing else
+ * has set the record since.
+ */
+export function applyLateComposeDefaults(
+  replyToUri: string | undefined,
+  defaults: PrivateDefaults | undefined,
+) {
+  if (!startedFresh || !defaults) return
+  const next = initialComposeVisibility(replyToUri, defaults)
+  if (!sameVisibility(next, state)) replace(next)
 }
 
 /**
@@ -110,10 +166,15 @@ export function routesPrivate(replyTo: string | undefined): boolean {
 /**
  * The record a compose starts from: Private and locked under the parent's
  * audience when replying to a private post (whether or not the account is a
- * member right now), else Public with Everyone.
+ * member right now). Otherwise, with a member's `defaults` (absent for
+ * anyone else): a top-level post starts as "New posts start as" says, a
+ * reply to a public post starts Public, and either holds the default
+ * audience for when it is made Private. Without defaults, Public with
+ * Everyone.
  */
 export function initialComposeVisibility(
   replyToUri: string | undefined,
+  defaults?: PrivateDefaults,
 ): ComposeVisibility {
   if (PRIVATE_POSTING && replyToUri && isPrivatePostUri(replyToUri)) {
     return {
@@ -125,22 +186,11 @@ export function initialComposeVisibility(
       locked: true,
     }
   }
-  return PUBLIC_COMPOSE
-}
-
-/**
- * Owns the record for the composer's lifetime: sets it up on mount and resets
- * it to Public on unmount. Called once in `ComposePost`. Returns whether the
- * compose is private, re-rendering the composer when that changes.
- */
-export function usePrivateComposeSession(
-  replyTo: {uri: string} | undefined,
-): boolean {
-  const replyToUri = replyTo?.uri
-  useLayoutEffect(() => {
-    if (!PRIVATE_POSTING) return
-    setComposeVisibility(initialComposeVisibility(replyToUri))
-    return () => setComposeVisibility(PUBLIC_COMPOSE)
-  }, [replyToUri])
-  return useIsPrivateCompose()
+  if (!PRIVATE_POSTING || !defaults) return PUBLIC_COMPOSE
+  return {
+    visibility:
+      !replyToUri && defaults.startAs === 'private' ? 'private' : 'public',
+    audience: defaults.audience,
+    locked: false,
+  }
 }

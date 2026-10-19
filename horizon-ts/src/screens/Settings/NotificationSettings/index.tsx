@@ -36,6 +36,13 @@ import {
 import {Shapes_Stroke2_Corner0_Rounded as ShapesIcon} from '#/components/icons/Shapes'
 import * as Layout from '#/components/Layout'
 import {IS_ANDROID, IS_IOS, IS_WEB} from '#/env'
+// HORIZON: Public | Private tabs and the Private settings, for members
+import {
+  NotificationSettingsTabs,
+  PrivateNotificationSettingsScreen,
+} from '#/horizon/private/notifications/NotificationSettingsTabs'
+// HORIZON: Public | Private tabs and the Private settings, for members
+import {usePrivateNotificationSettingsMode} from '#/horizon/private/notifications/settings-mode'
 import * as SettingsList from '../components/SettingsList'
 import {ChatNotificationDialogs} from './components/ChatNotificationDialogs'
 import {ItemTextWithSubtitle} from './components/ItemTextWithSubtitle'
@@ -62,6 +69,8 @@ export function NotificationSettingsScreen({}: Props) {
   const chatDialogControl = Dialog.useDialogControl()
   const chatRequestDialogControl = Dialog.useDialogControl()
   const miscDialogControl = Dialog.useDialogControl()
+  // HORIZON: Public | Private tabs and the Private settings, for members
+  const showsPrivateSettings = usePrivateNotificationSettingsMode()
 
   const {data: permissions, refetch} = useQuery({
     queryKey: RQKEY,
@@ -116,6 +125,9 @@ export function NotificationSettingsScreen({}: Props) {
     }
   }
 
+  // HORIZON: Public | Private tabs and the Private settings, for members
+  if (showsPrivateSettings) return <PrivateNotificationSettingsScreen />
+
   return (
     <Layout.Screen>
       <Layout.Header.Outer>
@@ -127,6 +139,8 @@ export function NotificationSettingsScreen({}: Props) {
         </Layout.Header.Content>
         <Layout.Header.Slot />
       </Layout.Header.Outer>
+      {/* HORIZON: Public | Private tabs and the Private settings, for members */}
+      <NotificationSettingsTabs />
       <Layout.Content>
         <SettingsList.Container>
           {permissions && !permissions.granted && (

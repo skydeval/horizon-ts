@@ -88,6 +88,10 @@ jest.mock('#/horizon/private/membership', () => ({
 jest.mock('#/horizon/private/render/AudienceLabel', () => ({
   usePostAudienceLabel: () => undefined,
 }))
+let mockDefaults: PrivateDefaults | undefined
+jest.mock('#/horizon/private/defaults/compose', () => ({
+  usePrivateComposeDefaults: () => mockDefaults,
+}))
 jest.mock('@lingui/react', () => ({
   useLingui: () => ({
     _: (value: {message?: string; id?: string}) => value.message ?? value.id,
@@ -95,12 +99,14 @@ jest.mock('@lingui/react', () => ({
   Trans: () => null,
 }))
 
+import {type PrivateDefaults} from '#/horizon/private/defaults/record'
+import {usePrivateComposeSession} from '../composer/session'
 import {
   chooseComposeVisibility,
   getComposeVisibility,
+  initialComposeVisibility,
   PUBLIC_COMPOSE,
   setComposeVisibility,
-  usePrivateComposeSession,
 } from '../composer/state'
 import {
   ComposerAudiencePill,
@@ -149,6 +155,7 @@ afterEach(() => {
   setComposeVisibility(PUBLIC_COMPOSE)
   mockAudienceMenu.mockClear()
   pillShown = undefined
+  mockDefaults = undefined
 })
 
 describe('where the audience drop-down sits (v2 live check 1)', () => {
@@ -255,6 +262,100 @@ describe('the composer owns the visibility record', () => {
         replyTo={{uri: `at://${DID}/app.bsky.feed.post/3kpublic22222`}}
       />,
     )
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    screen.unmount()
+  })
+})
+
+describe('the private posting defaults (Phase 3, batch B)', () => {
+  const FOLLOWERS: PrivateDefaults = {
+    startAs: 'private',
+    audience: {kind: 'mode', mode: 'followers'},
+  }
+  const LIST = `at://${DID}/tools.kryphocron.policy.audience/3klist1111111`
+
+  it('without defaults (a non-member, or the switches off) a post starts Public with Everyone', () => {
+    expect(initialComposeVisibility(undefined, undefined)).toEqual(
+      PUBLIC_COMPOSE,
+    )
+  })
+
+  it('a top-level post starts as the defaults say', () => {
+    expect(initialComposeVisibility(undefined, FOLLOWERS)).toEqual({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'followers'},
+      locked: false,
+    })
+    expect(
+      initialComposeVisibility(undefined, {
+        startAs: 'public',
+        audience: {kind: 'list', uri: LIST},
+      }),
+    ).toEqual({
+      visibility: 'public',
+      audience: {kind: 'list', uri: LIST},
+      locked: false,
+    })
+  })
+
+  it('a reply to a public post starts Public but holds the default audience', () => {
+    expect(initialComposeVisibility(PUBLIC_PARENT, FOLLOWERS)).toEqual({
+      visibility: 'public',
+      audience: {kind: 'mode', mode: 'followers'},
+      locked: false,
+    })
+  })
+
+  it('a reply to a private post stays locked under its parent, whatever the defaults', () => {
+    expect(initialComposeVisibility(PRIVATE_PARENT, FOLLOWERS)).toMatchObject({
+      visibility: 'private',
+      locked: true,
+      audience: {kind: 'parent'},
+    })
+  })
+
+  it('the composer opens on the defaults, and a post can still change them', () => {
+    mockDefaults = FOLLOWERS
+    const screen = render(<Composer showControl />)
+    expect(getComposeVisibility()).toMatchObject({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'followers'},
+    })
+    act(() => {
+      chooseComposeVisibility({visibility: 'public'})
+    })
+    expect(getComposeVisibility().visibility).toBe('public')
+    screen.unmount()
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+  })
+
+  it('defaults that arrive after opening apply until the post is changed', () => {
+    const screen = render(<Composer showControl />)
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    mockDefaults = FOLLOWERS
+    screen.rerender(<Composer showControl />)
+    expect(getComposeVisibility().visibility).toBe('private')
+
+    act(() => {
+      chooseComposeVisibility({audience: {kind: 'mode', mode: 'nobody'}})
+    })
+    // A later answer no longer replaces what was chosen.
+    mockDefaults = {...FOLLOWERS, audience: {kind: 'mode', mode: 'everyone'}}
+    screen.rerender(<Composer showControl />)
+    expect(getComposeVisibility().audience).toEqual({
+      kind: 'mode',
+      mode: 'nobody',
+    })
+    screen.unmount()
+  })
+
+  it('a draft restored over the defaults is not replaced by them', () => {
+    const screen = render(<Composer showControl />)
+    act(() => {
+      setComposeVisibility(PUBLIC_COMPOSE)
+    })
+    mockDefaults = FOLLOWERS
+    screen.rerender(<Composer showControl />)
     expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
     screen.unmount()
   })

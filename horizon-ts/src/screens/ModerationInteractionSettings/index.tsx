@@ -23,6 +23,11 @@ import {PostInteractionSettingsForm} from '#/components/dialogs/PostInteractionS
 import * as Layout from '#/components/Layout'
 import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
+// HORIZON: Public posts and Private posts sections, for members
+import {
+  PrivatePostsSection,
+  PublicPostsHeading,
+} from '#/horizon/private/defaults/InteractionSections'
 
 export function Screen() {
   const gutters = useGutters(['base'])
@@ -47,6 +52,8 @@ export function Screen() {
               composer.
             </Trans>
           </Admonition>
+          {/* HORIZON: Public posts heading, for members */}
+          <PublicPostsHeading />
           {preferences ? (
             <Inner preferences={preferences} />
           ) : (
@@ -54,6 +61,8 @@ export function Screen() {
               <Loader size="xl" />
             </View>
           )}
+          {/* HORIZON: Private posts section, for members */}
+          <PrivatePostsSection />
         </View>
       </Layout.Content>
     </Layout.Screen>

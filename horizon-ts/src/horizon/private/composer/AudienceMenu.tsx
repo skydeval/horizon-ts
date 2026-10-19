@@ -88,7 +88,10 @@ export type AudienceMenuProps = {
   fullWidth?: boolean
 }
 
-function useModeLabel() {
+/**
+ * The labels of the standing audiences.
+ */
+export function useModeLabel() {
   const {t: l} = useLingui()
   return (mode: StandingMode) => {
     switch (mode) {
@@ -104,9 +107,23 @@ function useModeLabel() {
   }
 }
 
-function listName(entry: AudienceEntry | undefined) {
+/**
+ * A list audience's name, as the drop-down shows it.
+ */
+export function listName(entry: AudienceEntry | undefined) {
   if (!entry) return undefined
   return audienceLabel(entry, {isSelf: true})
+}
+
+/**
+ * The list audiences offered under Who can see: named lists.
+ */
+export function pickableListAudiences(
+  audiences: AudienceEntry[] | undefined,
+): AudienceEntry[] {
+  return (audiences ?? []).filter(
+    entry => entry.mode === 'list' && entry.name !== undefined,
+  )
 }
 
 /**
@@ -427,9 +444,7 @@ function WhoCanSee({
   const t = useTheme()
   const {t: l} = useLingui()
   const readOnly = !onAudience
-  const lists = (audiences ?? []).filter(
-    entry => entry.mode === 'list' && entry.name !== undefined,
-  )
+  const lists = pickableListAudiences(audiences)
   const isMode = (mode: StandingMode) =>
     audience.kind === 'mode' && audience.mode === mode
   // Choosing keeps the menu open on web (see the file comment).

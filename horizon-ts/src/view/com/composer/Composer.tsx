@@ -169,11 +169,10 @@ import {
 import {applyDraftVisibility} from '#/horizon/private/composer/drafts'
 // HORIZON: private composing
 import {hidesStockInteractionPill} from '#/horizon/private/composer/interaction'
+// HORIZON: private composing, started from a member's posting defaults
+import {usePrivateComposeSession} from '#/horizon/private/composer/session'
 // HORIZON: private composing
-import {
-  useIsPrivateCompose,
-  usePrivateComposeSession,
-} from '#/horizon/private/composer/state'
+import {useIsPrivateCompose} from '#/horizon/private/composer/state'
 // HORIZON: private composing
 import {privatePostSuccessData} from '#/horizon/private/composer/success'
 // HORIZON: private composing

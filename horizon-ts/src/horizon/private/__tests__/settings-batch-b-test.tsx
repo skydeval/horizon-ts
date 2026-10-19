@@ -1,0 +1,402 @@
+import {beforeEach, describe, expect, it, jest} from '@jest/globals'
+import {act, render, renderHook} from '@testing-library/react-native'
+
+/*
+ * Phase 3, batch B: who sees the Interaction settings sections, the
+ * Notifications settings tabs and the Audiences row, and what a choice in
+ * the Private posts section saves. The design system is replaced by plain
+ * stand-ins: these tests are about gating and wiring, not looks.
+ */
+
+const DID = 'did:plc:privateaaaaaaaaaaaaaaaaa'
+
+let mockIsMember = true
+jest.mock('#/horizon/private/membership', () => ({
+  useIsMember: () => mockIsMember,
+  useIsConfirmedMember: () => mockIsMember,
+}))
+jest.mock('#/state/session', () => ({
+  useSession: () => ({currentAccount: {did: DID}}),
+}))
+let mockDefaultsSwitch = true
+let mockSettingsTabsSwitch = true
+jest.mock('#/horizon/switches', () =>
+  Object.defineProperties(
+    {...jest.requireActual<object>('#/horizon/switches')},
+    {
+      PRIVATE_POSTING_DEFAULTS: {
+        get: () => mockDefaultsSwitch,
+        enumerable: true,
+      },
+      PRIVATE_NOTIFICATION_SETTINGS: {
+        get: () => mockSettingsTabsSwitch,
+        enumerable: true,
+      },
+    },
+  ),
+)
+let mockDefaults: unknown = {
+  startAs: 'public',
+  audience: {kind: 'mode', mode: 'everyone'},
+}
+const mockSave = jest.fn()
+jest.mock('#/horizon/private/defaults/query', () => ({
+  usePostingDefaultsQuery: () => ({data: mockDefaults, isError: false}),
+  useSetPostingDefaultsMutation: () => ({mutate: mockSave}),
+}))
+jest.mock('#/horizon/private/audiences/useAudiencesQuery', () => ({
+  useAudiencesQuery: () => ({
+    data: [
+      {
+        uri: `at://${DID}/tools.kryphocron.policy.audience/3klist1111111`,
+        rkey: '3klist1111111',
+        mode: 'list',
+        name: 'Close friends',
+        members: [],
+      },
+    ],
+    isPending: false,
+    isError: false,
+  }),
+}))
+jest.mock('#/horizon/private/audiences/AudienceEditorDialog', () => ({
+  AudienceEditorDialog: () => null,
+}))
+jest.mock('#/horizon/private/composer/AudienceMenu', () => ({
+  useModeLabel: () => (mode: string) => mode,
+  listName: (entry: {name?: string}) => entry.name,
+  pickableListAudiences: (entries: {mode: string; name?: string}[]) =>
+    entries.filter(entry => entry.mode === 'list' && entry.name),
+}))
+
+jest.mock('#/alf', () => ({
+  atoms: new Proxy({}, {get: () => ({})}),
+  tokens: new Proxy({}, {get: () => new Proxy({}, {get: () => 0})}),
+  useTheme: () => ({
+    atoms: new Proxy({}, {get: () => ({})}),
+    palette: new Proxy({}, {get: () => '#000'}),
+  }),
+}))
+jest.mock('#/lib/haptics', () => ({useHaptics: () => ({selection: () => {}})}))
+
+/** Group handlers by their accessibility label, to call them. */
+const mockGroups = new Map<string, (values: string[]) => void>()
+const mockItems: string[] = []
+jest.mock('#/components/forms/Toggle', () => {
+  const pass = (props: {children?: unknown}) =>
+    typeof props.children === 'function'
+      ? (props.children as (mockArg: unknown) => unknown)({selected: false})
+      : (props.children ?? null)
+  return {
+    Group: (props: {
+      label: string
+      onChange: (mockValues: string[]) => void
+      children?: unknown
+    }) => {
+      mockGroups.set(props.label, props.onChange)
+      return props.children ?? null
+    },
+    Item: (props: {name: string; children?: unknown}) => {
+      mockItems.push(props.name)
+      return pass(props)
+    },
+    Panel: pass,
+    PanelGroup: pass,
+    PanelText: pass,
+    Radio: () => null,
+  }
+})
+jest.mock('#/components/Typography', () => {
+  const {Text} = jest.requireActual<{
+    Text: React.ComponentType<{children?: React.ReactNode}>
+  }>('react-native')
+  return {
+    Text: (props: {children?: React.ReactNode}) => (
+      <Text>{props.children}</Text>
+    ),
+  }
+})
+const mockLinks: string[] = []
+jest.mock('#/components/Link', () => ({
+  Link: (props: {to: string; children?: unknown}) => {
+    mockLinks.push(props.to)
+    return typeof props.children === 'function'
+      ? (props.children as (mockArg: unknown) => unknown)({
+          hovered: false,
+          pressed: false,
+        })
+      : null
+  },
+}))
+jest.mock('#/components/Button', () => ({
+  Button: (props: {children?: unknown}) =>
+    typeof props.children === 'function'
+      ? (props.children as (mockArg: unknown) => unknown)({
+          hovered: false,
+          pressed: false,
+        })
+      : null,
+}))
+jest.mock('#/components/Dialog', () => ({
+  useDialogControl: () => ({open: () => {}, close: () => {}}),
+}))
+jest.mock('#/components/Admonition', () => {
+  const {Text} = jest.requireActual<{
+    Text: React.ComponentType<{children?: React.ReactNode}>
+  }>('react-native')
+  return {
+    Admonition: (props: {children?: React.ReactNode}) => (
+      <Text>{props.children}</Text>
+    ),
+  }
+})
+jest.mock('#/components/Loader', () => ({Loader: () => null}))
+const mockSettingsLinks: string[] = []
+jest.mock('#/screens/Settings/components/SettingsList', () => ({
+  LinkItem: (props: {to: string; children?: React.ReactNode}) => {
+    mockSettingsLinks.push(props.to)
+    return props.children ?? null
+  },
+  Item: (props: {children?: React.ReactNode}) => props.children ?? null,
+  ItemIcon: () => null,
+  ItemText: (props: {children?: React.ReactNode}) => props.children ?? null,
+  Container: (props: {children?: React.ReactNode}) => props.children ?? null,
+}))
+jest.mock(
+  '#/screens/Settings/NotificationSettings/components/ItemTextWithSubtitle',
+  () => {
+    const {Text} = jest.requireActual<{
+      Text: React.ComponentType<{children?: React.ReactNode}>
+    }>('react-native')
+    return {
+      ItemTextWithSubtitle: (props: {titleText: React.ReactNode}) => (
+        <Text>{props.titleText}</Text>
+      ),
+    }
+  },
+)
+jest.mock('#/components/Layout', () => ({}))
+const mockFolderTabs = jest.fn((_props: Record<string, unknown>) => null)
+jest.mock('#/horizon/private/tabs/FolderTabs', () => ({
+  FolderTabs: (props: Record<string, unknown>) => mockFolderTabs(props),
+}))
+jest.mock('#/components/icons/At', () => ({
+  At_Stroke2_Corner2_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Bubble', () => ({
+  Bubble_Stroke2_Corner2_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Chevron', () => ({
+  ChevronRight_Stroke2_Corner0_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Heart2', () => ({
+  Heart2_Stroke2_Corner0_Rounded: () => null,
+}))
+jest.mock('#/components/icons/List', () => ({
+  ListPlus_Stroke2_Corner0_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Person', () => ({
+  PersonGroup_Stroke2_Corner2_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Quote', () => ({
+  CloseQuote_Stroke2_Corner0_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Repost', () => ({
+  Repost_Stroke2_Corner2_Rounded: () => null,
+}))
+
+import {i18n} from '@lingui/core'
+import {I18nProvider} from '@lingui/react'
+
+import {AudiencesSettingsItem} from '../audiences/AudiencesSettingsItem'
+import {usePrivateComposeDefaults} from '../defaults/compose'
+import {
+  PrivatePostsSection,
+  PublicPostsHeading,
+} from '../defaults/InteractionSections'
+import {
+  NotificationSettingsTabs,
+  PrivateNotificationSettings,
+} from '../notifications/NotificationSettingsTabs'
+import {
+  getNotificationSettingsMode,
+  setNotificationSettingsMode,
+} from '../notifications/settings-mode'
+
+i18n.loadAndActivate({locale: 'en', messages: {}})
+
+function show(ui: React.ReactElement) {
+  return render(ui, {
+    wrapper: ({children}) => (
+      <I18nProvider i18n={i18n}>{children}</I18nProvider>
+    ),
+  })
+}
+
+beforeEach(() => {
+  mockIsMember = true
+  mockDefaultsSwitch = true
+  mockSettingsTabsSwitch = true
+  mockDefaults = {startAs: 'public', audience: {kind: 'mode', mode: 'everyone'}}
+  mockSave.mockClear()
+  mockGroups.clear()
+  mockItems.length = 0
+  mockLinks.length = 0
+  mockSettingsLinks.length = 0
+  mockFolderTabs.mockClear()
+  setNotificationSettingsMode(DID, 'public')
+})
+
+describe('Interaction settings (item 5)', () => {
+  it('a non-member sees only the stock screen', () => {
+    mockIsMember = false
+    const screen = show(
+      <>
+        <PublicPostsHeading />
+        <PrivatePostsSection />
+      </>,
+    )
+    expect(screen.toJSON()).toBeNull()
+  })
+
+  it('with the switch off, members see the stock screen too', () => {
+    mockDefaultsSwitch = false
+    const screen = show(<PrivatePostsSection />)
+    expect(screen.toJSON()).toBeNull()
+  })
+
+  it('a member sees both sections, the reply and quote note and Audiences', () => {
+    const screen = show(
+      <>
+        <PublicPostsHeading />
+        <PrivatePostsSection />
+      </>,
+    )
+    expect(screen.getByText('Public posts')).toBeTruthy()
+    expect(screen.getByText('Private posts')).toBeTruthy()
+    expect(screen.getByText('New posts start as')).toBeTruthy()
+    expect(screen.getByText('Default audience')).toBeTruthy()
+    expect(screen.getByText('Who can reply and quote')).toBeTruthy()
+    expect(mockLinks).toContain('/settings/audiences')
+    // The standing audiences, the named list, and Only me last.
+    expect(mockItems).toEqual([
+      'public',
+      'private',
+      'everyone',
+      'followers',
+      'following',
+      `list:at://${DID}/tools.kryphocron.policy.audience/3klist1111111`,
+      'nobody',
+    ])
+  })
+
+  it('choosing saves the whole defaults at once', () => {
+    show(<PrivatePostsSection />)
+    act(() => {
+      mockGroups.get('Choose whether new posts start public or private')?.([
+        'private',
+      ])
+    })
+    expect(mockSave).toHaveBeenLastCalledWith({
+      startAs: 'private',
+      audience: {kind: 'mode', mode: 'everyone'},
+    })
+    const list = `at://${DID}/tools.kryphocron.policy.audience/3klist1111111`
+    act(() => {
+      mockGroups.get('Choose who can see your private posts by default')?.([
+        `list:${list}`,
+      ])
+    })
+    expect(mockSave).toHaveBeenLastCalledWith({
+      startAs: 'public',
+      audience: {kind: 'list', uri: list},
+    })
+    act(() => {
+      mockGroups.get('Choose who can see your private posts by default')?.([
+        'followers',
+      ])
+    })
+    expect(mockSave).toHaveBeenLastCalledWith({
+      startAs: 'public',
+      audience: {kind: 'mode', mode: 'followers'},
+    })
+  })
+
+  it('a default list the account no longer has stays chosen, not widened', () => {
+    const gone = `at://${DID}/tools.kryphocron.policy.audience/3kgone2222222`
+    mockDefaults = {startAs: 'private', audience: {kind: 'list', uri: gone}}
+    const screen = show(<PrivatePostsSection />)
+    // Panel text is a plain string in the stand-ins.
+    expect(JSON.stringify(screen.toJSON())).toContain(
+      'A list you no longer have',
+    )
+    expect(mockItems).toContain(`list:${gone}`)
+    expect(mockSave).not.toHaveBeenCalled()
+  })
+
+  it('the old Audiences row is not shown while Audiences lives here', () => {
+    const screen = show(<AudiencesSettingsItem />)
+    expect(screen.toJSON()).toBeNull()
+    mockDefaultsSwitch = false
+    show(<AudiencesSettingsItem />)
+    expect(mockSettingsLinks).toEqual(['/settings/audiences'])
+  })
+})
+
+describe('Notifications settings tabs (item 6)', () => {
+  it('members get Public | Private tabs; choosing one sets the mode', () => {
+    show(<NotificationSettingsTabs />)
+    const props = mockFolderTabs.mock.calls.at(-1)?.[0] as {
+      selected: string
+      onSelect: (key: string) => void
+    }
+    expect(props.selected).toBe('public')
+    act(() => props.onSelect('private'))
+    expect(getNotificationSettingsMode(DID)).toBe('private')
+  })
+
+  it('non-members, and the switch off, get no tabs', () => {
+    mockIsMember = false
+    show(<NotificationSettingsTabs />)
+    mockIsMember = true
+    mockSettingsTabsSwitch = false
+    show(<NotificationSettingsTabs />)
+    expect(mockFolderTabs).not.toHaveBeenCalled()
+  })
+
+  it('the Private settings are shown disabled with the note, and store nothing', () => {
+    const screen = show(<PrivateNotificationSettings />)
+    expect(
+      screen.getByText(
+        'Private notification settings arrive with server support.',
+      ),
+    ).toBeTruthy()
+    for (const title of ['Likes', 'Replies', 'Mentions', 'Quotes', 'Reposts']) {
+      expect(screen.getByText(title)).toBeTruthy()
+    }
+    expect(
+      screen.UNSAFE_root.findAll(
+        node =>
+          (node.props as {accessibilityState?: {disabled?: boolean}})
+            .accessibilityState?.disabled === true,
+      ).length,
+    ).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe('the composer reads the defaults for members only', () => {
+  it('a member gets them; a non-member and the switch off get none', () => {
+    expect(renderHook(() => usePrivateComposeDefaults()).result.current).toBe(
+      mockDefaults,
+    )
+    mockIsMember = false
+    expect(
+      renderHook(() => usePrivateComposeDefaults()).result.current,
+    ).toBeUndefined()
+    mockIsMember = true
+    mockDefaultsSwitch = false
+    expect(
+      renderHook(() => usePrivateComposeDefaults()).result.current,
+    ).toBeUndefined()
+  })
+})

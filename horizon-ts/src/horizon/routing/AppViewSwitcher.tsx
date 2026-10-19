@@ -1,12 +1,13 @@
 /*
- * The AppView switcher: prism shown greyed out (always connected), and the
- * public AppView, Bluesky's or a custom one.
+ * The app view switcher (Settings > App views): prism shown greyed out (always
+ * connected), and the public app view, Bluesky's or a custom one.
  *
  * Adapted from the Witchsky client (MIT),
  * src/screens/Login/components/AppServerDialog.tsx (the dialog and the quiet
- * App server button; validation is in `appview-validation.ts`). Applying a
+ * App server button, here the App view button; validation is in
+ * `appview-validation.ts`). Applying a
  * change reloads the page; an OAuth account is not re-authorized, because
- * `transition:generic` covers any AppView.
+ * `transition:generic` covers any app view.
  */
 
 import {useState} from 'react'
@@ -117,32 +118,32 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
     }
     switch (result.reason) {
       case 'empty':
-        setError(l`Enter the address of an AppView.`)
+        setError(l`Enter the address of an app view.`)
         break
       case 'invalid':
         setError(l`That doesn’t look like a web address.`)
         break
       case 'prism':
         setError(
-          l`This is ${PRODUCT_NAME}’s own server. It is always connected and can’t be the public AppView.`,
+          l`This is ${PRODUCT_NAME}’s own server. It is always connected and can’t be the public app view.`,
         )
         break
       case 'pds':
-        setError(l`This is a PDS, not an AppView.`)
+        setError(l`This is a PDS, not an app view.`)
         break
       case 'not-found':
         setError(
-          l`Couldn’t find an AppView at this address. Check the address and try again.`,
+          l`Couldn’t find an app view at this address. Check the address and try again.`,
         )
         break
     }
   }
 
   return (
-    <Dialog.ScrollableInner label={l`App servers`} style={web({maxWidth: 420})}>
+    <Dialog.ScrollableInner label={l`App views`} style={web({maxWidth: 420})}>
       <View style={[a.gap_lg]}>
         <Text style={[a.text_2xl, a.font_bold]}>
-          <Trans>App servers</Trans>
+          <Trans>App views</Trans>
         </Text>
 
         <View
@@ -157,7 +158,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
             {opacity: 0.6},
           ]}>
           <Text style={[a.text_md, a.font_semi_bold]}>
-            <Trans>{PRODUCT_NAME} network</Trans>
+            <Trans>{PRODUCT_NAME} app view</Trans>
           </Text>
           <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
             {new URL(PRISM_URL).host}
@@ -171,11 +172,11 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
 
         <View style={[a.gap_sm]}>
           <Text style={[a.text_md, a.font_semi_bold]}>
-            <Trans>Public AppView</Trans>
+            <Trans>Public app view</Trans>
           </Text>
           <SegmentedControl.Root
             type="tabs"
-            label={l`Public AppView`}
+            label={l`Public app view`}
             value={preset}
             onChange={value => {
               setPreset(value)
@@ -197,13 +198,13 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
           {preset === 'custom' && (
             <View>
               <TextField.LabelText>
-                <Trans>AppView address</Trans>
+                <Trans>App view address</Trans>
               </TextField.LabelText>
               <TextField.Root isInvalid={!!error}>
                 <TextField.Icon icon={GlobeIcon} />
                 <Dialog.Input
                   testID="publicAppviewAddressInput"
-                  label={l`AppView address`}
+                  label={l`App view address`}
                   placeholder="api.example.com"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -222,7 +223,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
           <Text
             style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
             <Trans>
-              The public AppView provides posts, feeds, profiles, search and
+              The public app view provides posts, feeds, profiles, search and
               notifications. Changing it reloads the app.
             </Trans>
           </Text>
@@ -263,7 +264,7 @@ export function AppViewSwitcherDialog({
 }
 
 /**
- * The Settings row, **App servers**.
+ * The Settings row, **App views**.
  */
 export function AppViewSettingsItem() {
   const {t: l} = useLingui()
@@ -271,11 +272,11 @@ export function AppViewSettingsItem() {
   return (
     <>
       <SettingsList.PressableItem
-        label={l`App servers`}
+        label={l`App views`}
         onPress={() => control.open()}>
         <SettingsList.ItemIcon icon={EarthIcon} />
         <SettingsList.ItemText>
-          <Trans>App servers</Trans>
+          <Trans>App views</Trans>
         </SettingsList.ItemText>
         <SettingsList.Chevron />
       </SettingsList.PressableItem>
@@ -285,8 +286,8 @@ export function AppViewSettingsItem() {
 }
 
 /**
- * The quiet **App server** button under the OAuth tab of the sign-in form, so
- * signed-out visitors can change the public AppView too.
+ * The quiet **App view** button under the OAuth tab of the sign-in form, so
+ * signed-out visitors can change the public app view too.
  */
 export function AppViewButton() {
   const t = useTheme()
@@ -296,8 +297,8 @@ export function AppViewButton() {
     <>
       <Button
         testID="appServerButton"
-        label={l`App server`}
-        accessibilityHint={l`Opens a dialog to choose the AppView used for posts, feeds and profiles`}
+        label={l`App view`}
+        accessibilityHint={l`Opens a dialog to choose the app view used for posts, feeds and profiles`}
         size="small"
         color="secondary"
         variant="ghost"
@@ -306,7 +307,7 @@ export function AppViewButton() {
           control.open()
         }}>
         <ButtonText style={[t.atoms.text_contrast_medium, a.font_normal]}>
-          <Trans>App server</Trans>
+          <Trans>App view</Trans>
         </ButtonText>
         <TinyChevronIcon width={8} style={[t.atoms.text_contrast_medium]} />
       </Button>

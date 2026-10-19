@@ -68,10 +68,12 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL, IS_IOS, IS_NATIVE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
-// HORIZON: Audiences for private posts, for members
+// HORIZON: Audiences for private posts, for members (in Interaction settings while PRIVATE_POSTING_DEFAULTS)
 import {AudiencesSettingsItem} from '#/horizon/private/audiences/AudiencesSettingsItem'
-// HORIZON: App servers: prism (always connected) and the public AppView
+// HORIZON: App views: prism (always connected) and the public app view
 import {AppViewSettingsItem} from '#/horizon/routing/AppViewSwitcher'
+// HORIZON: Interaction settings as a main row
+import {InteractionSettingsItem} from '#/horizon/settings/InteractionSettingsItem'
 // HORIZON: hide "Beta features"; the local flag table has none
 import {SHOW_BETA_FEATURES} from '#/horizon/switches'
 import {type app} from '#/lexicons'
@@ -202,6 +204,8 @@ export function SettingsScreen({}: Props) {
               <Trans>Moderation and content filters</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
+          {/* HORIZON: Interaction settings as a main row */}
+          <InteractionSettingsItem />
           <SettingsList.LinkItem
             to="/settings/notifications"
             label={l`Notifications`}>
@@ -252,9 +256,9 @@ export function SettingsScreen({}: Props) {
               <Trans>Languages</Trans>
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
-          {/* HORIZON: App servers: prism (always connected) and the public AppView */}
+          {/* HORIZON: App views: prism (always connected) and the public app view */}
           <AppViewSettingsItem />
-          {/* HORIZON: Audiences for private posts, for members */}
+          {/* HORIZON: Audiences for private posts, for members (in Interaction settings while PRIVATE_POSTING_DEFAULTS) */}
           <AudiencesSettingsItem />
           {/* HORIZON: hide "Beta features"; the local flag table has none */}
           {SHOW_BETA_FEATURES && (
