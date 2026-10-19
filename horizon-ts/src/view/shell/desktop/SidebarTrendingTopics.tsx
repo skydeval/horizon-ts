@@ -23,6 +23,8 @@ import {
 } from '#/components/TrendingTopics'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: the trending card over the backdrop (Phase 3)
+import {RailCard} from '#/horizon/backdrops/RailCard'
 
 export function SidebarTrendingTopics() {
   const {enabled} = useTrendingConfig()
@@ -60,7 +62,8 @@ function Inner() {
 
   return error || noTopics ? null : (
     <>
-      <View
+      {/* HORIZON: the trending view as a rail card (Phase 3, BD-10) */}
+      <RailCard
         style={[a.p_lg, a.rounded_md, a.border, t.atoms.border_contrast_low]}>
         <View style={[a.flex_row, a.align_center, a.gap_xs, a.pb_md]}>
           <TrendingIcon width={16} height={16} fill={t.atoms.text.color} />
@@ -151,7 +154,8 @@ function Inner() {
             </>
           )}
         </View>
-      </View>
+        {/* HORIZON: end of the trending card (Phase 3, BD-10) */}
+      </RailCard>
       <TrendingTopicsPrompt
         control={trendingPrompt}
         onConfirm={onConfirmHide}

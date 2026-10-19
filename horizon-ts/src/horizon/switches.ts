@@ -161,3 +161,35 @@ export const MEDIA_SPOILERS: boolean = true
  * plain spoiler.
  */
 export const CONTENT_WARNINGS: boolean = true
+
+/**
+ * Backdrops (Phase 3 design, `backdrops/`, `appearance/`): the backdrop
+ * layer, the transparent shell root, the transparent web `contentStyle` and
+ * navigation-theme background, the reading surface, the split-view
+ * background, the rail and nav cards and the Appearance sections. `false`
+ * returns every hook to its stock value (`t.atoms.bg` roots and
+ * `contentStyle`, the input navigation theme, `RailCard` as a fragment or the
+ * stock view, `ReadingSurface`, `BackdropLayer` and
+ * `HorizonAppearanceSections` render nothing, `horizonOpaque` is
+ * `undefined`), and sync does not run.
+ */
+export const BACKDROPS: boolean = true
+
+/**
+ * The compact frame windows (Phase 3 design, section 9): below 800px the
+ * Home header, the sticky headers, the bottom bar and the drawer paint the
+ * backdrop inside themselves under the theme's glass (or, with the "Buttons"
+ * phone frame, the header buttons, the tab icons and the compose button
+ * do). Effective only with `BACKDROPS` on. `false` leaves compact screens
+ * stock (`FrameWindow` and `FrameLens` render nothing, the inner Home header
+ * row is sticky, the Home tab bar paints `t.atoms.bg`): the backdrop shows on
+ * desktop and tablet only.
+ */
+export const COMPACT_FRAME_WINDOWS: boolean = true
+
+/**
+ * Reading and writing the public appearance record
+ * (`app.nearhorizon.actor.appearance/self`) in the account's own repo.
+ * Guards Horizon code only. `false` keeps the appearance on this device only.
+ */
+export const APPEARANCE_SYNC: boolean = true

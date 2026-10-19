@@ -72,6 +72,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: the frosted drawer's window (Phase 3)
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
 const iconWidth = 26
 
@@ -324,6 +326,8 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     <View
       testID="drawer"
       style={[a.flex_1, a.border_r, t.atoms.bg, t.atoms.border_contrast_low]}>
+      {/* HORIZON: the frosted drawer, a window onto the backdrop (Phase 3, BD-17) */}
+      <FrameWindow kind="drawer" />
       <ScrollView
         style={[a.flex_1]}
         contentContainerStyle={[

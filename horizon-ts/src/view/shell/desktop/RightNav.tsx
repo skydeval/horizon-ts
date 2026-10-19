@@ -24,6 +24,8 @@ import {InlineLinkText} from '#/components/Link'
 import {ProgressGuideList} from '#/components/ProgressGuide/List'
 import {Text} from '#/components/Typography'
 import {SidebarLiveEventFeedsBanner} from '#/features/liveEvents/components/SidebarLiveEventFeedsBanner'
+// HORIZON: frosted rail cards over the backdrop (Phase 3)
+import {RailCard} from '#/horizon/backdrops/RailCard'
 
 function useWebQueryParams() {
   const navigation = useNavigation()
@@ -85,7 +87,12 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           maxHeight: '100vh',
         }),
       ]}>
-      {!isSearchScreen && <DesktopSearch />}
+      {/* HORIZON: the search card (Phase 3, BD-7) */}
+      {!isSearchScreen && (
+        <RailCard>
+          <DesktopSearch />
+        </RailCard>
+      )}
 
       {hasSession && (
         <>
@@ -97,42 +104,46 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
       {showExploreScreenDuplicatedContent && <SidebarLiveEventFeedsBanner />}
       {showExploreScreenDuplicatedContent && <SidebarTrendingTopics />}
 
-      <Text style={[a.leading_snug, t.atoms.text_contrast_low]}>
-        {hasSession && (
-          <>
-            <InlineLinkText
-              to={FEEDBACK_FORM_URL({
-                email: currentAccount?.email,
-                handle: currentAccount?.handle,
-              })}
-              style={[t.atoms.text_contrast_medium]}
-              label={_(msg`Feedback`)}>
-              {_(msg`Feedback`)}
-            </InlineLinkText>
-            <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
-          </>
-        )}
-        <InlineLinkText
-          to="https://bsky.social/about/support/privacy-policy"
-          style={[t.atoms.text_contrast_medium]}
-          label={_(msg`Privacy`)}>
-          {_(msg`Privacy`)}
-        </InlineLinkText>
-        <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
-        <InlineLinkText
-          to="https://bsky.social/about/support/tos"
-          style={[t.atoms.text_contrast_medium]}
-          label={_(msg`Terms`)}>
-          {_(msg`Terms`)}
-        </InlineLinkText>
-        <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
-        <InlineLinkText
-          label={_(msg`Help`)}
-          to={HELP_DESK_URL}
-          style={[t.atoms.text_contrast_medium]}>
-          {_(msg`Help`)}
-        </InlineLinkText>
-      </Text>
+      {/* HORIZON: start of the footer card (Phase 3, BD-8) */}
+      <RailCard>
+        <Text style={[a.leading_snug, t.atoms.text_contrast_low]}>
+          {hasSession && (
+            <>
+              <InlineLinkText
+                to={FEEDBACK_FORM_URL({
+                  email: currentAccount?.email,
+                  handle: currentAccount?.handle,
+                })}
+                style={[t.atoms.text_contrast_medium]}
+                label={_(msg`Feedback`)}>
+                {_(msg`Feedback`)}
+              </InlineLinkText>
+              <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
+            </>
+          )}
+          <InlineLinkText
+            to="https://bsky.social/about/support/privacy-policy"
+            style={[t.atoms.text_contrast_medium]}
+            label={_(msg`Privacy`)}>
+            {_(msg`Privacy`)}
+          </InlineLinkText>
+          <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
+          <InlineLinkText
+            to="https://bsky.social/about/support/tos"
+            style={[t.atoms.text_contrast_medium]}
+            label={_(msg`Terms`)}>
+            {_(msg`Terms`)}
+          </InlineLinkText>
+          <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
+          <InlineLinkText
+            label={_(msg`Help`)}
+            to={HELP_DESK_URL}
+            style={[t.atoms.text_contrast_medium]}>
+            {_(msg`Help`)}
+          </InlineLinkText>
+        </Text>
+        {/* HORIZON: end of the footer card (Phase 3, BD-8) */}
+      </RailCard>
 
       {logoVariant === 'kawaii' && (
         <Text style={[t.atoms.text_contrast_medium, {marginTop: 12}]}>

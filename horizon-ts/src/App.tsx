@@ -86,6 +86,8 @@ import {
   Provider as LiveEventsProvider,
 } from '#/features/liveEvents/context'
 import * as Geo from '#/geolocation'
+// HORIZON: the appearance record's sync on native (Phase 3, BD-22)
+import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {Splash} from '#/Splash'
 
 void identifyDevice(getDeviceId(), setupDeviceId)
@@ -184,6 +186,8 @@ function InnerApp() {
                                                                 <TestCtrls />
                                                                 <Shell />
                                                                 <ToastOutlet />
+                                                                {/* HORIZON: the appearance record's sync (Phase 3, BD-22) */}
+                                                                <AppearanceSync />
                                                               </TranslateOnDeviceProvider>
                                                             </IntentDialogProvider>
                                                           </GlobalGestureEventsProvider>

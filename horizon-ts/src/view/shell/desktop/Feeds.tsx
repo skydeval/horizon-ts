@@ -19,6 +19,8 @@ import {PlusSmall_Stroke2_Corner0_Rounded as Plus} from '#/components/icons/Plus
 import {Link} from '#/components/Link'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: the feeds card over the backdrop (Phase 3)
+import {RailCard} from '#/horizon/backdrops/RailCard'
 
 export function DesktopFeeds() {
   const t = useTheme()
@@ -37,7 +39,8 @@ export function DesktopFeeds() {
 
   if (isLoading) {
     return (
-      <View style={[{gap: 10}]}>
+      // HORIZON: the loading view as a rail card (Phase 3, BD-9)
+      <RailCard style={[{gap: 10}]}>
         {Array(5)
           .fill(0)
           .map((_, i) => (
@@ -53,7 +56,8 @@ export function DesktopFeeds() {
               ]}
             />
           ))}
-      </View>
+        {/* HORIZON: end of the loading card (Phase 3, BD-9) */}
+      </RailCard>
     )
   }
 
@@ -62,7 +66,8 @@ export function DesktopFeeds() {
   }
 
   return (
-    <View
+    // HORIZON: the list view as a rail card (Phase 3, BD-9)
+    <RailCard
       style={[
         a.flex_1,
         web({
@@ -155,7 +160,8 @@ export function DesktopFeeds() {
           )
         }}
       </Link>
-    </View>
+      {/* HORIZON: end of the feeds card (Phase 3, BD-9) */}
+    </RailCard>
   )
 }
 

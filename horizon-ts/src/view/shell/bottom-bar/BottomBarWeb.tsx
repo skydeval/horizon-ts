@@ -47,6 +47,10 @@ import {Text} from '#/components/Typography'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
+// HORIZON: the tab icon lenses (Phase 3)
+import {FrameLens} from '#/horizon/backdrops/FrameLens'
+// HORIZON: the bottom bar's compact frame window (Phase 3)
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {styles} from './BottomBarStyles'
 
 type NavItemValue = 'home' | 'search' | 'chat' | 'notifications' | 'profile'
@@ -102,6 +106,8 @@ export function BottomBarWeb() {
           footerMinimalShellTransform,
         ]}
         onLayout={event => footerHeight.set(event.nativeEvent.layout.height)}>
+        {/* HORIZON: the bottom bar as a window (Phase 3, BD-16) */}
+        <FrameWindow kind="bottomBar" />
         {hasSession ? (
           <>
             <NavItem
@@ -330,6 +336,8 @@ const NavItem: React.FC<{
       accessible={true}
       onBeforePress={onBeforePress}
       onLongPress={onLongPress}>
+      {/* HORIZON: a lens behind the tab icon (Phase 3, BD-19) */}
+      <FrameLens kind="tab" />
       {children({isActive})}
       {notificationCount ? (
         <View

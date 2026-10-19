@@ -59,6 +59,8 @@ import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: the native bottom bar's compact frame window (Phase 3)
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {useDemoMode} from '#/storage/hooks/demo-mode'
 import {styles} from './BottomBarStyles'
 
@@ -177,6 +179,8 @@ export function BottomBar({navigation}: BottomTabBarProps) {
         onLayout={e => {
           footerHeight.set(e.nativeEvent.layout.height)
         }}>
+        {/* HORIZON: the bottom bar as a window (Phase 3, BD-23) */}
+        <FrameWindow kind="bottomBar" />
         {hasSession ? (
           <>
             <Btn

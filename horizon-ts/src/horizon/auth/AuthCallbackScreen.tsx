@@ -17,7 +17,7 @@ import {logger} from '#/logger'
 import {useSession, useSessionApi} from '#/state/session'
 import {readLastActiveAccount} from '#/state/session/util'
 import {useLoggedOutViewControls} from '#/state/shell/logged-out'
-import {atoms as a} from '#/alf'
+import {atoms as a, useTheme} from '#/alf'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {
@@ -56,6 +56,7 @@ function replaceUrl(path: string) {
  * still has a session; otherwise the sign-in form opens with the error.
  */
 export function AuthCallbackScreen() {
+  const t = useTheme()
   const {t: l} = useLingui()
   const navigation = useNavigation<NavigationProp>()
   const {accounts} = useSession()
@@ -143,9 +144,17 @@ export function AuthCallbackScreen() {
     setShowLoggedOut,
   ])
 
+  // Opaque: this screen has no `Layout.Screen`, so no reading surface.
   return (
     <View
-      style={[a.flex_1, a.align_center, a.justify_center, a.gap_md, a.p_xl]}>
+      style={[
+        a.flex_1,
+        a.align_center,
+        a.justify_center,
+        a.gap_md,
+        a.p_xl,
+        t.atoms.bg,
+      ]}>
       <Loader size="xl" />
       <Text style={[a.text_md]}>
         <Trans>Signing in…</Trans>

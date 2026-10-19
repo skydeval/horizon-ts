@@ -315,6 +315,60 @@ released version yet; everything so far is under `[Unreleased]`.
       body (`cw blood` then `||it was a lot||`), so other apps show an
       ordinary spoiler instead of `||` on lines of their own; posts written
       the earlier way still read as before.
+- **Phase 3, backdrops and themes** (design: internal,
+  `docs/internal/design/phase-3-backdrops-themes.md`). Steps 3A to 3F:
+  desktop, tablet and phone web, with the native pieces built but not yet
+  verified.
+  - **Backdrops:** 1.0's 29 (None, 12 pride flags, 7 materials, 9 solids) in
+    1.0's order, plus a Custom colour, drawn as one soft diagonal gradient
+    from the top left to the bottom right of the window, behind the app, as
+    1.0 looked. The renderer now honours angles, positions, opacity and
+    tuning; 1.0's spec as written (angled, hard-edged stripes with the
+    bloom) can be tried by flipping one constant (`BACKDROP_LOOK`).
+  - **Themes are glass:** light, dim and dark stay the only themes. With a
+    backdrop, the reading column stays opaque in the theme's background, and
+    the left nav and each right-rail section (search, feeds, trending, the
+    footer links) sit on a translucent, blurred card with 16px corners in
+    the theme's tint. The card is just opaque enough for the grey rail text
+    to read at 4.5:1 over that backdrop, in every theme. At tablet width the
+    collapsed icon nav gets the same card. Buttons and accents keep their
+    colours. The Messages split view stays opaque.
+  - **Appearance > Backdrops,** after Dark theme: the selected backdrop's
+    name (the hovered one's on web), a grid of swatches with a ring on the
+    selected one, and a Custom chip. Custom opens the Custom Backdrop Color
+    card: Solid or Two-tone (pink to cyan by default), each colour with a
+    hex field, a swatch and R, G and B sliders, with the backdrop following
+    the sliders before Apply; 10 preset slots (tap to load, long-press to
+    save, "Hold to clear N"). Keyboard: Space or Enter selects a swatch;
+    Enter loads a preset and Shift+Enter saves it; Enter twice clears one.
+    In dim and dark the pale swatches are drawn stronger so they stay
+    distinguishable.
+  - **Saved to your account:** the choice, the custom colours and the
+    presets are a public record, `app.nearhorizon.actor.appearance/self`, in
+    the account's own repo on any PDS, so they follow you to other devices.
+    This device keeps a copy for an instant first paint. "Keep this
+    device's own backdrop" keeps a device to itself. If the PDS refuses the
+    record, the backdrop is kept on this device and a notice says so once.
+  - **Phones, below 800px:** the Home header with its feed tabs, the other
+    screens' top bars, the bottom tab bar and the slide-out drawer are
+    windows onto the same backdrop, lined up with each other as if one
+    gradient sat behind the whole screen, under the theme's glass so their
+    labels and icons stay readable. They stay lined up as the bars hide and
+    show on scroll, as the drawer slides in, and on navigation. Posts stay on
+    opaque ground. Bars inside dialogs stay as they were.
+  - **"Phone frame" (to compare, this device only):** Appearance offers Bars
+    (the windows above, the default) or Buttons, which keeps the bars opaque
+    and makes the five tab icons, the header buttons and the compose button
+    small windows onto the backdrop instead; the compose button then shows
+    the backdrop under a dark glass in place of its blue. The picker goes
+    away once one is chosen for everyone.
+  - **An inset reading card** for phones (the column drawn as a card 8px in
+    from each side, the backdrop around it) is built and kept off for now;
+    its "Reading card on small screens" toggle appears when it is switched
+    on.
+  - **iOS and Android:** the bottom bar, the Home header, the drawer, the
+    header buttons and the compose button paint the backdrop the same way.
+    Built, not yet tried on a device.
 
 ### Fixed
 

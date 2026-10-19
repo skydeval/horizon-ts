@@ -86,6 +86,7 @@ jest.mock('#/state/shell/logged-out', () => ({
 }))
 jest.mock('#/alf', () => ({
   atoms: new Proxy({}, {get: () => ({})}),
+  useTheme: () => ({atoms: {bg: {}}}),
 }))
 jest.mock('#/components/Loader', () => ({Loader: () => null}))
 jest.mock('#/components/Typography', () => ({Text: () => null}))

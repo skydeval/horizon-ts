@@ -4,6 +4,8 @@ import {type SharedValue} from 'react-native-reanimated'
 
 import {atoms as a, useBreakpoints, useTheme, web} from '#/alf'
 import {Text} from '#/components/Typography'
+// HORIZON: the Home tab bar over the header's window (Phase 3)
+import {horizonTabBarBg} from '#/horizon/backdrops/frame'
 import {PressableWithHover} from '../util/PressableWithHover'
 import {DraggableScrollView} from './DraggableScrollView'
 
@@ -38,6 +40,8 @@ export function TabBar({
   align = 'center',
   onSelect,
   onPressSelected,
+  // HORIZON: read on web for the Home header's window (Phase 3, BD-14)
+  transparent,
 }: TabBarProps) {
   const t = useTheme()
   const scrollElRef = useRef<React.ComponentRef<typeof ScrollView>>(null)
@@ -104,7 +108,8 @@ export function TabBar({
   return (
     <View
       testID={testID}
-      style={[t.atoms.bg, styles.outer]}
+      // HORIZON: transparent over the Home header's window (Phase 3, BD-14)
+      style={[horizonTabBarBg(t, transparent), styles.outer]}
       accessibilityRole="tablist">
       <DraggableScrollView
         testID={`${testID}-selector`}

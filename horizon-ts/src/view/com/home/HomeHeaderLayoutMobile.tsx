@@ -21,6 +21,12 @@ import * as Layout from '#/components/Layout'
 import {Link} from '#/components/Link'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_LIQUID_GLASS} from '#/env'
+// HORIZON: the inner row's sticky value under the window (Phase 3)
+import {horizonInnerHeaderSticky} from '#/horizon/backdrops/frame'
+// HORIZON: the feeds button lens (Phase 3)
+import {FrameLens} from '#/horizon/backdrops/FrameLens'
+// HORIZON: the Home header's compact frame window (Phase 3)
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
 export function HomeHeaderLayoutMobile({
   children,
@@ -53,7 +59,10 @@ export function HomeHeaderLayoutMobile({
         headerMinimalShellTransform,
       ]}
       onLayout={onLayout}>
-      <Layout.Header.Outer noBottomBorder>
+      {/* HORIZON: the logo row and feed tabs on one window (Phase 3, BD-12) */}
+      <FrameWindow kind="homeHeader" />
+      {/* HORIZON: not sticky, so the row shows the wrapper's window (Phase 3, BD-13) */}
+      <Layout.Header.Outer noBottomBorder sticky={horizonInnerHeaderSticky()}>
         <Layout.Header.Slot>
           <Layout.Header.MenuButton />
         </Layout.Header.Slot>
@@ -92,6 +101,8 @@ export function HomeHeaderLayoutMobile({
                 {marginRight: -Layout.BUTTON_VISUAL_ALIGNMENT_OFFSET},
                 a.bg_transparent,
               ]}>
+              {/* HORIZON: the feeds button as a lens (Phase 3, BD-20) */}
+              <FrameLens kind="headerButton" shape="square" />
               <ButtonIcon icon={FeedsIcon} size="lg" />
             </Link>
           )}

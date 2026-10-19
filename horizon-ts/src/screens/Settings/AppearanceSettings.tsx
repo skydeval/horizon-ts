@@ -23,6 +23,8 @@ import {TextSize_Stroke2_Corner0_Rounded as TextSize} from '#/components/icons/T
 import {TitleCase_Stroke2_Corner0_Rounded as Aa} from '#/components/icons/TitleCase'
 import * as Layout from '#/components/Layout'
 import {Text} from '#/components/Typography'
+// HORIZON: the Backdrops sections (Phase 3)
+import {HorizonAppearanceSections} from '#/horizon/appearance/settings/AppearanceSections'
 import * as SettingsList from './components/SettingsList'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'AppearanceSettings'>
@@ -118,6 +120,9 @@ export function AppearanceSettingsScreen({}: Props) {
                 />
               </Animated.View>
             )}
+
+            {/* HORIZON: Backdrops, after Dark theme and before Font (Phase 3, BD-11) */}
+            <HorizonAppearanceSections />
 
             <Animated.View layout={native(LinearTransition)}>
               <SettingsList.Divider />

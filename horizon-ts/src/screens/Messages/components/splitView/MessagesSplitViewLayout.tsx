@@ -16,6 +16,8 @@ import {CENTER_COLUMN_WIDTH, SCROLLBAR_OFFSET} from '#/components/Layout'
 import {LockScroll} from '#/components/LockScroll'
 import {useAgeAssurance} from '#/ageAssurance'
 import {IS_WEB} from '#/env'
+// HORIZON: an opaque split view over the backdrop (Phase 3)
+import {horizonOpaque} from '#/horizon/backdrops/nav'
 import {ChatList, Header as ChatListHeader} from '../../ChatList'
 import {SplitViewProvider} from './context'
 import {splitViewLeftScroll} from './leftColumnScroll'
@@ -98,6 +100,8 @@ function MessagesSplitViewLayoutInner({
         a.flex_1,
         a.flex_row,
         a.mx_auto,
+        // HORIZON: opaque across both columns (Phase 3, BD-5)
+        horizonOpaque(t),
         {maxWidth: containerWidth},
         {
           transform: [

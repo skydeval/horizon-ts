@@ -34,6 +34,9 @@ import {DataUnavailableScreen} from '#/ageAssurance/components/DataUnavailableSc
 import {NoAccessScreen} from '#/ageAssurance/components/NoAccessScreen'
 import {RedirectOverlay} from '#/ageAssurance/components/RedirectOverlay'
 import {PassiveAnalytics} from '#/analytics/PassiveAnalytics'
+// HORIZON: the backdrop behind the shell (Phase 3)
+import {BackdropLayer} from '#/horizon/backdrops/BackdropLayer'
+import {useShellBackdrop} from '#/horizon/backdrops/shell'
 import {FlatNavigator, RoutesContainer} from '#/Navigation'
 import {Composer} from './Composer'
 import {DrawerContent} from './Drawer'
@@ -160,8 +163,17 @@ export function Shell() {
   const t = useTheme()
   const aa = useAgeAssurance()
   const {currentAccount} = useSession()
+  // HORIZON: whether the backdrop is drawn (Phase 3, BD-1)
+  const horizonBackdrop = useShellBackdrop(currentAccount?.status)
   return (
-    <View style={[a.util_screen_outer, t.atoms.bg]}>
+    // HORIZON: a transparent root over the backdrop layer (Phase 3, BD-1)
+    <View
+      style={[
+        a.util_screen_outer,
+        horizonBackdrop.active ? a.bg_transparent : t.atoms.bg,
+      ]}>
+      {/* HORIZON: the backdrop layer, first child (Phase 3, BD-1) */}
+      <BackdropLayer active={horizonBackdrop.active} />
       {currentAccount?.status === 'takendown' ? (
         <Takendown />
       ) : currentAccount?.status === 'deactivated' ? (

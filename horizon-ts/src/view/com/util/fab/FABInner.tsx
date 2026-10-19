@@ -15,6 +15,8 @@ import {useMinimalShellFabTransform} from '#/lib/hooks/useMinimalShellTransform'
 import {clamp} from '#/lib/numbers'
 import {atoms as a, ios, useBreakpoints, useTheme} from '#/alf'
 import {IS_WEB} from '#/env'
+// HORIZON: the compose button lens (Phase 3)
+import {FrameLens} from '#/horizon/backdrops/FrameLens'
 
 /**
  * Minimum time between the press-in and release haptics on iOS, so a quick tap
@@ -79,6 +81,8 @@ export function FABInner({testID, icon, onPress, style, ...props}: FABProps) {
           style,
         ]}
         {...props}>
+        {/* HORIZON: the compose button as a lens (Phase 3, BD-21) */}
+        <FrameLens kind="fab" />
         {icon}
       </PressableScale>
     </Animated.View>

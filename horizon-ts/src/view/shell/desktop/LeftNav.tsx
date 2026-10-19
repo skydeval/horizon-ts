@@ -90,6 +90,8 @@ import {useAnalytics} from '#/analytics'
 import {type Events} from '#/analytics/metrics/types'
 import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: the frosted nav card over the backdrop (Phase 3)
+import {RailCard} from '#/horizon/backdrops/RailCard'
 import {type app} from '#/lexicons'
 import {router} from '#/routes'
 
@@ -668,131 +670,135 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
           ],
         },
       ]}>
-      {hasSession ? (
-        <ProfileCard minimal={leftNavMinimal} />
-      ) : !leftNavMinimal ? (
-        <View style={[a.pt_xl]}>
-          <NavSignupCard />
-        </View>
-      ) : null}
-      {hasSession && (
-        <>
-          <NavItem
-            label={l`Home`}
-            href="/"
-            navItem="home"
-            minimal={leftNavMinimal}
-            hasNew={hasHomeBadge && isFollowingV2HomeDotEnabled(ax)}
-            icons={{
-              inactive: HomeIcon,
-              active: HomeFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Explore`}
-            href="/search"
-            navItem="search"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: MagnifyingGlassIcon,
-              active: MagnifyingGlassFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Notifications`}
-            href="/notifications"
-            navItem="notifications"
-            minimal={leftNavMinimal}
-            count={numUnreadNotifications}
-            icons={{
-              inactive: BellIcon,
-              active: BellFilledIcon,
-            }}
-          />
-          {isAtmosphereExploreEnabled && (
+      {/* HORIZON: start of the nav card (Phase 3, BD-6) */}
+      <RailCard variant={leftNavMinimal ? 'navMinimal' : 'nav'}>
+        {hasSession ? (
+          <ProfileCard minimal={leftNavMinimal} />
+        ) : !leftNavMinimal ? (
+          <View style={[a.pt_xl]}>
+            <NavSignupCard />
+          </View>
+        ) : null}
+        {hasSession && (
+          <>
             <NavItem
-              label={l`Atmosphere`}
-              href="/atmosphere"
-              navItem="atmosphere"
+              label={l`Home`}
+              href="/"
+              navItem="home"
               minimal={leftNavMinimal}
-              beta
+              hasNew={hasHomeBadge && isFollowingV2HomeDotEnabled(ax)}
               icons={{
-                inactive: EarthIcon,
-                active: EarthIcon,
+                inactive: HomeIcon,
+                active: HomeFilledIcon,
               }}
             />
-          )}
-          <NavItem
-            label={l`Chat`}
-            href="/messages"
-            navItem="chat"
-            minimal={leftNavMinimal}
-            count={
-              aa.flags.chatDisabled ? undefined : numUnreadMessages.numUnread
-            }
-            hasNew={!aa.flags.chatDisabled && numUnreadMessages.hasNew}
-            icons={{
-              inactive: MessageIcon,
-              active: MessageFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Feeds`}
-            href="/feeds"
-            navItem="feeds"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: HashtagIcon,
-              active: HashtagFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Lists`}
-            href="/lists"
-            navItem="lists"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: ListIcon,
-              active: ListFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l({
-              message: 'Saved',
-              context: 'link to bookmarks screen',
-            })}
-            href="/saved"
-            navItem="saved"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: BookmarkIcon,
-              active: BookmarkFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Profile`}
-            href={makeProfileLink(currentAccount!)}
-            navItem="profile"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: UserCircleIcon,
-              active: UserCircleFilledIcon,
-            }}
-          />
-          <NavItem
-            label={l`Settings`}
-            href="/settings"
-            navItem="settings"
-            minimal={leftNavMinimal}
-            icons={{
-              inactive: SettingsIcon,
-              active: SettingsFilledIcon,
-            }}
-          />
+            <NavItem
+              label={l`Explore`}
+              href="/search"
+              navItem="search"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: MagnifyingGlassIcon,
+                active: MagnifyingGlassFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l`Notifications`}
+              href="/notifications"
+              navItem="notifications"
+              minimal={leftNavMinimal}
+              count={numUnreadNotifications}
+              icons={{
+                inactive: BellIcon,
+                active: BellFilledIcon,
+              }}
+            />
+            {isAtmosphereExploreEnabled && (
+              <NavItem
+                label={l`Atmosphere`}
+                href="/atmosphere"
+                navItem="atmosphere"
+                minimal={leftNavMinimal}
+                beta
+                icons={{
+                  inactive: EarthIcon,
+                  active: EarthIcon,
+                }}
+              />
+            )}
+            <NavItem
+              label={l`Chat`}
+              href="/messages"
+              navItem="chat"
+              minimal={leftNavMinimal}
+              count={
+                aa.flags.chatDisabled ? undefined : numUnreadMessages.numUnread
+              }
+              hasNew={!aa.flags.chatDisabled && numUnreadMessages.hasNew}
+              icons={{
+                inactive: MessageIcon,
+                active: MessageFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l`Feeds`}
+              href="/feeds"
+              navItem="feeds"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: HashtagIcon,
+                active: HashtagFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l`Lists`}
+              href="/lists"
+              navItem="lists"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: ListIcon,
+                active: ListFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l({
+                message: 'Saved',
+                context: 'link to bookmarks screen',
+              })}
+              href="/saved"
+              navItem="saved"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: BookmarkIcon,
+                active: BookmarkFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l`Profile`}
+              href={makeProfileLink(currentAccount!)}
+              navItem="profile"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: UserCircleIcon,
+                active: UserCircleFilledIcon,
+              }}
+            />
+            <NavItem
+              label={l`Settings`}
+              href="/settings"
+              navItem="settings"
+              minimal={leftNavMinimal}
+              icons={{
+                inactive: SettingsIcon,
+                active: SettingsFilledIcon,
+              }}
+            />
 
-          <ComposeBtn minimal={leftNavMinimal} />
-        </>
-      )}
+            <ComposeBtn minimal={leftNavMinimal} />
+          </>
+        )}
+        {/* HORIZON: end of the nav card (Phase 3, BD-6) */}
+      </RailCard>
     </View>
   )
 }

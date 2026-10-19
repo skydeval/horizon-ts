@@ -31,6 +31,10 @@ import {ScrollbarOffsetContext} from '#/components/Layout/context'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: the header's back and menu button lenses (Phase 3)
+import {FrameLens} from '#/horizon/backdrops/FrameLens'
+// HORIZON: the sticky header's compact frame window (Phase 3)
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
 const HEADER_BUTTON_HITSLOP = {top: 30, bottom: 10, left: 30, right: 30}
 
@@ -77,6 +81,8 @@ export function Outer({
             ],
           },
       ]}>
+      {/* HORIZON: a sticky header below 800px is a window (Phase 3, BD-15) */}
+      <FrameWindow kind="header" enabled={sticky} />
       {children}
     </View>
   )
@@ -144,6 +150,8 @@ export function BackButton({onPress, style, ...props}: Partial<ButtonProps>) {
           style,
         ]}
         {...props}>
+        {/* HORIZON: the back button as a lens (Phase 3, BD-20) */}
+        <FrameLens kind="headerButton" shape="round" />
         <ButtonIcon icon={ArrowLeft} size="lg" />
       </Button>
     </Slot>
@@ -176,6 +184,8 @@ export function MenuButton() {
           {marginLeft: -BUTTON_VISUAL_ALIGNMENT_OFFSET},
           a.bg_transparent,
         ]}>
+        {/* HORIZON: the menu button as a lens (Phase 3, BD-20) */}
+        <FrameLens kind="headerButton" shape="square" />
         <ButtonIcon icon={Menu} size="lg" />
       </Button>
     </Slot>

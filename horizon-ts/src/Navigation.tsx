@@ -146,6 +146,8 @@ import {HomeScreen} from '#/features/followingV2/home'
 import {InviteScannerScreen} from '#/features/inviteFriends'
 // HORIZON: the OAuth callback route
 import {AuthCallbackScreen} from '#/horizon/auth/AuthCallbackScreen'
+// HORIZON: transparent screens over the web backdrop (Phase 3)
+import {horizonContentStyle, horizonNavTheme} from '#/horizon/backdrops/nav'
 // HORIZON: private posting screens
 import {AudiencesSettingsScreen} from '#/horizon/private/audiences/AudiencesScreen'
 import {
@@ -718,7 +720,8 @@ function screenOptions(t: Theme) {
   return {
     fullScreenGestureEnabled: true,
     headerShown: false,
-    contentStyle: t.atoms.bg,
+    // HORIZON: transparent on web so the backdrop shows (Phase 3, BD-2)
+    contentStyle: horizonContentStyle(t),
   } as const
 }
 
@@ -951,7 +954,8 @@ function RoutesContainer({children}: React.PropsWithChildren<{}>) {
   const ax = useAnalytics()
   // eslint-disable-next-line react-compiler/react-compiler
   const notyLogger = ax.logger.useChild(ax.logger.Context.Notifications)
-  const theme = useColorSchemeStyle(DefaultTheme, DarkTheme)
+  // HORIZON: no navigation background over the web backdrop (Phase 3, BD-3)
+  const theme = horizonNavTheme(useColorSchemeStyle(DefaultTheme, DarkTheme))
   const {currentAccount, accounts} = useSession()
   const {onPressSwitchAccount} = useAccountSwitcher()
   const {setShowLoggedOut} = useLoggedOutViewControls()

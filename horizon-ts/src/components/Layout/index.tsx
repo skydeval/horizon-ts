@@ -30,6 +30,10 @@ import {
 } from '#/components/Layout/const'
 import {ScrollbarOffsetContext} from '#/components/Layout/context'
 import {IS_WEB} from '#/env'
+// HORIZON: the inset reading card's content gutter (Phase 3)
+import {useInsetReadingGutter} from '#/horizon/backdrops/inset'
+// HORIZON: the opaque reading surface over the backdrop (Phase 3)
+import {ReadingSurface} from '#/horizon/backdrops/ReadingSurface'
 
 export * from '#/components/Layout/const'
 export * as Header from '#/components/Layout/Header'
@@ -56,6 +60,8 @@ export const Screen = memo(function Screen({
 
   return (
     <>
+      {/* HORIZON: the reading surface, before the borders (Phase 3, BD-4) */}
+      <ReadingSurface />
       {IS_WEB && !isWithinSplitView && <WebCenterBorders />}
       <View
         style={[
@@ -147,6 +153,8 @@ export const Center = memo(function LayoutCenter({
   const {centerColumnOffset} = useLayoutBreakpoints()
   const {isWithinDialog} = useDialogContext()
   const {isWithinSplitView} = useIsWithinSplitView()
+  // HORIZON: the inset reading card's gutter (Phase 3, BD-18)
+  const horizonInset = useInsetReadingGutter()
   const ctx = useMemo(() => ({isWithinOffsetView: true}), [])
   return (
     <View
@@ -156,6 +164,11 @@ export const Center = memo(function LayoutCenter({
         gtMobile && {
           maxWidth: CENTER_COLUMN_WIDTH,
         },
+        // HORIZON: only the outermost Center pads (Phase 3, BD-18)
+        !isWithinOffsetView &&
+          !isWithinDialog &&
+          !isWithinSplitView &&
+          horizonInset,
         !isWithinOffsetView &&
           !isWithinSplitView && {
             transform: [
