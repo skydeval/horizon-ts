@@ -111,17 +111,15 @@ describe('glass (T7)', () => {
     )
   })
 
-  it('reduced transparency floors the alpha at 0.85 and drops the blur', () => {
+  it('reduced transparency floors the alpha at 0.85', () => {
     const trans = registryDef('pride.trans')!
     expect(glassFor(trans, 'light', true)).toEqual({
       color: 'rgba(255, 255, 255, 0.85)',
       alpha: 0.85,
-      blur: false,
     })
     expect(glassFor(trans, 'light', false)).toEqual({
       color: 'rgba(255, 255, 255, 0.55)',
       alpha: 0.55,
-      blur: true,
     })
     const ace = registryDef('pride.ace')!
     expect(glassFor(ace, 'dim', true).alpha).toBe(0.85)

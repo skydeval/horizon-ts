@@ -11,10 +11,30 @@ import {
   useAppearanceState,
   useEffectiveAppearance,
 } from '#/horizon/appearance/store'
+import {compileKey} from '#/horizon/backdrops/compile'
 import {resolveBackdrop} from '#/horizon/backdrops/registry'
 import {softnessAmount} from '#/horizon/backdrops/softness'
 import {type BackdropDef} from '#/horizon/backdrops/types'
 import {BACKDROPS} from '#/horizon/switches'
+
+/*
+ * One def object per compile key (performance fix 7d): the softened copy
+ * and a custom def are new objects on every read, so without this every
+ * render handed the painters a new def. Stable identity lets the React
+ * Compiler skip work and keeps the def-keyed caches warm.
+ */
+const stableDefs = new Map<string, BackdropDef>()
+
+/** The def's one shared instance for its compile key. */
+export function stableDef(def: BackdropDef): BackdropDef {
+  const key = compileKey(def)
+  const existing = stableDefs.get(key)
+  if (existing) return existing
+  // Custom previews add a key per slider step; keep the map small.
+  if (stableDefs.size >= 256) stableDefs.clear()
+  stableDefs.set(key, def)
+  return def
+}
 
 /** The active backdrop's def, or null when none is active. */
 export function useActiveBackdrop(): BackdropDef | null {
@@ -25,5 +45,5 @@ export function useActiveBackdrop(): BackdropDef | null {
   const def = resolveBackdrop(appearance)
   if (!def) return null
   const soften = softnessAmount(device.softness, t.name)
-  return soften > 0 ? {...def, soften} : def
+  return stableDef(soften > 0 ? {...def, soften} : def)
 }

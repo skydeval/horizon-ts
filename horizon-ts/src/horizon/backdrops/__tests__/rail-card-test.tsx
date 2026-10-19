@@ -30,19 +30,32 @@ jest.mock('#/horizon/appearance/device-store', () => ({
   writeDeviceJson: () => {},
   subscribeDeviceJson: () => () => {},
 }))
+// The web painter and frame, as the web bundle resolves them.
+jest.mock('#/horizon/backdrops/BackdropWindow', () =>
+  jest.requireActual('#/horizon/backdrops/BackdropWindow.web'),
+)
+jest.mock('#/horizon/backdrops/viewport', () => ({
+  useViewportFrame: () => ({width: 1440, height: 900}),
+}))
 
 const BORDER = themes.light.atoms.border_contrast_low.borderColor
 
 function rendered(variant?: 'rail' | 'nav' | 'navMinimal', style?: object) {
-  const {UNSAFE_getByType} = render(
+  const {UNSAFE_getAllByType} = render(
     <RailCard variant={variant} style={style}>
       <Text>child</Text>
     </RailCard>,
   )
-  return StyleSheet.flatten(UNSAFE_getByType(View).props.style) as Record<
+  return StyleSheet.flatten(UNSAFE_getAllByType(View)[0].props.style) as Record<
     string,
     unknown
   >
+}
+
+type Json = {
+  type: string
+  props: {style?: Record<string, unknown>}
+  children: (Json | string)[] | null
 }
 
 function ShellProbe({status}: {status?: string}) {
@@ -65,9 +78,10 @@ describe('RailCard (T17)', () => {
     expect(rendered('rail', {padding: 3})).toEqual({padding: 3})
   })
 
-  it('active: the rail card over a stock style, blurred at gtMobile', () => {
+  it('active: the rail card over a stock style, never blurred (7a)', () => {
     store.selectBackdrop(undefined, 'pride.trans')
-    expect(rendered('rail', {paddingTop: 2, gap: 2})).toEqual({
+    const style = rendered('rail', {paddingTop: 2, gap: 2})
+    expect(style).toEqual({
       gap: 2,
       paddingTop: 16,
       paddingRight: 16,
@@ -77,16 +91,46 @@ describe('RailCard (T17)', () => {
       borderWidth: 1,
       borderColor: BORDER,
       backgroundColor: 'rgba(255, 255, 255, 0.55)',
-      backdropFilter: 'blur(14px)',
-      WebkitBackdropFilter: 'blur(14px)',
     })
+    expect(style.backdropFilter).toBeUndefined()
+    expect(style.WebkitBackdropFilter).toBeUndefined()
     mockGtMobile = false
     expect(rendered('rail').backdropFilter).toBeUndefined()
   })
 
+  it('paints the backdrop into the card under the glass (7a)', () => {
+    store.selectBackdrop(undefined, 'pride.trans')
+    const json = render(
+      <RailCard>
+        <Text>child</Text>
+      </RailCard>,
+    ).toJSON() as Json
+    const [paint, child] = json.children as Json[]
+    // The web painter, first: clipped to the card inside its border.
+    expect(paint.type).toBe('div')
+    expect(paint.props.style).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      borderRadius: 15,
+      zIndex: -1,
+      overflow: 'hidden',
+    })
+    const [inner, glass] = paint.children as Json[]
+    expect(String(inner.props.style?.backgroundImage)).toMatch(
+      /^linear-gradient\(/,
+    )
+    expect(String(glass.props.style?.backgroundImage)).toBe(
+      'linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55))',
+    )
+    expect(child.type).toBe('Text')
+  })
+
   it('the nav variants keep the stock content width', () => {
     const ace = registryDef('pride.ace')!
-    const opts = {borderColor: BORDER, gtMobile: true, reduced: false}
+    const opts = {borderColor: BORDER, reduced: false}
     expect(railCardStyle('nav', ace, 'light', opts).style).toEqual({
       marginLeft: -9,
       marginRight: -9,
@@ -108,22 +152,14 @@ describe('RailCard (T17)', () => {
     })
   })
 
-  it('blur only at gtMobile; reduced transparency: 0.85 and no blur', () => {
+  it('reduced transparency: the glass at 0.85', () => {
     const trans = registryDef('pride.trans')!
-    const base = {borderColor: BORDER, reduced: false}
-    expect(
-      railCardStyle('rail', trans, 'light', {...base, gtMobile: true}).blur,
-    ).toBe(true)
-    expect(
-      railCardStyle('rail', trans, 'light', {...base, gtMobile: false}).blur,
-    ).toBe(false)
     const reduced = railCardStyle('rail', trans, 'light', {
       borderColor: BORDER,
-      gtMobile: true,
       reduced: true,
     })
-    expect(reduced.blur).toBe(false)
     expect(reduced.style.backgroundColor).toBe('rgba(255, 255, 255, 0.85)')
+    expect(reduced.glass).toBe('rgba(255, 255, 255, 0.85)')
   })
 })
 

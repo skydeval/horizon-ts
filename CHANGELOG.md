@@ -328,9 +328,10 @@ released version yet; everything so far is under `[Unreleased]`.
   - **Themes are glass:** light, dim and dark stay the only themes. With a
     backdrop, the reading column stays opaque in the theme's background, and
     the left nav and each right-rail section (search, feeds, trending, the
-    footer links) sit on a translucent, blurred card with 16px corners in
-    the theme's tint. The card is just opaque enough for the grey rail text
-    to read at 4.5:1 over that backdrop, in every theme. At tablet width the
+    footer links) sit on a frosted card with 16px corners: the backdrop
+    painted into the card under the theme's tint. The card is just opaque
+    enough for the grey rail text to read at 4.5:1 over that backdrop, in
+    every theme. At tablet width the
     collapsed icon nav gets the same card. Buttons and accents keep their
     colours. The Messages split view stays opaque.
   - **Appearance > Backdrops,** after Dark theme: the selected backdrop's
@@ -352,17 +353,24 @@ released version yet; everything so far is under `[Unreleased]`.
   - **Phones, below 800px:** the Home header with its feed tabs, the other
     screens' top bars, the bottom tab bar and the slide-out drawer are
     windows onto the same backdrop, lined up with each other as if one
-    gradient sat behind the whole screen, under the theme's glass so their
-    labels and icons stay readable. They stay lined up as the bars hide and
-    show on scroll, as the drawer slides in, and on navigation. Posts stay on
-    opaque ground. Bars inside dialogs stay as they were.
+    gradient sat behind the whole screen. The bars show the backdrop edge to
+    edge with no glass, its colours as pure as in Gutter's margins (with the
+    softness of dim and dark when it is on); each thing written on them (a
+    tab icon, a header button, the back arrow, the title, a Home feed tab,
+    the logo) sits on a small soft oblong of shade, just dark or light
+    enough for it to read at 3:1 over the part of the backdrop that bar
+    shows. The drawer stays frosted, under the theme's tint. They stay lined
+    up as the bars hide and show on scroll, as the drawer slides in, and on
+    navigation. Posts stay on opaque ground. Bars inside dialogs stay as
+    they were.
   - **"Phone frame" (to compare, this device only):** Appearance offers
     five styles, with a line under the picker saying what the chosen one
-    does. **Bars** (the default): the windows above. **Edges:** plain bars
+    does. **Bars** (the default): the bare windows above. **Edges:** plain bars
     with a thin strip of backdrop along the top bar's bottom edge and the
     tab bar's top edge. **Gutter:** plain bars, and the reading column drawn
     as a card 8px in from each side with the backdrop in the margins.
-    **Header:** only the top bars are windows; the tab bar is plain.
+    **Header:** only the top bars are windows, under the theme's glass; the
+    tab bar is plain.
     **Buttons:** plain bars, and the five tab icons, the header buttons and
     the compose button are small windows onto the backdrop, each icon on a
     small soft backing just dark or light enough to read (the compose button
@@ -378,9 +386,19 @@ released version yet; everything so far is under `[Unreleased]`.
     colour) to 100; they apply on this device only, to the window backdrop,
     the cards, bars and buttons alike, and the cards' glass still keeps the
     grey rail text at 4.5:1 over the softened colours.
+  - **Smoother scrolling with a backdrop:** nothing is blurred live any
+    more (the rail and nav cards paint the backdrop instead); the phone bars
+    follow the page with one shared tracker that measures once per frame
+    and moves each bar's backdrop without repainting it, only while
+    something moves, and not for screens out of view; the full-screen
+    backdrop is promoted to its own layer, and on phones it is not drawn
+    at all where the bars paint their own (every style but Gutter); and a
+    backdrop is worked out once per theme, softness and window size. The
+    look is unchanged.
   - **iOS and Android:** the bottom bar, the Home header, the drawer, the
-    header buttons and the compose button paint the backdrop the same way.
-    Built, not yet tried on a device.
+    header buttons and the compose button paint the backdrop the same way
+    (under the theme's glass with Bars, whose bare bars are web only for
+    now). Built, not yet tried on a device.
 
 ### Fixed
 

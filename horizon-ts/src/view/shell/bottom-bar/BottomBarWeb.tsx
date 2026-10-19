@@ -47,7 +47,9 @@ import {Text} from '#/components/Typography'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
-// HORIZON: the tab icon lenses (Phase 3)
+// HORIZON: the signed-out logo group's shade on a Bars window (Phase 3)
+import {BarShade} from '#/horizon/backdrops/BarShade'
+// HORIZON: the tab icon lenses and, with Bars, the tab shades (Phase 3)
 import {FrameLens} from '#/horizon/backdrops/FrameLens'
 // HORIZON: the bottom bar's compact frame window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
@@ -242,6 +244,8 @@ export function BottomBarWeb() {
                 },
               ]}>
               <View style={[a.flex_row, a.align_center, a.gap_md]}>
+                {/* HORIZON: the logo group's shade on a Bars window (Phase 3) */}
+                <BarShade kind="brand" />
                 <Logo allowVariants={false} width={32} />
                 <View style={{paddingTop: 4}}>
                   <Logotype width={80} fill={t.atoms.text.color} />

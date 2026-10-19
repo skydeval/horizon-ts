@@ -9,18 +9,28 @@
 import {type Theme} from '#/alf'
 import {themes} from '#/alf/themes'
 import {IS_WEB} from '#/env'
-import {hexToRgb, type RGB} from '#/horizon/backdrops/compile'
+import {
+  compileBackdrop,
+  type Frame,
+  hexToRgb,
+  type RGB,
+} from '#/horizon/backdrops/compile'
 import {type DiscOverlay, type Overlay} from '#/horizon/backdrops/css'
 import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {
   backdropKey,
   colorsUnderGlass,
+  composite,
+  contrast,
+  FULL_RANGE,
   GLASS,
   glassFor,
+  type GradientRange,
   MAX_GLASS_ALPHA,
   prefersReducedTransparency,
   REDUCED_TRANSPARENCY_ALPHA,
   rgba,
+  sampledColors,
   smallestAlpha,
 } from '#/horizon/backdrops/glass'
 import {BACKDROP_LOOK} from '#/horizon/backdrops/look'
@@ -36,11 +46,13 @@ export type WindowKind = 'homeHeader' | 'header' | 'bottomBar' | 'drawer'
 export type LensKind = 'tab' | 'headerButton' | 'fab'
 
 /**
- * How a window is drawn: `full` covers the piece under the glass; `edge` is
- * the slim band of the Edges frame, along the header's bottom edge or the
+ * How a window is drawn: `full` covers the piece under the glass; `bare`
+ * covers it with no glass at all, the piece's buttons, title and tabs each
+ * on a small shade (`BarShade`, the Bars frame, batch A); `edge` is the
+ * slim band of the Edges frame, along the header's bottom edge or the
  * bottom bar's top edge, with no glass (nothing is written on it).
  */
-export type WindowMode = 'full' | 'edge'
+export type WindowMode = 'full' | 'bare' | 'edge'
 
 /**
  * Where a window or a lens sits inside its piece, absolutely positioned.
@@ -129,7 +141,7 @@ const WINDOW_MODES: Record<
   FrameStyle,
   Partial<Record<WindowKind, WindowMode>>
 > = {
-  bars: {homeHeader: 'full', header: 'full', bottomBar: 'full', drawer: 'full'},
+  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'full'},
   edges: {
     homeHeader: 'edge',
     header: 'edge',
@@ -146,7 +158,8 @@ const WINDOW_MODES: Record<
  * active, the frame style draws this piece, the piece is not inside a
  * dialog and is enabled, and a sticky header only below 800px (at 800 and
  * up it is part of the opaque column). The header window is web only:
- * `Layout.Header.Outer` is sticky only on web (9.8).
+ * `Layout.Header.Outer` is sticky only on web (9.8). A `bare` window is
+ * web only too: its shades need CSS, so native keeps the glass.
  */
 export function windowMode({
   def,
@@ -169,6 +182,7 @@ export function windowMode({
   if (isWithinDialog || !enabled) return null
   const mode = WINDOW_MODES[frameStyle][kind] ?? null
   if (mode && kind === 'header' && !(web && !gtMobile)) return null
+  if (mode === 'bare' && !web) return 'full'
   return mode
 }
 
@@ -204,7 +218,8 @@ export function lensActive({
 /**
  * A window's overlays, top first: for a full window the theme's glass tint
  * at the adaptive alpha (7.3, with the reduced-transparency floor); none
- * for the Edges band, which carries no text.
+ * for the Edges band, which carries no text, and none for a bare window,
+ * whose items carry their own shades.
  */
 export function windowOverlays(
   def: BackdropDef,
@@ -212,7 +227,7 @@ export function windowOverlays(
   mode: WindowMode = 'full',
   reduced: boolean = prefersReducedTransparency(),
 ): Overlay[] {
-  return mode === 'edge' ? [] : [glassFor(def, theme, reduced).color]
+  return mode === 'full' ? [glassFor(def, theme, reduced).color] : []
 }
 
 /*
@@ -308,6 +323,300 @@ export function lensOverlays(
       ...LENS_BACKING[kind],
     },
   ]
+}
+
+/*
+ * Bar shades (the Bars frame, batch A). A bare window shows the backdrop
+ * with no glass, edge to edge, as Gutter's margins do; each thing written
+ * on it (a bottom tab, a header button, the title, a Home feed tab, the
+ * logo) gets a small soft oblong of the theme's tint under it instead, at
+ * the smallest alpha that gives the item's own colour 3:1 over the
+ * backdrop, as the lens backing does.
+ *
+ * The window sets each kind's colour as a CSS custom property on its piece
+ * (`barShadeVars`), and a shade paints `var(...)`: a shade inherits a
+ * colour only inside a bare window, so the same header row elsewhere (a
+ * non-sticky header, a header in the opaque column, a dialog) draws
+ * nothing, with no React state to keep in step.
+ */
+
+/** What a shade sits under. */
+export type ShadeKind =
+  'tab' | 'button' | 'title' | 'subtitle' | 'label' | 'logo' | 'brand'
+
+/** Every shade kind. */
+export const SHADE_KINDS: readonly ShadeKind[] = [
+  'tab',
+  'button',
+  'title',
+  'subtitle',
+  'label',
+  'logo',
+  'brand',
+]
+
+/** WCAG 1.4.11's 3:1, as skydeval asked for the bar items. */
+export const SHADE_TARGET = 3
+
+/**
+ * A shade's box inside its positioned parent (pixels; negative insets reach
+ * past the parent's box) and its soft edge.
+ */
+export type ShadeShape = {
+  top?: number
+  right?: number
+  bottom?: number
+  left?: number | `${number}%`
+  width?: number
+  height?: number
+  marginLeft?: number
+  /** The tint fades to nothing over this many pixels at the left and right. */
+  fadeX: number
+  /** The same at the top and bottom. */
+  fadeY: number
+}
+
+/**
+ * Each kind's shade: an oblong whose solid middle covers the item and
+ * whose wide soft ends reach past it. The tab one is centred on the 26px
+ * tab icon (its centre 26px down, as the tab lens); the header buttons'
+ * on the 34px button, the logo's on the logo. The text kinds fill their
+ * text's box, which `TEXT_SHADE_PADDING` grows by the fades without moving
+ * the text; the Home feed tab's follows its label (`BarShade.web.tsx`).
+ */
+export const SHADE_SHAPES: Record<ShadeKind, ShadeShape> = {
+  tab: {
+    top: 6,
+    left: '50%',
+    marginLeft: -26,
+    width: 52,
+    height: 40,
+    fadeX: 12,
+    fadeY: 9,
+  },
+  button: {top: -3, right: -6, bottom: -3, left: -6, fadeX: 11, fadeY: 9},
+  title: {top: 0, right: 0, bottom: 0, left: 0, fadeX: 12, fadeY: 6},
+  subtitle: {top: 0, right: 0, bottom: 0, left: 0, fadeX: 12, fadeY: 6},
+  label: {top: 0, left: 0, width: 0, height: 0, fadeX: 12, fadeY: 6},
+  logo: {top: -7, right: -10, bottom: -7, left: -10, fadeX: 10, fadeY: 7},
+  brand: {top: -7, right: -10, bottom: -7, left: -10, fadeX: 10, fadeY: 7},
+}
+
+/** How far a text shade reaches past its text, each side: its fades. */
+export const TEXT_SHADE_PADDING = {horizontal: 12, vertical: 6}
+
+/** The CSS custom property that carries a kind's colour. */
+export function shadeVar(kind: ShadeKind): string {
+  return `--horizon-shade-${kind}`
+}
+
+/**
+ * The colours a kind's shade must keep readable: the bottom tab icons and
+ * the title use `t.atoms.text`; the header buttons are secondary ghost
+ * (`contrast_600`); the subtitle and an unselected Home feed tab use
+ * `text_contrast_medium`; the logo is `primary_500`, and the signed-out
+ * bar's logo group adds the logotype in `t.atoms.text`.
+ */
+export function shadeItemColors(theme: ThemeName, kind: ShadeKind): RGB[] {
+  const t = themes[theme]
+  const text = hexToRgb(t.atoms.text.color)
+  const medium = hexToRgb(t.atoms.text_contrast_medium.color)
+  const logo = hexToRgb(t.palette.primary_500)
+  switch (kind) {
+    case 'tab':
+    case 'title':
+      return [text]
+    case 'button':
+      return [hexToRgb(t.palette.contrast_600)]
+    case 'subtitle':
+      return [medium]
+    case 'label':
+      return [medium, text]
+    case 'logo':
+      return [logo]
+    case 'brand':
+      return [logo, text]
+  }
+}
+
+/** The step a window's gradient range is widened to. */
+const RANGE_STEP = 0.02
+
+/** A window's box in the viewport. */
+export type WindowBox = {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+/**
+ * The part of the backdrop's first linear layer a window at `box` sees: the
+ * positions along the gradient line of its four corners, widened to the
+ * next `RANGE_STEP` (so a bar sliding a few pixels keeps its value) and
+ * clamped to the line. A bar only ever shows its strip of the gradient,
+ * which is often far from the backdrop's palest or darkest colour.
+ */
+export function windowRange(
+  def: BackdropDef,
+  theme: ThemeName,
+  frame: Frame,
+  box: WindowBox,
+): GradientRange {
+  const compiled = compileBackdrop(def, theme, frame)
+  const layer = compiled?.layers.find(l => l.kind === 'linear')
+  if (!layer || layer.kind !== 'linear') return FULL_RANGE
+  const dx = layer.x2 - layer.x1
+  const dy = layer.y2 - layer.y1
+  const length = dx * dx + dy * dy
+  if (length === 0) return FULL_RANGE
+  const at = (x: number, y: number) =>
+    ((x - layer.x1) * dx + (y - layer.y1) * dy) / length
+  const right = box.left + box.width
+  const bottom = box.top + box.height
+  const ts = [
+    at(box.left, box.top),
+    at(right, box.top),
+    at(box.left, bottom),
+    at(right, bottom),
+  ]
+  const from = Math.max(
+    0,
+    Math.floor(Math.min(...ts) / RANGE_STEP) * RANGE_STEP,
+  )
+  const to = Math.min(1, Math.ceil(Math.max(...ts) / RANGE_STEP) * RANGE_STEP)
+  return [Number(from.toFixed(2)), Number(to.toFixed(2))]
+}
+
+const shadeCache = new Map<string, number>()
+
+/**
+ * A shade's alpha: the smallest from 0 at which the theme's tint gives each
+ * of the kind's colours 3:1 over every colour of the backdrop in `range`
+ * (the window's part of it; all of it by default). Before the
+ * reduced-transparency floor; memoised per def, theme, kind, range and
+ * look.
+ */
+export function shadeAlpha(
+  def: BackdropDef,
+  theme: ThemeName,
+  kind: ShadeKind,
+  range: GradientRange = FULL_RANGE,
+): number {
+  const key = `${backdropKey(def)}|${theme}|${kind}|${range[0]}-${range[1]}|${BACKDROP_LOOK}`
+  let alpha = shadeCache.get(key)
+  if (alpha === undefined) {
+    const under = sampledColors(def, theme, BACKDROP_LOOK, range)
+    const tint = GLASS[theme].tint
+    const items = shadeItemColors(theme, kind)
+    /*
+     * One search for all of the kind's colours: contrast is not monotonic
+     * in the alpha (a tint can pass through an item's own lightness), so
+     * the largest of each colour's own answer is not always an answer.
+     */
+    const top = Math.round(MAX_GLASS_ALPHA * 100)
+    alpha = MAX_GLASS_ALPHA
+    for (let step = 0; step <= top; step++) {
+      const a = step / 100
+      const ok = items.every(text =>
+        under.every(
+          color => contrast(composite(tint, color, a), text) >= SHADE_TARGET,
+        ),
+      )
+      if (ok) {
+        alpha = a
+        break
+      }
+    }
+    if (shadeCache.size >= 512) shadeCache.clear()
+    shadeCache.set(key, alpha)
+  }
+  return alpha
+}
+
+const shadeVarsCache = new Map<string, Record<string, string>>()
+
+/**
+ * The custom properties a bare window sets on its piece: each kind's tint
+ * at its alpha over the window's `range` of the backdrop (0.85 at least
+ * where the browser asks for reduced transparency). One object per def,
+ * theme, range and reduced flag, so a window rewrites them only when one
+ * changes.
+ */
+export function barShadeVars(
+  def: BackdropDef,
+  theme: ThemeName,
+  range: GradientRange = FULL_RANGE,
+  reduced: boolean = prefersReducedTransparency(),
+): Record<string, string> {
+  const key = `${backdropKey(def)}|${theme}|${range[0]}-${range[1]}|${reduced ? 1 : 0}|${BACKDROP_LOOK}`
+  let vars = shadeVarsCache.get(key)
+  if (!vars) {
+    const tint = GLASS[theme].tint
+    vars = {}
+    for (const kind of SHADE_KINDS) {
+      const alpha = shadeAlpha(def, theme, kind, range)
+      vars[shadeVar(kind)] = rgba(
+        tint,
+        reduced ? Math.max(alpha, REDUCED_TRANSPARENCY_ALPHA) : alpha,
+      )
+    }
+    if (shadeVarsCache.size >= 512) shadeVarsCache.clear()
+    shadeVarsCache.set(key, vars)
+  }
+  return vars
+}
+
+/**
+ * Whether a shade is rendered at all: web, a backdrop, the compact frame
+ * on, the Bars frame, not inside a dialog, and below 800px except for the
+ * signed-out bottom bar's logo group (that bar is a window up to 1300px).
+ * Where it renders outside a bare window it inherits no colour and draws
+ * nothing (a non-sticky header, say).
+ */
+export function barShadesOn({
+  def,
+  frameStyle,
+  kind,
+  gtMobile,
+  isWithinDialog,
+  web = IS_WEB,
+}: {
+  def: BackdropDef | null
+  frameStyle: FrameStyle
+  kind: ShadeKind
+  gtMobile: boolean
+  isWithinDialog: boolean
+  web?: boolean
+}): boolean {
+  return (
+    web &&
+    compactFrameOn() &&
+    def !== null &&
+    frameStyle === 'bars' &&
+    !isWithinDialog &&
+    (kind === 'brand' || !gtMobile)
+  )
+}
+
+/*
+ * The fixed layer below 800px (performance fix 7c). There the reading
+ * surface is opaque and covers the viewport, and every window and lens
+ * paints its own backdrop, so the full-screen layer is never seen; only
+ * Gutter's margins show it. Not drawing it saves a full-screen layer
+ * composited under a transparent scroller on every frame.
+ */
+
+/** Whether the fixed backdrop layer is drawn. */
+export function fixedLayerDrawn({
+  frameStyle,
+  gtMobile,
+}: {
+  frameStyle: FrameStyle
+  gtMobile: boolean
+}): boolean {
+  if (gtMobile || !compactFrameOn()) return true
+  return frameStyle === 'gutter'
 }
 
 /**

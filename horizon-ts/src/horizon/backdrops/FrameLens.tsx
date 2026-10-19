@@ -8,7 +8,9 @@
  * untinted, with only a small backing disc behind the icon where the icon
  * needs it for 3:1 (live fix batch 1, `lensOverlays`). Renders nothing
  * unless a backdrop is active, `COMPACT_FRAME_WINDOWS` is on, the phone
- * frame is "Buttons" and the button is not inside a dialog (`lensActive`).
+ * frame is "Buttons" and the button is not inside a dialog (`lensActive`);
+ * with Bars, a bottom tab's lens place draws the tab's shade (`BarShade`,
+ * batch A), so the tab bar needs no second hook.
  */
 
 import {atoms as a, useBreakpoints, useTheme} from '#/alf'
@@ -16,6 +18,7 @@ import {useDialogContext} from '#/components/Dialog/context'
 import {useAppearanceState} from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {BackdropWindow} from '#/horizon/backdrops/BackdropWindow'
+import {BarShade} from '#/horizon/backdrops/BarShade'
 import {
   FILL_SHAPE,
   lensActive,
@@ -61,7 +64,8 @@ export function FrameLens({
       isWithinDialog,
     })
   ) {
-    return null
+    // With Bars, a bottom tab's place holds its shade instead (batch A).
+    return kind === 'tab' ? <BarShade kind="tab" /> : null
   }
   return (
     <BackdropWindow

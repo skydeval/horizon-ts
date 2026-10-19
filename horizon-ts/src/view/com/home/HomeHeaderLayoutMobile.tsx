@@ -21,6 +21,8 @@ import * as Layout from '#/components/Layout'
 import {Link} from '#/components/Link'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_LIQUID_GLASS} from '#/env'
+// HORIZON: the logo's shade on a Bars window (Phase 3)
+import {BarShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the inner row's sticky value under the window (Phase 3)
 import {horizonInnerHeaderSticky} from '#/horizon/backdrops/frame'
 // HORIZON: the feeds button lens (Phase 3)
@@ -78,6 +80,8 @@ export function HomeHeaderLayoutMobile({
                 emitSoftReset()
               }
             }}>
+            {/* HORIZON: the logo's shade on a Bars window (Phase 3) */}
+            <BarShade kind="logo" />
             <Logo width={30} />
           </PressableScale>
         </View>

@@ -16,8 +16,12 @@ export const MAX_GLASS_ALPHA = 0.92
 /** The alpha floor where the browser asks for reduced transparency. */
 export const REDUCED_TRANSPARENCY_ALPHA = 0.85
 
-/** The rail and nav cards' blur, in pixels (>= 800px wide only). */
-export const GLASS_BLUR = 14
+/*
+ * Nothing is blurred any more (performance fix 7a): the rail and nav cards
+ * paint the backdrop into themselves under the glass instead. A live
+ * `backdrop-filter` over a full-screen or scroll-overlapping area is what
+ * made 1.0 lag; do not add one back.
+ */
 
 /*
  * Live fix batch 1: the dark theme's black veil (0.18) is gone. Dim and dark
@@ -97,34 +101,70 @@ export function contrast(x: RGB, y: RGB) {
 /** The number of samples between two adjacent stops. */
 const BETWEEN = 16
 
+/** A part of a gradient line, 0 at its start and 1 at its end. */
+export type GradientRange = readonly [number, number]
+
+/** The whole gradient line. */
+export const FULL_RANGE: GradientRange = [0, 1]
+
+function lerp(a: RGB, b: RGB, f: number): RGB {
+  return {
+    r: Math.round(a.r + (b.r - a.r) * f),
+    g: Math.round(a.g + (b.g - a.g) * f),
+    b: Math.round(a.b + (b.b - a.b) * f),
+  }
+}
+
 /**
  * The colours of the def's first linear layer, compiled for the theme and
  * sampled at each stop and at 16 evenly spaced points between adjacent
- * stops.
+ * stops. With a `range` (a window's part of the gradient line, batch A),
+ * only the samples inside it, plus the colours at its two ends.
  */
 export function sampledColors(
   def: BackdropDef,
   theme: ThemeName,
   look: BackdropLook = BACKDROP_LOOK,
+  range: GradientRange = FULL_RANGE,
 ): RGB[] {
   const compiled = compileBackdrop(def, theme, {width: 1, height: 1}, look)
   if (!compiled) return []
   const layer = compiled.layers.find(l => l.kind === 'linear')
   if (!layer) return []
+  const [from, to] = range
+  const whole = from <= 0 && to >= 1
+  const inside = (pos: number) => whole || (pos >= from && pos <= to)
   const out: RGB[] = []
-  layer.stops.forEach((stop, i) => {
-    out.push({r: stop.r, g: stop.g, b: stop.b})
-    const next = layer.stops[i + 1]
+  const stops = layer.stops
+  stops.forEach((stop, i) => {
+    if (inside(stop.pos)) out.push({r: stop.r, g: stop.g, b: stop.b})
+    const next = stops[i + 1]
     if (!next) return
     for (let k = 1; k <= BETWEEN; k++) {
       const f = k / (BETWEEN + 1)
-      out.push({
-        r: Math.round(stop.r + (next.r - stop.r) * f),
-        g: Math.round(stop.g + (next.g - stop.g) * f),
-        b: Math.round(stop.b + (next.b - stop.b) * f),
-      })
+      if (inside(stop.pos + (next.pos - stop.pos) * f)) {
+        out.push(lerp(stop, next, f))
+      }
     }
   })
+  if (!whole) {
+    // The colours at the range's ends, where they fall between samples.
+    for (const pos of [from, to]) {
+      const i = stops.findIndex(
+        (stop, j) => j + 1 < stops.length && pos <= stops[j + 1].pos,
+      )
+      if (i < 0) {
+        const last = stops[stops.length - 1]
+        out.push({r: last.r, g: last.g, b: last.b})
+        continue
+      }
+      const a = stops[i]
+      const b = stops[i + 1]
+      const span = b.pos - a.pos
+      const f = span > 0 ? Math.min(1, Math.max(0, (pos - a.pos) / span)) : 0
+      out.push(lerp(a, b, f))
+    }
+  }
   return out
 }
 
@@ -214,16 +254,15 @@ export function prefersReducedTransparency(): boolean {
 }
 
 /**
- * The glass to draw for a def and a theme: the tint as CSS colour, its
- * alpha (raised to 0.85 under reduced transparency) and whether blur is
- * allowed (not under reduced transparency).
+ * The glass to draw for a def and a theme: the tint as CSS colour and its
+ * alpha (raised to 0.85 under reduced transparency).
  */
 export function glassFor(
   def: BackdropDef,
   theme: ThemeName,
   reduced: boolean = prefersReducedTransparency(),
-): {color: string; alpha: number; blur: boolean} {
+): {color: string; alpha: number} {
   const base = glassAlpha(def, theme)
   const alpha = reduced ? Math.max(base, REDUCED_TRANSPARENCY_ALPHA) : base
-  return {color: rgba(GLASS[theme].tint, alpha), alpha, blur: !reduced}
+  return {color: rgba(GLASS[theme].tint, alpha), alpha}
 }

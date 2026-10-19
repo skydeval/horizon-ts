@@ -31,6 +31,8 @@ import {ScrollbarOffsetContext} from '#/components/Layout/context'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: shades under the header's buttons and title on a Bars window (Phase 3)
+import {BarShade, BarSlot, useBarTextShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the header's back and menu button lenses (Phase 3)
 import {FrameLens} from '#/horizon/backdrops/FrameLens'
 // HORIZON: the sticky header's compact frame window (Phase 3)
@@ -114,7 +116,12 @@ export function Content({
 }
 
 export function Slot({children}: {children?: React.ReactNode}) {
-  return <View style={[a.z_50, {width: HEADER_SLOT_SIZE}]}>{children}</View>
+  return (
+    <View style={[a.z_50, {width: HEADER_SLOT_SIZE}]}>
+      {/* HORIZON: a shade under the slot's button on a Bars window (Phase 3) */}
+      <BarSlot>{children}</BarSlot>
+    </View>
+  )
 }
 
 export function BackButton({onPress, style, ...props}: Partial<ButtonProps>) {
@@ -199,6 +206,8 @@ export function TitleText({
   const {gtMobile} = useBreakpoints()
   const {isWithinLeftPanel} = useIsWithinSplitView()
   const align = useContext(AlignmentContext)
+  // HORIZON: the title's box for its shade on a Bars window (Phase 3)
+  const horizonShade = useBarTextShade('title', style)
   return (
     <Text
       style={[
@@ -208,11 +217,14 @@ export function TitleText({
         a.leading_tight,
         IS_IOS && align === 'platform' && a.text_center,
         gtMobile && a.text_xl,
+        horizonShade,
         style,
       ]}
       numberOfLines={2}
       emoji
       maxFontSizeMultiplier={2}>
+      {/* HORIZON: the title's shade on a Bars window (Phase 3) */}
+      <BarShade kind="title" />
       {children}
     </Text>
   )
@@ -221,6 +233,8 @@ export function TitleText({
 export function SubtitleText({children}: {children: React.ReactNode}) {
   const t = useTheme()
   const align = useContext(AlignmentContext)
+  // HORIZON: the subtitle's box for its shade on a Bars window (Phase 3)
+  const horizonShade = useBarTextShade('subtitle')
   return (
     <Text
       style={[
@@ -228,8 +242,11 @@ export function SubtitleText({children}: {children: React.ReactNode}) {
         a.leading_snug,
         IS_IOS && align === 'platform' && a.text_center,
         t.atoms.text_contrast_medium,
+        horizonShade,
       ]}
       numberOfLines={1}>
+      {/* HORIZON: the subtitle's shade on a Bars window (Phase 3) */}
+      <BarShade kind="subtitle" />
       {children}
     </Text>
   )

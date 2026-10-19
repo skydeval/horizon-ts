@@ -227,12 +227,16 @@ describe('the lens sits under its icon (live fix 1)', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     act(() => store.setFrameStyle('buttons'))
     mockTheme = 'dark'
-    const [div] = divs(render(<FrameLens kind="tab" />).toJSON())
-    const image = String(div.props.style?.backgroundImage)
-    expect(image).toMatch(
-      /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, rgba\(0, 0, 0, 0\.\d+\) 15px, rgba\(0, 0, 0, 0\) 19px\), linear-gradient\(/,
+    // The clip, the frame-sized backdrop, then the disc above it.
+    const [, backdrop, disc] = divs(render(<FrameLens kind="tab" />).toJSON())
+    expect(String(disc.props.style?.backgroundImage)).toMatch(
+      /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, rgba\(0, 0, 0, 0\.\d+\) 15px, rgba\(0, 0, 0, 0\) 19px\)$/,
     )
-    expect(div.props.style?.backgroundSize).toBe('100% 100%, 390px 844px')
+    expect(disc.props.style?.backgroundSize).toBe('100% 100%')
+    expect(String(backdrop.props.style?.backgroundImage)).toMatch(
+      /^linear-gradient\(/,
+    )
+    expect(backdrop.props.style?.backgroundSize).toBe('390px 844px')
   })
 })
 
@@ -251,12 +255,16 @@ describe('phone frame styles (live fix 1)', () => {
       ]),
     )
     expect(table).toEqual({
-      bars: ['full', 'full', 'full', 'full'],
+      bars: ['bare', 'bare', 'bare', 'full'],
       edges: ['edge', 'edge', 'edge', 'full'],
       gutter: [null, null, null, 'full'],
       headerBand: ['full', 'full', null, 'full'],
       buttons: [null, null, null, null],
     })
+    // Bare windows need the web shades: native keeps the glass.
+    expect(
+      windowMode({...base, frameStyle: 'bars', kind: 'bottomBar', web: false}),
+    ).toBe('full')
     // Headers stay part of the opaque column at 800 and up.
     expect(
       windowMode({
@@ -271,7 +279,9 @@ describe('phone frame styles (live fix 1)', () => {
   it('Edges: a 4px band, no glass, along the header and the bottom bar', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     act(() => store.setFrameStyle('edges'))
-    const [header] = divs(render(<FrameWindow kind="header" />).toJSON())
+    const [header, headerBackdrop] = divs(
+      render(<FrameWindow kind="header" />).toJSON(),
+    )
     expect(header.props.style).toMatchObject({
       position: 'absolute',
       left: 0,
@@ -279,22 +289,24 @@ describe('phone frame styles (live fix 1)', () => {
       bottom: 0,
       height: EDGE_BAND,
       zIndex: -1,
-      backgroundSize: '390px 844px',
     })
+    expect(headerBackdrop.props.style?.backgroundSize).toBe('390px 844px')
     expect(header.props.style?.top).toBeUndefined()
-    const [bar] = divs(render(<FrameWindow kind="bottomBar" />).toJSON())
+    const barDivs = divs(render(<FrameWindow kind="bottomBar" />).toJSON())
+    const [bar] = barDivs
     expect(bar.props.style?.top).toBeLessThan(0)
     expect(Number(bar.props.style?.height)).toBeGreaterThan(EDGE_BAND)
     expect(bar.props.style?.bottom).toBeUndefined()
-    expect(String(bar.props.style?.backgroundSize)).not.toContain('100%')
+    // The clip and the backdrop only: no glass layer.
+    expect(barDivs).toHaveLength(2)
     expect(windowOverlays(trans, 'dark', 'edge', false)).toEqual([])
   })
 
   it('Header: the top bars under glass, the tab bar stock', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     act(() => store.setFrameStyle('headerBand'))
-    const [home] = divs(render(<FrameWindow kind="homeHeader" />).toJSON())
-    expect(String(home.props.style?.backgroundImage)).toMatch(
+    const [, , glass] = divs(render(<FrameWindow kind="homeHeader" />).toJSON())
+    expect(String(glass.props.style?.backgroundImage)).toMatch(
       /^linear-gradient\(rgba\(255, 255, 255, 0\.55\)/,
     )
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()

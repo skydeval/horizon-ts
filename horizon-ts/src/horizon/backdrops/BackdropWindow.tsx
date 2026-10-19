@@ -64,7 +64,9 @@ function Disc({disc}: {disc: DiscOverlay}) {
 
 /**
  * Paints `def` under `overlays` (top first) inside the parent, aligned with
- * the window. `homeHeader` adds the Home header's mode trigger.
+ * the window. `homeHeader` adds the Home header's mode trigger. The web
+ * painter's tracking hints (`isStatic`, `followsAnimations`) and shade
+ * colours (`shades`; bare windows are web only) do not apply here.
  */
 export function BackdropWindow({
   def,
@@ -76,6 +78,9 @@ export function BackdropWindow({
   overlays: Overlay[]
   shape: WindowShape
   homeHeader?: boolean
+  isStatic?: boolean
+  followsAnimations?: boolean
+  shades?: boolean
 }) {
   const t = useTheme()
   const frame = useViewportFrame()

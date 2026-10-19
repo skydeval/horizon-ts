@@ -78,6 +78,45 @@ function overlayImage(overlay: Overlay) {
   return `radial-gradient(circle at 50% 50%, ${color} 0px, ${color} ${px(solid)}, ${clear} ${px(fade)})`
 }
 
+const layerCache = new WeakMap<Compiled, Map<string, WebBackgroundStyle>>()
+
+/**
+ * The backdrop alone, anchored at the element's origin: what the fixed
+ * layer and a window's frame-sized inner element paint. Memoised per
+ * compiled backdrop and frame (performance fix 7d), so the same object
+ * comes back on every render.
+ */
+export function cssLayers(
+  compiled: Compiled,
+  frame: Frame,
+): WebBackgroundStyle {
+  let byFrame = layerCache.get(compiled)
+  if (!byFrame) {
+    byFrame = new Map()
+    layerCache.set(compiled, byFrame)
+  }
+  const key = `${frame.width}x${frame.height}`
+  let style = byFrame.get(key)
+  if (!style) {
+    style = cssBackground(compiled, [], frame, {x: 0, y: 0})
+    byFrame.set(key, style)
+  }
+  return style
+}
+
+/** The CSS of overlays alone, top first, each filling the element. */
+export function cssOverlays(overlays: Overlay[]): {
+  backgroundImage: string
+  backgroundSize: string
+  backgroundRepeat: 'no-repeat'
+} {
+  return {
+    backgroundImage: overlays.map(overlayImage).join(', '),
+    backgroundSize: overlays.map(() => '100% 100%').join(', '),
+    backgroundRepeat: 'no-repeat',
+  }
+}
+
 /**
  * The background for an element. `overlays` are top first (the glass tint,
  * a lens's icon backing); `offset` is where the frame's origin sits inside

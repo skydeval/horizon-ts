@@ -5,7 +5,9 @@
  * shared backdrop there, so the piece reads as a window onto the fixed
  * layer while posts stay on opaque ground. The phone frame style decides
  * which pieces are windows and how (`windowMode`): the whole piece under
- * the theme's glass, or the Edges frame's slim band. Renders nothing unless
+ * the theme's glass, the whole piece bare with a shade under each item
+ * (Bars, batch A; the window hands the shades their colours), or the Edges
+ * frame's slim band. Renders nothing unless
  * a backdrop is active, `COMPACT_FRAME_WINDOWS` is on, the style draws the
  * piece and it is not inside a dialog.
  */
@@ -61,6 +63,8 @@ function ActiveWindow({
       overlays={windowOverlays(def, t.name, mode)}
       shape={shape}
       homeHeader={kind === 'homeHeader'}
+      followsAnimations={kind === 'drawer'}
+      shades={mode === 'bare'}
     />
   )
 }

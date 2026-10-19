@@ -1,21 +1,23 @@
 import {createContext as mockCreateContext, useRef as mockUseRef} from 'react'
+import {StyleSheet} from 'react-native'
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, render} from '@testing-library/react-native'
 
 import type * as ThemesModule from '#/alf/themes'
 import * as store from '#/horizon/appearance/store'
-import {cssBackgroundPosition} from '#/horizon/backdrops/css'
 import {
   bottomBarShape,
   horizonInnerHeaderSticky,
   lensActive,
+  shadeVar,
   windowActive,
 } from '#/horizon/backdrops/frame'
 import {
-  attachWindowTriggers,
-  createSettleLoop,
+  createWindowTracker,
   type ListenerTarget,
+  QUIET_FRAMES,
   SETTLE_CAP_MS,
+  type TrackedWindow,
   windowOffset,
   type WindowRect,
 } from '#/horizon/backdrops/frame-tracking'
@@ -111,38 +113,14 @@ function fireReactions() {
   }
 }
 
-/** A manual animation-frame queue and clock. */
-function frames() {
-  let clock = 0
-  let next = 1
-  const queue = new Map<number, () => void>()
-  return {
-    now: () => clock,
-    advance: (ms: number) => {
-      clock += ms
-    },
-    requestFrame: (callback: () => void) => {
-      const handle = next++
-      queue.set(handle, callback)
-      return handle
-    },
-    cancelFrame: (handle: number) => {
-      queue.delete(handle)
-    },
-    /** Runs the frames queued now, after `ms` of clock. */
-    run: (ms = 16) => {
-      clock += ms
-      const due = [...queue.values()]
-      queue.clear()
-      due.forEach(callback => callback())
-    },
-    pending: () => queue.size,
-  }
-}
+type Listener = (event?: {target?: unknown}) => void
 
 /** A DOM-style event target that records its listeners. */
-function target(): ListenerTarget & {fire: (type: string) => void} {
-  const listeners = new Map<string, Set<() => void>>()
+function target(): ListenerTarget & {
+  fire: (type: string, event?: {target?: unknown}) => void
+  count: (type: string) => number
+} {
+  const listeners = new Map<string, Set<Listener>>()
   return {
     addEventListener: (type, listener) => {
       if (!listeners.has(type)) listeners.set(type, new Set())
@@ -151,7 +129,69 @@ function target(): ListenerTarget & {fire: (type: string) => void} {
     removeEventListener: (type, listener) => {
       listeners.get(type)?.delete(listener)
     },
-    fire: type => listeners.get(type)?.forEach(listener => listener()),
+    fire: (type, event) =>
+      listeners.get(type)?.forEach(listener => listener(event)),
+    count: type => listeners.get(type)?.size ?? 0,
+  }
+}
+
+/** A tracker on fake targets, a manual frame queue, clock and microtasks. */
+function fakeTracker() {
+  let clock = 0
+  let next = 1
+  const frames = new Map<number, () => void>()
+  const micro: (() => void)[] = []
+  const doc = target()
+  const win = target()
+  const vv = target()
+  const tracker = createWindowTracker({
+    document: doc,
+    window: win,
+    visualViewport: vv,
+    requestFrame: callback => {
+      const handle = next++
+      frames.set(handle, callback)
+      return handle
+    },
+    cancelFrame: handle => {
+      frames.delete(handle)
+    },
+    now: () => clock,
+    microtask: callback => {
+      micro.push(callback)
+    },
+  })
+  return {
+    tracker,
+    doc,
+    win,
+    vv,
+    flush: () => micro.splice(0).forEach(callback => callback()),
+    /** Runs the frames queued now, after `ms` of clock. */
+    frame: (ms = 16) => {
+      clock += ms
+      const due = [...frames.values()]
+      frames.clear()
+      due.forEach(callback => callback())
+    },
+    pending: () => frames.size,
+  }
+}
+
+/** A window that logs its reads and writes into `log`. */
+function logged(
+  name: string,
+  log: string[],
+  rect: {current: WindowRect | null},
+  extra: Partial<TrackedWindow> = {},
+): TrackedWindow {
+  return {
+    read: () => {
+      log.push(`read ${name}`)
+      return rect.current
+    },
+    apply: r => log.push(`apply ${name} ${r.top}`),
+    ...extra,
   }
 }
 
@@ -167,137 +207,205 @@ beforeEach(() => {
   store.resetAppearanceStoreForTests()
 })
 
-describe('window alignment (T15)', () => {
-  it('the background position comes from the window rect', () => {
+describe('the shared window tracker (7b)', () => {
+  it('the offset is the frame origin inside the window', () => {
     expect(windowOffset({left: 0, top: 744})).toEqual({x: -0, y: -744})
-    expect(cssBackgroundPosition(2, 1, windowOffset({left: 0, top: 744}))).toBe(
-      '0px 0px, 0px 0px, 0px -744px',
-    )
-    expect(
-      cssBackgroundPosition(1, 2, windowOffset({left: -12.5, top: 3.333})),
-    ).toBe('0px 0px, 12.5px -3.33px, 12.5px -3.33px')
   })
 
-  it('the settle loop stops after two equal reads', () => {
-    const f = frames()
-    const rects: WindowRect[] = [
-      {left: 0, top: 50},
-      {left: 0, top: 40},
-      {left: 0, top: 30},
-      {left: 0, top: 30},
-    ]
-    let i = 0
-    const applied: WindowRect[] = []
-    const loop = createSettleLoop({
-      read: () => rects[Math.min(i++, rects.length - 1)],
-      apply: rect => applied.push(rect),
-      ...f,
-    })
-    loop.start()
-    expect(applied).toEqual([{left: 0, top: 50}])
-    f.run()
-    f.run()
-    expect(loop.running()).toBe(true)
-    f.run()
-    expect(applied.map(r => r.top)).toEqual([50, 40, 30])
-    expect(loop.running()).toBe(false)
+  it('reads every window first, then writes only those that moved', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    const a = {current: {left: 0, top: 0}}
+    const b = {current: {left: 0, top: 790}}
+    f.tracker.register(logged('a', log, a))
+    f.tracker.register(logged('b', log, b))
+    // Aligned before paint, in one batch for both.
+    f.flush()
+    expect(log).toEqual(['read a', 'read b', 'apply a 0', 'apply b 790'])
+    log.length = 0
+    b.current = {left: 0, top: 800}
+    f.doc.fire('scroll')
+    f.frame()
+    expect(log).toEqual(['read a', 'read b', 'apply b 800'])
+  })
+
+  it(`stops after ${QUIET_FRAMES} quiet frames`, () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    const rect = {current: {left: 0, top: 50}}
+    f.tracker.register(logged('a', log, rect))
+    f.flush()
+    rect.current = {left: 0, top: 40}
+    f.frame()
+    expect(f.tracker.running()).toBe(true)
+    f.frame()
+    f.frame()
+    expect(f.tracker.running()).toBe(false)
     expect(f.pending()).toBe(0)
+    expect(log.filter(line => line.startsWith('apply'))).toEqual([
+      'apply a 50',
+      'apply a 40',
+    ])
   })
 
-  it('the settle loop stops 1000 ms after its start while the rect moves', () => {
-    const f = frames()
+  it('stops 1000 ms after the last trigger while a window moves', () => {
+    const f = fakeTracker()
     let top = 0
+    f.tracker.register({read: () => ({left: 0, top: top++}), apply: () => {}})
+    f.flush()
+    // 8 ms frames (a 120 Hz display): the cap is time, not frames.
+    for (let k = 0; k < 200 && f.tracker.running(); k++) f.frame(8)
+    expect(f.tracker.running()).toBe(false)
+    expect(top).toBe(Math.ceil(SETTLE_CAP_MS / 8) + 1)
+    // A trigger restarts the clock.
+    f.tracker.kick()
+    f.frame(900)
+    f.tracker.kick()
+    f.frame(900)
+    expect(f.tracker.running()).toBe(true)
+  })
+
+  it('a hidden window is not read until it shows again', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    const rect = {current: {left: 0, top: 0}}
+    const w = logged('a', log, rect)
+    f.tracker.register(w)
+    f.flush()
+    f.tracker.setVisible(w, false)
+    log.length = 0
+    f.doc.fire('scroll')
+    f.frame()
+    f.frame()
+    expect(log).toEqual([])
+    rect.current = {left: 0, top: 20}
+    f.tracker.setVisible(w, true)
+    f.frame()
+    expect(log).toEqual(['read a', 'apply a 20'])
+  })
+
+  it('a gone window is skipped, and nothing is written for it', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    f.tracker.register(logged('a', log, {current: null}))
+    f.flush()
+    expect(log).toEqual(['read a'])
+  })
+
+  it('static windows: not on page scroll; on resize, relayout and their own scroller', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    const scroller = {}
+    const card = {current: {left: 1100, top: 16}}
+    f.tracker.register(
+      logged('card', log, card, {
+        isStatic: true,
+        within: t => t === scroller,
+      }),
+    )
+    f.flush()
+    expect(log).toEqual(['read card', 'apply card 16'])
+    // Settled.
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    log.length = 0
+    // Page scroll: no tracking at all for a static window.
+    f.doc.fire('scroll', {target: {}})
+    expect(f.pending()).toBe(0)
+    f.frame()
+    expect(log).toEqual([])
+    // Its own scroller.
+    card.current = {left: 1100, top: 10}
+    f.doc.fire('scroll', {target: scroller})
+    f.frame()
+    expect(log).toEqual(['read card', 'apply card 10'])
+    log.length = 0
+    f.win.fire('resize')
+    f.frame()
+    expect(log).toEqual(['read card'])
+    log.length = 0
+    f.tracker.relayout()
+    f.frame()
+    expect(log).toEqual(['read card'])
+  })
+
+  it('one listener per trigger for any number of windows, all detached', () => {
+    const f = fakeTracker()
+    const off = [1, 2, 3, 4].map(i =>
+      f.tracker.register({read: () => ({left: 0, top: i}), apply: () => {}}),
+    )
+    expect(f.doc.count('scroll')).toBe(1)
+    expect(f.vv.count('scroll')).toBe(1)
+    expect(f.win.count('resize')).toBe(1)
+    // Animation ends are not listened to until a window follows them.
+    expect(f.doc.count('transitionend')).toBe(0)
+    expect(f.doc.count('animationend')).toBe(0)
+    const offDrawer = f.tracker.register({
+      read: () => ({left: 0, top: 0}),
+      apply: () => {},
+      followsAnimations: true,
+    })
+    expect(f.doc.count('transitionend')).toBe(1)
+    expect(f.doc.count('animationend')).toBe(1)
+    offDrawer()
+    expect(f.doc.count('transitionend')).toBe(0)
+    off.forEach(detach => detach())
+    expect(f.doc.count('scroll')).toBe(0)
+    expect(f.vv.count('scroll')).toBe(0)
+    expect(f.win.count('resize')).toBe(0)
+  })
+
+  it('an animation end restarts only for a window inside the animated element', () => {
+    const f = fakeTracker()
+    const drawer = {}
     let reads = 0
-    const loop = createSettleLoop({
+    f.tracker.register({
       read: () => {
         reads++
-        return {left: 0, top: top++}
+        return {left: 0, top: 0}
       },
       apply: () => {},
-      ...f,
+      followsAnimations: true,
+      within: t => t === drawer,
     })
-    loop.start()
-    // 8 ms frames (a 120 Hz display): the cap is time, not frames.
-    for (let k = 0; k < 200 && loop.running(); k++) f.run(8)
-    expect(loop.running()).toBe(false)
-    expect(f.now()).toBeGreaterThanOrEqual(SETTLE_CAP_MS)
-    expect(f.now()).toBeLessThan(SETTLE_CAP_MS + 8)
-    expect(reads).toBe(Math.ceil(SETTLE_CAP_MS / 8) + 1)
+    f.flush()
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    // A button's hover transition elsewhere: nothing.
+    f.doc.fire('transitionend', {target: {}})
+    expect(f.pending()).toBe(0)
+    f.doc.fire('animationend', {target: drawer})
+    expect(f.pending()).toBe(1)
+    const before = reads
+    f.frame()
+    expect(reads).toBe(before + 1)
   })
 
-  it('a restart resets the clock and always re-applies', () => {
-    const f = frames()
-    let top = 0
-    const applied: number[] = []
-    const loop = createSettleLoop({
-      read: () => ({left: 0, top: top++}),
-      apply: rect => applied.push(rect.top),
-      ...f,
-    })
-    loop.start()
-    f.run(900)
-    loop.start()
-    f.run(900)
-    expect(loop.running()).toBe(true)
-    f.run(200)
-    expect(loop.running()).toBe(false)
-
-    const still = createSettleLoop({
-      read: () => ({left: 0, top: 7}),
-      apply: rect => applied.push(rect.top),
-      ...f,
-    })
-    applied.length = 0
-    still.start()
-    f.run()
-    still.start()
-    expect(applied).toEqual([7, 7])
-  })
-
-  it('a missing node stops the loop', () => {
-    const f = frames()
-    let gone = false
-    const loop = createSettleLoop({
-      read: () => (gone ? null : {left: 0, top: Math.random()}),
-      apply: () => {},
-      ...f,
-    })
-    loop.start()
-    gone = true
-    f.run()
-    expect(loop.running()).toBe(false)
-  })
-
-  it('every DOM and navigation trigger calls back, and detaches', () => {
-    const doc = target()
-    const vv = target()
-    let stateListener: (() => void) | null = null
+  it('the navigation state event is shared and counted', () => {
+    const f = fakeTracker()
+    const listeners = new Set<() => void>()
     const nav = {
       addListener: (_type: 'state', listener: () => void) => {
-        stateListener = listener
-        return () => {
-          stateListener = null
-        }
+        listeners.add(listener)
+        return () => listeners.delete(listener)
       },
     }
-    const onTrigger = jest.fn()
-    const detach = attachWindowTriggers(
-      {document: doc, visualViewport: vv, navigation: nav},
-      onTrigger,
-    )
-    doc.fire('scroll')
-    doc.fire('animationend')
-    doc.fire('transitionend')
-    vv.fire('scroll')
-    stateListener!()
-    expect(onTrigger).toHaveBeenCalledTimes(5)
-    detach()
-    doc.fire('scroll')
-    doc.fire('animationend')
-    doc.fire('transitionend')
-    vv.fire('scroll')
-    expect(stateListener).toBeNull()
-    expect(onTrigger).toHaveBeenCalledTimes(5)
+    f.tracker.register({read: () => ({left: 0, top: 0}), apply: () => {}})
+    const off1 = f.tracker.attachNavigation(nav)
+    const off2 = f.tracker.attachNavigation(nav)
+    expect(listeners.size).toBe(1)
+    f.flush()
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    listeners.forEach(listener => listener())
+    expect(f.pending()).toBe(1)
+    off1()
+    expect(listeners.size).toBe(1)
+    off2()
+    expect(listeners.size).toBe(0)
   })
 })
 
@@ -309,7 +417,7 @@ describe('when windows and lenses are drawn (T15)', () => {
     isWithinDialog: false,
   }
 
-  it('windows: bars only, a backdrop, not in a dialog, headers below 800', () => {
+  it('windows: a backdrop, not in a dialog, headers below 800', () => {
     expect(windowActive({...base, kind: 'bottomBar'})).toBe(true)
     expect(windowActive({...base, kind: 'bottomBar', def: null})).toBe(false)
     expect(
@@ -358,21 +466,54 @@ describe('when windows and lenses are drawn (T15)', () => {
   })
 })
 
-describe('FrameWindow and FrameLens on web (T15, T16)', () => {
-  let rect: WindowRect = {left: 0, top: 0}
-  const node = {
+type Json = {
+  type: string
+  props: {style?: Record<string, unknown>}
+  children: (Json | string)[] | null
+}
+
+function divs(json: unknown): Json[] {
+  const out: Json[] = []
+  const walk = (node: unknown) => {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(walk)
+    const n = node as Json
+    if (n.type === 'div') out.push(n)
+    n.children?.forEach(walk)
+  }
+  walk(json)
+  return out
+}
+
+describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
+  let rect = {left: 0, top: 0, width: 390, height: 50}
+  const vars = new Map<string, string>()
+  const piece = {
+    style: {
+      setProperty: (name: string, value: string) => vars.set(name, value),
+      removeProperty: (name: string) => vars.delete(name),
+    },
+  }
+  const outer = {
     isConnected: true,
-    style: {} as Record<string, string>,
+    parentElement: piece,
     getBoundingClientRect: () => rect,
   }
-  const doc = target()
-  const createNodeMock = (element: React.ReactElement) =>
-    element.type === 'div' ? node : null
+  const inner = {style: {} as Record<string, string>}
+  const createNodeMock = (element: React.ReactElement) => {
+    if (element.type !== 'div') return null
+    const style = (element.props as {style?: Record<string, unknown>}).style
+    if (style?.zIndex === -1) return outer
+    if (style?.willChange === 'transform') return inner
+    return {style: {}}
+  }
   let queue: (() => void)[] = []
+  const doc = target()
 
   beforeEach(() => {
-    rect = {left: 0, top: 0}
-    node.style = {}
+    rect = {left: 0, top: 0, width: 390, height: 50}
+    inner.style = {}
+    vars.clear()
     queue = []
     Object.assign(globalThis, {document: doc})
     jest
@@ -392,14 +533,11 @@ describe('FrameWindow and FrameLens on web (T15, T16)', () => {
     }
   }
 
-  function divStyle(json: unknown): Record<string, unknown> {
-    const tree = Array.isArray(json) ? json : [json]
-    const div = tree.find(
-      (n): n is {type: string; props: {style: Record<string, unknown>}} =>
-        !!n && typeof n === 'object' && (n as {type?: string}).type === 'div',
-    )
-    if (!div) throw new Error('no div')
-    return div.props.style
+  /** Renders, then lets the before-paint alignment run. */
+  async function mount(element: React.ReactElement) {
+    const view = render(element, {createNodeMock})
+    await act(async () => {})
+    return view
   }
 
   it('renders nothing without a backdrop, with buttons, or disabled', () => {
@@ -416,100 +554,136 @@ describe('FrameWindow and FrameLens on web (T15, T16)', () => {
     expect(render(<FrameLens kind="headerButton" />).toJSON()).toBeNull()
   })
 
-  it('paints the backdrop with the glass and aligns to its rect', () => {
+  it('Bars: the backdrop bare, in a frame-sized layer moved by a transform', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    rect = {left: 0, top: 790}
-    const view = render(<FrameWindow kind="bottomBar" />, {createNodeMock})
-    const style = divStyle(view.toJSON())
-    expect(style.top).toBeLessThan(0)
-    expect(style).toMatchObject({
+    rect = {left: 0, top: 790, width: 390, height: 54}
+    const view = await mount(<FrameWindow kind="bottomBar" />)
+    const [clip, backdrop, hairline, ...rest] = divs(view.toJSON())
+    expect(rest).toEqual([])
+    expect(clip.props.style?.top).toBeLessThan(0)
+    expect(clip.props.style).toMatchObject({
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
       zIndex: -1,
       pointerEvents: 'none',
-      backgroundOrigin: 'border-box',
-      backgroundSize: '100% 100%, 390px 844px',
+      overflow: 'hidden',
+    })
+    expect(clip.props.style?.backgroundImage).toBeUndefined()
+    expect(backdrop.props.style).toMatchObject({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: 390,
+      height: 844,
+      willChange: 'transform',
+      backgroundSize: '390px 844px',
       backgroundRepeat: 'no-repeat',
     })
-    expect(String(style.backgroundImage)).toMatch(
-      /^linear-gradient\(rgba\(255, 255, 255, 0\.55\), rgba\(255, 255, 255, 0\.55\)\), linear-gradient\(/,
+    // No glass: the first layer is the backdrop's own gradient.
+    expect(String(backdrop.props.style?.backgroundImage)).toMatch(
+      /^linear-gradient\(\d/,
     )
-    expect(String(style.borderTop)).toContain('solid')
-    // Measured before paint: the frame's origin is 790px above the bar.
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px -790px')
+    expect(hairline.props.style).toMatchObject({
+      top: 0,
+      height: StyleSheet.hairlineWidth,
+    })
+    // Aligned before paint: the frame's origin is 790px above the bar.
+    expect(inner.style.transform).toBe('translate3d(0px, -790px, 0)')
+    // The bare window hands its items their shade colours.
+    expect(vars.get(shadeVar('tab'))).toMatch(/^rgba\(255, 255, 255, /)
+    expect([...vars.keys()]).toHaveLength(7)
   })
 
-  it('a footerMode change re-measures with no scroll', () => {
+  it('a footerMode change re-measures with no scroll', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    rect = {left: 0, top: 790}
-    render(<FrameWindow kind="bottomBar" />, {createNodeMock})
+    rect = {left: 0, top: 790, width: 390, height: 54}
+    await mount(<FrameWindow kind="bottomBar" />)
     fireReactions()
-    runFrames(3)
+    runFrames(4)
     expect(queue).toHaveLength(0)
     // The bar slides in on navigation: only footerMode changes.
-    rect = {left: 0, top: 800}
+    rect = {left: 0, top: 800, width: 390, height: 54}
     mockFooterMode = 0.5
     fireReactions()
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px -800px')
-    rect = {left: 0, top: 810}
     runFrames(1)
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px -810px')
+    expect(inner.style.transform).toBe('translate3d(0px, -800px, 0)')
+    rect = {left: 0, top: 810, width: 390, height: 54}
+    runFrames(1)
+    expect(inner.style.transform).toBe('translate3d(0px, -810px, 0)')
   })
 
-  it('a document scroll and the drawer slide end re-measure', () => {
+  it('a document scroll re-measures in the next frame, not in the handler', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    rect = {left: -330, top: 0}
-    render(<FrameWindow kind="drawer" />, {createNodeMock})
-    expect(node.style.backgroundPosition).toBe('0px 0px, 330px 0px')
-    runFrames(3)
-    rect = {left: 0, top: 0}
-    doc.fire('animationend')
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px 0px')
-    rect = {left: 0, top: -20}
+    await mount(<FrameWindow kind="drawer" />)
+    runFrames(4)
+    rect = {left: 0, top: -20, width: 330, height: 844}
     doc.fire('scroll')
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px 20px')
+    // No read or write inside the scroll event.
+    expect(inner.style.transform).toBe('translate3d(0px, 0px, 0)')
+    runFrames(1)
+    expect(inner.style.transform).toBe('translate3d(0px, 20px, 0)')
   })
 
-  it('the Home header follows headerMode too', () => {
+  it('the drawer keeps its glass: a tint layer above the backdrop', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    render(<FrameWindow kind="homeHeader" />, {createNodeMock})
+    const view = await mount(<FrameWindow kind="drawer" />)
+    const [, , glass] = divs(view.toJSON())
+    expect(glass.props.style?.backgroundImage).toBe(
+      'linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55))',
+    )
+    expect([...vars.keys()]).toHaveLength(0)
+  })
+
+  it('the Home header follows headerMode too', async () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    await mount(<FrameWindow kind="homeHeader" />)
     fireReactions()
     expect(mockReactions).toHaveLength(2)
-    runFrames(3)
-    rect = {left: 0, top: -30}
+    runFrames(4)
+    rect = {left: 0, top: -30, width: 390, height: 95}
     mockHeaderMode = 0.4
     fireReactions()
-    expect(node.style.backgroundPosition).toBe('0px 0px, 0px 30px')
+    runFrames(1)
+    expect(inner.style.transform).toBe('translate3d(0px, 30px, 0)')
+  })
+
+  it('unmounting takes the shade colours off the piece', async () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    const view = await mount(<FrameWindow kind="homeHeader" />)
+    expect(vars.size).toBe(7)
+    view.unmount()
+    expect(vars.size).toBe(0)
   })
 
   it('lenses: the tab pill, and the compose button in black', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     act(() => store.setFrameStyle('buttons'))
-    const tab = divStyle(
+    const [tab] = divs(
       render(<FrameLens kind="tab" />, {createNodeMock}).toJSON(),
     )
-    expect(tab).toMatchObject({
+    expect(tab.props.style).toMatchObject({
       top: 9,
       left: '50%',
       marginLeft: -28,
       width: 56,
       height: 34,
       borderRadius: 17,
+      overflow: 'hidden',
     })
-    const fab = divStyle(
+    const [, , disc] = divs(
       render(<FrameLens kind="fab" />, {createNodeMock}).toJSON(),
     )
-    expect(String(fab.backgroundImage)).toMatch(
+    expect(String(disc.props.style?.backgroundImage)).toMatch(
       /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, /,
     )
-    const square = divStyle(
+    const [square] = divs(
       render(<FrameLens kind="headerButton" shape="square" />, {
         createNodeMock,
       }).toJSON(),
     )
-    expect(square.borderRadius).toBe(8)
+    expect(square.props.style?.borderRadius).toBe(8)
     mockWithinDialog = true
     expect(render(<FrameLens kind="fab" />).toJSON()).toBeNull()
   })

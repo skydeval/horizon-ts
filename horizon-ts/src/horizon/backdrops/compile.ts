@@ -160,14 +160,60 @@ function resolveStops(
 }
 
 /**
+ * Everything a def's compiled output depends on, as a string: two defs with
+ * the same key compile to the same layers (custom defs are rebuilt on every
+ * read, so identity is not enough).
+ */
+export function compileKey(def: BackdropDef): string {
+  return [
+    def.id,
+    def.stripes.join(','),
+    def.stripe.angleDeg,
+    def.stripe.edgeEpsilon,
+    def.stripe.softenEdges ? 1 : 0,
+    def.bloomOpacity,
+    def.lockColors ? 1 : 0,
+    def.tuning ? JSON.stringify(def.tuning) : '',
+    def.soften ?? 0,
+  ].join('|')
+}
+
+/*
+ * Compiled backdrops by def, theme, frame and look (performance fix 7d).
+ * Every painter compiles on every render; with this the strings and stops
+ * are built once per backdrop, theme, softness and size. The result is
+ * shared, so callers must not mutate it.
+ */
+const compiledCache = new Map<string, Compiled | null>()
+
+/** The compile cache's size; custom previews add a key per slider step. */
+const COMPILED_CACHE_MAX = 256
+
+/**
  * Compile a def for a theme and a frame. Null for a def with no layers
- * (`none`).
+ * (`none`). Memoised; the returned object is shared and must not be
+ * mutated.
  */
 export function compileBackdrop(
   def: BackdropDef,
   theme: ThemeName,
   frame: Frame,
   look: BackdropLook = BACKDROP_LOOK,
+): Compiled | null {
+  const key = `${compileKey(def)}|${theme}|${frame.width}x${frame.height}|${look}`
+  const cached = compiledCache.get(key)
+  if (cached !== undefined) return cached
+  const compiled = compileUncached(def, theme, frame, look)
+  if (compiledCache.size >= COMPILED_CACHE_MAX) compiledCache.clear()
+  compiledCache.set(key, compiled)
+  return compiled
+}
+
+function compileUncached(
+  def: BackdropDef,
+  theme: ThemeName,
+  frame: Frame,
+  look: BackdropLook,
 ): Compiled | null {
   const layers = look === 'seen' ? seenLayers(def) : specLayers(def)
   if (layers.length === 0) return null
