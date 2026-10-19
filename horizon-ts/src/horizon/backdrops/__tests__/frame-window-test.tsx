@@ -427,6 +427,7 @@ describe('FrameWindow and FrameLens on web (T15, T16)', () => {
       left: 0,
       right: 0,
       bottom: 0,
+      zIndex: -1,
       pointerEvents: 'none',
       backgroundOrigin: 'border-box',
       backgroundSize: '100% 100%, 390px 844px',
@@ -501,7 +502,7 @@ describe('FrameWindow and FrameLens on web (T15, T16)', () => {
       render(<FrameLens kind="fab" />, {createNodeMock}).toJSON(),
     )
     expect(String(fab.backgroundImage)).toMatch(
-      /^linear-gradient\(rgba\(0, 0, 0, /,
+      /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, /,
     )
     const square = divStyle(
       render(<FrameLens kind="headerButton" shape="square" />, {

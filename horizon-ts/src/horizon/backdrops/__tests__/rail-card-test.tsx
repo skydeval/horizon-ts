@@ -104,7 +104,7 @@ describe('RailCard (T17)', () => {
       marginRight: -13,
       paddingLeft: 12,
       paddingRight: 12,
-      backgroundColor: 'rgba(0, 0, 0, 0.68)',
+      backgroundColor: 'rgba(0, 0, 0, 0.74)',
     })
   })
 

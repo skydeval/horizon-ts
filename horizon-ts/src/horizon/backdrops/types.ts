@@ -74,4 +74,11 @@ export type BackdropDef = {
   tuning?: Partial<Record<ThemeName, Tuning>>
   /** Never tune saturation or brightness (flags stay accurate). */
   lockColors: boolean
+  /**
+   * The device's backdrop softness (0..1) for the theme the def is drawn
+   * in; missing means 0. Only `useActiveBackdrop` sets it, so swatches and
+   * registry defs keep their full colours. Applies to flags as well:
+   * softness is the viewer's own treatment, not a tuning of the backdrop.
+   */
+  soften?: number
 }

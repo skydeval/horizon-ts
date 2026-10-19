@@ -21,6 +21,22 @@ export type WebBackgroundStyle = {
   backgroundColor: string
 }
 
+/**
+ * A disc of colour centred in the element: full `color` out to `solid`
+ * pixels from the centre, fading to `clear` (the same colour at alpha 0) by
+ * `fade`, nothing beyond. A lens's icon backing (live fix batch 1).
+ */
+export type DiscOverlay = {
+  kind: 'disc'
+  color: string
+  clear: string
+  solid: number
+  fade: number
+}
+
+/** An overlay over the backdrop: a uniform CSS colour, or a disc. */
+export type Overlay = string | DiscOverlay
+
 /** At most `digits` decimals, trailing zeros dropped. */
 export function formatNumber(value: number, digits: number): string {
   const fixed = Number(value.toFixed(digits))
@@ -54,21 +70,29 @@ export function cssBackgroundPosition(
   ].join(', ')
 }
 
+function overlayImage(overlay: Overlay) {
+  if (typeof overlay === 'string') {
+    return `linear-gradient(${overlay}, ${overlay})`
+  }
+  const {color, clear, solid, fade} = overlay
+  return `radial-gradient(circle at 50% 50%, ${color} 0px, ${color} ${px(solid)}, ${clear} ${px(fade)})`
+}
+
 /**
- * The background for an element. `overlays` are uniform colours, top first
- * (the glass tint, the veil); `offset` is where the frame's origin sits
- * inside the element.
+ * The background for an element. `overlays` are top first (the glass tint,
+ * a lens's icon backing); `offset` is where the frame's origin sits inside
+ * the element.
  */
 export function cssBackground(
   compiled: Compiled,
-  overlays: string[],
+  overlays: Overlay[],
   frame: Frame,
   offset: {x: number; y: number},
 ): WebBackgroundStyle {
   const images: string[] = []
   const sizes: string[] = []
-  for (const color of overlays) {
-    images.push(`linear-gradient(${color}, ${color})`)
+  for (const overlay of overlays) {
+    images.push(overlayImage(overlay))
     sizes.push('100% 100%')
   }
   const frameSize = `${px(frame.width)} ${px(frame.height)}`

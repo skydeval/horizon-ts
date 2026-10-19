@@ -70,12 +70,19 @@ export function clearKeyDownCapture({
   }
 }
 
-/** A range input's `onKeyDown`: Page Up and Page Down step by 16. */
-export function rangeKeyDown(value: number, onChange: (next: number) => void) {
+/**
+ * A range input's `onKeyDown`: Page Up and Page Down step by `page` (16 for
+ * the colour sliders, 0 to 255), clamped to 0 and `max`.
+ */
+export function rangeKeyDown(
+  value: number,
+  onChange: (next: number) => void,
+  {page = 16, max = 255}: {page?: number; max?: number} = {},
+) {
   return (e: KeyEventLike) => {
     if (e.key !== 'PageUp' && e.key !== 'PageDown') return
     e.preventDefault()
-    const next = value + (e.key === 'PageUp' ? 16 : -16)
-    onChange(Math.max(0, Math.min(255, next)))
+    const next = value + (e.key === 'PageUp' ? page : -page)
+    onChange(Math.max(0, Math.min(max, next)))
   }
 }

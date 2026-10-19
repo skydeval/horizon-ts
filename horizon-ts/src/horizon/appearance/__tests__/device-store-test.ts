@@ -22,7 +22,7 @@ describe('the device value (T10)', () => {
       optOut: false,
       accounts: {},
       frameStyle: 'bars',
-      insetCard: false,
+      softness: {dim: 40, dark: 50},
     })
   })
 
@@ -38,6 +38,7 @@ describe('the device value (T10)', () => {
         optOut: 'yes',
         frameStyle: 'circles',
         insetCard: 1,
+        softness: {dim: 'x', dark: 250.4},
         accounts: {
           'did:plc:a': {
             record: {backdrop: 'pride.bi'},
@@ -65,7 +66,7 @@ describe('the device value (T10)', () => {
     expect(parsed.device.presets).toEqual(emptyPresetSlots())
     expect(parsed.optOut).toBe(false)
     expect(parsed.frameStyle).toBe('bars')
-    expect(parsed.insetCard).toBe(false)
+    expect(parsed.softness).toEqual({dim: 40, dark: 100})
     expect(Object.keys(parsed.accounts)).toEqual(['did:plc:a', 'did:plc:c'])
     const a = parsed.accounts['did:plc:a']
     expect(a.record?.backdrop).toBe('pride.bi')
@@ -85,6 +86,33 @@ describe('the device value (T10)', () => {
     })
   })
 
+  it('reads every frame style, and the retired inset toggle as Gutter', () => {
+    const read = (value: Record<string, unknown>) =>
+      parseDeviceValue(JSON.stringify({v: 1, ...value})).frameStyle
+    for (const style of [
+      'bars',
+      'edges',
+      'gutter',
+      'headerBand',
+      'buttons',
+    ] as const) {
+      expect(read({frameStyle: style})).toBe(style)
+    }
+    expect(read({frameStyle: 'circles'})).toBe('bars')
+    expect(read({})).toBe('bars')
+    expect(read({frameStyle: 'bars', insetCard: true})).toBe('gutter')
+    expect(read({insetCard: true})).toBe('gutter')
+    expect(read({frameStyle: 'buttons', insetCard: true})).toBe('buttons')
+    expect(read({frameStyle: 'edges', insetCard: true})).toBe('edges')
+    // Written back without the retired field.
+    const parsed = parseDeviceValue(
+      JSON.stringify({v: 1, frameStyle: 'bars', insetCard: true}),
+    )
+    expect(JSON.parse(serializeDeviceValue(parsed))).not.toHaveProperty(
+      'insetCard',
+    )
+  })
+
   it('round trips', () => {
     const presets = emptyPresetSlots()
     presets[9] = {
@@ -100,8 +128,8 @@ describe('the device value (T10)', () => {
         presets,
       },
       optOut: true,
-      frameStyle: 'buttons',
-      insetCard: true,
+      frameStyle: 'headerBand',
+      softness: {dim: 0, dark: 73},
       accounts: {
         'did:plc:a': {
           record: DEFAULT_APPEARANCE,

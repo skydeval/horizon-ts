@@ -3,7 +3,10 @@
  * BD-19 to BD-21): with the "Buttons" phone frame the bars stay opaque and
  * the frame's buttons (the bottom tabs, the header back, menu and feeds
  * buttons, the compose button) become small windows onto the same backdrop.
- * Placed first inside the button, clipped to its shape. Renders nothing
+ * Placed first inside the button as its bottom layer (below the icon,
+ * `BackdropWindow.web.tsx`), clipped to its shape; it shows the backdrop
+ * untinted, with only a small backing disc behind the icon where the icon
+ * needs it for 3:1 (live fix batch 1, `lensOverlays`). Renders nothing
  * unless a backdrop is active, `COMPACT_FRAME_WINDOWS` is on, the phone
  * frame is "Buttons" and the button is not inside a dialog (`lensActive`).
  */

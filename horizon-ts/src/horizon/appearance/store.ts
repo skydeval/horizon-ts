@@ -26,7 +26,9 @@ import {
   type CustomConfig,
   presetField,
 } from '#/horizon/appearance/model'
+import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {BACKDROP_CUSTOM} from '#/horizon/backdrops/registry'
+import {type SoftTheme} from '#/horizon/backdrops/softness'
 import {APPEARANCE_SYNC} from '#/horizon/switches'
 
 export type AppearanceState = {
@@ -286,14 +288,17 @@ export function setOptOut(on: boolean) {
   setDeviceValue({...device, optOut: true, accounts})
 }
 
-/** The compact frame prototype (9.7). Device only. */
-export function setFrameStyle(frameStyle: 'bars' | 'buttons') {
+/** The phone frame (9.3, 9.6, 9.7). Device only. */
+export function setFrameStyle(frameStyle: FrameStyle) {
   setDeviceValue({...load().device, frameStyle})
 }
 
-/** The inset reading card (9.6). Device only. */
-export function setInsetCard(insetCard: boolean) {
-  setDeviceValue({...load().device, insetCard})
+/** The backdrop softness of `theme`, 0 to 100. Device only. */
+export function setBackdropSoftness(theme: SoftTheme, value: number) {
+  const device = load().device
+  const next = Math.max(0, Math.min(100, Math.round(value)))
+  if (device.softness[theme] === next) return
+  setDeviceValue({...device, softness: {...device.softness, [theme]: next}})
 }
 
 /** Tests only: forget the loaded state so the next read reloads it. */

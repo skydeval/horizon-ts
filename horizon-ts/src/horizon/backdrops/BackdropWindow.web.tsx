@@ -7,6 +7,15 @@
  * written straight to the node as the piece moves, so a moving bar costs no
  * React render. `background-attachment: fixed` is not used: every bar
  * carries a transform, which turns it into `scroll`.
+ *
+ * The `div` sits at `z-index: -1` (live fix batch 1). An absolutely
+ * positioned box with `z-index: auto` paints above its parent's in-flow,
+ * non-positioned children, and the bottom tabs' and the compose button's
+ * icons are bare `<svg>` elements, so the first build's lenses covered
+ * them. At -1 it paints just above its piece's own background and below
+ * all of the piece's content; every piece is an RN-web `View`, which is
+ * `position: relative; z-index: 0` and so a stacking context that keeps
+ * the -1 inside it.
  */
 
 import {useContext, useLayoutEffect, useRef} from 'react'
@@ -14,7 +23,11 @@ import {NavigationContainerRefContext} from '@react-navigation/native'
 
 import {useTheme} from '#/alf'
 import {compileBackdrop} from '#/horizon/backdrops/compile'
-import {cssBackground, cssBackgroundPosition} from '#/horizon/backdrops/css'
+import {
+  cssBackground,
+  cssBackgroundPosition,
+  type Overlay,
+} from '#/horizon/backdrops/css'
 import {type WindowShape} from '#/horizon/backdrops/frame'
 import {
   attachWindowTriggers,
@@ -57,7 +70,7 @@ export function BackdropWindow({
   homeHeader = false,
 }: {
   def: BackdropDef
-  overlays: string[]
+  overlays: Overlay[]
   shape: WindowShape
   homeHeader?: boolean
 }) {
@@ -125,6 +138,8 @@ export function BackdropWindow({
         aria-hidden
         style={{
           ...shapeCss(shape),
+          // The bottom layer of its piece: below the icons, see above.
+          zIndex: -1,
           pointerEvents: 'none',
           ...background,
           // The rect is the border box; the offset is measured from it.

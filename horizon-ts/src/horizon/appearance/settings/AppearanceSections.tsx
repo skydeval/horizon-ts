@@ -2,9 +2,9 @@
  * Horizon's Appearance sections (Phase 3 design, section 10), after Dark
  * theme and before Font (BD-11): the Backdrops group (the shown name, the
  * swatch grid, the Custom chip and, while Custom is selected, its card), the
- * per-device opt-out, then the prototype pickers of 10.8: "Phone frame"
- * (while `SHOW_FRAME_STYLE_PICKER`) and "Reading card on small screens"
- * (while `INSET_READING_CARD_AVAILABLE`).
+ * per-device opt-out, "Backdrop softness" (live fix batch 1), then the
+ * "Phone frame" picker of 10.8 (while `SHOW_FRAME_STYLE_PICKER`), whose
+ * Gutter style replaced the "Reading card on small screens" toggle.
  */
 
 import {useState} from 'react'
@@ -17,6 +17,7 @@ import {AppearanceToggleButtonGroup} from '#/screens/Settings/AppearanceSettings
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
 import {atoms as a, native, useTheme, web} from '#/alf'
 import * as Toggle from '#/components/forms/Toggle'
+import {Moon_Stroke2_Corner0_Rounded as MoonIcon} from '#/components/icons/Moon'
 import {PaintRoller_Stroke2_Corner2_Rounded as PaintRollerIcon} from '#/components/icons/PaintRoller'
 import {Phone_Stroke2_Corner0_Rounded as PhoneIcon} from '#/components/icons/Phone'
 import {Text} from '#/components/Typography'
@@ -24,16 +25,20 @@ import {IS_WEB} from '#/env'
 import {BackdropFill} from '#/horizon/appearance/settings/BackdropFill'
 import {CustomEditor} from '#/horizon/appearance/settings/CustomEditor'
 import {swatchKeyDown} from '#/horizon/appearance/settings/keys'
+import {SoftnessSlider} from '#/horizon/appearance/settings/SoftnessSlider'
 import {
   effectiveAppearance,
   selectBackdrop,
+  setBackdropSoftness,
   setFrameStyle,
-  setInsetCard,
   setOptOut,
   useAppearanceState,
 } from '#/horizon/appearance/store'
-import {SHOW_FRAME_STYLE_PICKER} from '#/horizon/backdrops/frame-style'
-import {INSET_READING_CARD_AVAILABLE} from '#/horizon/backdrops/inset'
+import {
+  FRAME_STYLES,
+  type FrameStyle,
+  SHOW_FRAME_STYLE_PICKER,
+} from '#/horizon/backdrops/frame-style'
 import {
   BACKDROP_CUSTOM,
   BACKDROP_DEFS,
@@ -302,51 +307,74 @@ function DeviceOptOutGroup() {
 }
 
 /*
- * The phone frame prototype (10.8, 9.7): Bars or Buttons, this device only.
- * `AppearanceToggleButtonGroup` comes from the stock screen, which imports
- * this file: a circular import, safe because each side uses the other only
- * at render.
+ * Backdrop softness (live fix batch 1): how much dim and dark calm the
+ * backdrop, 0 (full colour) to 100, this device only. Applied as the slider
+ * moves.
+ */
+function SoftnessGroup() {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const {device} = useAppearanceState()
+  return (
+    <SettingsList.Group contentContainerStyle={[a.gap_sm]} iconInset={false}>
+      <SettingsList.ItemIcon icon={MoonIcon} />
+      <SettingsList.ItemText>{l`Backdrop softness`}</SettingsList.ItemText>
+      <Text
+        style={[
+          a.w_full,
+          a.text_sm,
+          a.leading_snug,
+          t.atoms.text_contrast_medium,
+        ]}>
+        {l`In dim and dark, calms the backdrop’s colors without darkening them. 0 shows them in full.`}
+      </Text>
+      <SoftnessSlider
+        label={l({message: 'Dim', context: 'theme name'})}
+        value={device.softness.dim}
+        onChange={value => setBackdropSoftness('dim', value)}
+      />
+      <SoftnessSlider
+        label={l({message: 'Dark', context: 'theme name'})}
+        value={device.softness.dark}
+        onChange={value => setBackdropSoftness('dark', value)}
+      />
+    </SettingsList.Group>
+  )
+}
+
+/*
+ * The phone frame picker (10.8, 9.3, 9.6, 9.7; live fix batch 1), this
+ * device only, with one line under the title describing the selected
+ * style. `AppearanceToggleButtonGroup` comes from the stock screen, which
+ * imports this file: a circular import, safe because each side uses the
+ * other only at render.
  */
 function FrameStyleGroup() {
   const {t: l} = useLingui()
   const {device} = useAppearanceState()
+  const labels: Record<FrameStyle, string> = {
+    bars: l({message: 'Bars', context: 'phone frame style'}),
+    edges: l({message: 'Edges', context: 'phone frame style'}),
+    gutter: l({message: 'Gutter', context: 'phone frame style'}),
+    headerBand: l({message: 'Header', context: 'phone frame style'}),
+    buttons: l({message: 'Buttons', context: 'phone frame style'}),
+  }
+  const descriptions: Record<FrameStyle, string> = {
+    bars: l`The top bar and the tab bar show the backdrop.`,
+    edges: l`Plain bars with a thin strip of backdrop along their edges.`,
+    gutter: l`Plain bars; the backdrop shows in a margin beside the posts.`,
+    headerBand: l`Only the top bar shows the backdrop.`,
+    buttons: l`Plain bars; the backdrop shows through the buttons.`,
+  }
   return (
     <AppearanceToggleButtonGroup
       title={l`Phone frame`}
+      description={descriptions[device.frameStyle]}
       icon={PhoneIcon}
-      items={[
-        {
-          label: l({message: 'Bars', context: 'phone frame style'}),
-          name: 'bars',
-        },
-        {
-          label: l({message: 'Buttons', context: 'phone frame style'}),
-          name: 'buttons',
-        },
-      ]}
+      items={FRAME_STYLES.map(name => ({label: labels[name], name}))}
       value={device.frameStyle}
       onChange={setFrameStyle}
     />
-  )
-}
-
-/** The inset reading card (10.8, 9.6), this device only. */
-function InsetCardGroup() {
-  const {t: l} = useLingui()
-  const {device} = useAppearanceState()
-  const label = l`Reading card on small screens`
-  return (
-    <SettingsList.Item>
-      <Toggle.Item
-        name="horizon_inset_reading_card"
-        label={label}
-        value={device.insetCard}
-        onChange={setInsetCard}
-        style={[a.w_full]}>
-        <Toggle.LabelText style={[a.flex_1]}>{label}</Toggle.LabelText>
-        <Toggle.Platform />
-      </Toggle.Item>
-    </SettingsList.Item>
   )
 }
 
@@ -359,8 +387,8 @@ export function HorizonAppearanceSections() {
       <SettingsList.Divider />
       <BackdropGroup />
       {hasSession && <DeviceOptOutGroup />}
+      <SoftnessGroup />
       {SHOW_FRAME_STYLE_PICKER && COMPACT_FRAME_WINDOWS && <FrameStyleGroup />}
-      {INSET_READING_CARD_AVAILABLE && <InsetCardGroup />}
     </Animated.View>
   )
 }

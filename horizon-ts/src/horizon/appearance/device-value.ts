@@ -1,7 +1,8 @@
 /*
  * The device value under `horizon:appearance` (Phase 3 design, 6.1): this
- * device's own appearance, the opt-out, a copy per account and the two
- * device-only prototype settings. Parsed leniently, field by field; a
+ * device's own appearance, the opt-out, a copy per account and the
+ * device-only settings (the phone frame and the backdrop softness). Parsed
+ * leniently, field by field; a
  * missing, unparsable or other-version value reads as the default.
  */
 
@@ -19,6 +20,16 @@ import {
   parseCustom,
   parsePresetBody,
 } from '#/horizon/appearance/record'
+import {
+  DEFAULT_FRAME_STYLE,
+  type FrameStyle,
+  parseFrameStyle,
+} from '#/horizon/backdrops/frame-style'
+import {
+  DEFAULT_SOFTNESS,
+  parseSoftness,
+  type SoftnessValues,
+} from '#/horizon/backdrops/softness'
 
 export const APPEARANCE_DEVICE_KEY = 'horizon:appearance'
 
@@ -49,10 +60,16 @@ export type DeviceAppearanceV1 = {
   optOut: boolean
   /** Per account on this device, by DID. */
   accounts: Record<string, AccountCopy>
-  /** Compact frame prototype (9.7). Device only. */
-  frameStyle: 'bars' | 'buttons'
-  /** Inset reading card (9.6). Device only. */
-  insetCard: boolean
+  /**
+   * The phone frame (9.3, 9.6, 9.7, live fix batch 1). Device only. Gutter
+   * replaced the retired `insetCard` toggle, which parsing maps to it.
+   */
+  frameStyle: FrameStyle
+  /**
+   * Backdrop softness in dim and dark, 0 to 100 (live fix batch 1). Device
+   * only: how calm a backdrop should look depends on the screen.
+   */
+  softness: SoftnessValues
 }
 
 export function defaultDeviceValue(): DeviceAppearanceV1 {
@@ -61,8 +78,8 @@ export function defaultDeviceValue(): DeviceAppearanceV1 {
     device: DEFAULT_APPEARANCE,
     optOut: false,
     accounts: {},
-    frameStyle: 'bars',
-    insetCard: false,
+    frameStyle: DEFAULT_FRAME_STYLE,
+    softness: DEFAULT_SOFTNESS,
   }
 }
 
@@ -148,8 +165,8 @@ export function parseDeviceValue(json: string | undefined): DeviceAppearanceV1 {
     device: parseStoredAppearance(value.device) ?? DEFAULT_APPEARANCE,
     optOut: value.optOut === true,
     accounts,
-    frameStyle: value.frameStyle === 'buttons' ? 'buttons' : 'bars',
-    insetCard: value.insetCard === true,
+    frameStyle: parseFrameStyle(value.frameStyle, value.insetCard),
+    softness: parseSoftness(value.softness),
   }
 }
 

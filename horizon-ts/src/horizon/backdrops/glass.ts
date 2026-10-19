@@ -19,13 +19,15 @@ export const REDUCED_TRANSPARENCY_ALPHA = 0.85
 /** The rail and nav cards' blur, in pixels (>= 800px wide only). */
 export const GLASS_BLUR = 14
 
-/** The dark theme's veil over the backdrop. */
-export const DARK_VEIL = {color: {r: 0, g: 0, b: 0}, alpha: 0.18}
+/*
+ * Live fix batch 1: the dark theme's black veil (0.18) is gone. Dim and dark
+ * now soften the backdrop's colours instead (`softness.ts`), which the
+ * compiler applies, so every colour this module samples is already treated.
+ */
 
 export type GlassTheme = {
   tint: RGB
   baseAlpha: number
-  veil: {color: RGB; alpha: number} | null
   /** The text colour the alpha is checked against. */
   text: RGB
 }
@@ -42,19 +44,16 @@ export const GLASS: Record<ThemeName, GlassTheme> = {
   light: {
     tint: {r: 255, g: 255, b: 255},
     baseAlpha: 0.55,
-    veil: null,
     text: themeColor(themes.light.atoms.text_contrast_medium.color),
   },
   dim: {
     tint: themeColor(themes.dim.atoms.bg.backgroundColor),
     baseAlpha: 0.38,
-    veil: null,
     text: themeColor(themes.dim.atoms.text_contrast_medium.color),
   },
   dark: {
     tint: {r: 0, g: 0, b: 0},
     baseAlpha: 0.38,
-    veil: DARK_VEIL,
     text: themeColor(themes.dark.atoms.text_contrast_medium.color),
   },
 }
@@ -62,12 +61,6 @@ export const GLASS: Record<ThemeName, GlassTheme> = {
 /** `rgba(...)` for a colour and an alpha. */
 export function rgba({r, g, b}: RGB, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(3))})`
-}
-
-/** The dark veil as CSS overlays (empty in light and dim). */
-export function veilOverlays(theme: ThemeName): string[] {
-  const veil = GLASS[theme].veil
-  return veil ? [rgba(veil.color, veil.alpha)] : []
 }
 
 /** One 8-bit channel blend, as browsers composite. */
@@ -167,21 +160,21 @@ export function smallestAlpha({
   return max
 }
 
-/** The backdrop's colours as the glass sees them: under the veil in dark. */
+/**
+ * The backdrop's colours as the glass sees them: the sampled colours, with
+ * the def's softness already applied by the compiler.
+ */
 export function colorsUnderGlass(
   def: BackdropDef,
   theme: ThemeName,
   look: BackdropLook = BACKDROP_LOOK,
 ): RGB[] {
-  const veil = GLASS[theme].veil
-  const colors = sampledColors(def, theme, look)
-  return veil
-    ? colors.map(color => composite(veil.color, color, veil.alpha))
-    : colors
+  return sampledColors(def, theme, look)
 }
 
-function defKey(def: BackdropDef) {
-  return `${def.id}|${def.stripes.join(',')}`
+/** What a def's glass depends on: its id, colours and softness. */
+export function backdropKey(def: BackdropDef) {
+  return `${def.id}|${def.stripes.join(',')}|${def.soften ?? 0}`
 }
 
 const alphaCache = new Map<string, number>()
@@ -195,7 +188,7 @@ export function glassAlpha(
   theme: ThemeName,
   look: BackdropLook = BACKDROP_LOOK,
 ): number {
-  const key = `${defKey(def)}|${theme}|${look}`
+  const key = `${backdropKey(def)}|${theme}|${look}`
   const cached = alphaCache.get(key)
   if (cached !== undefined) return cached
   const glass = GLASS[theme]

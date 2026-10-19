@@ -7,6 +7,7 @@
 
 import {seenLayers, specLayers} from '#/horizon/backdrops/layers'
 import {BACKDROP_LOOK, type BackdropLook} from '#/horizon/backdrops/look'
+import {softenRgb} from '#/horizon/backdrops/softness'
 import {
   type BackdropDef,
   type Hex,
@@ -127,10 +128,16 @@ function resolveStops(
   opacity: number,
   tuning: Tuning | undefined,
   tuneColors: boolean,
+  theme: ThemeName,
+  soften: number,
 ): ResolvedStop[] {
   let resolved = stops.map(stop => {
     const rgb = hexToRgb(stop.color)
-    const color = tuneColors ? tuneColor(rgb, tuning) : rgb
+    const color = softenRgb(
+      tuneColors ? tuneColor(rgb, tuning) : rgb,
+      theme,
+      soften,
+    )
     return {
       ...color,
       a: clamp01((stop.alpha ?? 1) * opacity * (tuning?.opacity ?? 1)),
@@ -170,7 +177,14 @@ export function compileBackdrop(
   const H = frame.height
 
   const resolved = layers.map((layer): ResolvedLinear | ResolvedRadial => {
-    const stops = resolveStops(layer.stops, layer.opacity, tuning, tuneColors)
+    const stops = resolveStops(
+      layer.stops,
+      layer.opacity,
+      tuning,
+      tuneColors,
+      theme,
+      def.soften ?? 0,
+    )
     if (layer.kind === 'radial') {
       return {
         kind: 'radial',

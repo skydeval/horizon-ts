@@ -356,16 +356,28 @@ released version yet; everything so far is under `[Unreleased]`.
     labels and icons stay readable. They stay lined up as the bars hide and
     show on scroll, as the drawer slides in, and on navigation. Posts stay on
     opaque ground. Bars inside dialogs stay as they were.
-  - **"Phone frame" (to compare, this device only):** Appearance offers Bars
-    (the windows above, the default) or Buttons, which keeps the bars opaque
-    and makes the five tab icons, the header buttons and the compose button
-    small windows onto the backdrop instead; the compose button then shows
-    the backdrop under a dark glass in place of its blue. The picker goes
-    away once one is chosen for everyone.
-  - **An inset reading card** for phones (the column drawn as a card 8px in
-    from each side, the backdrop around it) is built and kept off for now;
-    its "Reading card on small screens" toggle appears when it is switched
-    on.
+  - **"Phone frame" (to compare, this device only):** Appearance offers
+    five styles, with a line under the picker saying what the chosen one
+    does. **Bars** (the default): the windows above. **Edges:** plain bars
+    with a thin strip of backdrop along the top bar's bottom edge and the
+    tab bar's top edge. **Gutter:** plain bars, and the reading column drawn
+    as a card 8px in from each side with the backdrop in the margins.
+    **Header:** only the top bars are windows; the tab bar is plain.
+    **Buttons:** plain bars, and the five tab icons, the header buttons and
+    the compose button are small windows onto the backdrop, each icon on a
+    small soft backing just dark or light enough to read (the compose button
+    shows the backdrop in place of its blue). The drawer is a window with
+    every style but Buttons. The picker goes away once one is chosen for
+    everyone. Gutter replaces the earlier hidden "Reading card on small
+    screens" toggle; a device that had it on starts on Gutter.
+  - **Backdrop softness:** dim and dark no longer lay a dark veil over the
+    backdrop. They calm it instead: colours lose some saturation and come
+    down a little in brightness, keeping their hue, so a backdrop reads as
+    "not bright" rather than darkened. Appearance > "Backdrop softness" has
+    a slider for dim (40 by default) and one for dark (50), from 0 (full
+    colour) to 100; they apply on this device only, to the window backdrop,
+    the cards, bars and buttons alike, and the cards' glass still keeps the
+    grey rail text at 4.5:1 over the softened colours.
   - **iOS and Android:** the bottom bar, the Home header, the drawer, the
     header buttons and the compose button paint the backdrop the same way.
     Built, not yet tried on a device.

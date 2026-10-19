@@ -217,8 +217,14 @@ describe('edits (T11)', () => {
 
   it('device-only settings', () => {
     store.setFrameStyle('buttons')
-    store.setInsetCard(true)
     expect(device().frameStyle).toBe('buttons')
-    expect(device().insetCard).toBe(true)
+    store.setFrameStyle('gutter')
+    expect(device().frameStyle).toBe('gutter')
+    expect(device().softness).toEqual({dim: 40, dark: 50})
+    store.setBackdropSoftness('dark', 72.6)
+    store.setBackdropSoftness('dim', -5)
+    expect(device().softness).toEqual({dim: 0, dark: 73})
+    // Device only: no pending edit for the record.
+    expect(device().accounts).toEqual({})
   })
 })

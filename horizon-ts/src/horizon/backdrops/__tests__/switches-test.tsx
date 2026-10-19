@@ -14,6 +14,7 @@ import {
   lensActive,
   windowActive,
 } from '#/horizon/backdrops/frame'
+import {FRAME_STYLES} from '#/horizon/backdrops/frame-style'
 import {FrameLens} from '#/horizon/backdrops/FrameLens'
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {
@@ -116,11 +117,11 @@ describe('BACKDROPS off (T16)', () => {
     expect(stock.UNSAFE_getByType(View).props.style).toEqual({padding: 3})
   })
 
-  it('no window, lens or inset card, in either phone frame', () => {
+  it('no window, lens or inset card, in any phone frame', () => {
     mockGtMobile = false
     const trans = registryDef('pride.trans')!
     const base = {def: trans, gtMobile: false, isWithinDialog: false}
-    for (const frameStyle of ['bars', 'buttons'] as const) {
+    for (const frameStyle of FRAME_STYLES) {
       act(() => store.setFrameStyle(frameStyle))
       expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
       expect(render(<FrameWindow kind="header" />).toJSON()).toBeNull()
@@ -132,14 +133,13 @@ describe('BACKDROPS off (T16)', () => {
       expect(windowActive({...base, frameStyle, kind: 'bottomBar'})).toBe(false)
       expect(lensActive({...base, frameStyle, kind: 'tab'})).toBe(false)
     }
-    act(() => store.setInsetCard(true))
+    act(() => store.setFrameStyle('gutter'))
     expect(render(<GutterProbe />).getByText('null')).toBeTruthy()
     expect(
       insetReadingCardOn({
         def: trans,
-        insetCard: true,
+        frameStyle: 'gutter',
         gtMobile: false,
-        available: true,
         web: true,
       }),
     ).toBe(false)
