@@ -12,11 +12,14 @@ import {
 
 import {PUBLIC_BSKY_SERVICE} from '#/lib/constants'
 import {ENV} from '#/env'
+import {PREVIEW_ORIGIN} from '#/horizon/preview'
 import {
+  createPreviewClientMetadata,
   HOSTED_DEV_CLIENT_METADATA,
   loopbackClientId,
   type OAuthClientMode,
   PRODUCTION_CLIENT_METADATA,
+  selectOAuthClientMode,
 } from '#/horizon/session/oauth-metadata'
 
 /**
@@ -33,30 +36,20 @@ export const OAUTH_AVAILABLE: boolean = true
 export const OAUTH_HANDLE_RESOLVER: string =
   process.env.EXPO_PUBLIC_OAUTH_HANDLE_RESOLVER || PUBLIC_BSKY_SERVICE
 
-const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1']
-
 /**
- * The client document this page signs in with. Production builds always use
- * the production document. Otherwise `EXPO_PUBLIC_OAUTH_CLIENT` chooses, and a
+ * The client document this page signs in with (`selectOAuthClientMode`). A
+ * preview build uses its preview document; any other production build the
+ * production document. Otherwise `EXPO_PUBLIC_OAUTH_CLIENT` chooses, and a
  * page on a loopback host defaults to the loopback client.
  */
 export function getOAuthClientMode(): OAuthClientMode {
-  if (ENV === 'production') return 'production'
-  const requested = process.env.EXPO_PUBLIC_OAUTH_CLIENT
-  if (
-    requested === 'production' ||
-    requested === 'loopback' ||
-    requested === 'hosted-dev'
-  ) {
-    return requested
-  }
-  if (
-    typeof window !== 'undefined' &&
-    LOOPBACK_HOSTS.includes(window.location.hostname)
-  ) {
-    return 'loopback'
-  }
-  return 'production'
+  return selectOAuthClientMode({
+    env: ENV,
+    requested: process.env.EXPO_PUBLIC_OAUTH_CLIENT,
+    previewOrigin: PREVIEW_ORIGIN,
+    hostname:
+      typeof window !== 'undefined' ? window.location.hostname : undefined,
+  })
 }
 
 type DeletedListener = (did: string, cause: unknown) => void
@@ -89,6 +82,9 @@ function buildMetadata() {
   switch (getOAuthClientMode()) {
     case 'hosted-dev':
       return HOSTED_DEV_CLIENT_METADATA
+    case 'preview':
+      // The mode is preview only when PREVIEW_ORIGIN is set.
+      return createPreviewClientMetadata(PREVIEW_ORIGIN ?? '')
     case 'loopback':
       return atprotoLoopbackClientMetadata(
         loopbackClientId(window.location.port),

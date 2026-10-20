@@ -8,6 +8,7 @@ its logic here and touches Bluesky's files only through small, marked hooks.
 |---|---|
 | `index.ts` | Side-effect-free barrel: re-exports branding and switches. |
 | `switches.ts` | Fixed booleans that hooks guard on. Flipping one restores Bluesky's behaviour at that hook. |
+| `preview.ts` | A preview build's origin (`EXPO_PUBLIC_OAUTH_CLIENT=preview` with `EXPO_PUBLIC_PREVIEW_ORIGIN`), read by the OAuth client mode and the private share links; `undefined` in every other build. |
 | `flags/` | The local feature-flag table that replaces Bluesky's GrowthBook fetch. |
 | `telemetry/` | The no-op metrics client. |
 | `branding/` | The product name. `product.json` is its one source. |
@@ -273,7 +274,11 @@ they must be served from the site root): `public/oauth-client-metadata.json`
 (the production OAuth client document) and
 `public/oauth-client-metadata-dev.json` (the hosted development document).
 A unit test keeps each equal to the document built in
-`session/oauth-metadata.ts`.
+`session/oauth-metadata.ts`. `scripts/horizon-preview-pages.js` (Horizon's
+own, beside Bluesky's build scripts) turns a preview build's `dist/` into a
+Cloudflare Pages upload: the preview's client document, `_redirects`,
+`_headers`, no source maps; a unit test keeps its document equal to
+`createPreviewClientMetadata`.
 
 ### Literal copies of the product name
 

@@ -3,12 +3,16 @@ import {describe, expect, it} from '@jest/globals'
 import committedProduction from '../../../../public/oauth-client-metadata.json'
 import committedDev from '../../../../public/oauth-client-metadata-dev.json'
 import {
+  createPreviewClientMetadata,
   HOSTED_DEV_CLIENT_METADATA,
   isOAuthPopupComplete,
   loopbackClientId,
   OAUTH_SCOPE,
   PRODUCTION_CLIENT_METADATA,
+  selectOAuthClientMode,
 } from '../oauth-metadata'
+
+const PREVIEW = 'https://preview.example.invalid'
 
 describe('OAuth client metadata', () => {
   it('the committed production document equals the one built in code', () => {
@@ -41,6 +45,103 @@ describe('OAuth client metadata', () => {
       'http://127.0.0.1:8081/auth/web/callback',
     )
     expect(id.searchParams.get('scope')).toBe(OAUTH_SCOPE)
+  })
+
+  it('the preview document is the production document at the preview origin', () => {
+    expect(createPreviewClientMetadata(PREVIEW)).toEqual({
+      ...PRODUCTION_CLIENT_METADATA,
+      client_id: 'https://preview.example.invalid/oauth-client-metadata.json',
+      client_name: 'Horizon (preview)',
+      client_uri: 'https://preview.example.invalid',
+      redirect_uris: ['https://preview.example.invalid/auth/web/callback'],
+    })
+    expect(createPreviewClientMetadata(PREVIEW).scope).toBe(OAUTH_SCOPE)
+  })
+
+  describe('selectOAuthClientMode', () => {
+    const base = {
+      env: undefined,
+      requested: undefined,
+      previewOrigin: undefined,
+      hostname: undefined,
+    }
+
+    it('a preview build uses the preview document, production or not', () => {
+      expect(
+        selectOAuthClientMode({
+          ...base,
+          env: 'production',
+          requested: 'preview',
+          previewOrigin: PREVIEW,
+        }),
+      ).toBe('preview')
+      expect(
+        selectOAuthClientMode({
+          ...base,
+          env: 'development',
+          requested: 'preview',
+          previewOrigin: PREVIEW,
+          hostname: '127.0.0.1',
+        }),
+      ).toBe('preview')
+    })
+
+    it('preview without an origin is not a preview build', () => {
+      expect(
+        selectOAuthClientMode({
+          ...base,
+          env: 'production',
+          requested: 'preview',
+        }),
+      ).toBe('production')
+      expect(
+        selectOAuthClientMode({
+          ...base,
+          requested: 'preview',
+          hostname: '127.0.0.1',
+        }),
+      ).toBe('loopback')
+    })
+
+    it('a production build ignores the other modes', () => {
+      for (const requested of ['loopback', 'hosted-dev', undefined]) {
+        expect(
+          selectOAuthClientMode({
+            ...base,
+            env: 'production',
+            requested,
+            hostname: '127.0.0.1',
+          }),
+        ).toBe('production')
+      }
+    })
+
+    it('outside production the requested mode wins', () => {
+      for (const requested of ['production', 'loopback', 'hosted-dev']) {
+        expect(
+          selectOAuthClientMode({
+            ...base,
+            env: 'development',
+            requested,
+            hostname: 'example.com',
+          }),
+        ).toBe(requested)
+      }
+    })
+
+    it('outside production a loopback host defaults to loopback', () => {
+      for (const hostname of ['localhost', '127.0.0.1', '[::1]']) {
+        expect(selectOAuthClientMode({...base, hostname})).toBe('loopback')
+      }
+      expect(
+        selectOAuthClientMode({
+          ...base,
+          requested: 'nonsense',
+          hostname: 'a.b',
+        }),
+      ).toBe('production')
+      expect(selectOAuthClientMode(base)).toBe('production')
+    })
   })
 
   it('recognises the popup hand-off error', () => {

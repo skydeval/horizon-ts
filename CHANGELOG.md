@@ -428,6 +428,13 @@ released version yet; everything so far is under `[Unreleased]`.
     posts, shown disabled with "Private notification settings arrive with
     server support" until prism offers private notification preferences;
     nothing is stored meanwhile. Non-members see the stock screen.
+- **A public preview build for Cloudflare Pages.** A `preview` OAuth client
+  mode whose origin is set at build time (`EXPO_PUBLIC_OAUTH_CLIENT=preview`,
+  `EXPO_PUBLIC_PREVIEW_ORIGIN`), with its own client document written into
+  the build output, single-page routing and headers for Pages, private share
+  links on the preview's own origin, and `scripts/preview-build.sh` (`build`,
+  `deploy`, `info`) for silonew. How-to (internal):
+  `docs/internal/notes/preview-deploy.md`.
 
 ### Fixed
 

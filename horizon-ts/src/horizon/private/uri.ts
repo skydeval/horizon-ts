@@ -7,6 +7,7 @@
 import {AtUri} from '@atproto/syntax'
 
 import {type NavigationProp} from '#/lib/routes/types'
+import {PREVIEW_ORIGIN} from '#/horizon/preview'
 import {
   PRIVATE_POST_DISPLAY,
   PRIVATE_POST_LINKS,
@@ -17,9 +18,10 @@ export const PP_COLLECTION = 'tools.kryphocron.feed.postPrivate'
 export const AUDIENCE_COLLECTION = 'tools.kryphocron.policy.audience'
 
 /**
- * The host private post links are shared on.
+ * The host private post links are shared on: nearhorizon.app, or a preview
+ * build's own origin, so a link copied from the preview opens the preview.
  */
-export const PRIVATE_SHARE_ORIGIN = 'https://nearhorizon.app'
+export const PRIVATE_SHARE_ORIGIN = PREVIEW_ORIGIN ?? 'https://nearhorizon.app'
 
 function parseAtUri(uri: string | undefined): AtUri | undefined {
   if (!uri || !uri.startsWith('at://')) return undefined

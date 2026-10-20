@@ -6,7 +6,9 @@
  * The production document is also committed as
  * `public/oauth-client-metadata.json`, and the hosted development document as
  * `public/oauth-client-metadata-dev.json`; a unit test keeps each equal to the
- * document built here.
+ * document built here. A preview build's document is written into the build
+ * output by `scripts/horizon-preview-pages.js`; a unit test keeps that script
+ * equal to `createPreviewClientMetadata`.
  */
 
 import {PRODUCT_NAME} from '#/horizon/branding'
@@ -48,8 +50,17 @@ export const HOSTED_DEV_REDIRECT_URI = `http://127.0.0.1:8081${OAUTH_CALLBACK_PA
  *   servers that accept it (Bluesky's PDS).
  * - `hosted-dev`: the hosted development document, for local development
  *   against aurora-locus until it accepts loopback clients.
+ * - `preview`: a preview build served from its own https origin
+ *   (`EXPO_PUBLIC_PREVIEW_ORIGIN`), with its own document at that origin.
  */
-export type OAuthClientMode = 'production' | 'loopback' | 'hosted-dev'
+export type OAuthClientMode =
+  'production' | 'loopback' | 'hosted-dev' | 'preview'
+
+/**
+ * Where a client document lives, relative to its origin. The production and
+ * preview documents share it.
+ */
+export const CLIENT_METADATA_PATH = '/oauth-client-metadata.json'
 
 /**
  * The client metadata document Horizon publishes.
@@ -101,7 +112,7 @@ export function createOAuthClientMetadata({
  * `https://nearhorizon.app/oauth-client-metadata.json`.
  */
 export const PRODUCTION_CLIENT_METADATA = createOAuthClientMetadata({
-  clientId: `${HORIZON_ORIGIN}/oauth-client-metadata.json`,
+  clientId: `${HORIZON_ORIGIN}${CLIENT_METADATA_PATH}`,
   clientUri: HORIZON_ORIGIN,
   redirectUri: `${HORIZON_ORIGIN}${OAUTH_CALLBACK_PATH}`,
   clientName: PRODUCT_NAME,
@@ -117,6 +128,61 @@ export const HOSTED_DEV_CLIENT_METADATA = createOAuthClientMetadata({
   redirectUri: HOSTED_DEV_REDIRECT_URI,
   clientName: `${PRODUCT_NAME} (development)`,
 })
+
+/**
+ * A preview build's document: the production document moved to `origin`
+ * (an https origin with no trailing slash), under its own name so the
+ * authorization page says which build is asking.
+ */
+export function createPreviewClientMetadata(
+  origin: string,
+): OAuthClientMetadataDocument {
+  return createOAuthClientMetadata({
+    clientId: `${origin}${CLIENT_METADATA_PATH}`,
+    clientUri: origin,
+    redirectUri: `${origin}${OAUTH_CALLBACK_PATH}`,
+    clientName: `${PRODUCT_NAME} (preview)`,
+  })
+}
+
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1']
+
+/**
+ * The modes `EXPO_PUBLIC_OAUTH_CLIENT` can pick outside a production build.
+ * `preview` is not one: it needs a preview origin.
+ */
+const REQUESTABLE_MODES: OAuthClientMode[] = [
+  'production',
+  'loopback',
+  'hosted-dev',
+]
+
+/**
+ * Which client document a page signs in with:
+ * - a preview build (`requested` is `preview` and the build has a preview
+ *   origin) uses the preview document, production build or not;
+ * - any other production build uses the production document;
+ * - otherwise `requested` chooses, and a page on a loopback host defaults to
+ *   the loopback client.
+ */
+export function selectOAuthClientMode({
+  env,
+  requested,
+  previewOrigin,
+  hostname,
+}: {
+  env: string | undefined
+  requested: string | undefined
+  previewOrigin: string | undefined
+  hostname: string | undefined
+}): OAuthClientMode {
+  if (requested === 'preview' && previewOrigin) return 'preview'
+  if (env === 'production') return 'production'
+  const mode = REQUESTABLE_MODES.find(m => m === requested)
+  if (mode) return mode
+  if (hostname && LOOPBACK_HOSTS.includes(hostname)) return 'loopback'
+  return 'production'
+}
 
 /**
  * The atproto loopback client ID for a dev server on `127.0.0.1:<port>`. The
