@@ -158,7 +158,12 @@ function MediaGridTile({
   const media = gridMediaOf(post.embed)
   if (!media) return null
   const modui = mergedModerationUi(moderation)
+  /*
+   * Full width: the Link centres its children on web, so without it the
+   * square shrinks to nothing.
+   */
   const tileStyle = [
+    a.w_full,
     a.overflow_hidden,
     t.atoms.bg_contrast_25,
     {aspectRatio: 1},
