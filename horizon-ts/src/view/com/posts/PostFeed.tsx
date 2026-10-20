@@ -73,6 +73,17 @@ import {
   isStatusValidForViewers,
   useLiveNowConfig,
 } from '#/features/liveNow'
+// HORIZON: the profile Media tab as a grid of square tiles
+import {
+  hasGridMedia,
+  isMediaGridFeed,
+  mediaGridColumns,
+} from '#/horizon/media-grid/grid'
+// HORIZON: the profile Media tab as a grid of square tiles
+import {
+  MediaGridPlaceholder,
+  MediaGridRow,
+} from '#/horizon/media-grid/MediaGrid'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {ComposerPrompt} from '../feeds/ComposerPrompt'
@@ -481,7 +492,10 @@ let PostFeed = ({
               )
               if (
                 item &&
-                bsky.isType(app.bsky.embed.video.view, item.post.embed) &&
+                // HORIZON: the Media tab's grid keeps posts with media
+                (isMediaGridFeed(feed)
+                  ? hasGridMedia(item.post)
+                  : bsky.isType(app.bsky.embed.video.view, item.post.embed)) &&
                 !blockedOrMutedAuthors.includes(item.post.author.did)
               ) {
                 videos.push({
@@ -501,7 +515,12 @@ let PostFeed = ({
           for (let i = 0; i < videos.length; i++) {
             const video = videos[i]
             const item = video.item
-            const cols = gtMobile ? 3 : 2
+            // HORIZON: the Media tab's grid has 3 or 4 tiles to a row
+            const cols = isMediaGridFeed(feed)
+              ? mediaGridColumns(gtMobile)
+              : gtMobile
+                ? 3
+                : 2
             const rowItem = {
               item,
               feedContext: video.feedContext,
@@ -895,6 +914,8 @@ let PostFeed = ({
       } else if (row.type === 'sliceViewFullThread') {
         return <ViewFullThread uri={row.uri} />
       } else if (row.type === 'videoGridRowPlaceholder') {
+        // HORIZON: the Media tab's grid draws square tiles
+        if (isMediaGridFeed(feed)) return <MediaGridPlaceholder />
         return (
           <View>
             <PostFeedVideoGridRowPlaceholder />
@@ -903,6 +924,8 @@ let PostFeed = ({
           </View>
         )
       } else if (row.type === 'videoGridRow') {
+        // HORIZON: the Media tab's grid draws square tiles that open the post
+        if (isMediaGridFeed(feed)) return <MediaGridRow items={row.items} />
         let sourceContext: VideoFeedSourceContext
         if (feedType === 'author') {
           sourceContext = {

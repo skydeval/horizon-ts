@@ -12,6 +12,13 @@
  * quote defaults are not here: they stay Bluesky's preferences
  * (`postInteractionSettings`), which private posts share.
  *
+ * `reading` (change list item 2) holds the account's reading choices that
+ * Horizon keeps beside its posting defaults: `otherAppSpoilers`, whether
+ * `||...||` in posts without spoiler facets (written in other apps) is drawn
+ * as spoilers; absent reads as on. It lives here, not in a record of its
+ * own, so that one Horizon record per account carries the per-account
+ * settings, with its write queue and kept fields.
+ *
  * The schema types writes and is used by tests; reads parse leniently
  * (`private/defaults/record.ts`), so one bad field never loses the others,
  * and unknown fields are kept on write.
@@ -38,11 +45,17 @@ export type PrivateDefaultsRecord = {
   audience?: DefaultAudienceRecord
 }
 
+/** `#readingDefaults`. */
+export type ReadingDefaultsRecord = {
+  otherAppSpoilers?: boolean
+}
+
 /** The record, as written. */
 export type PostingDefaultsRecord = {
   $type: 'app.nearhorizon.actor.postingDefaults'
   version: number
   private?: PrivateDefaultsRecord
+  reading?: ReadingDefaultsRecord
   updatedAt: l.DatetimeString
 }
 
@@ -58,6 +71,10 @@ const privateDefaults = l.object({
   audience: l.optional(audience),
 })
 
+const readingDefaults = l.object({
+  otherAppSpoilers: l.optional(l.boolean()),
+})
+
 export const postingDefaultsRecord = l.record<
   'literal:self',
   PostingDefaultsRecord
@@ -67,6 +84,7 @@ export const postingDefaultsRecord = l.record<
   l.object({
     version: l.integer({minimum: 1}),
     private: l.optional(privateDefaults),
+    reading: l.optional(readingDefaults),
     updatedAt: l.string({format: 'datetime'}),
   }),
 )

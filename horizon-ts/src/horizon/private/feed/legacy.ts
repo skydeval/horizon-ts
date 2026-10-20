@@ -2,9 +2,11 @@
  * Private posts on the legacy feed query (`src/state/queries/post-feed.ts`),
  * which serves profile feeds: the Private tab (6.4), the Posts and Replies
  * merges (6.3.1) and the pinned private post on the Posts tab (6.5).
- * Following on the legacy path (the Following v2 flag off) shows no private
- * posts. For a member, every legacy feed's pages come back with the private
- * posts they quote resolved (`quotes/resolve.ts`).
+ * The Media and Videos tabs merge the profile's private media while prism
+ * lists `private.mediaFilters` (change list item 4). The owner's Likes tab
+ * merges their liked private posts (change list item 5, `likes-merge.ts`). Following on the legacy path (the Following v2 flag
+ * off) shows no private posts. For a member, every legacy feed's pages come
+ * back with the private posts they quote resolved (`quotes/resolve.ts`).
  */
 
 import {type AtIdentifierString} from '@atproto/syntax'
@@ -24,12 +26,20 @@ import {
 } from '#/horizon/private/api/reads'
 import {PrivateAuthorMergeFeedAPI} from '#/horizon/private/feed/author-merge'
 import {privateTabDid} from '#/horizon/private/feed/keys'
+import {
+  LIKE_RECORDS_PAGE_LIMIT,
+  PrivateLikesMergeFeedAPI,
+} from '#/horizon/private/feed/likes-merge'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
 import {withPrivateQuotes} from '#/horizon/private/quotes/resolve'
+import {privateMediaFiltersServed} from '#/horizon/private/server-support'
 import {getPendingPosts} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
+import {getCurrentPdsClient} from '#/horizon/routing/current-clients'
 import {PRIVATE_READING} from '#/horizon/switches'
-import {app} from '#/lexicons'
+import {app, com} from '#/lexicons'
+
+const LIKE_COLLECTION = 'app.bsky.feed.like'
 
 /**
  * prism's largest author feed page.
@@ -215,6 +225,9 @@ function memberFeedApi(
   const privateActor = privateTabDid(feedDesc)
   if (privateActor) return new PrivateAuthorFeedAPI(privateActor, source)
   const [kind, actor, filter, ...rest] = feedDesc.split('|')
+  if (kind === 'likes' && actor && filter === undefined) {
+    return ownLikesFeedApi(actor, source, api)
+  }
   if (kind !== 'author' || !actor || rest.length) return api
   if (filter === 'posts_and_author_threads') {
     // A new first page makes a new lookup.
@@ -227,5 +240,37 @@ function memberFeedApi(
   if (filter === 'posts_with_replies') {
     return new PrivateAuthorMergeFeedAPI(api, source, actor, 'replies')
   }
+  // The Media and Videos tabs, while prism filters media (change list 4).
+  if (privateMediaFiltersServed()) {
+    if (filter === 'posts_with_media') {
+      return new PrivateAuthorMergeFeedAPI(api, source, actor, 'media')
+    }
+    if (filter === 'posts_with_video') {
+      return new PrivateAuthorMergeFeedAPI(api, source, actor, 'video')
+    }
+  }
   return api
+}
+
+/**
+ * The Likes tab (change list item 5): the owner's own likes with their liked
+ * private posts merged in, read from the owner's repo through their PDS.
+ * Anyone else's Likes tab, or one without a PDS client, is stock.
+ */
+function ownLikesFeedApi(
+  actor: string,
+  source: PrivateSource,
+  api: FeedAPI,
+): FeedAPI {
+  const pds = getCurrentPdsClient()
+  if (actor !== source.did || !pds) return api
+  return new PrivateLikesMergeFeedAPI(api, source, async cursor => {
+    const res = await pds.call(com.atproto.repo.listRecords, {
+      repo: actor as AtIdentifierString,
+      collection: LIKE_COLLECTION,
+      limit: LIKE_RECORDS_PAGE_LIMIT,
+      cursor,
+    })
+    return {records: res.records, cursor: res.cursor}
+  })
 }

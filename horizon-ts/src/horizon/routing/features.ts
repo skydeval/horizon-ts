@@ -37,6 +37,7 @@ export const PRISM_FEATURES = [
   'private.following',
   'private.search',
   'private.threadAudience',
+  'private.mediaFilters',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

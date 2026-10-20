@@ -12,14 +12,19 @@ import {
 } from '#/horizon/private/__tests__/fixtures'
 import {
   fetchPostingDefaults,
+  fetchReadingSettings,
   readDeviceDefaults,
+  readDeviceReadingSettings,
   writePostingDefaults,
+  writeReadingSettings,
 } from '#/horizon/private/defaults/query'
 import {
   buildPostingDefaultsRecord,
+  buildReadingSettingsRecord,
   DEFAULT_PRIVATE_DEFAULTS,
   isOwnAudienceUri,
   parsePostingDefaultsRecord,
+  parseReadingSettings,
   type PrivateDefaults,
 } from '#/horizon/private/defaults/record'
 
@@ -262,6 +267,88 @@ describe('reading and writing in the account own repo', () => {
     expect(puts(server.calls)).toHaveLength(2)
     expect(server.stored?.value).toMatchObject({
       private: {startAs: 'private'},
+    })
+  })
+})
+
+describe('reading settings in the same record (change list item 2)', () => {
+  it('reads leniently: only an explicit false turns spoilers from other apps off', () => {
+    expect(parseReadingSettings(undefined)).toEqual({otherAppSpoilers: true})
+    expect(parseReadingSettings({otherAppSpoilers: 'no'})).toEqual({
+      otherAppSpoilers: true,
+    })
+    expect(parseReadingSettings({otherAppSpoilers: false})).toEqual({
+      otherAppSpoilers: false,
+    })
+    expect(
+      parsePostingDefaultsRecord({reading: {otherAppSpoilers: false}}, DID)
+        ?.reading,
+    ).toEqual({otherAppSpoilers: false})
+  })
+
+  it('a reading write keeps private, unknown fields and validates', () => {
+    const raw = {
+      version: 1,
+      private: {startAs: 'private', audience: {mode: 'followers'}},
+      reading: {later: 'kept'},
+      future: {x: 1},
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    }
+    const record = buildReadingSettingsRecord(
+      raw,
+      {otherAppSpoilers: false},
+      NOW,
+    )
+    expect(postingDefaultsRecord.safeValidate(record).success).toBe(true)
+    expect(record).toEqual({
+      ...raw,
+      $type: COLLECTION,
+      reading: {later: 'kept', otherAppSpoilers: false},
+      updatedAt: NOW.toISOString(),
+    })
+  })
+
+  it('a posting defaults write keeps the reading settings', () => {
+    const record = buildPostingDefaultsRecord(
+      {version: 1, reading: {otherAppSpoilers: false}},
+      FOLLOWERS,
+      NOW,
+    )
+    expect(record.reading).toEqual({otherAppSpoilers: false})
+  })
+
+  it('writes through the PDS swapped on the CID, and keeps a device copy', async () => {
+    const {server, client} = pds({
+      value: {
+        $type: COLLECTION,
+        version: 1,
+        private: {startAs: 'private'},
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+      cid: RECORD_CID,
+    })
+    await writeReadingSettings(
+      client,
+      DID,
+      {otherAppSpoilers: false},
+      () => NOW,
+    )
+    const [put] = puts(server.calls)
+    expect(put.body?.swapRecord).toBe(RECORD_CID)
+    expect(server.stored?.value).toMatchObject({
+      private: {startAs: 'private'},
+      reading: {otherAppSpoilers: false},
+    })
+    expect(readDeviceReadingSettings(DID)).toEqual({otherAppSpoilers: false})
+    expect(await fetchReadingSettings(client, DID)).toEqual({
+      otherAppSpoilers: false,
+    })
+  })
+
+  it('no record reads as on', async () => {
+    const {client} = pds(null)
+    expect(await fetchReadingSettings(client, DID)).toEqual({
+      otherAppSpoilers: true,
     })
   })
 })

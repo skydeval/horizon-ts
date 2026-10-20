@@ -76,11 +76,27 @@ export function getPrivateTimeline(
 }
 
 /**
+ * The `filter` values prism's private author feed takes: the stock tab
+ * filters (`private.paging`) and the media filters (`private.mediaFilters`,
+ * P-30).
+ */
+export type PrivateAuthorFeedFilter =
+  | 'posts_and_author_threads'
+  | 'posts_with_replies'
+  | 'posts_with_media'
+  | 'posts_with_video'
+
+/**
  * One page of an author's private posts that the reader may view.
  */
 export function getPrivateAuthorFeed(
   prism: Client,
-  params: {actor: string; limit?: number; cursor?: string; filter?: string},
+  params: {
+    actor: string
+    limit?: number
+    cursor?: string
+    filter?: PrivateAuthorFeedFilter
+  },
 ): Promise<{feed: PrivatePostView[]; cursor?: string}> {
   return reportedPrismCall(() =>
     prism.call(nearhorizon.privateGetAuthorFeed, {

@@ -435,6 +435,33 @@ released version yet; everything so far is under `[Unreleased]`.
   links on the preview's own origin, and `scripts/preview-build.sh` (`build`,
   `deploy`, `info`) for silonew. How-to (internal):
   `docs/internal/notes/preview-deploy.md`.
+- **Spoilers from other apps** (change list item 2). A post with no spoiler
+  facets, written in another app or before Horizon wrote facets, has its
+  `||text||` drawn as covers and drawers, in the feed, threads, quotes,
+  notifications, the reply preview, the video card text and the DM share
+  preview. A strict rule keeps ordinary text alone: the markers hug the
+  text (`||x||`, never `a || b`) and are not glued to a word outside them;
+  a post with a backtick, `|||`, more than one spaced `||` or `&&`, an
+  unpaired marker or more than 5 spoilers renders as stock. Settings >
+  Content and media has "Cover ||spoilers|| from other apps", per account
+  and on by default, kept in the account's
+  `app.nearhorizon.actor.postingDefaults` record (`reading`); off, such
+  posts render as stock. This reverses spoilers design S-3 as an opt-out.
+- **The profile Likes tab shows liked private posts** (change list item 5).
+  For a member on their own Likes tab, the like records in their repo whose
+  subject is a private post are read through prism (readable ones only) and
+  merged with the stock items in like order; non-members see the stock tab.
+- **The profile Media tab is a grid** (change list item 6): square
+  thumbnails, 3 to a row on phones and 4 from 800px, on web and native. A
+  tap opens the post, a post with several images shows a stack mark, spoiler
+  and CW media stay blurred with the compact covers, posts hidden by
+  moderation are masked as on the Videos tab, and a private post carries
+  the corner lock.
+- **The profile Media and Videos tabs include private posts** (change list
+  item 4) the reader may see, merged by time like the Posts tab, while
+  prism serves `private.mediaFilters` (its author feed's
+  `posts_with_media` and `posts_with_video` filters, reposts left out);
+  without it, and for non-members, the tabs are public-only.
 
 ### Fixed
 
@@ -482,6 +509,13 @@ released version yet; everything so far is under `[Unreleased]`.
   so instead of showing a dead player. A quoted public post's video is
   unchanged. Safari and iOS may not play or seek it until Horizon's server
   answers range requests.
+
+- **App views: the Horizon app view card is described briefly** (change
+  list item 1): "Always connected. Powers Horizon's features.", without its
+  address. It stays greyed out and cannot be switched.
+- **"Phone frame" in Appearance shows only where it applies** (change list
+  item 3): below 800px or on a touch-first device, following window resizes
+  live. A desktop window hides it; the saved choice is kept either way.
 
 ### Removed
 

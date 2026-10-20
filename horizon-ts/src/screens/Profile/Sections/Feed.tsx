@@ -23,6 +23,8 @@ import {atoms as a, ios, useTheme} from '#/alf'
 import {EditBig_Stroke1_Corner0_Rounded as EditIcon} from '#/components/icons/EditBig'
 import {Text} from '#/components/Typography'
 import {IS_IOS, IS_NATIVE} from '#/env'
+// HORIZON: the Media tab is drawn as a grid, through the video grid rows
+import {isMediaGridFeed} from '#/horizon/media-grid/grid'
 import {type SectionRef} from './types'
 
 interface FeedSectionProps {
@@ -112,7 +114,8 @@ export function ProfileFeedSection({
         initialNumToRender={
           shouldUseAdjustedNumToRender ? adjustedInitialNumToRender : undefined
         }
-        isVideoFeed={isVideoFeed}
+        // HORIZON: the Media tab is drawn as a grid, through the video grid rows
+        isVideoFeed={isVideoFeed || isMediaGridFeed(feed)}
         ref={postFeedRef}
       />
       {(isScrolledDown || hasNew) && (

@@ -34,7 +34,6 @@ import {IS_WEB} from '#/env'
 import {openInPlaceSignIn} from '#/horizon/auth/in-place-store'
 import {PRODUCT_NAME} from '#/horizon/branding'
 import {validatePublicAppview} from '#/horizon/routing/appview-validation'
-import {PRISM_URL} from '#/horizon/routing/prism'
 import {
   type PublicAppviewChoice,
   usePublicAppviewChoice,
@@ -125,7 +124,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
         break
       case 'prism':
         setError(
-          l`This is ${PRODUCT_NAME}’s own server. It is always connected and can’t be the public app view.`,
+          l`That’s ${PRODUCT_NAME}’s app view, which is always connected. Enter a public app view.`,
         )
         break
       case 'pds':
@@ -161,12 +160,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
             <Trans>{PRODUCT_NAME} app view</Trans>
           </Text>
           <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            {new URL(PRISM_URL).host}
-          </Text>
-          <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            <Trans>
-              Always connected. Private posts, polls and Thread Lens use it.
-            </Trans>
+            <Trans>Always connected. Powers {PRODUCT_NAME}’s features.</Trans>
           </Text>
         </View>
 

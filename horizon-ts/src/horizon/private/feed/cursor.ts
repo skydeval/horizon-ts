@@ -58,7 +58,8 @@ export function isMergeCursor(cursor: string | undefined): cursor is string {
   return !!cursor && cursor.startsWith(MERGE_CURSOR_PREFIX)
 }
 
-function toBase64Url(text: string): string {
+/** `text`'s UTF-8 bytes as unpadded base64url. */
+export function toBase64Url(text: string): string {
   const bytes = new TextEncoder().encode(text)
   let binary = ''
   const CHUNK = 0x8000
@@ -68,7 +69,8 @@ function toBase64Url(text: string): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function fromBase64Url(encoded: string): string {
+/** The text `toBase64Url` encoded. */
+export function fromBase64Url(encoded: string): string {
   const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
   const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
   const binary = atob(padded)

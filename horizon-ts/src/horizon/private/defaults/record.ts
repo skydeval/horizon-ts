@@ -1,5 +1,6 @@
 /*
- * The private posting defaults and their record,
+ * The private posting defaults and their record (with the account's reading
+ * choices, `ReadingSettings`, kept in it too),
  * `app.nearhorizon.actor.postingDefaults/self` (schema in
  * `lexicons/posting-defaults.ts`). Reads are lenient, field by field; a write
  * replaces `private` and keeps every other field as read, so a newer
@@ -117,7 +118,11 @@ export function parsePrivateDefaults(
 export function parsePostingDefaultsRecord(
   value: unknown,
   ownerDid: string,
-): {defaults: PrivateDefaults; raw: Record<string, unknown>} | null {
+): {
+  defaults: PrivateDefaults
+  reading: ReadingSettings
+  raw: Record<string, unknown>
+} | null {
   if (!isObject(value)) return null
   if (
     value.$type !== undefined &&
@@ -126,7 +131,11 @@ export function parsePostingDefaultsRecord(
     return null
   }
   const {$type: _type, ...raw} = value
-  return {defaults: parsePrivateDefaults(value.private, ownerDid), raw}
+  return {
+    defaults: parsePrivateDefaults(value.private, ownerDid),
+    reading: parseReadingSettings(value.reading),
+    raw,
+  }
 }
 
 /** A default audience as the record's `#audience`. */
@@ -160,6 +169,14 @@ export function buildPostingDefaultsRecord(
     startAs: defaults.startAs,
     ...(defaults.audience ? {audience: audienceRecord(defaults.audience)} : {}),
   }
+  return finishRecord(base, raw, now)
+}
+
+function finishRecord(
+  base: Record<string, unknown>,
+  raw: Record<string, unknown> | null,
+  now: Date,
+): BuiltPostingDefaultsRecord {
   const version =
     raw && typeof raw.version === 'number' && Number.isInteger(raw.version)
       ? Math.max(1, raw.version)
@@ -170,4 +187,42 @@ export function buildPostingDefaultsRecord(
     version,
     updatedAt: now.toISOString() as PostingDefaultsRecord['updatedAt'],
   }
+}
+
+/**
+ * The account's reading choices kept in the same record (change list item
+ * 2). Not private: every signed-in account has them.
+ */
+export type ReadingSettings = {
+  /** Draw `||...||` in posts from other apps as spoilers. */
+  otherAppSpoilers: boolean
+}
+
+export const DEFAULT_READING_SETTINGS: ReadingSettings = {
+  otherAppSpoilers: true,
+}
+
+/**
+ * A record's `#readingDefaults`, leniently: only an explicit `false` turns a
+ * choice off, so a bad value keeps the default.
+ */
+export function parseReadingSettings(value: unknown): ReadingSettings {
+  if (!isObject(value)) return DEFAULT_READING_SETTINGS
+  return {otherAppSpoilers: value.otherAppSpoilers !== false}
+}
+
+/**
+ * The record to put for a reading change: `raw` with `reading` replaced by
+ * `reading`, its unknown fields kept, and every other field (`private`
+ * included) as read.
+ */
+export function buildReadingSettingsRecord(
+  raw: Record<string, unknown> | null,
+  reading: ReadingSettings,
+  now: Date,
+): BuiltPostingDefaultsRecord {
+  const base: Record<string, unknown> = raw ? {...raw} : {}
+  const readReading = isObject(base.reading) ? base.reading : {}
+  base.reading = {...readReading, otherAppSpoilers: reading.otherAppSpoilers}
+  return finishRecord(base, raw, now)
 }

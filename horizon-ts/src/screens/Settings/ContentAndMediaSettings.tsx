@@ -27,6 +27,8 @@ import {Window_Stroke2_Corner2_Rounded as WindowIcon} from '#/components/icons/W
 import * as Layout from '#/components/Layout'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
+// HORIZON: cover ||spoilers|| from other apps, per account
+import {OtherAppSpoilersToggle} from '#/horizon/spoilers/OtherAppSpoilers'
 
 type Props = NativeStackScreenProps<
   CommonNavigatorParams,
@@ -126,6 +128,8 @@ export function ContentAndMediaSettingsScreen({}: Props) {
               <Toggle.Platform />
             </SettingsList.Item>
           </Toggle.Item>
+          {/* HORIZON: cover ||spoilers|| from other apps, per account */}
+          <OtherAppSpoilersToggle />
           {trendingEnabled ? (
             <>
               <SettingsList.Divider />

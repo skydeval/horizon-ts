@@ -14,6 +14,8 @@ import {Text} from '#/components/Typography'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {withContentWarningRecord} from './cw-line'
 import {rendersSpoilers} from './layout'
+import {withOtherAppSpoilers} from './other-apps'
+import {useOtherAppSpoilersOn} from './other-apps-setting'
 import {
   coversWhileLoading,
   findCachedPostRecord,
@@ -34,6 +36,7 @@ export function ReplyToText({
   const cached = findCachedPostRecord(queryClient, replyTo.uri, replyTo.text)
   const query = usePostQuery(cached ? undefined : replyTo.uri)
   const record = cached ?? matchingRecord(query.data, replyTo.text)
+  const otherAppSpoilers = useOtherAppSpoilersOn()
 
   const stock = (
     <Text style={style} numberOfLines={numberOfLines} emoji>
@@ -42,9 +45,12 @@ export function ReplyToText({
   )
 
   if (record) {
-    const richText = withContentWarningRecord(
-      new RichTextAPI({text: record.text, facets: record.facets}),
-      record,
+    const richText = withOtherAppSpoilers(
+      withContentWarningRecord(
+        new RichTextAPI({text: record.text, facets: record.facets}),
+        record,
+      ),
+      otherAppSpoilers,
     )
     if (!rendersSpoilers(richText)) return stock
     return (

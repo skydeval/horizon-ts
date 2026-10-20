@@ -13,6 +13,8 @@ import {Text, type TextProps} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
 // HORIZON: post text with spoiler facets renders its spoilers covered
 import {rendersSpoilers} from '#/horizon/spoilers/layout'
+// HORIZON: a post's ||spoilers|| from another app render covered (setting)
+import {useOtherAppSpoilers} from '#/horizon/spoilers/other-apps-setting'
 // HORIZON: post text with spoiler facets renders its spoilers covered
 import {SpoilerRichText} from '#/horizon/spoilers/SpoilerRichText'
 import {app} from '#/lexicons'
@@ -88,11 +90,13 @@ export function RichText({
     }
   }, [value])
 
+  // HORIZON: a post's ||spoilers|| from another app render covered (setting)
+  const spoilerText = useOtherAppSpoilers(richText)
   // HORIZON: post text with spoiler facets renders its spoilers covered
-  if (rendersSpoilers(richText)) {
+  if (rendersSpoilers(spoilerText)) {
     return (
       <SpoilerRichText
-        richText={richText}
+        richText={spoilerText}
         testID={testID}
         style={style}
         numberOfLines={numberOfLines}

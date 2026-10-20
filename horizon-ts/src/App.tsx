@@ -88,6 +88,8 @@ import {
 import * as Geo from '#/geolocation'
 // HORIZON: the appearance record's sync on native (Phase 3, BD-22)
 import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
+// HORIZON: the "spoilers from other apps" choice (change list 2)
+import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
 import {Splash} from '#/Splash'
 
 void identifyDevice(getDeviceId(), setupDeviceId)
@@ -188,6 +190,8 @@ function InnerApp() {
                                                                 <ToastOutlet />
                                                                 {/* HORIZON: the appearance record's sync (Phase 3, BD-22) */}
                                                                 <AppearanceSync />
+                                                                {/* HORIZON: the "spoilers from other apps" choice (change list 2) */}
+                                                                <OtherAppSpoilersSync />
                                                               </TranslateOnDeviceProvider>
                                                             </IntentDialogProvider>
                                                           </GlobalGestureEventsProvider>

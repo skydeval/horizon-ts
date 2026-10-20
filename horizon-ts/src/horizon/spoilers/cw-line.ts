@@ -17,6 +17,7 @@ import {type RichText as RichTextAPI} from '@bsky/sdk/richtext'
 
 import {isContentWarningRecord} from '#/horizon/media-spoilers/nsid'
 import {contentWarningsOn} from '#/horizon/media-spoilers/switches-read'
+import {isPostText, markPostText} from './post-texts'
 
 /**
  * Texts built from a record with the CW self-label. Keyed by the object, so
@@ -29,15 +30,26 @@ const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
 /**
- * `richText`, unchanged, remembered as a CW post's text when `record` (the
- * record it was built from) carries the CW self-label.
+ * `richText`, unchanged, remembered as a post's text (`post-texts.ts`, read
+ * by local detection of spoilers from other apps) and as a CW post's text
+ * when `record` (the record it was built from) carries the CW self-label.
  */
 export function withContentWarningRecord<T extends RichTextAPI | undefined>(
   richText: T,
   record: unknown,
 ): T {
-  if (richText && isContentWarningRecord(record)) cwTexts.add(richText)
+  if (!richText) return richText
+  markPostText(richText)
+  if (isContentWarningRecord(record)) cwTexts.add(richText)
   return richText
+}
+
+/**
+ * `to`, a text rebuilt from `from` (local detection), takes `from`'s marks.
+ */
+export function carryTextMarks(from: RichTextAPI, to: RichTextAPI): void {
+  if (isPostText(from)) markPostText(to)
+  if (cwTexts.has(from)) cwTexts.add(to)
 }
 
 /**

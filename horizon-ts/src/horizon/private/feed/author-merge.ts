@@ -1,6 +1,6 @@
 /*
- * The profile merges (6.3.1): a member's view of a profile's Posts and
- * Replies tabs is the stock author feed merged by time with the private posts
+ * The profile merges (6.3.1; change list item 4 for Media and Videos): a
+ * member's view of a profile's Posts, Replies, Media and Videos tabs is the stock author feed merged by time with the private posts
  * of that profile the reader may view, as Following merges the private
  * timeline. Nothing is taken away from the stock tab; private posts are
  * added.
@@ -20,13 +20,17 @@
 
 import {type FeedAPI, type FeedAPIResponse} from '#/lib/api/feed/types'
 import {logger} from '#/logger'
+import {gridMediaOf} from '#/horizon/media-grid/grid'
 import {
   isOwnItem,
   type PrivateSource,
   readReplyRefs,
   toFeedViewPosts,
 } from '#/horizon/private/adapt/feed-view'
-import {getPrivateAuthorFeed} from '#/horizon/private/api/reads'
+import {
+  getPrivateAuthorFeed,
+  type PrivateAuthorFeedFilter,
+} from '#/horizon/private/api/reads'
 import {
   decodeMergeCursor,
   encodeMergeCursor,
@@ -48,10 +52,13 @@ import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
 /**
- * The tab a merge serves: `posts` (stock `posts_and_author_threads`) or
- * `replies` (stock `posts_with_replies`).
+ * The tab a merge serves: `posts` (stock `posts_and_author_threads`),
+ * `replies` (stock `posts_with_replies`), `media` (stock `posts_with_media`)
+ * or `video` (stock `posts_with_video`). The media tabs are merged only while
+ * prism lists `private.mediaFilters` (change list item 4, P-30), and prism
+ * always filters them.
  */
-export type AuthorMergeFilter = 'posts' | 'replies'
+export type AuthorMergeFilter = 'posts' | 'replies' | 'media' | 'video'
 
 /**
  * The size of a private author feed page.
@@ -66,9 +73,35 @@ export const AUTHOR_MERGE_DEADLINE_MS = 5_000
 /**
  * The stock filter of each tab, which prism takes once it filters (P-20).
  */
-const STOCK_FILTER: Record<AuthorMergeFilter, string> = {
+const STOCK_FILTER: Record<AuthorMergeFilter, PrivateAuthorFeedFilter> = {
   posts: 'posts_and_author_threads',
   replies: 'posts_with_replies',
+  media: 'posts_with_media',
+  video: 'posts_with_video',
+}
+
+function isMediaFilter(filter: AuthorMergeFilter): boolean {
+  return filter === 'media' || filter === 'video'
+}
+
+/**
+ * Whether prism filters the tab itself: the media tabs always (they are
+ * merged only with `private.mediaFilters`), the others with
+ * `private.paging`.
+ */
+function prismFilters(filter: AuthorMergeFilter): boolean {
+  return isMediaFilter(filter) || privatePagingServed()
+}
+
+/**
+ * A post's own media kind on a media tab, as stock sorts it: `media` for
+ * images or a gallery (a quote with them included), `video` for a video.
+ * Read from the adapted embed view (a pending post's).
+ */
+function mediaTabOf(embed: unknown): AuthorMergeFilter | undefined {
+  const media = gridMediaOf(embed)
+  if (!media) return undefined
+  return media.kind === 'video' ? 'video' : 'media'
 }
 
 function authorityOf(uri: string): string | undefined {
@@ -87,7 +120,7 @@ export function keepsPrivatePost(
   actor: string,
   record: unknown,
 ): boolean {
-  if (filter === 'replies' || privatePagingServed()) return true
+  if (filter === 'replies' || prismFilters(filter)) return true
   const refs = readReplyRefs(record)
   if (!refs) return true
   return (
@@ -165,7 +198,7 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
                 actor: this.actor,
                 limit: AUTHOR_MERGE_PAGE_LIMIT,
                 cursor: pageCursor,
-                ...(privatePagingServed()
+                ...(prismFilters(this.filter)
                   ? {filter: STOCK_FILTER[this.filter]}
                   : {}),
               })
@@ -173,10 +206,12 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
             },
             priv.cursor ?? undefined,
             {
-              // A repost item appears under both filters (lexicon).
+              // A repost item appears under both filters (lexicon); the
+              // media filters leave reposts out, as stock.
               keep: view =>
-                !isOwnItem(view) ||
-                keepsPrivatePost(this.filter, this.actor, view.record),
+                isOwnItem(view)
+                  ? keepsPrivatePost(this.filter, this.actor, view.record)
+                  : !isMediaFilter(this.filter),
             },
           ),
           AUTHOR_MERGE_DEADLINE_MS,
@@ -205,7 +240,9 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
         insertPending(
           state.priv.buf,
           getPendingPosts().filter(entry =>
-            keepsPrivatePost(this.filter, this.actor, entry.record),
+            isMediaFilter(this.filter)
+              ? mediaTabOf(entry.postView.embed) === this.filter
+              : keepsPrivatePost(this.filter, this.actor, entry.record),
           ),
         )
       }

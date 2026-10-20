@@ -86,7 +86,12 @@ export const privateGetTimeline = l.query(
 
 /**
  * `app.nearhorizon.private.getAuthorFeed`. `filter` is the stock author-feed
- * filter (P-20); it is sent only while prism lists `private.paging`.
+ * filter (P-20); `posts_and_author_threads` and `posts_with_replies` are
+ * sent only while prism lists `private.paging`, `posts_with_media` (images
+ * and galleries, a quote with them included, no video) and
+ * `posts_with_video` (video, a quote with video included) only while it
+ * lists `private.mediaFilters` (P-30). Reposts are left out of the media
+ * filters. Any other value is a 400.
  */
 export const privateGetAuthorFeed = l.query(
   'app.nearhorizon.private.getAuthorFeed',
@@ -94,7 +99,16 @@ export const privateGetAuthorFeed = l.query(
     actor: l.string({format: 'did'}),
     limit: l.optional(l.integer({minimum: 1, maximum: 50})),
     cursor: l.optional(l.string()),
-    filter: l.optional(l.string()),
+    filter: l.optional(
+      l.string<{
+        knownValues: [
+          'posts_and_author_threads',
+          'posts_with_replies',
+          'posts_with_media',
+          'posts_with_video',
+        ]
+      }>(),
+    ),
   }),
   l.jsonPayload({
     feed: l.array(privatePostView),

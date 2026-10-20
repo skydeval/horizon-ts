@@ -2,7 +2,8 @@
  * Post text for a place that draws it plainly and reads it in a label: the
  * video grid card (spoilers design, 6.8). Each spoiler becomes a placeholder,
  * and a content warning's body another (2J design, 6.9). A CW line reads
- * "CW: " and the line, as it is drawn (2J follow-up, `cw-line.ts`).
+ * "CW: " and the line, as it is drawn (2J follow-up, `cw-line.ts`). Spoilers
+ * from other apps count while the account's choice is on (`other-apps.ts`).
  */
 
 import {RichText as RichTextAPI} from '@bsky/sdk/richtext'
@@ -11,6 +12,8 @@ import {t} from '@lingui/core/macro'
 import {type app} from '#/lexicons'
 import {cwLineEndOf, withContentWarningRecord} from './cw-line'
 import {rendersSpoilers, visibleSpoilerText} from './layout'
+import {withOtherAppSpoilers} from './other-apps'
+import {otherAppSpoilersOn} from './other-apps-setting'
 
 const decoder = new TextDecoder()
 
@@ -21,9 +24,12 @@ const decoder = new TextDecoder()
  * "CW: " before a CW line.
  */
 export function spoilerSafeText(record: app.bsky.feed.post.Main): string {
-  const richText = withContentWarningRecord(
-    new RichTextAPI({text: record.text, facets: record.facets}),
-    record,
+  const richText = withOtherAppSpoilers(
+    withContentWarningRecord(
+      new RichTextAPI({text: record.text, facets: record.facets}),
+      record,
+    ),
+    otherAppSpoilersOn(),
   )
   if (!rendersSpoilers(richText)) return record.text
   const {bytes, spans} = visibleSpoilerText(richText)

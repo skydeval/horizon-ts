@@ -33,6 +33,22 @@ export const FRAME_STYLES: readonly FrameStyle[] = [
 export const DEFAULT_FRAME_STYLE: FrameStyle = 'bars'
 
 /**
+ * Whether Appearance offers "Phone frame" on this window (change list item
+ * 3): below 800px, where the frames apply, or on a touch-first device, which
+ * can rotate or resize into compact. A desktop window at 800px or more hides
+ * it. The saved style is kept either way.
+ */
+export function offersFrameStylePicker({
+  gtMobile,
+  coarsePointer,
+}: {
+  gtMobile: boolean
+  coarsePointer: boolean
+}): boolean {
+  return !gtMobile || coarsePointer
+}
+
+/**
  * Retired styles and what they read as: `buttons` (the button-lens
  * prototype, 9.7) was removed in the round 2 list and reads as Bars.
  */

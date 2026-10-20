@@ -153,6 +153,17 @@ export const SPOILER_TAGS: boolean = true
 export const MEDIA_SPOILERS: boolean = true
 
 /**
+ * Spoilers from other apps (change list item 2, reversing spoilers design
+ * S-3 as an opt-out): a post without spoiler facets has its `||...||` pairs
+ * parsed on this device under a strict rule (`spoilers/other-apps.ts`) and
+ * drawn as covers, while the account's "Cover ||spoilers|| from other apps"
+ * setting in Content and media is on (the default). Effective only with
+ * `SPOILER_TAGS` on. `false` removes the setting row and renders such posts
+ * as stock, markers visible.
+ */
+export const OTHER_APP_SPOILERS: boolean = true
+
+/**
  * Whole-post content warnings (2J design): the composer's CW toggle and line,
  * the CW text pipeline, the `app.nearhorizon.cw` self-label, and the "Content
  * warning" wording of drawers and pills. Effective only with `SPOILER_TAGS`
@@ -221,3 +232,12 @@ export const PRIVATE_POSTING_DEFAULTS: boolean = true
  * with no tabs.
  */
 export const PRIVATE_NOTIFICATION_SETTINGS: boolean = true
+
+/**
+ * The profile Media tab as a grid of square thumbnails (change list item 6,
+ * `media-grid/`), 3 or 4 to a row by width, on web and native: a tap opens
+ * the post, a post with several images shows a stack mark, spoiler and CW
+ * media stay blurred with the compact covers, and a private post carries the
+ * corner lock. `false` restores the stock list of posts.
+ */
+export const MEDIA_GRID: boolean = true

@@ -95,6 +95,15 @@ export function privatePagingServed(opts?: ServedOptions): boolean {
 }
 
 /**
+ * prism filters its private author feed with `posts_with_media` and
+ * `posts_with_video` (`private.mediaFilters`, P-30; change list item 4).
+ * Until then the profile Media and Videos tabs are public-only.
+ */
+export function privateMediaFiltersServed(opts?: ServedOptions): boolean {
+  return served('private.mediaFilters', opts)
+}
+
+/**
  * prism searches the private posts the reader may read (`private.search`,
  * P-7).
  */

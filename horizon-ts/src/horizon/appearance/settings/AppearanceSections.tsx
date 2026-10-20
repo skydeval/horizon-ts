@@ -15,7 +15,7 @@ import {useLingui} from '@lingui/react/macro'
 import {useSession} from '#/state/session'
 import {AppearanceToggleButtonGroup} from '#/screens/Settings/AppearanceSettings'
 import * as SettingsList from '#/screens/Settings/components/SettingsList'
-import {atoms as a, native, useTheme, web} from '#/alf'
+import {atoms as a, native, useBreakpoints, useTheme, web} from '#/alf'
 import * as Toggle from '#/components/forms/Toggle'
 import {Moon_Stroke2_Corner0_Rounded as MoonIcon} from '#/components/icons/Moon'
 import {PaintRoller_Stroke2_Corner2_Rounded as PaintRollerIcon} from '#/components/icons/PaintRoller'
@@ -34,9 +34,11 @@ import {
   setOptOut,
   useAppearanceState,
 } from '#/horizon/appearance/store'
+import {useCoarsePointer} from '#/horizon/backdrops/coarse-pointer'
 import {
   FRAME_STYLES,
   type FrameStyle,
+  offersFrameStylePicker,
   SHOW_FRAME_STYLE_PICKER,
 } from '#/horizon/backdrops/frame-style'
 import {
@@ -345,11 +347,21 @@ function SoftnessGroup() {
 /*
  * The phone frame picker (10.8, 9.3, 9.6, 9.7; live fix batch 1), this
  * device only, with one line under the title describing the selected
- * style. `AppearanceToggleButtonGroup` comes from the stock screen, which
+ * style, offered only below 800px or on a touch-first device (change list
+ * item 3, `offersFrameStylePicker`), following resizes live; hiding it
+ * keeps the saved style. `AppearanceToggleButtonGroup` comes from the stock
+ * screen, which
  * imports this file: a circular import, safe because each side uses the
  * other only at render.
  */
 function FrameStyleGroup() {
+  const {gtMobile} = useBreakpoints()
+  const coarsePointer = useCoarsePointer()
+  if (!offersFrameStylePicker({gtMobile, coarsePointer})) return null
+  return <FrameStylePicker />
+}
+
+function FrameStylePicker() {
   const {t: l} = useLingui()
   const {device} = useAppearanceState()
   const labels: Record<FrameStyle, string> = {

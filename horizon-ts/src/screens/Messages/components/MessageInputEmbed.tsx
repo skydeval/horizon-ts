@@ -36,6 +36,8 @@ import {Text} from '#/components/Typography'
 import {MediaSpoilerNote} from '#/horizon/media-spoilers/MediaSpoilerCover'
 // HORIZON: a shared post's spoiler media are not previewed
 import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
+// HORIZON: a post's text, for ||spoilers|| from other apps
+import {asPostText} from '#/horizon/spoilers/post-texts'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -168,10 +170,13 @@ function MessageInputPostEmbed({
   const {rt, record} = useMemo(() => {
     if (post && bsky.isType(app.bsky.feed.post, post.record)) {
       return {
-        rt: new RichTextAPI({
-          text: post.record.text,
-          facets: post.record.facets,
-        }),
+        // HORIZON: a post's text, for ||spoilers|| from other apps
+        rt: asPostText(
+          new RichTextAPI({
+            text: post.record.text,
+            facets: post.record.facets,
+          }),
+        ),
         record: post.record,
       }
     }

@@ -3,7 +3,7 @@
  * (first, so it is published before anything else runs), the in-place
  * sign-in window,
  * the password dialog, the membership probe and its notice, the appearance
- * record's sync, the launch-time
+ * record's sync, the "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
  * every account change.
@@ -21,6 +21,7 @@ import {
   MembershipProbe,
 } from '#/horizon/routing/MembershipNotice'
 import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
+import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
 
 /**
  * Another tab changed the public AppView: reload when this tab is next
@@ -65,6 +66,7 @@ export function HorizonHost() {
       <MembershipProbe />
       <MembershipNotice />
       <AppearanceSync />
+      <OtherAppSpoilersSync />
       <InPlaceSignInWindow />
       <PasswordGateDialog />
     </>
