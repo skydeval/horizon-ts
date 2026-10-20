@@ -98,7 +98,7 @@ describe('RailCard (T17)', () => {
     expect(rendered('rail').backdropFilter).toBeUndefined()
   })
 
-  it('paints the backdrop into the card under the glass (7a)', () => {
+  it('paints the backdrop into the card under the glass (7a, round 2)', () => {
     store.selectBackdrop(undefined, 'pride.trans')
     const json = render(
       <RailCard>
@@ -118,13 +118,14 @@ describe('RailCard (T17)', () => {
       zIndex: -1,
       overflow: 'hidden',
     })
-    const [inner, glass] = paint.children as Json[]
-    expect(String(inner.props.style?.backgroundImage)).toMatch(
-      /^linear-gradient\(/,
+    // Static (round 2): one layered background on the clip itself, the
+    // glass over the backdrop, and no child layers.
+    expect(paint.children).toBeNull()
+    const image = String(paint.props.style?.backgroundImage)
+    expect(image).toMatch(
+      /^linear-gradient\(rgba\(255, 255, 255, 0\.55\), rgba\(255, 255, 255, 0\.55\)\), linear-gradient\(\d/,
     )
-    expect(String(glass.props.style?.backgroundImage)).toBe(
-      'linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55))',
-    )
+    expect(paint.props.style?.willChange).toBeUndefined()
     expect(child.type).toBe('Text')
   })
 

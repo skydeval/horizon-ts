@@ -65,12 +65,16 @@ beforeEach(() => {
   store.resetAppearanceStoreForTests()
 })
 
+/** The surface's views' styles, in order. */
+function surfaceStyles() {
+  const {UNSAFE_getAllByType} = render(<ReadingSurface />)
+  return UNSAFE_getAllByType(View).map(
+    view => StyleSheet.flatten(view.props.style) as Record<string, unknown>,
+  )
+}
+
 function surfaceStyle() {
-  const {UNSAFE_getByType} = render(<ReadingSurface />)
-  return StyleSheet.flatten(UNSAFE_getByType(View).props.style) as Record<
-    string,
-    unknown
-  >
+  return surfaceStyles()[0]
 }
 
 describe('COMPACT_FRAME_WINDOWS off', () => {
@@ -128,5 +132,28 @@ describe('the Gutter frame (3E) with the compact frame off', () => {
       borderRadius: 16,
       backgroundColor: themes.light.atoms.bg.backgroundColor,
     })
+  })
+
+  it('an opaque core clear of the corners lets the compositor cull (round 2)', () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    mockInset = true
+    const [card, core, ...rest] = surfaceStyles()
+    expect(rest).toEqual([])
+    // Inside the card: the same sides, in from the top and bottom by the
+    // radius, so it never reaches a rounded corner; the card's colour.
+    expect(core).toEqual({
+      position: 'fixed',
+      top: card.borderRadius,
+      bottom: card.borderRadius,
+      left: card.left,
+      right: card.right,
+      backgroundColor: card.backgroundColor,
+    })
+    expect(core.borderRadius).toBeUndefined()
+  })
+
+  it('no core without the inset card', () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    expect(surfaceStyles()).toHaveLength(1)
   })
 })

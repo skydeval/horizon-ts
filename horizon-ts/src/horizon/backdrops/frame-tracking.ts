@@ -50,6 +50,14 @@ export type TrackedWindow = {
    */
   isStatic?: boolean
   /**
+   * A moving window in a piece fixed to the viewport (the Home header and
+   * the bottom bar; performance round 2): a page scroll cannot move it, so
+   * a scroll reads it only when the scroller is around it, as a static
+   * window. The bars' slides (`kick`), resize, navigation and the visual
+   * viewport still read it.
+   */
+  pinned?: boolean
+  /**
    * Follows the end of a CSS animation or transition on an ancestor (the
    * drawer's slide). Only these windows listen for them.
    */
@@ -191,9 +199,12 @@ export function createWindowTracker(env: TrackerEnv): WindowTracker {
   }
 
   const onScroll = (event?: {target?: unknown}) => {
-    let any = hasMoving()
+    let any = false
     entries.forEach((state, window) => {
-      if (window.isStatic && window.within?.(event?.target)) {
+      if (!window.isStatic && !window.pinned) {
+        // It may sit in the scrolled content, or be a sticky header.
+        any = true
+      } else if (window.within?.(event?.target)) {
         state.dirty = true
         any = true
       }

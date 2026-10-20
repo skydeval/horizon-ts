@@ -6,6 +6,13 @@
  * `t.atoms.bg`, so stock sticky headers and the
  * folder tabs join it. Only the focused screen's surface shows (the web stack
  * hides the others).
+ *
+ * The inset card's rounded corners keep the compositor from treating it as
+ * opaque, so the full-screen backdrop layer under it and the card itself
+ * were both drawn on every scroll frame (Gutter, performance round 2). A
+ * plain rectangle of the same colour inside the card, clear of the
+ * corners, is its own opaque fixed layer: everything under it is culled.
+ * It is invisible, being the card's colour within the card.
  */
 
 import {View} from 'react-native'
@@ -37,7 +44,7 @@ export function ReadingSurface() {
   if (!def || isWithinSplitView) return null
   if (!gtMobile) {
     // The inset card (9.6): the backdrop shows in the 8px gutters.
-    return (
+    const card = (
       <View
         pointerEvents="none"
         style={[
@@ -54,6 +61,25 @@ export function ReadingSurface() {
           t.atoms.bg,
         ]}
       />
+    )
+    if (!inset) return card
+    return (
+      <>
+        {card}
+        <View
+          pointerEvents="none"
+          style={[
+            a.fixed,
+            {
+              top: INSET_RADIUS,
+              bottom: INSET_RADIUS,
+              left: INSET_GUTTER,
+              right: INSET_GUTTER,
+            },
+            t.atoms.bg,
+          ]}
+        />
+      </>
     )
   }
   return (

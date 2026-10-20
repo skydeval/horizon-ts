@@ -13,6 +13,19 @@
  * those that moved. `background-attachment: fixed` is not used: every bar
  * carries a transform, which turns it into `scroll`.
  *
+ * A static window (a rail or nav card, performance round 2) paints the
+ * backdrop and its overlays as one layered background on the clipping
+ * `div` itself and moves it with `background-position`: it moves only with
+ * the layout, so it is never repainted on scroll, and it adds no
+ * compositor layers. The frame-sized inner element is a layer of its own
+ * (and promotes the overlays above it by overlap), so at 1440 the four
+ * cards were eight extra layers drawn on every scroll frame.
+ *
+ * A window whose piece is fixed to the viewport (the Home header and the
+ * bottom bar, performance round 2) is `pinned`: a page scroll cannot move
+ * it, so it is read only when the bars slide, the layout changes or a
+ * scroller around it scrolls, not on every scroll frame.
+ *
  * The `div` sits at `z-index: -1` (live fix batch 1). An absolutely
  * positioned box with `z-index: auto` paints above its parent's in-flow,
  * non-positioned children, and the bottom tabs' and the compose button's
@@ -29,6 +42,8 @@ import {NavigationContainerRefContext} from '@react-navigation/native'
 import {useTheme} from '#/alf'
 import {compileBackdrop} from '#/horizon/backdrops/compile'
 import {
+  cssBackground,
+  cssBackgroundPosition,
   cssLayers,
   cssOverlays,
   formatNumber,
@@ -43,6 +58,7 @@ import {
   createWindowTracker,
   type StateEmitter,
   type TrackedWindow,
+  windowOffset,
   type WindowRect,
   type WindowTracker,
 } from '#/horizon/backdrops/frame-tracking'
@@ -55,6 +71,9 @@ import {type BackdropDef} from '#/horizon/backdrops/types'
 import {useViewportFrame} from '#/horizon/backdrops/viewport'
 
 let tracker: WindowTracker | null = null
+
+/** A static window's paint before its first alignment. */
+const ORIGIN = {x: 0, y: 0}
 
 /** The page's one window tracker, created on first use. */
 function windowTracker(): WindowTracker {
@@ -126,6 +145,24 @@ function shapeCss(shape: WindowShape): React.CSSProperties {
   return {position: 'absolute', ...box}
 }
 
+/**
+ * Whether `node` sits in a `position: fixed` piece with no sticky box in
+ * between, so that a page scroll cannot move it (read once, on mount).
+ */
+export function pinnedToViewport(node: Element): boolean {
+  if (typeof Element === 'undefined') return false
+  for (
+    let el: Element | null = node.parentElement;
+    el instanceof Element;
+    el = el.parentElement
+  ) {
+    const {position} = getComputedStyle(el)
+    if (position === 'fixed') return true
+    if (position === 'sticky') return false
+  }
+  return false
+}
+
 function translate(rect: WindowRect) {
   return `translate3d(${formatNumber(-rect.left, 2)}px, ${formatNumber(-rect.top, 2)}px, 0)`
 }
@@ -166,12 +203,16 @@ export function BackdropWindow({
   const innerRef = useRef<HTMLDivElement>(null)
   const compiled = compileBackdrop(def, theme, frame)
   const drawn = compiled !== null
+  const overlayCount = overlays.length
+  const layerCount = compiled?.layers.length ?? 0
 
   useLayoutEffect(() => {
     const outer = outerRef.current
     const inner = innerRef.current
     const piece = outer?.parentElement
-    if (!outer || !inner || !piece || typeof window === 'undefined') return
+    if (!outer || !piece || typeof window === 'undefined') return
+    // A static window paints on `outer` itself; the others move `inner`.
+    if (!isStatic && !inner) return
     const shared = windowTracker()
     const reduced = shades && prefersReducedTransparency()
     let shadeVars: Record<string, string> | null = null
@@ -189,7 +230,15 @@ export function BackdropWindow({
         }
       },
       apply: rect => {
-        inner.style.transform = translate(rect)
+        if (isStatic) {
+          outer.style.backgroundPosition = cssBackgroundPosition(
+            overlayCount,
+            layerCount,
+            windowOffset(rect),
+          )
+        } else if (inner) {
+          inner.style.transform = translate(rect)
+        }
         if (!shades) return
         const next = barShadeVars(
           def,
@@ -214,6 +263,7 @@ export function BackdropWindow({
         }
       },
       isStatic,
+      pinned: !isStatic && pinnedToViewport(outer),
       followsAnimations,
       // An element around the window: its own scroller, the sliding drawer.
       within: target =>
@@ -250,6 +300,8 @@ export function BackdropWindow({
     followsAnimations,
     navigation,
     drawn,
+    overlayCount,
+    layerCount,
     shades,
     def,
     theme,
@@ -275,21 +327,27 @@ export function BackdropWindow({
           pointerEvents: 'none',
           overflow: 'hidden',
           contain: 'strict',
+          // Static: painted here, aligned by `background-position` (above).
+          ...(isStatic
+            ? cssBackground(compiled, overlays, frame, ORIGIN)
+            : null),
         }}>
-        <div
-          ref={innerRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: frame.width,
-            height: frame.height,
-            // Its own layer: a move is composited, never repainted.
-            willChange: 'transform',
-            ...cssLayers(compiled, frame),
-          }}
-        />
-        {overlays.length > 0 && (
+        {!isStatic && (
+          <div
+            ref={innerRef}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: frame.width,
+              height: frame.height,
+              // Its own layer: a move is composited, never repainted.
+              willChange: 'transform',
+              ...cssLayers(compiled, frame),
+            }}
+          />
+        )}
+        {!isStatic && overlays.length > 0 && (
           <div
             style={{
               position: 'absolute',

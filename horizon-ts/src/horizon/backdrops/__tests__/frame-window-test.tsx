@@ -1,10 +1,14 @@
 import {createContext as mockCreateContext, useRef as mockUseRef} from 'react'
 import {StyleSheet} from 'react-native'
-import {beforeEach, describe, expect, it, jest} from '@jest/globals'
+import {afterEach, beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, render} from '@testing-library/react-native'
 
 import type * as ThemesModule from '#/alf/themes'
 import * as store from '#/horizon/appearance/store'
+import {
+  BackdropWindow,
+  pinnedToViewport,
+} from '#/horizon/backdrops/BackdropWindow.web'
 import {
   bottomBarShape,
   horizonInnerHeaderSticky,
@@ -330,6 +334,66 @@ describe('the shared window tracker (7b)', () => {
     expect(log).toEqual(['read card'])
   })
 
+  it('pinned windows: not on page scroll; on a slide, resize, the visual viewport and their own scroller (round 2)', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    const scroller = {}
+    const bar = {current: {left: 0, top: 790}}
+    f.tracker.register(
+      logged('bar', log, bar, {pinned: true, within: t => t === scroller}),
+    )
+    f.flush()
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    log.length = 0
+    // Page scroll: a fixed piece cannot move, so nothing is read.
+    f.doc.fire('scroll', {target: {}})
+    expect(f.pending()).toBe(0)
+    // A slide (minimal shell) reads it every frame until it settles.
+    f.tracker.kick()
+    bar.current = {left: 0, top: 800}
+    f.frame()
+    expect(log).toEqual(['read bar', 'apply bar 800'])
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    log.length = 0
+    // A scroller around it.
+    f.doc.fire('scroll', {target: scroller})
+    f.frame()
+    expect(log).toEqual(['read bar'])
+    f.frame()
+    f.frame()
+    log.length = 0
+    f.vv.fire('scroll')
+    f.frame()
+    expect(log).toEqual(['read bar'])
+    f.frame()
+    f.frame()
+    log.length = 0
+    f.win.fire('resize')
+    f.frame()
+    expect(log).toEqual(['read bar'])
+  })
+
+  it('a page scroll still reads a window that is not pinned, and a pinned one with it', () => {
+    const f = fakeTracker()
+    const log: string[] = []
+    f.tracker.register(logged('sticky', log, {current: {left: 0, top: 0}}))
+    f.tracker.register(
+      logged('bar', log, {current: {left: 0, top: 790}}, {pinned: true}),
+    )
+    f.flush()
+    f.frame()
+    f.frame()
+    expect(f.pending()).toBe(0)
+    log.length = 0
+    f.doc.fire('scroll', {target: {}})
+    f.frame()
+    expect(log).toEqual(['read sticky', 'read bar'])
+  })
+
   it('one listener per trigger for any number of windows, all detached', () => {
     const f = fakeTracker()
     const off = [1, 2, 3, 4].map(i =>
@@ -498,6 +562,7 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
     isConnected: true,
     parentElement: piece,
     getBoundingClientRect: () => rect,
+    style: {} as Record<string, string>,
   }
   const inner = {style: {} as Record<string, string>}
   const createNodeMock = (element: React.ReactElement) => {
@@ -513,6 +578,7 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
   beforeEach(() => {
     rect = {left: 0, top: 0, width: 390, height: 50}
     inner.style = {}
+    outer.style = {}
     vars.clear()
     queue = []
     Object.assign(globalThis, {document: doc})
@@ -649,6 +715,37 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
     expect(inner.style.transform).toBe('translate3d(0px, 30px, 0)')
   })
 
+  it('a static window paints on its clip and is aligned by background-position (round 2)', async () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    rect = {left: 1048, top: 21, width: 300, height: 299}
+    const view = await mount(
+      <BackdropWindow
+        def={trans}
+        overlays={['rgba(255, 255, 255, 0.55)']}
+        shape={{top: 0, right: 0, bottom: 0, left: 0, borderRadius: 15}}
+        isStatic
+      />,
+    )
+    const [clip, ...rest] = divs(view.toJSON())
+    // No frame-sized layer and no overlay layer: nothing to composite.
+    expect(rest).toEqual([])
+    expect(clip.props.style?.willChange).toBeUndefined()
+    const layers = String(clip.props.style?.backgroundSize).split(', ')
+    expect(layers[0]).toBe('100% 100%')
+    expect(layers.slice(1).every(size => size === '390px 844px')).toBe(true)
+    // Aligned before paint: the glass at the origin, the backdrop moved
+    // by the card's place in the viewport.
+    expect(outer.style.backgroundPosition).toBe(
+      ['0px 0px', ...layers.slice(1).map(() => '-1048px -21px')].join(', '),
+    )
+    expect(inner.style.transform).toBeUndefined()
+    // Page scroll: nothing is read again.
+    rect = {left: 1048, top: 0, width: 300, height: 299}
+    doc.fire('scroll', {target: {}})
+    runFrames(2)
+    expect(outer.style.backgroundPosition).toContain('-1048px -21px')
+  })
+
   it('unmounting takes the shade colours off the piece', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     const view = await mount(<FrameWindow kind="homeHeader" />)
@@ -686,5 +783,51 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
     expect(square.props.style?.borderRadius).toBe(8)
     mockWithinDialog = true
     expect(render(<FrameLens kind="fab" />).toJSON()).toBeNull()
+  })
+})
+
+describe('pinnedToViewport (round 2)', () => {
+  class FakeElement {
+    constructor(
+      public position: string,
+      public parentElement: FakeElement | null,
+    ) {}
+  }
+  const globals = globalThis as unknown as Record<string, unknown>
+  const saved = {Element: globals.Element, gcs: globals.getComputedStyle}
+
+  beforeEach(() => {
+    globals.Element = FakeElement
+    globals.getComputedStyle = (el: FakeElement) => ({position: el.position})
+  })
+
+  afterEach(() => {
+    globals.Element = saved.Element
+    globals.getComputedStyle = saved.gcs
+  })
+
+  const chain = (...positions: string[]) =>
+    positions.reduceRight<FakeElement | null>(
+      (parent, position) => new FakeElement(position, parent),
+      null,
+    ) as unknown as Element
+
+  it('a window under a fixed piece is pinned', () => {
+    // The window, then its piece and the piece's ancestors.
+    expect(
+      pinnedToViewport(chain('absolute', 'relative', 'fixed', 'static')),
+    ).toBe(true)
+  })
+
+  it('a sticky box on the way, or no fixed ancestor, is not', () => {
+    expect(pinnedToViewport(chain('absolute', 'sticky', 'fixed'))).toBe(false)
+    expect(pinnedToViewport(chain('absolute', 'relative', 'static'))).toBe(
+      false,
+    )
+  })
+
+  it('without a DOM, never', () => {
+    globals.Element = undefined
+    expect(pinnedToViewport(chain('absolute', 'fixed'))).toBe(false)
   })
 })
