@@ -21,24 +21,6 @@ export type WebBackgroundStyle = {
   backgroundColor: string
 }
 
-/**
- * A disc of colour centred in the element: full `color` out to `solid`
- * pixels from the centre, fading to `clear` (the same colour at alpha 0) by
- * `fade`, nothing beyond. Built for the button lenses' icon backing (live
- * fix batch 1); no frame draws one since the Buttons frame was removed
- * (round 2 list), and the painters keep it.
- */
-export type DiscOverlay = {
-  kind: 'disc'
-  color: string
-  clear: string
-  solid: number
-  fade: number
-}
-
-/** An overlay over the backdrop: a uniform CSS colour, or a disc. */
-export type Overlay = string | DiscOverlay
-
 /** At most `digits` decimals, trailing zeros dropped. */
 export function formatNumber(value: number, digits: number): string {
   const fixed = Number(value.toFixed(digits))
@@ -72,12 +54,9 @@ export function cssBackgroundPosition(
   ].join(', ')
 }
 
-function overlayImage(overlay: Overlay) {
-  if (typeof overlay === 'string') {
-    return `linear-gradient(${overlay}, ${overlay})`
-  }
-  const {color, clear, solid, fade} = overlay
-  return `radial-gradient(circle at 50% 50%, ${color} 0px, ${color} ${px(solid)}, ${clear} ${px(fade)})`
+/** A uniform overlay colour as a background image. */
+function overlayImage(overlay: string) {
+  return `linear-gradient(${overlay}, ${overlay})`
 }
 
 const layerCache = new WeakMap<Compiled, Map<string, WebBackgroundStyle>>()
@@ -106,8 +85,11 @@ export function cssLayers(
   return style
 }
 
-/** The CSS of overlays alone, top first, each filling the element. */
-export function cssOverlays(overlays: Overlay[]): {
+/**
+ * The CSS of overlays (uniform CSS colours) alone, top first, each filling
+ * the element.
+ */
+export function cssOverlays(overlays: string[]): {
   backgroundImage: string
   backgroundSize: string
   backgroundRepeat: 'no-repeat'
@@ -120,13 +102,13 @@ export function cssOverlays(overlays: Overlay[]): {
 }
 
 /**
- * The background for an element. `overlays` are top first (the glass tint,
- * a disc); `offset` is where the frame's origin sits inside
+ * The background for an element. `overlays` are uniform CSS colours, top
+ * first (the glass tint); `offset` is where the frame's origin sits inside
  * the element.
  */
 export function cssBackground(
   compiled: Compiled,
-  overlays: Overlay[],
+  overlays: string[],
   frame: Frame,
   offset: {x: number; y: number},
 ): WebBackgroundStyle {

@@ -47,7 +47,6 @@ import {
   cssLayers,
   cssOverlays,
   formatNumber,
-  type Overlay,
 } from '#/horizon/backdrops/css'
 import {
   barShadeVars,
@@ -186,7 +185,7 @@ export function BackdropWindow({
   shades = false,
 }: {
   def: BackdropDef
-  overlays: Overlay[]
+  overlays: string[]
   shape: WindowShape
   homeHeader?: boolean
   isStatic?: boolean

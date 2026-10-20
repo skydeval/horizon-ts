@@ -354,7 +354,7 @@ describe('Interaction settings (item 5)', () => {
     expect(mockGroupValues.get(label)).toEqual([''])
     expect(
       screen.getByText(
-        'Until you choose, posts you make private go to Everyone, and quotes of private posts start private to Followers.',
+        'Until you choose, private posts and quotes of private posts go to Everyone.',
       ),
     ).toBeTruthy()
     // Everyone can be chosen as such.

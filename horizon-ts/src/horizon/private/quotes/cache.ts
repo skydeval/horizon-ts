@@ -35,10 +35,12 @@ export const QUOTE_GC_MS = 24 * 60 * 60 * 1000
 export type QuoteData = JsonValue | null
 
 /**
- * The persisted query key of the quoted private post at `uri`.
+ * The persisted query key of the quoted private post at `uri`. Version 2
+ * drops quotes cached with a video on the video service's CDN, from before a
+ * private video played from its author's PDS.
  */
 export function privateQuoteQueryKey(uri: string) {
-  return createQueryKey('horizon-private-quote', {uri}, {persistedVersion: 1})
+  return createQueryKey('horizon-private-quote', {uri}, {persistedVersion: 2})
 }
 
 /**

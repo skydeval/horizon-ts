@@ -15,8 +15,11 @@ jest.mock('#/horizon/switches', () =>
 
 import {
   attachDirectSource,
+  directSourceUrl,
   isHlsPlaylist,
   playsAsDirectSource,
+  POSTER_FRAME_FRAGMENT,
+  videoPreload,
 } from '#/horizon/video/playback'
 import {HORIZON_VIDEO_SERVICE, videoPlaylistUrl} from '#/horizon/video/service'
 import {type app} from '#/lexicons'
@@ -140,7 +143,7 @@ describe('embedViewFromRecord (6.1.3)', () => {
     })
   })
 
-  it('a video gets the video service’s playlist and thumbnail', () => {
+  it('a video plays its MP4 blob from the author’s PDS, with no thumbnail', () => {
     const view = embedViewFromRecord(
       record({
         $type: `${PUB}#embedVideo`,
@@ -149,17 +152,35 @@ describe('embedViewFromRecord (6.1.3)', () => {
         aspectRatio: {width: 16, height: 9},
         presentation: 'gif',
       }),
-      {authorDid: DID},
+      ctx,
     )
     expect(view).toEqual({
       $type: 'app.bsky.embed.video#view',
       cid: BLOB_CID,
-      playlist: `https://video.bsky.app/watch/${encodeURIComponent(DID)}/${BLOB_CID}/playlist.m3u8`,
-      thumbnail: `https://video.bsky.app/watch/${encodeURIComponent(DID)}/${BLOB_CID}/thumbnail.jpg`,
+      playlist: BLOB_URL,
       alt: 'clip',
       aspectRatio: {width: 16, height: 9},
       presentation: 'gif',
     })
+    expect(JSON.stringify(view)).not.toContain('video.bsky.app')
+  })
+
+  it('a video has no view without the author’s PDS, alone or as media', () => {
+    const video = record({
+      $type: `${PUB}#embedVideo`,
+      video: blob(10, 'video/mp4'),
+    })
+    expect(embedViewFromRecord(video, {authorDid: DID})).toBeUndefined()
+    expect(recordUsesPdsBlobs(video)).toBe(true)
+    const withMedia = record({
+      $type: `${PUB}#embedRecordWithMedia`,
+      record: {record: {uri: PRIVATE_QUOTE, cid: RECORD_CID}},
+      media: {$type: `${PUB}#embedVideo`, video: blob(10, 'video/mp4')},
+    })
+    expect(recordUsesPdsBlobs(withMedia)).toBe(true)
+    const view = embedViewFromRecord(withMedia, {authorDid: DID})
+    expect(view?.$type).toBe('app.bsky.embed.record#view')
+    expect(JSON.stringify(view)).not.toContain('video.bsky.app')
   })
 
   it('a quote: a private one as not found (the private quote resolves it), a public one from the fetched views', () => {
@@ -221,6 +242,8 @@ describe('embedViewFromRecord (6.1.3)', () => {
     expect(view.$type).toBe('app.bsky.embed.recordWithMedia#view')
     expect(view.record.record.$type).toBe('app.bsky.embed.record#viewNotFound')
     expect(view.media.$type).toBe('app.bsky.embed.video#view')
+    expect((view.media as app.bsky.embed.video.View).playlist).toBe(BLOB_URL)
+    expect((view.media as app.bsky.embed.video.View).thumbnail).toBeUndefined()
     expect(recordQuoteUri(record(embed))).toBe(PRIVATE_QUOTE)
   })
 
@@ -279,5 +302,48 @@ describe('the video service and web playback', () => {
     cleanup()
     expect(removed).toEqual(['src'])
     expect(loads).toBe(1)
+  })
+
+  it('a direct source without a thumbnail preloads metadata and seeks into its first frame', () => {
+    const mp4 = `https://pds.example/xrpc/com.atproto.sync.getBlob?did=${DID}&cid=${BLOB_CID}`
+    const hls = 'https://video.bsky.app/watch/did/cid/playlist.m3u8'
+    expect(directSourceUrl(mp4)).toBe(mp4 + POSTER_FRAME_FRAGMENT)
+    expect(POSTER_FRAME_FRAGMENT).toBe('#t=0.1')
+    expect(directSourceUrl(`${mp4}#t=3`)).toBe(`${mp4}#t=3`)
+    expect(videoPreload({playlist: mp4})).toBe('metadata')
+    expect(videoPreload({playlist: mp4, thumbnail: 'https://x/t.jpg'})).toBe(
+      'none',
+    )
+    expect(videoPreload({playlist: hls})).toBe('none')
+    mockReading = false
+    expect(videoPreload({playlist: mp4})).toBe('none')
+    mockReading = true
+  })
+
+  it('a direct source that fails to load reports whether it was not found, until cleaned up', () => {
+    const listeners = new Set<() => void>()
+    const video = {
+      src: '',
+      error: null as {code: number} | null,
+      removeAttribute: () => {},
+      load: () => {},
+      addEventListener: (_type: 'error', listener: () => void) => {
+        listeners.add(listener)
+      },
+      removeEventListener: (_type: 'error', listener: () => void) => {
+        listeners.delete(listener)
+      },
+    }
+    const reports: boolean[] = []
+    const cleanup = attachDirectSource(video, 'https://pds.example/blob', nf =>
+      reports.push(nf),
+    )
+    video.error = {code: 4}
+    listeners.forEach(listener => listener())
+    video.error = {code: 2}
+    listeners.forEach(listener => listener())
+    expect(reports).toEqual([true, false])
+    cleanup()
+    expect(listeners.size).toBe(0)
   })
 })

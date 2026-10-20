@@ -116,7 +116,7 @@ describe('BACKDROPS off (T16)', () => {
     expect(stock.UNSAFE_getByType(View).props.style).toEqual({padding: 3})
   })
 
-  it('no window, lens or inset card, in any phone frame', () => {
+  it('no window, shade or inset card, in any phone frame', () => {
     mockGtMobile = false
     const trans = registryDef('pride.trans')!
     const base = {def: trans, gtMobile: false, isWithinDialog: false}

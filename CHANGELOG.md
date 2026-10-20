@@ -413,7 +413,7 @@ released version yet; everything so far is under `[Unreleased]`.
     to a public post starts Public with the default audience ready, and a
     reply to a private post stays private under its thread. A quote starts
     as the post it quotes: quoting a private post starts Private with the
-    default audience (Followers until you choose one), quoting a public post
+    default audience (Everyone until you choose one), quoting a public post
     starts Public, whatever "New posts start as" says; either can still be
     switched. Until a default audience is chosen none is selected, and the
     screen says what applies meanwhile. The defaults
@@ -456,6 +456,13 @@ released version yet; everything so far is under `[Unreleased]`.
 - **Signing out also ends the session at the server**: OAuth grants are
   revoked where the server offers revocation, and password sessions are
   ended with the server (best effort).
+- **Phase 2: a private post's video plays from its author's server**, never
+  from Bluesky's video service, which can drop a video no public post uses.
+  It shows its first frame until played, video cards without a thumbnail
+  show a plain tile with a play icon, and a video that can't be loaded says
+  so instead of showing a dead player. A quoted public post's video is
+  unchanged. Safari and iOS may not play or seek it until Horizon's server
+  answers range requests.
 
 ### Removed
 

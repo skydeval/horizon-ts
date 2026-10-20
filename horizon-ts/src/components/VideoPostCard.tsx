@@ -23,9 +23,14 @@ import {Text} from '#/components/Typography'
 // HORIZON: a flagged video's card shows the spoiler pill
 import {MediaSpoilerPill} from '#/horizon/media-spoilers/MediaSpoilerCover'
 // HORIZON: a flagged video's card thumbnail is blurred
-import {mediaSpoilerCardBlur} from '#/horizon/media-spoilers/read'
+import {
+  hasMediaSpoilers,
+  mediaSpoilerCardBlur,
+} from '#/horizon/media-spoilers/read'
 // HORIZON: a spoiler shows as a placeholder in the card and its label
 import {spoilerSafeText} from '#/horizon/spoilers/plain'
+// HORIZON: a video without a thumbnail shows a neutral tile
+import {NoThumbnailTile} from '#/horizon/video/NoThumbnailTile'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -149,12 +154,18 @@ export function VideoPostCard({
                 aspectRatio: 9 / 16,
               },
             ]}>
-            <Image
-              source={{uri: thumbnail}}
-              style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
-              accessibilityIgnoresInvertColors
-              blurRadius={100}
-            />
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (start) */}
+            {thumbnail ? (
+              <Image
+                source={{uri: thumbnail}}
+                style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
+                accessibilityIgnoresInvertColors
+                blurRadius={100}
+              />
+            ) : (
+              <NoThumbnailTile showPlay={false} dimmed={pressed} />
+            )}
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (end) */}
             <MediaInsetBorder />
             <View
               style={[a.absolute, a.inset_0, a.justify_center, a.align_center]}>
@@ -193,13 +204,22 @@ export function VideoPostCard({
                 aspectRatio: 9 / 16,
               },
             ]}>
-            <Image
-              source={{uri: thumbnail}}
-              style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
-              accessibilityIgnoresInvertColors
-              // HORIZON: a flagged video's card thumbnail is blurred
-              blurRadius={mediaSpoilerCardBlur(post)}
-            />
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (start) */}
+            {thumbnail ? (
+              <Image
+                source={{uri: thumbnail}}
+                style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
+                accessibilityIgnoresInvertColors
+                // HORIZON: a flagged video's card thumbnail is blurred
+                blurRadius={mediaSpoilerCardBlur(post)}
+              />
+            ) : (
+              <NoThumbnailTile
+                showPlay={!hasMediaSpoilers(post)}
+                dimmed={pressed}
+              />
+            )}
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (end) */}
             <MediaInsetBorder />
             {/* HORIZON: a flagged video's card shows the spoiler pill */}
             <MediaSpoilerPill post={post} />
@@ -434,12 +454,18 @@ export function CompactVideoPostCard({
                 aspectRatio: 9 / 16,
               },
             ]}>
-            <Image
-              source={{uri: thumbnail}}
-              style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
-              accessibilityIgnoresInvertColors
-              blurRadius={100}
-            />
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (start) */}
+            {thumbnail ? (
+              <Image
+                source={{uri: thumbnail}}
+                style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
+                accessibilityIgnoresInvertColors
+                blurRadius={100}
+              />
+            ) : (
+              <NoThumbnailTile showPlay={false} dimmed={pressed} />
+            )}
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (end) */}
             <MediaInsetBorder />
             <View
               style={[a.absolute, a.inset_0, a.justify_center, a.align_center]}>
@@ -477,13 +503,22 @@ export function CompactVideoPostCard({
                 aspectRatio: 9 / 16,
               },
             ]}>
-            <Image
-              source={{uri: thumbnail}}
-              style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
-              accessibilityIgnoresInvertColors
-              // HORIZON: a flagged video's card thumbnail is blurred
-              blurRadius={mediaSpoilerCardBlur(post)}
-            />
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (start) */}
+            {thumbnail ? (
+              <Image
+                source={{uri: thumbnail}}
+                style={[a.w_full, a.h_full, {opacity: pressed ? 0.8 : 1}]}
+                accessibilityIgnoresInvertColors
+                // HORIZON: a flagged video's card thumbnail is blurred
+                blurRadius={mediaSpoilerCardBlur(post)}
+              />
+            ) : (
+              <NoThumbnailTile
+                showPlay={!hasMediaSpoilers(post)}
+                dimmed={pressed}
+              />
+            )}
+            {/* HORIZON: a video without a thumbnail shows a neutral tile (end) */}
             <MediaInsetBorder />
             {/* HORIZON: a flagged video's card shows the spoiler pill */}
             <MediaSpoilerPill post={post} />

@@ -158,7 +158,10 @@ export function VideoEmbed({
         cursor: 'default',
         position: 'relative',
         backgroundColor: t.palette.black,
-        backgroundImage: `url(${embed.thumbnail})`,
+        // HORIZON: a video without a thumbnail (a private one) requests no `url(undefined)`
+        backgroundImage: embed.thumbnail
+          ? `url(${embed.thumbnail})`
+          : undefined,
         backgroundSize: 'contain',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',

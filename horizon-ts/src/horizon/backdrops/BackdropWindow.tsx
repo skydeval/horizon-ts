@@ -13,7 +13,6 @@ import {View, type ViewStyle} from 'react-native'
 import {atoms as a, useTheme} from '#/alf'
 import {compileBackdrop} from '#/horizon/backdrops/compile'
 import {CompiledSvg} from '#/horizon/backdrops/CompiledSvg'
-import {type DiscOverlay, type Overlay} from '#/horizon/backdrops/css'
 import {type WindowShape} from '#/horizon/backdrops/frame'
 import {windowOffset} from '#/horizon/backdrops/frame-tracking'
 import {
@@ -35,34 +34,6 @@ function shapeStyle(shape: WindowShape): ViewStyle {
   }
 }
 
-/*
- * A disc overlay on native (once a button lens's icon backing): a solid
- * centred circle in the disc's colour, its radius halfway through the web
- * disc's fade. The web disc's soft edge is not drawn (an approximation,
- * live fix batch 1).
- */
-function Disc({disc}: {disc: DiscOverlay}) {
-  const r = (disc.solid + disc.fade) / 2
-  return (
-    <View
-      pointerEvents="none"
-      style={[
-        a.absolute,
-        {
-          top: '50%',
-          left: '50%',
-          width: r * 2,
-          height: r * 2,
-          marginTop: -r,
-          marginLeft: -r,
-          borderRadius: r,
-          backgroundColor: disc.color,
-        },
-      ]}
-    />
-  )
-}
-
 /**
  * Paints `def` under `overlays` (top first) inside the parent, aligned with
  * the window. `homeHeader` adds the Home header's mode trigger. The web
@@ -76,7 +47,7 @@ export function BackdropWindow({
   homeHeader = false,
 }: {
   def: BackdropDef
-  overlays: Overlay[]
+  overlays: string[]
   shape: WindowShape
   homeHeader?: boolean
   isStatic?: boolean
@@ -88,12 +59,6 @@ export function BackdropWindow({
   const ref = useRef<React.ComponentRef<typeof View>>(null)
   const [offset, setOffset] = useState<{x: number; y: number} | null>(null)
   const compiled = compileBackdrop(def, t.name, frame)
-  const colors = overlays.filter(
-    (overlay): overlay is string => typeof overlay === 'string',
-  )
-  const discs = overlays.filter(
-    (overlay): overlay is DiscOverlay => typeof overlay !== 'string',
-  )
 
   const measure = () => {
     ref.current?.measureInWindow((left, top) => {
@@ -115,14 +80,11 @@ export function BackdropWindow({
       {compiled && offset && (
         <CompiledSvg
           compiled={compiled}
-          overlays={colors}
+          overlays={overlays}
           frame={frame}
           offset={offset}
         />
       )}
-      {compiled &&
-        offset &&
-        discs.map((disc, i) => <Disc key={i} disc={disc} />)}
     </View>
   )
 }

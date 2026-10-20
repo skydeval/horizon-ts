@@ -15,7 +15,6 @@ import {
   hexToRgb,
   type RGB,
 } from '#/horizon/backdrops/compile'
-import {type Overlay} from '#/horizon/backdrops/css'
 import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {
   backdropKey,
@@ -182,7 +181,7 @@ export function windowOverlays(
   theme: ThemeName,
   mode: WindowMode = 'full',
   reduced: boolean = prefersReducedTransparency(),
-): Overlay[] {
+): string[] {
   return mode === 'full' ? [glassFor(def, theme, reduced).color] : []
 }
 

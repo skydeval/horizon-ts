@@ -17,7 +17,12 @@ import {AltBadgeWithDialog} from '#/components/AltBadgeWithDialog'
 import {useFullscreen} from '#/components/hooks/useFullscreen'
 import {useReportDialogMetadataContext} from '#/components/moderation/ReportDialog/ReportDialogMetadataContext'
 // HORIZON: a playlist that is not HLS plays as the video element's own source
-import {attachDirectSource, playsAsDirectSource} from '#/horizon/video/playback'
+import {
+  attachDirectSource,
+  directSourceUrl,
+  playsAsDirectSource,
+  videoPreload,
+} from '#/horizon/video/playback'
 import * as BandwidthEstimate from './bandwidth-estimate'
 import {loadHls} from './loadHls'
 import {
@@ -86,7 +91,8 @@ export function VideoEmbedInnerWeb({
             poster={embed.thumbnail}
             style={{width: '100%', height: '100%', objectFit: 'contain'}}
             playsInline
-            preload="none"
+            // HORIZON: a direct source without a thumbnail shows its first frame as the poster
+            preload={videoPreload(embed)}
             muted={embed.presentation === 'gif' || !focused}
             aria-labelledby={embed.alt ? figId : undefined}
             onTimeUpdate={e => {
@@ -295,9 +301,19 @@ function useHLS({
 
   useEffect(() => {
     if (!videoRef.current) return
-    // HORIZON: a playlist that is not HLS (a private video's MP4 on its PDS) plays as the element's own source
+    // HORIZON: a playlist that is not HLS (a private video's MP4 on its PDS) plays as the element's own source (start)
     if (playsAsDirectSource(playlist))
-      return attachDirectSource(videoRef.current, playlist)
+      return attachDirectSource(
+        videoRef.current,
+        directSourceUrl(playlist),
+        notFound =>
+          setError(
+            notFound
+              ? new VideoNotFoundError()
+              : new Error('Failed to load video'),
+          ),
+      )
+    // HORIZON: a playlist that is not HLS (a private video's MP4 on its PDS) plays as the element's own source (end)
     if (!Hls) return
     if (!Hls.isSupported() || !canPlayBskyVideoCodecs()) {
       throw new HLSUnsupportedError()

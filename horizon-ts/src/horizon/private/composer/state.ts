@@ -23,7 +23,6 @@ import {type StandingMode} from '#/horizon/private/api/audiences'
 import {
   type PrivateDefaults,
   UNSET_AUDIENCE,
-  UNSET_QUOTE_AUDIENCE,
 } from '#/horizon/private/defaults/record'
 import {getPrivatePostFacts} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
@@ -176,8 +175,8 @@ export function routesPrivate(replyTo: string | undefined): boolean {
  * - a reply to a public post starts Public;
  * - a quote (`quoteUri`, the post the composer opened quoting) starts as
  *   the quoted post is, whatever "New posts start as" says: a quote of a
- *   private post Private with the default audience, or Followers while none
- *   is chosen; a quote of a public post Public. Not locked: a public quote
+ *   private post Private with the default audience (Everyone while none is
+ *   chosen); a quote of a public post Public. Not locked: a public quote
  *   of a private post is allowed, its readers outside the audience see the
  *   stand-in;
  * - any other post starts as "New posts start as" says;
@@ -201,14 +200,10 @@ export function initialComposeVisibility(
     }
   }
   if (!PRIVATE_POSTING || !defaults) return PUBLIC_COMPOSE
-  if (!replyToUri && quoteUri && isPrivatePostUri(quoteUri)) {
-    return {
-      visibility: 'private',
-      audience: defaults.audience ?? UNSET_QUOTE_AUDIENCE,
-      locked: false,
-    }
-  }
   const audience = defaults.audience ?? UNSET_AUDIENCE
+  if (!replyToUri && quoteUri && isPrivatePostUri(quoteUri)) {
+    return {visibility: 'private', audience, locked: false}
+  }
   if (replyToUri || quoteUri) {
     return {visibility: 'public', audience, locked: false}
   }

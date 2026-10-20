@@ -143,7 +143,7 @@ describe('glass (T7)', () => {
     ).toBeCloseTo(4.48, 2)
   })
 
-  it('the lens rule: 3:1 for an icon, minimum 0.20', () => {
+  it('smallestAlpha at 3:1 with a floor of 0.20', () => {
     const white = {r: 255, g: 255, b: 255}
     const black = {r: 0, g: 0, b: 0}
     // A white icon over black glass on white needs about 0.42.

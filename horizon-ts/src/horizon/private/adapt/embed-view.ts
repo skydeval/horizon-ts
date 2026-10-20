@@ -11,9 +11,11 @@
  *   hook resolves through prism for a reader who may view it; a quote of a
  *   public post from the public views the caller fetched, else
  *   `#viewNotFound`;
- * - a video with the video service's playlist and thumbnail for its blob,
- *   until prism serves a view (whether the service serves a video only a
- *   private record references is not verified);
+ * - a video as its MP4 blob on the author's PDS (`getBlob`), with no
+ *   thumbnail, omitted when that PDS is not known. Never the video service's
+ *   CDN: it may drop a video no public post refers to, and a private video
+ *   must not depend on it (handoff `prism-private-video-pds.md`). A quoted
+ *   public post keeps the view the public AppView serves for it;
  * - a quote with media from the two parts.
  *
  * A video view prism serves carries no `presentation` (P-1, its private video
@@ -28,7 +30,6 @@ import {type $Typed, getBlobCidString} from '@atproto/lex'
 import {type AtUriString, type UriString} from '@atproto/syntax'
 
 import {isPrivatePostUri} from '#/horizon/private/uri'
-import {videoPlaylistUrl, videoThumbnailUrl} from '#/horizon/video/service'
 import {type app} from '#/lexicons'
 
 const POST_PUBLIC = 'tools.kryphocron.feed.postPublic'
@@ -39,7 +40,10 @@ const POST_PUBLIC = 'tools.kryphocron.feed.postPublic'
 export type EmbedViewContext = {
   /** The post's author, whose repo holds the blobs. */
   authorDid: string
-  /** The author's PDS; without it images and gallery items are omitted. */
+  /**
+   * The author's PDS; without it images, gallery items and a video are
+   * omitted.
+   */
   pdsUrl?: string
   /** Public posts the record may quote, by URI. */
   quoteViews?: ReadonlyMap<string, app.bsky.feed.defs.PostView>
@@ -176,15 +180,14 @@ function videoView(
   ctx: EmbedViewContext,
 ): $Typed<app.bsky.embed.video.View> | undefined {
   const cid = blobCid(embed.video)
-  if (!cid) return undefined
+  if (!cid || !ctx.pdsUrl) return undefined
   const aspectRatio = aspectRatioOf(embed.aspectRatio)
   const alt = str(embed.alt)
   const presentation = str(embed.presentation)
   return {
     $type: 'app.bsky.embed.video#view',
     cid,
-    playlist: videoPlaylistUrl(ctx.authorDid, cid) as UriString,
-    thumbnail: videoThumbnailUrl(ctx.authorDid, cid) as UriString,
+    playlist: blobUrl(ctx.pdsUrl, ctx.authorDid, cid),
     ...(alt ? {alt} : {}),
     ...(aspectRatio ? {aspectRatio} : {}),
     ...(presentation ? {presentation} : {}),
@@ -266,7 +269,7 @@ export function recordQuoteUri(record: unknown): string | undefined {
 
 /**
  * Whether the record's embed shows blobs from the author's PDS (images, a
- * gallery or a link thumbnail, alone or with a quote).
+ * gallery, a video or a link thumbnail, alone or with a quote).
  */
 export function recordUsesPdsBlobs(record: unknown): boolean {
   if (!isObject(record) || !isObject(record.embed)) return false
@@ -278,6 +281,7 @@ export function recordUsesPdsBlobs(record: unknown): boolean {
   return (
     embed.$type === `${POST_PUBLIC}#embedImage` ||
     embed.$type === `${POST_PUBLIC}#embedGallery` ||
+    embed.$type === `${POST_PUBLIC}#embedVideo` ||
     (embed.$type === `${POST_PUBLIC}#embedExternal` &&
       isObject(embed.external) &&
       embed.external.thumb !== undefined)

@@ -390,15 +390,15 @@ describe('quotes start as the quoted post is (round 2 list, item 6)', () => {
     })
   })
 
-  it('with no default audience chosen, a quote of a private post starts Private to Followers', () => {
+  it('with no default audience chosen, a quote of a private post starts Private to Everyone, not locked', () => {
     expect(
       initialComposeVisibility(undefined, {startAs: 'public'}, PRIVATE_QUOTED),
     ).toEqual({
       visibility: 'private',
-      audience: {kind: 'mode', mode: 'followers'},
+      audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
-    // A post that is not a quote, made Private, still uses Everyone.
+    // A post that is not a quote, made Private, uses Everyone too.
     expect(initialComposeVisibility(undefined, {startAs: 'private'})).toEqual({
       visibility: 'private',
       audience: {kind: 'mode', mode: 'everyone'},
@@ -505,7 +505,7 @@ describe('quotes start as the quoted post is (round 2 list, item 6)', () => {
     screen.rerender(<Composer showControl quote={{uri: PRIVATE_QUOTED}} />)
     expect(getComposeVisibility()).toEqual({
       visibility: 'private',
-      audience: {kind: 'mode', mode: 'followers'},
+      audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
     act(() => {

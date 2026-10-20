@@ -751,31 +751,6 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(vars.size).toBe(7)
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
   })
-
-  it('a disc overlay still paints over the backdrop (kept from the retired lenses)', () => {
-    act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    const [, , disc] = divs(
-      render(
-        <BackdropWindow
-          def={trans}
-          overlays={[
-            {
-              kind: 'disc',
-              color: 'rgba(0, 0, 0, 0.5)',
-              clear: 'rgba(0, 0, 0, 0)',
-              solid: 15,
-              fade: 19,
-            },
-          ]}
-          shape={{top: 0, right: 0, bottom: 0, left: 0}}
-        />,
-        {createNodeMock},
-      ).toJSON(),
-    )
-    expect(String(disc.props.style?.backgroundImage)).toBe(
-      'radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.5) 0px, rgba(0, 0, 0, 0.5) 15px, rgba(0, 0, 0, 0) 19px)',
-    )
-  })
 })
 
 describe('pinnedToViewport (round 2)', () => {

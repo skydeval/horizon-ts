@@ -8,9 +8,8 @@
  * A default audience is never widened by a bad value: an audience that is
  * present but does not parse (an unknown mode, a list URI that is not one of
  * the owner's own audience records) reads as Only me. An absent one stays
- * absent (none chosen): a new post made Private then uses Everyone, the
- * composer's own default, and a quote of a private post uses Followers
- * (round 2 list, item 6).
+ * absent (none chosen): a new post made Private, or a quote of a private
+ * post, then uses Everyone, the composer's own default.
  */
 
 import {AtUri, type AtUriString} from '@atproto/syntax'
@@ -43,14 +42,11 @@ export type PrivateDefaults = {
 
 export const DEFAULT_PRIVATE_DEFAULTS: PrivateDefaults = {startAs: 'public'}
 
-/** The audience a new post made Private uses while none is chosen. */
+/**
+ * The audience a new post made Private, or a quote of a private post, uses
+ * while none is chosen.
+ */
 export const UNSET_AUDIENCE: DefaultAudience = {kind: 'mode', mode: 'everyone'}
-
-/** The audience a quote of a private post starts with while none is chosen. */
-export const UNSET_QUOTE_AUDIENCE: DefaultAudience = {
-  kind: 'mode',
-  mode: 'followers',
-}
 
 const ONLY_ME: DefaultAudience = {kind: 'mode', mode: 'nobody'}
 

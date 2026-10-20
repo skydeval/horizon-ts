@@ -289,8 +289,8 @@ function DefaultAudienceForm({
       {audience ? null : (
         <HintText>
           <Trans>
-            Until you choose, posts you make private go to Everyone, and quotes
-            of private posts start private to Followers.
+            Until you choose, private posts and quotes of private posts go to
+            Everyone.
           </Trans>
         </HintText>
       )}

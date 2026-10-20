@@ -17,13 +17,16 @@ export const HORIZON_VIDEO_SERVICE = {
 /**
  * The HLS playlist the video service serves for a video blob, as Bluesky's
  * AppView builds it: `<service>/watch/<url-encoded did>/<cid>/playlist.m3u8`.
+ * Never for a private post's video, which plays from its author's PDS
+ * (handoff `prism-private-video-pds.md`).
  */
 export function videoPlaylistUrl(did: string, cid: string): string {
   return `${HORIZON_VIDEO_SERVICE.url}/watch/${encodeURIComponent(did)}/${cid}/playlist.m3u8`
 }
 
 /**
- * The thumbnail the video service serves beside the playlist.
+ * The thumbnail the video service serves beside the playlist. Never for a
+ * private post's video.
  */
 export function videoThumbnailUrl(did: string, cid: string): string {
   return `${HORIZON_VIDEO_SERVICE.url}/watch/${encodeURIComponent(did)}/${cid}/thumbnail.jpg`
