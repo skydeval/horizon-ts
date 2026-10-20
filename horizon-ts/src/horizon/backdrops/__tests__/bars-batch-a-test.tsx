@@ -26,6 +26,7 @@ import {
   SHADE_KINDS,
   SHADE_TARGET,
   shadeAlpha,
+  shadeFill,
   shadeItemColors,
   type ShadeKind,
   shadeVar,
@@ -320,12 +321,64 @@ describe('the shades keep their item at 3:1 (batch A, item 1)', () => {
     expect(barShadeVars(trans, 'dark', [0, 0.2], false)).toBe(vars)
     expect(Object.keys(vars).sort()).toEqual(SHADE_KINDS.map(shadeVar).sort())
     for (const value of Object.values(vars)) {
-      expect(value).toMatch(/^rgba\(0, 0, 0, [\d.]+\)$/)
+      expect(value).toMatch(/^rgba\(\d+, \d+, \d+, [\d.]+\)$/)
     }
     const reduced = barShadeVars(trans, 'dark', [0, 0.2], true)
     for (const value of Object.values(reduced)) {
       const alpha = Number(/, ([\d.]+)\)$/.exec(value)![1])
       expect(alpha).toBeGreaterThanOrEqual(0.85)
+    }
+  })
+})
+
+describe('the shades keep the theme`s hue over bright backdrops', () => {
+  const chroma = (c: {r: number; g: number; b: number}) =>
+    Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)
+
+  it('every kind, backdrop and theme still meets 3:1', () => {
+    for (const def of DEFS) {
+      for (const theme of THEMES) {
+        const d = softened(def, theme)
+        const under = sampledColors(d, theme)
+        for (const kind of SHADE_KINDS) {
+          const fill = shadeFill(d, theme, kind)
+          expect(fill.alpha).toBeGreaterThanOrEqual(shadeAlpha(d, theme, kind))
+          if (fill.alpha === 0 || fill.alpha >= MAX_GLASS_ALPHA) continue
+          for (const item of shadeItemColors(theme, kind)) {
+            const worst = Math.min(
+              ...under.map(color =>
+                contrast(composite(fill.color, color, fill.alpha), item),
+              ),
+            )
+            expect(worst).toBeGreaterThanOrEqual(SHADE_TARGET)
+          }
+        }
+      }
+    }
+  })
+
+  it('over vivid yellow in dark, a near-neutral chip, not olive', () => {
+    // Softness 0, as in the live check: the yellow at full strength.
+    for (const id of ['solids.yellow', 'pride.intersex']) {
+      const d = registryDef(id)!
+      const range: GradientRange = [0, 0.2]
+      const under = sampledColors(d, 'dark', undefined, range)
+      const mean = {
+        r: under.reduce((s, c) => s + c.r, 0) / under.length,
+        g: under.reduce((s, c) => s + c.g, 0) / under.length,
+        b: under.reduce((s, c) => s + c.b, 0) / under.length,
+      }
+      for (const kind of ['label', 'title'] as const) {
+        const fill = shadeFill(d, 'dark', kind, range)
+        expect(fill.alpha).toBeGreaterThan(0)
+        const old = composite(
+          GLASS.dark.tint,
+          mean,
+          shadeAlpha(d, 'dark', kind, range),
+        )
+        const now = composite(fill.color, mean, fill.alpha)
+        expect(chroma(now)).toBeLessThan(chroma(old) / 2)
+      }
     }
   })
 })

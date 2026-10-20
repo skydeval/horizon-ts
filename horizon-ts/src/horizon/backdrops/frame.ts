@@ -24,6 +24,7 @@ import {
   GLASS,
   glassFor,
   type GradientRange,
+  luminance,
   MAX_GLASS_ALPHA,
   prefersReducedTransparency,
   REDUCED_TRANSPARENCY_ALPHA,
@@ -394,6 +395,135 @@ export function shadeAlpha(
   return alpha
 }
 
+/** A shade's paint: the colour it is filled with, at an alpha. */
+export type ShadeFill = {color: RGB; alpha: number}
+
+function averageColor(colors: RGB[]): RGB {
+  const sum = colors.reduce(
+    (acc, c) => ({r: acc.r + c.r, g: acc.g + c.g, b: acc.b + c.b}),
+    {r: 0, g: 0, b: 0},
+  )
+  return {
+    r: sum.r / colors.length,
+    g: sum.g / colors.length,
+    b: sum.b / colors.length,
+  }
+}
+
+function mix(a: RGB, b: RGB, f: number): RGB {
+  return {
+    r: a.r + (b.r - a.r) * f,
+    g: a.g + (b.g - a.g) * f,
+    b: a.b + (b.b - a.b) * f,
+  }
+}
+
+/**
+ * The theme's tint lightened toward white, or darkened toward black, to
+ * the relative luminance `target`: the tint's own hue at another lightness.
+ */
+function tintAtLuminance(tint: RGB, target: number): RGB {
+  const toward =
+    target >= luminance(tint) ? {r: 255, g: 255, b: 255} : {r: 0, g: 0, b: 0}
+  let lo = 0
+  let hi = 1
+  for (let i = 0; i < 20; i++) {
+    const mid = (lo + hi) / 2
+    const l = luminance(mix(tint, toward, mid))
+    if (target >= luminance(tint) ? l < target : l > target) lo = mid
+    else hi = mid
+  }
+  return mix(tint, toward, (lo + hi) / 2)
+}
+
+function clampChannel(value: number) {
+  return Math.min(255, Math.max(0, Math.round(value)))
+}
+
+/**
+ * The colour that, at `alpha` over `under`, gives `target`, each channel
+ * clamped to what a colour can be (so the result only nears `target` when
+ * the alpha is too low to reach it).
+ */
+function colorGiving(target: RGB, under: RGB, alpha: number): RGB {
+  return {
+    r: clampChannel((target.r - (1 - alpha) * under.r) / alpha),
+    g: clampChannel((target.g - (1 - alpha) * under.g) / alpha),
+    b: clampChannel((target.b - (1 - alpha) * under.b) / alpha),
+  }
+}
+
+/**
+ * How far a shade's result may stray from the theme's hue, in chroma (the
+ * spread of its channels, 0 to 255).
+ */
+export const SHADE_HUE_TOLERANCE = 16
+
+function chroma(c: RGB) {
+  return Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)
+}
+
+const shadeFillCache = new Map<string, ShadeFill>()
+
+/*
+ * A shade's colour (live check, 2026-10-20). The theme's tint laid thinly
+ * over a bright backdrop takes the backdrop's hue: black over yellow came
+ * out olive, a smudge rather than a shade. The shade is instead filled with
+ * the colour that, over the average of the backdrop it covers, comes out
+ * as the theme's own tint at the lightness the plain tint would give (a
+ * neutral grey in dark, the dim surface's blue-grey in dim): over yellow,
+ * a deep blue that cancels the yellow. A thin shade cannot cancel a vivid
+ * colour, so the alpha rises until the result is within
+ * `SHADE_HUE_TOLERANCE` of the theme's hue as well as 3:1 over every
+ * sampled colour: on bright sections the chip is firmer, and clean.
+ */
+export function shadeFill(
+  def: BackdropDef,
+  theme: ThemeName,
+  kind: ShadeKind,
+  range: GradientRange = FULL_RANGE,
+): ShadeFill {
+  const tint = GLASS[theme].tint
+  const base = shadeAlpha(def, theme, kind, range)
+  if (base === 0) return {color: tint, alpha: 0}
+  const key = `${backdropKey(def)}|${theme}|${kind}|${range[0]}-${range[1]}|${BACKDROP_LOOK}`
+  let fill = shadeFillCache.get(key)
+  if (!fill) {
+    fill = {color: tint, alpha: base}
+    const under = sampledColors(def, theme, BACKDROP_LOOK, range)
+    if (under.length > 0) {
+      const mean = averageColor(under)
+      const items = shadeItemColors(theme, kind)
+      const top = Math.round(MAX_GLASS_ALPHA * 100)
+      for (let step = Math.round(base * 100); step <= top; step++) {
+        const a = step / 100
+        const target = tintAtLuminance(
+          tint,
+          luminance(composite(tint, mean, a)),
+        )
+        const color = colorGiving(target, mean, a)
+        const neutral =
+          chroma(composite(color, mean, a)) <=
+          chroma(target) + SHADE_HUE_TOLERANCE
+        const ok =
+          (neutral || a === top / 100) &&
+          items.every(text =>
+            under.every(
+              c => contrast(composite(color, c, a), text) >= SHADE_TARGET,
+            ),
+          )
+        if (ok) {
+          fill = {color, alpha: a}
+          break
+        }
+      }
+    }
+    if (shadeFillCache.size >= 512) shadeFillCache.clear()
+    shadeFillCache.set(key, fill)
+  }
+  return fill
+}
+
 const shadeVarsCache = new Map<string, Record<string, string>>()
 
 /**
@@ -415,11 +545,17 @@ export function barShadeVars(
     const tint = GLASS[theme].tint
     vars = {}
     for (const kind of SHADE_KINDS) {
-      const alpha = shadeAlpha(def, theme, kind, range)
-      vars[shadeVar(kind)] = rgba(
-        tint,
-        reduced ? Math.max(alpha, REDUCED_TRANSPARENCY_ALPHA) : alpha,
-      )
+      if (reduced) {
+        // Near-opaque: the plain tint, which the backdrop barely shows through.
+        const alpha = shadeAlpha(def, theme, kind, range)
+        vars[shadeVar(kind)] = rgba(
+          tint,
+          Math.max(alpha, REDUCED_TRANSPARENCY_ALPHA),
+        )
+      } else {
+        const fill = shadeFill(def, theme, kind, range)
+        vars[shadeVar(kind)] = rgba(fill.color, fill.alpha)
+      }
     }
     if (shadeVarsCache.size >= 512) shadeVarsCache.clear()
     shadeVarsCache.set(key, vars)
