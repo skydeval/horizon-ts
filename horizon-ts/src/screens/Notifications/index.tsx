@@ -1,5 +1,10 @@
 import {useCallback, useEffect, useEffectEvent, useRef, useState} from 'react'
-import {type LayoutChangeEvent, View} from 'react-native'
+import {
+  type LayoutChangeEvent,
+  type StyleProp,
+  View,
+  type ViewStyle,
+} from 'react-native'
 import Animated, {
   interpolate,
   Reanimated3DefaultSpringConfig,
@@ -54,6 +59,8 @@ import {Link} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import {useAnalytics} from '#/analytics'
 import {IS_LIQUID_GLASS, IS_WEB} from '#/env'
+// HORIZON: the header's web backgrounds stay on the reading surface (Phase 3)
+import {useReadingColumnBox} from '#/horizon/backdrops/surface-box'
 // HORIZON: the Public | Private switch and the Private view for members
 import {usePrivateNotificationsMode} from '#/horizon/private/notifications/mode'
 // HORIZON: the Public | Private switch and the Private view for members
@@ -436,6 +443,8 @@ function NotificationsHeader({
   const {gtMobile} = useBreakpoints()
   const insets = useSafeAreaInsets()
   const headerPinnedHeight = IS_LIQUID_GLASS ? insets.top : 0
+  // HORIZON: the web backgrounds stay on the reading surface (Phase 3, header fix)
+  const surfaceBox = useReadingColumnBox()
 
   const titleStyle = useAnimatedStyle(() => {
     if (IS_WEB) return {}
@@ -483,7 +492,8 @@ function NotificationsHeader({
         {IS_WEB && (
           <View
             pointerEvents="none"
-            style={[a.absolute, a.inset_0, t.atoms.bg]}
+            // HORIZON: on the reading surface only (Phase 3, header fix)
+            style={[a.absolute, a.inset_0, t.atoms.bg, surfaceBox]}
           />
         )}
         <Layout.Header.Outer noBottomBorder sticky={false}>
@@ -513,7 +523,8 @@ function NotificationsHeader({
         </Layout.Header.Outer>
       </Animated.View>
       <Animated.View style={pillsStyle}>
-        {IS_WEB && <HeaderFade />}
+        {/* HORIZON: on the reading surface only (Phase 3, header fix) */}
+        {IS_WEB && <HeaderFade style={surfaceBox} />}
         <Layout.Center>{children}</Layout.Center>
       </Animated.View>
       {/* Last, so the backgrounds above don't cover it */}
@@ -537,13 +548,18 @@ function NotificationsHeader({
  * The header's background fading out to the bottom, so content scrolling
  * under it shows through.
  */
-function HeaderFade() {
+function HeaderFade({
+  style,
+}: {
+  // HORIZON: the fade's box over a backdrop (Phase 3, header fix)
+  style?: StyleProp<ViewStyle>
+} = {}) {
   const t = useTheme()
   return (
     <LinearGradient
       key={t.name}
       pointerEvents="none"
-      style={[a.absolute, a.inset_0]}
+      style={[a.absolute, a.inset_0, style]}
       start={[0.5, 0]}
       end={[0.5, 1]}
       colors={[

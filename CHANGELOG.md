@@ -454,6 +454,13 @@ released version yet; everything so far is under `[Unreleased]`.
   covered, its CW line reads as a warning with the body in a drawer, and its
   media are blurred as on the post itself, in the feed, threads, the quote
   screen, notifications and Saved.
+- **With a backdrop, a long pinned-feeds list shows in full on desktop.** The
+  feeds card no longer scrolls inside itself (it had its own vertical and
+  horizontal scrollbars and was cut off mid-item); every rail card sizes to
+  its content, and a right rail taller than the window scrolls as a whole.
+- **With a backdrop, Notifications has no opaque band across the top of the
+  window.** Its header's background and fade cover only the centre column
+  (or the Gutter card on phones), so the backdrop shows beside it.
 
 ### Changed
 

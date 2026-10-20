@@ -18,20 +18,14 @@
 import {View} from 'react-native'
 
 import {useIsWithinSplitView} from '#/screens/Messages/components/splitView/context'
-import {
-  atoms as a,
-  useBreakpoints,
-  useLayoutBreakpoints,
-  useTheme,
-  web,
-} from '#/alf'
-import {CENTER_COLUMN_OFFSET} from '#/components/Layout/const'
+import {atoms as a, useBreakpoints, useLayoutBreakpoints, useTheme} from '#/alf'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {
   INSET_GUTTER,
   INSET_RADIUS,
   useInsetReadingCard,
 } from '#/horizon/backdrops/inset'
+import {readingColumnBox} from '#/horizon/backdrops/surface-box'
 
 /** The surface behind the reading column, or nothing without a backdrop. */
 export function ReadingSurface() {
@@ -89,15 +83,7 @@ export function ReadingSurface() {
         a.fixed,
         {top: 0, bottom: 0},
         t.atoms.bg,
-        web({
-          width: 602,
-          left: '50%',
-          transform: [
-            {translateX: '-50%'},
-            {translateX: centerColumnOffset ? CENTER_COLUMN_OFFSET : 0},
-            ...a.scrollbar_offset.transform,
-          ],
-        }),
+        readingColumnBox({gtMobile, inset, centerColumnOffset}),
       ]}
     />
   )

@@ -11,7 +11,7 @@
  * changes, never on page scroll), under the theme's glass tint.
  */
 
-import {type StyleProp, View, type ViewStyle} from 'react-native'
+import {type StyleProp, StyleSheet, View, type ViewStyle} from 'react-native'
 
 import {useTheme} from '#/alf'
 import {IS_WEB} from '#/env'
@@ -58,6 +58,50 @@ const SHAPES: Record<RailCardVariant, ViewStyle> = {
     paddingBottom: 12,
   },
 }
+
+/*
+ * A stock style's keys a card drops (rail fix). Stock's feeds list is
+ * `flex: 1; overflow-y: auto` so that, when the fixed rail outgrows the
+ * viewport, the list shrinks and scrolls inside itself. On a card that made
+ * the card its own scroller: with the cards' padding the rail outgrew a
+ * 1080p viewport with about 17 feeds, so the card was capped mid-item and
+ * grew both scrollbars, and its painter scrolled away with the list. A card
+ * sizes to its content; the rail scrolls as a whole instead
+ * (`RAIL_SCROLL_STYLE`).
+ */
+const SIZING_KEYS = [
+  'flex',
+  'flexGrow',
+  'flexShrink',
+  'flexBasis',
+  'height',
+  'maxHeight',
+  'overflow',
+  'overflowX',
+  'overflowY',
+] as const
+
+/** `style` without the keys that let a card size to anything but its content. */
+export function cardStockStyle(style: StyleProp<ViewStyle>): ViewStyle {
+  // `overflowX` and `overflowY` are web keys, outside `ViewStyle`.
+  const flat: Record<string, unknown> = {...StyleSheet.flatten(style)}
+  for (const key of SIZING_KEYS) delete flat[key]
+  return flat
+}
+
+/**
+ * The desktop rail's own scroll, while cards are drawn: the cards keep
+ * their full height, so a rail taller than the viewport scrolls as a whole
+ * (wheel, trackpad, keyboard). It draws no scrollbar: a classic one took
+ * 10px off every card's width the moment the rail overflowed, and stock's
+ * right rail shows none. Its painters are static windows inside it, so the
+ * tracker re-reads them only when the rail itself scrolls.
+ */
+export const RAIL_SCROLL_STYLE = {
+  overflowX: 'hidden',
+  overflowY: 'auto',
+  scrollbarWidth: 'none',
+} as unknown as ViewStyle
 
 /** The painted backdrop fills the card inside its border. */
 export const RAIL_CARD_PAINT_SHAPE: WindowShape = {
@@ -118,7 +162,7 @@ export function RailCard({
     borderColor: t.atoms.border_contrast_low.borderColor,
   })
   return (
-    <View style={[style, card.style]}>
+    <View style={[cardStockStyle(style), card.style]}>
       {IS_WEB && (
         <BackdropWindow
           def={def}

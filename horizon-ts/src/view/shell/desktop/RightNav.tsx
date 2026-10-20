@@ -24,8 +24,10 @@ import {InlineLinkText} from '#/components/Link'
 import {ProgressGuideList} from '#/components/ProgressGuide/List'
 import {Text} from '#/components/Typography'
 import {SidebarLiveEventFeedsBanner} from '#/features/liveEvents/components/SidebarLiveEventFeedsBanner'
+// HORIZON: the rail scrolls as a whole under cards (Phase 3, rail fix)
+import {useActiveBackdrop} from '#/horizon/backdrops/active'
 // HORIZON: frosted rail cards over the backdrop (Phase 3)
-import {RailCard} from '#/horizon/backdrops/RailCard'
+import {RAIL_SCROLL_STYLE, RailCard} from '#/horizon/backdrops/RailCard'
 
 function useWebQueryParams() {
   const navigation = useNavigation()
@@ -58,6 +60,8 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
     !isSearchScreen || (isSearchScreen && !!searchQuery)
   const {rightNavVisible, centerColumnOffset, leftNavMinimal} =
     useLayoutBreakpoints()
+  // HORIZON: cards drawn (Phase 3, rail fix)
+  const hasCards = useActiveBackdrop() !== null
 
   if (!rightNavVisible || isMessagesRelatedScreen) {
     return null
@@ -86,6 +90,8 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           width: width + gutters.paddingLeft + 2,
           maxHeight: '100vh',
         }),
+        // HORIZON: the rail's own scroll under cards (Phase 3, rail fix)
+        hasCards && web(RAIL_SCROLL_STYLE),
       ]}>
       {/* HORIZON: the search card (Phase 3, BD-7) */}
       {!isSearchScreen && (
