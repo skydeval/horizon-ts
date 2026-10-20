@@ -538,6 +538,36 @@ export function haloVar(kind: ShadeKind): string {
   return `--horizon-halo-${kind}`
 }
 
+/*
+ * Halo option (b), live check 2026-10-20: the top bar's grey items (the
+ * header buttons, a subtitle, the unselected Home feed tabs) needed a far
+ * heavier halo than the bottom bar's white icons, and smeared. On a bare
+ * window they are drawn in the theme's text colour instead
+ * (`BARE_TEXT_VAR`), so every item but the logo takes the bottom bar's
+ * light halo. The selected feed tab is still marked by its underline.
+ */
+
+/** The kinds drawn in the theme's text colour on a bare window. */
+export const RECOLOURED_KINDS: ReadonlySet<ShadeKind> = new Set([
+  'button',
+  'subtitle',
+  'label',
+])
+
+/** The custom property with the theme's text colour, on a bare window. */
+export const BARE_TEXT_VAR = '--horizon-bare-text'
+
+/** The attribute a bare window's piece carries while it is bare. */
+export const BARE_ATTRIBUTE = 'data-horizon-bare'
+
+/**
+ * The colour a kind's halo is computed for: the logo keeps its own (blue);
+ * every other kind is the text colour, as drawn on a bare window.
+ */
+function haloKind(kind: ShadeKind): ShadeKind {
+  return kind === 'logo' || kind === 'brand' ? kind : 'tab'
+}
+
 /**
  * A halo's alpha from its box shade's: none where the backdrop needs no
  * shade, and denser than the box, since it only covers the glyph's edge.
@@ -567,10 +597,11 @@ export function barShadeVars(
   if (!vars) {
     const tint = GLASS[theme].tint
     vars = {}
+    vars[BARE_TEXT_VAR] = themes[theme].atoms.text.color
     for (const kind of SHADE_KINDS) {
       vars[haloVar(kind)] = rgba(
         tint,
-        haloAlpha(shadeAlpha(def, theme, kind, range)),
+        haloAlpha(shadeAlpha(def, theme, haloKind(kind), range)),
       )
       if (reduced) {
         // Near-opaque: the plain tint, which the backdrop barely shows through.

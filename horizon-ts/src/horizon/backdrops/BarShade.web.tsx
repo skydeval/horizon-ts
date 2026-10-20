@@ -23,8 +23,11 @@ import {useDialogContext} from '#/components/Dialog/context'
 import {useAppearanceState} from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {
+  BARE_ATTRIBUTE,
+  BARE_TEXT_VAR,
   barShadesOn,
   haloVar,
+  RECOLOURED_KINDS,
   SHADE_KINDS,
   SHADE_SHAPES,
   SHADE_STYLE,
@@ -60,6 +63,20 @@ function addHaloSheet() {
     `[${HALO_ATTRIBUTE}]{text-shadow:0 0 1px ${c},0 0 2px ${c},0 0 4px ${c}}`,
     `[${HALO_ATTRIBUTE}] svg{filter:drop-shadow(0 0 1px ${c}) drop-shadow(0 0 3px ${c})}`,
   )
+  /*
+   * Option (b): the grey kinds take the theme's text colour, only inside a
+   * bare window (the piece carries `BARE_ATTRIBUTE` and the colour). An
+   * icon's `fill` attribute loses to a CSS `fill`; `fill="none"` parts are
+   * left alone.
+   */
+  const text = `var(${BARE_TEXT_VAR})`
+  for (const kind of RECOLOURED_KINDS) {
+    const item = `[${BARE_ATTRIBUTE}] [${HALO_ATTRIBUTE}="${kind}"]`
+    rules.push(
+      `${item},${item} *{color:${text} !important}`,
+      `${item} svg [fill]:not([fill="none"]){fill:${text} !important}`,
+    )
+  }
   const sheet = document.createElement('style')
   sheet.setAttribute('data-horizon', 'bar-halo')
   sheet.textContent = rules.join('\n')

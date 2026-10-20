@@ -49,6 +49,7 @@ import {
   formatNumber,
 } from '#/horizon/backdrops/css'
 import {
+  BARE_ATTRIBUTE,
   barShadeVars,
   windowRange,
   type WindowShape,
@@ -257,6 +258,8 @@ export function BackdropWindow({
         )
         if (next === shadeVars) return
         shadeVars = next
+        // Scopes the halo's recolouring to a bare window (`BarShade.web`).
+        piece.setAttribute(BARE_ATTRIBUTE, '')
         for (const name of Object.keys(next)) {
           piece.style.setProperty(name, next[name])
         }
@@ -289,6 +292,7 @@ export function BackdropWindow({
       unwatch()
       unregister()
       if (shadeVars) {
+        piece.removeAttribute(BARE_ATTRIBUTE)
         for (const name of Object.keys(shadeVars)) {
           piece.style.removeProperty(name)
         }

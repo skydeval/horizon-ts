@@ -537,11 +537,14 @@ function divs(json: unknown): Json[] {
 describe('FrameWindow on web (T15, T16, 7b)', () => {
   let rect = {left: 0, top: 0, width: 390, height: 50}
   const vars = new Map<string, string>()
+  const attributes = new Set<string>()
   const piece = {
     style: {
       setProperty: (name: string, value: string) => vars.set(name, value),
       removeProperty: (name: string) => vars.delete(name),
     },
+    setAttribute: (name: string) => attributes.add(name),
+    removeAttribute: (name: string) => attributes.delete(name),
   }
   const outer = {
     isConnected: true,
@@ -642,7 +645,7 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(inner.style.transform).toBe('translate3d(0px, -790px, 0)')
     // The bare window hands its items their shade colours.
     expect(vars.get(shadeVar('tab'))).toMatch(/^rgba\(255, 255, 255, /)
-    expect([...vars.keys()]).toHaveLength(14)
+    expect([...vars.keys()]).toHaveLength(15)
   })
 
   it('a footerMode change re-measures with no scroll', async () => {
@@ -732,9 +735,12 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
   it('unmounting takes the shade colours off the piece', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     const view = await mount(<FrameWindow kind="homeHeader" />)
-    expect(vars.size).toBe(14)
+    expect(vars.size).toBe(15)
+    // Marked bare, so the halo's recolouring applies only here.
+    expect(attributes.has('data-horizon-bare')).toBe(true)
     view.unmount()
     expect(vars.size).toBe(0)
+    expect(attributes.has('data-horizon-bare')).toBe(false)
   })
 
   it('Header: the Home header bare, handing its items their shade colours (round 2 list)', async () => {
@@ -748,7 +754,7 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(String(backdrop.props.style?.backgroundImage)).toMatch(
       /^linear-gradient\(\d/,
     )
-    expect(vars.size).toBe(14)
+    expect(vars.size).toBe(15)
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
   })
 })

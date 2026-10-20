@@ -9,6 +9,7 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, render, renderHook} from '@testing-library/react-native'
 
 import type * as ThemesModule from '#/alf/themes'
+import {themes} from '#/alf/themes'
 import * as store from '#/horizon/appearance/store'
 import {stableDef, useActiveBackdrop} from '#/horizon/backdrops/active'
 import {BackdropLayer} from '#/horizon/backdrops/BackdropLayer.web'
@@ -20,11 +21,13 @@ import {
 import {compileBackdrop, compileKey} from '#/horizon/backdrops/compile'
 import {cssLayers} from '#/horizon/backdrops/css'
 import {
+  BARE_TEXT_VAR,
   barShadesOn,
   barShadeVars,
   fixedLayerDrawn,
   haloAlpha,
   haloVar,
+  RECOLOURED_KINDS,
   SHADE_KINDS,
   SHADE_TARGET,
   shadeAlpha,
@@ -330,11 +333,17 @@ describe('the shades keep their item at 3:1 (batch A, item 1)', () => {
     const vars = barShadeVars(trans, 'dark', [0, 0.2], false)
     expect(barShadeVars(trans, 'dark', [0, 0.2], false)).toBe(vars)
     expect(Object.keys(vars).sort()).toEqual(
-      [...SHADE_KINDS.map(shadeVar), ...SHADE_KINDS.map(haloVar)].sort(),
+      [
+        ...SHADE_KINDS.map(shadeVar),
+        ...SHADE_KINDS.map(haloVar),
+        BARE_TEXT_VAR,
+      ].sort(),
     )
-    for (const value of Object.values(vars)) {
-      expect(value).toMatch(/^rgba\(\d+, \d+, \d+, [\d.]+\)$/)
+    for (const kind of SHADE_KINDS) {
+      expect(vars[shadeVar(kind)]).toMatch(/^rgba\(\d+, \d+, \d+, [\d.]+\)$/)
+      expect(vars[haloVar(kind)]).toMatch(/^rgba\(\d+, \d+, \d+, [\d.]+\)$/)
     }
+    expect(vars[BARE_TEXT_VAR]).toMatch(/^#[0-9A-Fa-f]{6}$/)
     const reduced = barShadeVars(trans, 'dark', [0, 0.2], true)
     for (const kind of SHADE_KINDS) {
       const value = reduced[shadeVar(kind)]
@@ -441,6 +450,18 @@ describe('the halo look (live check, 2026-10-20)', () => {
     for (const kind of SHADE_KINDS) {
       expect(vars[haloVar(kind)]).toMatch(/^rgba\(0, 0, 0, [\d.]+\)$/)
     }
+  })
+
+  it('option (b): one light halo for every item but the logo', () => {
+    // Over vivid yellow, where the grey items used to need a heavy halo.
+    const d = registryDef('pride.intersex')!
+    const vars = barShadeVars(d, 'dark', [0, 0.2], false)
+    for (const kind of ['button', 'title', 'subtitle', 'label'] as const) {
+      expect(vars[haloVar(kind)]).toBe(vars[haloVar('tab')])
+    }
+    expect(RECOLOURED_KINDS).toEqual(new Set(['button', 'subtitle', 'label']))
+    expect(RECOLOURED_KINDS.has('logo')).toBe(false)
+    expect(vars[BARE_TEXT_VAR]).toBe(themes.dark.atoms.text.color)
   })
 })
 
