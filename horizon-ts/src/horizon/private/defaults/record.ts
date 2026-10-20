@@ -7,8 +7,10 @@
  *
  * A default audience is never widened by a bad value: an audience that is
  * present but does not parse (an unknown mode, a list URI that is not one of
- * the owner's own audience records) reads as Only me. An absent one reads as
- * Everyone, the composer's own default.
+ * the owner's own audience records) reads as Only me. An absent one stays
+ * absent (none chosen): a new post made Private then uses Everyone, the
+ * composer's own default, and a quote of a private post uses Followers
+ * (round 2 list, item 6).
  */
 
 import {AtUri, type AtUriString} from '@atproto/syntax'
@@ -35,13 +37,19 @@ export type DefaultAudience =
 export type PrivateDefaults = {
   /** "New posts start as". */
   startAs: 'public' | 'private'
-  /** "Default audience". */
-  audience: DefaultAudience
+  /** "Default audience"; absent while the account has chosen none. */
+  audience?: DefaultAudience
 }
 
-export const DEFAULT_PRIVATE_DEFAULTS: PrivateDefaults = {
-  startAs: 'public',
-  audience: {kind: 'mode', mode: 'everyone'},
+export const DEFAULT_PRIVATE_DEFAULTS: PrivateDefaults = {startAs: 'public'}
+
+/** The audience a new post made Private uses while none is chosen. */
+export const UNSET_AUDIENCE: DefaultAudience = {kind: 'mode', mode: 'everyone'}
+
+/** The audience a quote of a private post starts with while none is chosen. */
+export const UNSET_QUOTE_AUDIENCE: DefaultAudience = {
+  kind: 'mode',
+  mode: 'followers',
 }
 
 const ONLY_ME: DefaultAudience = {kind: 'mode', mode: 'nobody'}
@@ -74,12 +82,12 @@ export function isOwnAudienceUri(uri: unknown, ownerDid: string): boolean {
   }
 }
 
-/** A record's `#audience`, as read for `ownerDid`. */
+/** A record's `#audience`, as read for `ownerDid`; undefined when absent. */
 export function parseDefaultAudience(
   value: unknown,
   ownerDid: string,
-): DefaultAudience {
-  if (value === undefined) return DEFAULT_PRIVATE_DEFAULTS.audience
+): DefaultAudience | undefined {
+  if (value === undefined) return undefined
   if (!isObject(value) || typeof value.mode !== 'string') return ONLY_ME
   if (value.mode === 'list') {
     return isOwnAudienceUri(value.list, ownerDid)
@@ -98,9 +106,10 @@ export function parsePrivateDefaults(
   ownerDid: string,
 ): PrivateDefaults {
   if (!isObject(value)) return DEFAULT_PRIVATE_DEFAULTS
+  const audience = parseDefaultAudience(value.audience, ownerDid)
   return {
     startAs: value.startAs === 'private' ? 'private' : 'public',
-    audience: parseDefaultAudience(value.audience, ownerDid),
+    ...(audience ? {audience} : {}),
   }
 }
 
@@ -124,7 +133,8 @@ export function parsePostingDefaultsRecord(
   return {defaults: parsePrivateDefaults(value.private, ownerDid), raw}
 }
 
-function audienceRecord(
+/** A default audience as the record's `#audience`. */
+export function audienceRecord(
   audience: DefaultAudience,
 ): NonNullable<PrivateDefaultsRecord['audience']> {
   return audience.kind === 'list'
@@ -139,7 +149,7 @@ export type BuiltPostingDefaultsRecord = PostingDefaultsRecord &
 /**
  * The record to put: `raw` (the record as read, or null when there is none)
  * with `private` replaced by `defaults`. Fields of `private` this client does
- * not know are kept.
+ * not know are kept. No audience chosen writes none, so it stays unchosen.
  */
 export function buildPostingDefaultsRecord(
   raw: Record<string, unknown> | null,
@@ -148,10 +158,11 @@ export function buildPostingDefaultsRecord(
 ): BuiltPostingDefaultsRecord {
   const base: Record<string, unknown> = raw ? {...raw} : {}
   const readPrivate = isObject(base.private) ? base.private : {}
+  const {audience: _readAudience, ...readRest} = readPrivate
   base.private = {
-    ...readPrivate,
+    ...readRest,
     startAs: defaults.startAs,
-    audience: audienceRecord(defaults.audience),
+    ...(defaults.audience ? {audience: audienceRecord(defaults.audience)} : {}),
   }
   const version =
     raw && typeof raw.version === 'number' && Number.isInteger(raw.version)

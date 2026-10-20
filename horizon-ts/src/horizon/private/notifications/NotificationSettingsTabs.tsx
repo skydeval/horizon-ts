@@ -37,6 +37,12 @@ import {type PrivateMode} from '#/horizon/private/tabs/mode-store'
 /**
  * The Public | Private tabs under the screen's header. Members only;
  * nothing renders for anyone else.
+ *
+ * The screen mounts them straight in `Layout.Screen`, which does not centre
+ * its children (the header and the content each centre themselves), so the
+ * tabs sit in `Layout.Center` to take the centre column, as the header does
+ * and as Saved's tabs do (`SavedModeTabs`). Without it they drew from the
+ * window's left edge, over the left nav (round 2 list, item 1).
  */
 export function NotificationSettingsTabs() {
   const {t: l} = useLingui()
@@ -45,15 +51,17 @@ export function NotificationSettingsTabs() {
   const mode = useNotificationSettingsMode()
   if (!currentAccount || !offersNotificationSettingsTabs(isMember)) return null
   return (
-    <FolderTabs<PrivateMode>
-      testID="notificationSettingsTabs"
-      tabs={[
-        {key: 'public', label: l`Public`},
-        {key: 'private', label: l`Private`},
-      ]}
-      selected={mode}
-      onSelect={next => setNotificationSettingsMode(currentAccount.did, next)}
-    />
+    <Layout.Center>
+      <FolderTabs<PrivateMode>
+        testID="notificationSettingsTabs"
+        tabs={[
+          {key: 'public', label: l`Public`},
+          {key: 'private', label: l`Private`},
+        ]}
+        selected={mode}
+        onSelect={next => setNotificationSettingsMode(currentAccount.did, next)}
+      />
+    </Layout.Center>
   )
 }
 

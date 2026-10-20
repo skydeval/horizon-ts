@@ -1,9 +1,9 @@
 /*
- * Bar shades on web (the Bars frame, batch A): a small soft oblong of the
- * theme's tint under each thing written on a bare window (`frame.ts`,
- * "Bar shades"). A raw `div` at `z-index: -1`, first in its item, so it
- * paints over the window and under the item's icon or text, as a lens
- * does. Its colour is the custom property the bare window sets on its
+ * Bar shades on web (the Bars frame, batch A; Header's top bars, round 2
+ * list): a small soft oblong of the theme's tint under each thing written
+ * on a bare window (`frame.ts`, "Bar shades"). A raw `div` at
+ * `z-index: -1`, first in its item, so it paints over the window and under
+ * the item's icon or text. Its colour is the custom property the bare window sets on its
  * piece, so outside one it draws nothing. The soft edge is a mask of two
  * linear ramps, across and down: a solid middle whose ends and corners
  * fade out (`fadeX`, `fadeY`), painted once with the bar and moved with it.

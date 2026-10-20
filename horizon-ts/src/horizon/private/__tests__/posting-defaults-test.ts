@@ -156,6 +156,29 @@ describe('the record (lexicon and lenient reads)', () => {
     }
   })
 
+  it('an absent audience stays unchosen when read and written back (round 2 list)', () => {
+    const read = parsePostingDefaultsRecord(
+      {private: {startAs: 'private'}},
+      DID,
+    )?.defaults
+    expect(read).toEqual({startAs: 'private'})
+    expect(read).not.toHaveProperty('audience')
+    const record = buildPostingDefaultsRecord(
+      {private: {startAs: 'public', extra: true}},
+      read!,
+      NOW,
+    )
+    expect(record.private).toEqual({startAs: 'private', extra: true})
+    // A chosen one is written; choosing none never widens a read one.
+    expect(
+      buildPostingDefaultsRecord(
+        {private: {startAs: 'public', audience: {mode: 'nobody'}}},
+        {startAs: 'public', audience: {kind: 'mode', mode: 'nobody'}},
+        NOW,
+      ).private,
+    ).toEqual({startAs: 'public', audience: {mode: 'nobody'}})
+  })
+
   it('only the owner own audience records count', () => {
     expect(isOwnAudienceUri(AUDIENCE, DID)).toBe(true)
     expect(isOwnAudienceUri(OTHER_AUDIENCE, DID)).toBe(false)
@@ -213,6 +236,17 @@ describe('reading and writing in the account own repo', () => {
       private: {startAs: 'private', audience: {mode: 'followers'}},
     })
     expect(readDeviceDefaults(DID)).toEqual(FOLLOWERS)
+  })
+
+  it('the device copy keeps an unchosen audience unchosen (round 2 list)', async () => {
+    const {client} = pds({
+      value: {$type: COLLECTION, version: 1, private: {startAs: 'private'}},
+      cid: RECORD_CID,
+    })
+    expect(await fetchPostingDefaults(client, DID)).toEqual({
+      startAs: 'private',
+    })
+    expect(readDeviceDefaults(DID)).toEqual({startAs: 'private'})
   })
 
   it('with no record, the write requires that none exists', async () => {

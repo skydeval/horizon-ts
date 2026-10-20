@@ -321,8 +321,8 @@ export const ComposePost = ({
   const client = useAppviewClient()
   const chatClient = useChatClient()
   const pdsClient = usePdsClient()
-  // HORIZON: the composer owns the Public | Private record for its lifetime
-  const isPrivate = usePrivateComposeSession(replyTo)
+  // HORIZON: the composer owns the Public | Private record for its lifetime; a quote starts as the quoted post is
+  const isPrivate = usePrivateComposeSession(replyTo, initQuote)
   // HORIZON: the composer owns the media spoiler and content warning snapshot for its lifetime
   const composeSpoilers = useComposeSpoilerSession()
   const queryClient = useQueryClient()

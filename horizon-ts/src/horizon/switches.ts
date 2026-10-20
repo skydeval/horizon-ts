@@ -178,10 +178,9 @@ export const BACKDROPS: boolean = true
 /**
  * The compact frame windows (Phase 3 design, section 9): below 800px the
  * Home header, the sticky headers, the bottom bar and the drawer paint the
- * backdrop inside themselves under the theme's glass (or, with the "Buttons"
- * phone frame, the header buttons, the tab icons and the compose button
- * do). Effective only with `BACKDROPS` on. `false` leaves compact screens
- * stock (`FrameWindow` and `FrameLens` render nothing, the inner Home header
+ * backdrop inside themselves, bare or under the theme's glass as the phone
+ * frame says. Effective only with `BACKDROPS` on. `false` leaves compact
+ * screens stock (`FrameWindow` and `BarShade` render nothing, the inner Home header
  * row is sticky, the Home tab bar paints `t.atoms.bg`): the backdrop shows on
  * desktop and tablet only.
  */

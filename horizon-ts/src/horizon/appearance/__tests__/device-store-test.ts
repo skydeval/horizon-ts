@@ -86,23 +86,19 @@ describe('the device value (T10)', () => {
     })
   })
 
-  it('reads every frame style, and the retired inset toggle as Gutter', () => {
+  it('reads every frame style, retired Buttons as Bars, and the retired inset toggle as Gutter', () => {
     const read = (value: Record<string, unknown>) =>
       parseDeviceValue(JSON.stringify({v: 1, ...value})).frameStyle
-    for (const style of [
-      'bars',
-      'edges',
-      'gutter',
-      'headerBand',
-      'buttons',
-    ] as const) {
+    for (const style of ['bars', 'edges', 'gutter', 'headerBand'] as const) {
       expect(read({frameStyle: style})).toBe(style)
     }
+    // Buttons was removed (round 2 list): a stored pick reads as Bars.
+    expect(read({frameStyle: 'buttons'})).toBe('bars')
     expect(read({frameStyle: 'circles'})).toBe('bars')
     expect(read({})).toBe('bars')
     expect(read({frameStyle: 'bars', insetCard: true})).toBe('gutter')
     expect(read({insetCard: true})).toBe('gutter')
-    expect(read({frameStyle: 'buttons', insetCard: true})).toBe('buttons')
+    expect(read({frameStyle: 'buttons', insetCard: true})).toBe('bars')
     expect(read({frameStyle: 'edges', insetCard: true})).toBe('edges')
     // Written back without the retired field.
     const parsed = parseDeviceValue(

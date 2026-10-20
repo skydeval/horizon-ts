@@ -25,21 +25,24 @@ import {PRIVATE_POSTING} from '#/horizon/switches'
  * compose is private, re-rendering the composer when that changes. A
  * member's private posting defaults apply when the session starts and when
  * they arrive later, until the record is set otherwise (a choice in the
- * control, a restored draft).
+ * control, a restored draft). `quote` is the post the composer opened
+ * quoting: a member's quote starts as that post is (`state.ts`).
  */
 export function usePrivateComposeSession(
   replyTo: {uri: string} | undefined,
+  quote?: {uri: string},
 ): boolean {
   const replyToUri = replyTo?.uri
+  const quoteUri = quote?.uri
   const defaults = usePrivateComposeDefaults()
   useLayoutEffect(() => {
     if (!PRIVATE_POSTING) return
     startComposeVisibility(initialComposeVisibility(replyToUri))
     return () => setComposeVisibility(PUBLIC_COMPOSE)
-  }, [replyToUri])
+  }, [replyToUri, quoteUri])
   useLayoutEffect(() => {
     if (!PRIVATE_POSTING) return
-    applyLateComposeDefaults(replyToUri, defaults)
-  }, [replyToUri, defaults])
+    applyLateComposeDefaults(replyToUri, defaults, quoteUri)
+  }, [replyToUri, defaults, quoteUri])
   return useIsPrivateCompose()
 }

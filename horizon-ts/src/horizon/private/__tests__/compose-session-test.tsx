@@ -131,13 +131,15 @@ function PillProbe() {
 function Composer({
   showControl,
   replyTo,
+  quote,
   withPill = false,
 }: {
   showControl: boolean
   replyTo?: {uri: string}
+  quote?: {uri: string}
   withPill?: boolean
 }) {
-  usePrivateComposeSession(replyTo)
+  usePrivateComposeSession(replyTo, quote)
   return showControl ? (
     <ComposerAudienceProvider
       replyTo={replyTo}
@@ -357,6 +359,161 @@ describe('the private posting defaults (Phase 3, batch B)', () => {
     mockDefaults = FOLLOWERS
     screen.rerender(<Composer showControl />)
     expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    screen.unmount()
+  })
+})
+
+describe('quotes start as the quoted post is (round 2 list, item 6)', () => {
+  const PRIVATE_QUOTED = PRIVATE_PARENT
+  const PUBLIC_QUOTED = PUBLIC_PARENT
+  const LIST = `at://${DID}/tools.kryphocron.policy.audience/3klist1111111`
+  const STARTS_PUBLIC_TO_LIST: PrivateDefaults = {
+    startAs: 'public',
+    audience: {kind: 'list', uri: LIST},
+  }
+  const STARTS_PRIVATE_TO_FOLLOWING: PrivateDefaults = {
+    startAs: 'private',
+    audience: {kind: 'mode', mode: 'following'},
+  }
+
+  it('a quote of a private post starts Private with the default audience, over "New posts start as"', () => {
+    expect(
+      initialComposeVisibility(
+        undefined,
+        STARTS_PUBLIC_TO_LIST,
+        PRIVATE_QUOTED,
+      ),
+    ).toEqual({
+      visibility: 'private',
+      audience: {kind: 'list', uri: LIST},
+      locked: false,
+    })
+  })
+
+  it('with no default audience chosen, a quote of a private post starts Private to Followers', () => {
+    expect(
+      initialComposeVisibility(undefined, {startAs: 'public'}, PRIVATE_QUOTED),
+    ).toEqual({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'followers'},
+      locked: false,
+    })
+    // A post that is not a quote, made Private, still uses Everyone.
+    expect(initialComposeVisibility(undefined, {startAs: 'private'})).toEqual({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'everyone'},
+      locked: false,
+    })
+  })
+
+  it('a quote of a public post starts Public, over "New posts start as", holding the default audience', () => {
+    expect(
+      initialComposeVisibility(
+        undefined,
+        STARTS_PRIVATE_TO_FOLLOWING,
+        PUBLIC_QUOTED,
+      ),
+    ).toEqual({
+      visibility: 'public',
+      audience: {kind: 'mode', mode: 'following'},
+      locked: false,
+    })
+    expect(
+      initialComposeVisibility(undefined, {startAs: 'private'}, PUBLIC_QUOTED),
+    ).toEqual({
+      visibility: 'public',
+      audience: {kind: 'mode', mode: 'everyone'},
+      locked: false,
+    })
+  })
+
+  it('non-members always start Public, whatever is quoted', () => {
+    expect(
+      initialComposeVisibility(undefined, undefined, PRIVATE_QUOTED),
+    ).toEqual(PUBLIC_COMPOSE)
+    expect(
+      initialComposeVisibility(undefined, undefined, PUBLIC_QUOTED),
+    ).toEqual(PUBLIC_COMPOSE)
+  })
+
+  it('replies are unchanged: a reply follows its parent, not its quote', () => {
+    expect(
+      initialComposeVisibility(
+        PRIVATE_PARENT,
+        STARTS_PUBLIC_TO_LIST,
+        PUBLIC_QUOTED,
+      ),
+    ).toMatchObject({
+      visibility: 'private',
+      locked: true,
+      audience: {kind: 'parent'},
+    })
+    expect(
+      initialComposeVisibility(
+        PUBLIC_PARENT,
+        STARTS_PRIVATE_TO_FOLLOWING,
+        PRIVATE_QUOTED,
+      ),
+    ).toEqual({
+      visibility: 'public',
+      audience: {kind: 'mode', mode: 'following'},
+      locked: false,
+    })
+  })
+
+  it('the composer opens a quote of a private post Private, and it can be made Public', () => {
+    mockDefaults = STARTS_PUBLIC_TO_LIST
+    const screen = render(
+      <Composer showControl quote={{uri: PRIVATE_QUOTED}} />,
+    )
+    expect(getComposeVisibility()).toEqual({
+      visibility: 'private',
+      audience: {kind: 'list', uri: LIST},
+      locked: false,
+    })
+    // Not locked: a public quote of a private post is allowed.
+    act(() => {
+      chooseComposeVisibility({visibility: 'public'})
+    })
+    expect(getComposeVisibility().visibility).toBe('public')
+    screen.unmount()
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+  })
+
+  it('the composer opens a quote of a public post Public for a member who starts posts Private', () => {
+    mockDefaults = STARTS_PRIVATE_TO_FOLLOWING
+    const screen = render(<Composer showControl quote={{uri: PUBLIC_QUOTED}} />)
+    expect(getComposeVisibility().visibility).toBe('public')
+    screen.unmount()
+  })
+
+  it('a quote of a private post opens Public for a non-member', () => {
+    mockDefaults = undefined
+    const screen = render(
+      <Composer showControl quote={{uri: PRIVATE_QUOTED}} />,
+    )
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    screen.unmount()
+  })
+
+  it('defaults that arrive after opening a quote of a private post make it Private, until changed', () => {
+    const screen = render(
+      <Composer showControl quote={{uri: PRIVATE_QUOTED}} />,
+    )
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    mockDefaults = {startAs: 'public'}
+    screen.rerender(<Composer showControl quote={{uri: PRIVATE_QUOTED}} />)
+    expect(getComposeVisibility()).toEqual({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'followers'},
+      locked: false,
+    })
+    act(() => {
+      chooseComposeVisibility({visibility: 'public'})
+    })
+    mockDefaults = STARTS_PUBLIC_TO_LIST
+    screen.rerender(<Composer showControl quote={{uri: PRIVATE_QUOTED}} />)
+    expect(getComposeVisibility().visibility).toBe('public')
     screen.unmount()
   })
 })

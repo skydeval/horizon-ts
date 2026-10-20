@@ -12,7 +12,6 @@ import {
 import {
   bottomBarShape,
   horizonInnerHeaderSticky,
-  lensActive,
   shadeVar,
   windowActive,
 } from '#/horizon/backdrops/frame'
@@ -25,7 +24,6 @@ import {
   windowOffset,
   type WindowRect,
 } from '#/horizon/backdrops/frame-tracking'
-import {FrameLens} from '#/horizon/backdrops/FrameLens'
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {registryDef} from '#/horizon/backdrops/registry'
 
@@ -473,7 +471,7 @@ describe('the shared window tracker (7b)', () => {
   })
 })
 
-describe('when windows and lenses are drawn (T15)', () => {
+describe('when windows are drawn (T15)', () => {
   const base = {
     def: trans,
     frameStyle: 'bars' as const,
@@ -485,7 +483,7 @@ describe('when windows and lenses are drawn (T15)', () => {
     expect(windowActive({...base, kind: 'bottomBar'})).toBe(true)
     expect(windowActive({...base, kind: 'bottomBar', def: null})).toBe(false)
     expect(
-      windowActive({...base, kind: 'bottomBar', frameStyle: 'buttons'}),
+      windowActive({...base, kind: 'bottomBar', frameStyle: 'headerBand'}),
     ).toBe(false)
     expect(windowActive({...base, kind: 'header', isWithinDialog: true})).toBe(
       false,
@@ -495,19 +493,6 @@ describe('when windows and lenses are drawn (T15)', () => {
     expect(windowActive({...base, kind: 'header', web: false})).toBe(false)
     expect(windowActive({...base, kind: 'drawer', gtMobile: true})).toBe(true)
     expect(windowActive({...base, kind: 'homeHeader'})).toBe(true)
-  })
-
-  it('lenses: buttons only, a backdrop, not in a dialog, header buttons below 800', () => {
-    const lens = {...base, frameStyle: 'buttons' as const}
-    expect(lensActive({...lens, kind: 'tab'})).toBe(true)
-    expect(lensActive({...lens, kind: 'fab'})).toBe(true)
-    expect(lensActive({...lens, kind: 'fab', isWithinDialog: true})).toBe(false)
-    expect(lensActive({...lens, kind: 'tab', frameStyle: 'bars'})).toBe(false)
-    expect(lensActive({...lens, kind: 'tab', def: null})).toBe(false)
-    expect(lensActive({...lens, kind: 'headerButton', gtMobile: true})).toBe(
-      false,
-    )
-    expect(lensActive({...lens, kind: 'headerButton'})).toBe(true)
   })
 
   it('the inner Home header row is not sticky while the frame is on', () => {
@@ -549,7 +534,7 @@ function divs(json: unknown): Json[] {
   return out
 }
 
-describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
+describe('FrameWindow on web (T15, T16, 7b)', () => {
   let rect = {left: 0, top: 0, width: 390, height: 50}
   const vars = new Map<string, string>()
   const piece = {
@@ -606,18 +591,16 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
     return view
   }
 
-  it('renders nothing without a backdrop, with buttons, or disabled', () => {
+  it('renders nothing without a backdrop, where the style draws none, or disabled', () => {
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     expect(
       render(<FrameWindow kind="header" enabled={false} />).toJSON(),
     ).toBeNull()
-    expect(render(<FrameLens kind="tab" />).toJSON()).toBeNull()
-    act(() => store.setFrameStyle('buttons'))
+    act(() => store.setFrameStyle('gutter'))
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
     mockGtMobile = true
     expect(render(<FrameWindow kind="header" />).toJSON()).toBeNull()
-    expect(render(<FrameLens kind="headerButton" />).toJSON()).toBeNull()
   })
 
   it('Bars: the backdrop bare, in a frame-sized layer moved by a transform', async () => {
@@ -754,35 +737,44 @@ describe('FrameWindow and FrameLens on web (T15, T16, 7b)', () => {
     expect(vars.size).toBe(0)
   })
 
-  it('lenses: the tab pill, and the compose button in black', () => {
+  it('Header: the Home header bare, handing its items their shade colours (round 2 list)', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    act(() => store.setFrameStyle('buttons'))
-    const [tab] = divs(
-      render(<FrameLens kind="tab" />, {createNodeMock}).toJSON(),
+    act(() => store.setFrameStyle('headerBand'))
+    rect = {left: 0, top: 0, width: 390, height: 95}
+    const view = await mount(<FrameWindow kind="homeHeader" />)
+    const [, backdrop, ...rest] = divs(view.toJSON())
+    // No glass layer: the backdrop alone.
+    expect(rest).toEqual([])
+    expect(String(backdrop.props.style?.backgroundImage)).toMatch(
+      /^linear-gradient\(\d/,
     )
-    expect(tab.props.style).toMatchObject({
-      top: 9,
-      left: '50%',
-      marginLeft: -28,
-      width: 56,
-      height: 34,
-      borderRadius: 17,
-      overflow: 'hidden',
-    })
+    expect(vars.size).toBe(7)
+    expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
+  })
+
+  it('a disc overlay still paints over the backdrop (kept from the retired lenses)', () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
     const [, , disc] = divs(
-      render(<FrameLens kind="fab" />, {createNodeMock}).toJSON(),
+      render(
+        <BackdropWindow
+          def={trans}
+          overlays={[
+            {
+              kind: 'disc',
+              color: 'rgba(0, 0, 0, 0.5)',
+              clear: 'rgba(0, 0, 0, 0)',
+              solid: 15,
+              fade: 19,
+            },
+          ]}
+          shape={{top: 0, right: 0, bottom: 0, left: 0}}
+        />,
+        {createNodeMock},
+      ).toJSON(),
     )
-    expect(String(disc.props.style?.backgroundImage)).toMatch(
-      /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, /,
+    expect(String(disc.props.style?.backgroundImage)).toBe(
+      'radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.5) 0px, rgba(0, 0, 0, 0.5) 15px, rgba(0, 0, 0, 0) 19px)',
     )
-    const [square] = divs(
-      render(<FrameLens kind="headerButton" shape="square" />, {
-        createNodeMock,
-      }).toJSON(),
-    )
-    expect(square.props.style?.borderRadius).toBe(8)
-    mockWithinDialog = true
-    expect(render(<FrameLens kind="fab" />).toJSON()).toBeNull()
   })
 })
 

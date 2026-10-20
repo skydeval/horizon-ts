@@ -357,14 +357,12 @@ function FrameStyleGroup() {
     edges: l({message: 'Edges', context: 'phone frame style'}),
     gutter: l({message: 'Gutter', context: 'phone frame style'}),
     headerBand: l({message: 'Header', context: 'phone frame style'}),
-    buttons: l({message: 'Buttons', context: 'phone frame style'}),
   }
   const descriptions: Record<FrameStyle, string> = {
     bars: l`The top bar and the tab bar show the backdrop.`,
     edges: l`Plain bars with a thin strip of backdrop along their edges.`,
     gutter: l`Plain bars; the backdrop shows in a margin beside the posts.`,
-    headerBand: l`Only the top bar shows the backdrop.`,
-    buttons: l`Plain bars; the backdrop shows through the buttons.`,
+    headerBand: l`The top bar shows the backdrop; the tab bar stays plain.`,
   }
   return (
     <AppearanceToggleButtonGroup

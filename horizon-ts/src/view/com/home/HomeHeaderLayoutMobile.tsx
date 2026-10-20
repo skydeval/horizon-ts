@@ -21,12 +21,10 @@ import * as Layout from '#/components/Layout'
 import {Link} from '#/components/Link'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_LIQUID_GLASS} from '#/env'
-// HORIZON: the logo's shade on a Bars window (Phase 3)
+// HORIZON: the logo's shade on a bare window (Phase 3)
 import {BarShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the inner row's sticky value under the window (Phase 3)
 import {horizonInnerHeaderSticky} from '#/horizon/backdrops/frame'
-// HORIZON: the feeds button lens (Phase 3)
-import {FrameLens} from '#/horizon/backdrops/FrameLens'
 // HORIZON: the Home header's compact frame window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
@@ -80,7 +78,7 @@ export function HomeHeaderLayoutMobile({
                 emitSoftReset()
               }
             }}>
-            {/* HORIZON: the logo's shade on a Bars window (Phase 3) */}
+            {/* HORIZON: the logo's shade on a bare window (Phase 3) */}
             <BarShade kind="logo" />
             <Logo width={30} />
           </PressableScale>
@@ -105,8 +103,6 @@ export function HomeHeaderLayoutMobile({
                 {marginRight: -Layout.BUTTON_VISUAL_ALIGNMENT_OFFSET},
                 a.bg_transparent,
               ]}>
-              {/* HORIZON: the feeds button as a lens (Phase 3, BD-20) */}
-              <FrameLens kind="headerButton" shape="square" />
               <ButtonIcon icon={FeedsIcon} size="lg" />
             </Link>
           )}

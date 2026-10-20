@@ -4,10 +4,12 @@
  * "Private posts" section follows it with
  *
  * - "New posts start as" Public or Private (the composer's initial
- *   visibility for a top-level post);
+ *   visibility for a top-level post that quotes nothing; a quote starts as
+ *   the quoted post is, round 2 list item 6);
  * - "Default audience" (the composer's initial private audience): the
  *   standing audiences and the account's named list audiences, as the
- *   composer's drop-down offers them, with "New audience...";
+ *   composer's drop-down offers them, with "New audience...". None is
+ *   selected until the account chooses one (`record.ts`);
  * - who can reply and quote: private posts share the public defaults above
  *   (Horizon writes a private post's limits as the stock gate records, from
  *   the same composer settings), so this is a note, not a second form;
@@ -173,8 +175,8 @@ function PrivateDefaultsForm() {
         </Toggle.Group>
         <HintText>
           <Trans>
-            Replies to public posts start public. Replies to private posts are
-            always private.
+            Replies and quotes start as the post they reply to or quote. Replies
+            to private posts are always private.
           </Trans>
         </HintText>
       </View>
@@ -186,7 +188,9 @@ function PrivateDefaultsForm() {
   )
 }
 
-function audienceValue(audience: DefaultAudience): string {
+/** The radio value of `audience`; none selected while none is chosen. */
+function audienceValue(audience: DefaultAudience | undefined): string {
+  if (!audience) return ''
   return audience.kind === 'list' ? `list:${audience.uri}` : audience.mode
 }
 
@@ -194,7 +198,7 @@ function DefaultAudienceForm({
   audience,
   onChange,
 }: {
-  audience: DefaultAudience
+  audience: DefaultAudience | undefined
   onChange: (next: DefaultAudience) => void
 }) {
   const {t: l} = useLingui()
@@ -209,7 +213,7 @@ function DefaultAudienceForm({
    * refused at publish.
    */
   const missingList =
-    audience.kind === 'list' &&
+    audience?.kind === 'list' &&
     !isPending &&
     !lists.some(entry => entry.uri === audience.uri)
 
@@ -282,6 +286,14 @@ function DefaultAudienceForm({
           {standing('nobody')}
         </Toggle.PanelGroup>
       </Toggle.Group>
+      {audience ? null : (
+        <HintText>
+          <Trans>
+            Until you choose, posts you make private go to Everyone, and quotes
+            of private posts start private to Followers.
+          </Trans>
+        </HintText>
+      )}
       {isError ? (
         <HintText>
           <Trans>Your lists could not be loaded.</Trans>

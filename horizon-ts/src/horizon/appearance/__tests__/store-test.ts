@@ -216,8 +216,8 @@ describe('edits (T11)', () => {
   })
 
   it('device-only settings', () => {
-    store.setFrameStyle('buttons')
-    expect(device().frameStyle).toBe('buttons')
+    store.setFrameStyle('headerBand')
+    expect(device().frameStyle).toBe('headerBand')
     store.setFrameStyle('gutter')
     expect(device().frameStyle).toBe('gutter')
     expect(device().softness).toEqual({dim: 40, dark: 50})

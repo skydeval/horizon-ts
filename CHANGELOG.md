@@ -364,27 +364,25 @@ released version yet; everything so far is under `[Unreleased]`.
     navigation. Posts stay on opaque ground. Bars inside dialogs stay as
     they were.
   - **"Phone frame" (to compare, this device only):** Appearance offers
-    five styles, with a line under the picker saying what the chosen one
+    four styles, with a line under the picker saying what the chosen one
     does. **Bars** (the default): the bare windows above. **Edges:** plain bars
     with a thin strip of backdrop along the top bar's bottom edge and the
     tab bar's top edge. **Gutter:** plain bars, and the reading column drawn
     as a card 8px in from each side with the backdrop in the margins.
-    **Header:** only the top bars are windows, under the theme's glass; the
-    tab bar is plain.
-    **Buttons:** plain bars, and the five tab icons, the header buttons and
-    the compose button are small windows onto the backdrop, each icon on a
-    small soft backing just dark or light enough to read (the compose button
-    shows the backdrop in place of its blue). The drawer is a window with
-    every style but Buttons. The picker goes away once one is chosen for
-    everyone. Gutter replaces the earlier hidden "Reading card on small
-    screens" toggle; a device that had it on starts on Gutter.
+    **Header:** only the top bars show the backdrop, bare as with Bars, each
+    item on its shade; the tab bar is plain. The drawer is a window with
+    every style. The picker goes away once one is chosen for everyone.
+    Gutter replaces the earlier hidden "Reading card on small screens"
+    toggle; a device that had it on starts on Gutter. The earlier **Buttons**
+    style (plain bars with the tab icons, header buttons and compose button
+    as small windows) is gone; a device that had it starts on Bars.
   - **Backdrop softness:** dim and dark no longer lay a dark veil over the
     backdrop. They calm it instead: colours lose some saturation and come
     down a little in brightness, keeping their hue, so a backdrop reads as
     "not bright" rather than darkened. Appearance > "Backdrop softness" has
     a slider for dim (40 by default) and one for dark (50), from 0 (full
     colour) to 100; they apply on this device only, to the window backdrop,
-    the cards, bars and buttons alike, and the cards' glass still keeps the
+    the cards and bars alike, and the cards' glass still keeps the
     grey rail text at 4.5:1 over the softened colours.
   - **Smoother scrolling with a backdrop:** nothing is blurred live any
     more (the rail and nav cards paint the backdrop instead); the phone bars
@@ -395,10 +393,10 @@ released version yet; everything so far is under `[Unreleased]`.
     at all where the bars paint their own (every style but Gutter); and a
     backdrop is worked out once per theme, softness and window size. The
     look is unchanged.
-  - **iOS and Android:** the bottom bar, the Home header, the drawer, the
-    header buttons and the compose button paint the backdrop the same way
-    (under the theme's glass with Bars, whose bare bars are web only for
-    now). Built, not yet tried on a device.
+  - **iOS and Android:** the bottom bar, the Home header and the drawer
+    paint the backdrop the same way (under the theme's glass with Bars and
+    Header, whose bare bars are web only for now). Built, not yet tried on a
+    device.
   - **Settings: "App views".** The "App servers" row and dialog are now
     "App views", in the atproto ecosystem's terms: Horizon's own app view
     (prism, always connected) and the public app view. The sign-in form's
@@ -413,13 +411,19 @@ released version yet; everything so far is under `[Unreleased]`.
     Audiences, moved here from its own Settings row. The composer opens a
     new post on these defaults, and each post can still change them; a reply
     to a public post starts Public with the default audience ready, and a
-    reply to a private post stays private under its thread. The defaults
+    reply to a private post stays private under its thread. A quote starts
+    as the post it quotes: quoting a private post starts Private with the
+    default audience (Followers until you choose one), quoting a public post
+    starts Public, whatever "New posts start as" says; either can still be
+    switched. Until a default audience is chosen none is selected, and the
+    screen says what applies meanwhile. The defaults
     follow you to other devices as a record in your own repo,
     `app.nearhorizon.actor.postingDefaults/self`, with a copy on this device
     for an instant start. Non-members see the stock screen and the composer
     always starts Public for them.
   - **Settings > Notifications has Public | Private tabs** for members, the
-    same folder tabs as the Notifications page. Public is the stock screen.
+    same folder tabs as the Notifications page, in the centre column under
+    the screen's header. Public is the stock screen.
     Private lists likes, replies, mentions, quotes and reposts of private
     posts, shown disabled with "Private notification settings arrive with
     server support" until prism offers private notification preferences;

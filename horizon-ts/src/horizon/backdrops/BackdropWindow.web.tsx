@@ -1,13 +1,13 @@
 /*
- * The web painter of a compact window, a lens or a rail card (Phase 3
- * design, 9.1, 9.2 and 9.7; performance fixes 7a and 7b): a raw `div`,
+ * The web painter of a compact window or a rail card (Phase 3 design, 9.1
+ * and 9.2; performance fixes 7a and 7b): a raw `div`,
  * absolutely positioned in its piece and first inside it, clipped to its
  * shape. Inside it an element the size of the viewport frame carries the
  * same viewport-anchored gradient as the fixed layer, and is moved by a
  * `translate3d` so that its origin sits at the viewport's: it is
  * rasterised once and only composited as a bar slides, where the first
  * build rewrote `background-position` and repainted the bar on every frame.
- * The overlays (the glass, a lens's icon backing) and a bar's top hairline
+ * The overlays (the glass) and a bar's top hairline
  * are layers above it. The offsets come from one shared tracker
  * (`frame-tracking.ts`) that reads every window first and then writes only
  * those that moved. `background-attachment: fixed` is not used: every bar
@@ -29,8 +29,8 @@
  * The `div` sits at `z-index: -1` (live fix batch 1). An absolutely
  * positioned box with `z-index: auto` paints above its parent's in-flow,
  * non-positioned children, and the bottom tabs' and the compose button's
- * icons are bare `<svg>` elements, so the first build's lenses covered
- * them. At -1 it paints just above its piece's own background and below
+ * icons are bare `<svg>` elements, so the first build's button lenses (the
+ * retired Buttons frame) covered them. At -1 it paints just above its piece's own background and below
  * all of the piece's content; every piece is an RN-web `View`, which is
  * `position: relative; z-index: 0` and so a stacking context that keeps
  * the -1 inside it.

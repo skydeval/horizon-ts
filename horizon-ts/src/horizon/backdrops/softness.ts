@@ -6,7 +6,7 @@
  * dark ones lift slightly. It replaces the dark theme's old black veil.
  *
  * The treatment is applied to the compiled stops (`compile.ts`), so the
- * fixed layer, every window and lens, the rail cards' glass rule and the
+ * fixed layer, every window, the rail cards' glass rule and the
  * native painter all see the same colours. Both steps are affine per
  * channel, so treating the stops and then interpolating gives what a CSS
  * `saturate()` and a blend over the interpolated gradient would.

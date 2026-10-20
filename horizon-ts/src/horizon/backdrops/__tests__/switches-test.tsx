@@ -9,13 +9,12 @@ import * as store from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {BackdropLayer} from '#/horizon/backdrops/BackdropLayer.web'
 import {
+  barShadesOn,
   horizonInnerHeaderSticky,
   horizonTabBarBg,
-  lensActive,
   windowActive,
 } from '#/horizon/backdrops/frame'
 import {FRAME_STYLES} from '#/horizon/backdrops/frame-style'
-import {FrameLens} from '#/horizon/backdrops/FrameLens'
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {
   insetReadingCardOn,
@@ -127,11 +126,10 @@ describe('BACKDROPS off (T16)', () => {
       expect(render(<FrameWindow kind="header" />).toJSON()).toBeNull()
       expect(render(<FrameWindow kind="drawer" />).toJSON()).toBeNull()
       expect(render(<FrameWindow kind="homeHeader" />).toJSON()).toBeNull()
-      expect(render(<FrameLens kind="tab" />).toJSON()).toBeNull()
-      expect(render(<FrameLens kind="headerButton" />).toJSON()).toBeNull()
-      expect(render(<FrameLens kind="fab" />).toJSON()).toBeNull()
       expect(windowActive({...base, frameStyle, kind: 'bottomBar'})).toBe(false)
-      expect(lensActive({...base, frameStyle, kind: 'tab'})).toBe(false)
+      expect(barShadesOn({...base, frameStyle, kind: 'title', web: true})).toBe(
+        false,
+      )
     }
     act(() => store.setFrameStyle('gutter'))
     expect(render(<GutterProbe />).getByText('null')).toBeTruthy()

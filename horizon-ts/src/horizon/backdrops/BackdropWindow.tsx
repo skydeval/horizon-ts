@@ -1,5 +1,5 @@
 /*
- * The native painter of a compact window or lens (Phase 3 design, 9.8): a
+ * The native painter of a compact window (Phase 3 design, 9.8): a
  * clipping view, absolutely positioned and first inside its piece, that
  * measures itself with `measureInWindow` on layout and after every
  * minimal-shell change, and draws the backdrop with `CompiledSvg` at the
@@ -36,9 +36,10 @@ function shapeStyle(shape: WindowShape): ViewStyle {
 }
 
 /*
- * A lens's icon backing on native: a solid centred circle in the backing's
- * colour, its radius halfway through the web disc's fade. The web disc's
- * soft edge is not drawn (an approximation, live fix batch 1).
+ * A disc overlay on native (once a button lens's icon backing): a solid
+ * centred circle in the disc's colour, its radius halfway through the web
+ * disc's fade. The web disc's soft edge is not drawn (an approximation,
+ * live fix batch 1).
  */
 function Disc({disc}: {disc: DiscOverlay}) {
   const r = (disc.solid + disc.fade) / 2

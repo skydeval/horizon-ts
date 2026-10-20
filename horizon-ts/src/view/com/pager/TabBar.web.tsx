@@ -4,7 +4,7 @@ import {type SharedValue} from 'react-native-reanimated'
 
 import {atoms as a, useBreakpoints, useTheme, web} from '#/alf'
 import {Text} from '#/components/Typography'
-// HORIZON: the Home tab labels' shades on a Bars window (Phase 3)
+// HORIZON: the Home tab labels' shades on a bare window (Phase 3)
 import {BarShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the Home tab bar over the header's window (Phase 3)
 import {horizonTabBarBg} from '#/horizon/backdrops/frame'
@@ -132,7 +132,7 @@ export function TabBar({
               hoverStyle={t.atoms.bg_contrast_25}
               onPress={() => onPressItem(i)}
               accessibilityRole="tab">
-              {/* HORIZON: the label's shade on the Home header's Bars window (Phase 3) */}
+              {/* HORIZON: the label's shade on the Home header's bare window (Phase 3) */}
               <BarShade kind="label" show={transparent === true} />
               <View style={styles.itemInner}>
                 <Text

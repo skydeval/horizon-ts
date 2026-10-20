@@ -1,5 +1,5 @@
 /*
- * Bar shades on native: none. The Bars frame's bare windows are web only
+ * Bar shades on native: none. Bare windows (Bars, Header) are web only
  * (`windowMode` keeps the glass on native, where the shades' soft edge would
  * need its own painter), so every hook here is stock. `BarShade.web.tsx` is
  * the web version.

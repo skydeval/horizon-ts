@@ -81,6 +81,7 @@ jest.mock('#/lib/haptics', () => ({useHaptics: () => ({selection: () => {}})}))
 
 /** Group handlers by their accessibility label, to call them. */
 const mockGroups = new Map<string, (values: string[]) => void>()
+const mockGroupValues = new Map<string, string[]>()
 const mockItems: string[] = []
 jest.mock('#/components/forms/Toggle', () => {
   const pass = (props: {children?: unknown}) =>
@@ -90,10 +91,12 @@ jest.mock('#/components/forms/Toggle', () => {
   return {
     Group: (props: {
       label: string
+      values: string[]
       onChange: (mockValues: string[]) => void
       children?: unknown
     }) => {
       mockGroups.set(props.label, props.onChange)
+      mockGroupValues.set(props.label, props.values)
       return props.children ?? null
     },
     Item: (props: {name: string; children?: unknown}) => {
@@ -175,7 +178,16 @@ jest.mock(
     }
   },
 )
-jest.mock('#/components/Layout', () => ({}))
+jest.mock('#/components/Layout', () => {
+  const {View} = jest.requireActual<{
+    View: React.ComponentType<{testID?: string; children?: React.ReactNode}>
+  }>('react-native')
+  return {
+    Center: (props: {children?: React.ReactNode}) => (
+      <View testID="layoutCenter">{props.children}</View>
+    ),
+  }
+})
 const mockFolderTabs = jest.fn((_props: Record<string, unknown>) => null)
 jest.mock('#/horizon/private/tabs/FolderTabs', () => ({
   FolderTabs: (props: Record<string, unknown>) => mockFolderTabs(props),
@@ -240,6 +252,7 @@ beforeEach(() => {
   mockDefaults = {startAs: 'public', audience: {kind: 'mode', mode: 'everyone'}}
   mockSave.mockClear()
   mockGroups.clear()
+  mockGroupValues.clear()
   mockItems.length = 0
   mockLinks.length = 0
   mockSettingsLinks.length = 0
@@ -334,6 +347,41 @@ describe('Interaction settings (item 5)', () => {
     expect(mockSave).not.toHaveBeenCalled()
   })
 
+  it('no default audience chosen: none is selected, the hint says what applies, and any choice saves (round 2 list)', () => {
+    mockDefaults = {startAs: 'public'}
+    const screen = show(<PrivatePostsSection />)
+    const label = 'Choose who can see your private posts by default'
+    expect(mockGroupValues.get(label)).toEqual([''])
+    expect(
+      screen.getByText(
+        'Until you choose, posts you make private go to Everyone, and quotes of private posts start private to Followers.',
+      ),
+    ).toBeTruthy()
+    // Everyone can be chosen as such.
+    act(() => {
+      mockGroups.get(label)?.(['everyone'])
+    })
+    expect(mockSave).toHaveBeenLastCalledWith({
+      startAs: 'public',
+      audience: {kind: 'mode', mode: 'everyone'},
+    })
+    // Changing "New posts start as" alone leaves the audience unchosen.
+    act(() => {
+      mockGroups.get('Choose whether new posts start public or private')?.([
+        'private',
+      ])
+    })
+    expect(mockSave).toHaveBeenLastCalledWith({startAs: 'private'})
+  })
+
+  it('a chosen default audience is selected and has no hint', () => {
+    const screen = show(<PrivatePostsSection />)
+    expect(
+      mockGroupValues.get('Choose who can see your private posts by default'),
+    ).toEqual(['everyone'])
+    expect(JSON.stringify(screen.toJSON())).not.toContain('Until you choose')
+  })
+
   it('the old Audiences row is not shown while Audiences lives here', () => {
     const screen = show(<AudiencesSettingsItem />)
     expect(screen.toJSON()).toBeNull()
@@ -344,6 +392,15 @@ describe('Interaction settings (item 5)', () => {
 })
 
 describe('Notifications settings tabs (item 6)', () => {
+  it('the tabs sit in the centre column, as the Saved tabs do (round 2 list, item 1)', () => {
+    const screen = show(<NotificationSettingsTabs />)
+    const center = screen.getByTestId('layoutCenter')
+    expect(center).toBeTruthy()
+    expect(mockFolderTabs).toHaveBeenCalled()
+    // Nothing but the tabs is inside it, and nothing outside it.
+    expect(screen.toJSON()).toMatchObject({props: {testID: 'layoutCenter'}})
+  })
+
   it('members get Public | Private tabs; choosing one sets the mode', () => {
     show(<NotificationSettingsTabs />)
     const props = mockFolderTabs.mock.calls.at(-1)?.[0] as {

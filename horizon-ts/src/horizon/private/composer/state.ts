@@ -10,9 +10,9 @@
  *
  * A member's new compose starts from the private posting defaults
  * (Interaction settings > Private posts, `defaults/`): a top-level post
- * starts Public or Private as "New posts start as" says, and every compose
- * that is not locked starts with the "Default audience", used once it is
- * Private. Defaults that arrive after the composer opened (the record read
+ * starts Public or Private as "New posts start as" says, a quote as the
+ * quoted post is (round 2 list, item 6), and every compose that is not
+ * locked starts with the "Default audience", used once it is Private. Defaults that arrive after the composer opened (the record read
  * in the background, membership confirmed late) still apply, until anything
  * else sets the record: a choice in the control, or a restored draft.
  */
@@ -20,7 +20,11 @@
 import {useSyncExternalStore} from 'react'
 
 import {type StandingMode} from '#/horizon/private/api/audiences'
-import {type PrivateDefaults} from '#/horizon/private/defaults/record'
+import {
+  type PrivateDefaults,
+  UNSET_AUDIENCE,
+  UNSET_QUOTE_AUDIENCE,
+} from '#/horizon/private/defaults/record'
 import {getPrivatePostFacts} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {PRIVATE_POSTING} from '#/horizon/switches'
@@ -127,9 +131,10 @@ export function startComposeVisibility(initial: ComposeVisibility) {
 export function applyLateComposeDefaults(
   replyToUri: string | undefined,
   defaults: PrivateDefaults | undefined,
+  quoteUri?: string,
 ) {
   if (!startedFresh || !defaults) return
-  const next = initialComposeVisibility(replyToUri, defaults)
+  const next = initialComposeVisibility(replyToUri, defaults, quoteUri)
   if (!sameVisibility(next, state)) replace(next)
 }
 
@@ -167,14 +172,23 @@ export function routesPrivate(replyTo: string | undefined): boolean {
  * The record a compose starts from: Private and locked under the parent's
  * audience when replying to a private post (whether or not the account is a
  * member right now). Otherwise, with a member's `defaults` (absent for
- * anyone else): a top-level post starts as "New posts start as" says, a
- * reply to a public post starts Public, and either holds the default
- * audience for when it is made Private. Without defaults, Public with
+ * anyone else):
+ * - a reply to a public post starts Public;
+ * - a quote (`quoteUri`, the post the composer opened quoting) starts as
+ *   the quoted post is, whatever "New posts start as" says: a quote of a
+ *   private post Private with the default audience, or Followers while none
+ *   is chosen; a quote of a public post Public. Not locked: a public quote
+ *   of a private post is allowed, its readers outside the audience see the
+ *   stand-in;
+ * - any other post starts as "New posts start as" says;
+ * and every one of them holds the default audience (Everyone while none is
+ * chosen) for when it is made Private. Without defaults, Public with
  * Everyone.
  */
 export function initialComposeVisibility(
   replyToUri: string | undefined,
   defaults?: PrivateDefaults,
+  quoteUri?: string,
 ): ComposeVisibility {
   if (PRIVATE_POSTING && replyToUri && isPrivatePostUri(replyToUri)) {
     return {
@@ -187,10 +201,16 @@ export function initialComposeVisibility(
     }
   }
   if (!PRIVATE_POSTING || !defaults) return PUBLIC_COMPOSE
-  return {
-    visibility:
-      !replyToUri && defaults.startAs === 'private' ? 'private' : 'public',
-    audience: defaults.audience,
-    locked: false,
+  if (!replyToUri && quoteUri && isPrivatePostUri(quoteUri)) {
+    return {
+      visibility: 'private',
+      audience: defaults.audience ?? UNSET_QUOTE_AUDIENCE,
+      locked: false,
+    }
   }
+  const audience = defaults.audience ?? UNSET_AUDIENCE
+  if (replyToUri || quoteUri) {
+    return {visibility: 'public', audience, locked: false}
+  }
+  return {visibility: defaults.startAs, audience, locked: false}
 }

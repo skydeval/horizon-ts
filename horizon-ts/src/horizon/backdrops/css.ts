@@ -24,7 +24,9 @@ export type WebBackgroundStyle = {
 /**
  * A disc of colour centred in the element: full `color` out to `solid`
  * pixels from the centre, fading to `clear` (the same colour at alpha 0) by
- * `fade`, nothing beyond. A lens's icon backing (live fix batch 1).
+ * `fade`, nothing beyond. Built for the button lenses' icon backing (live
+ * fix batch 1); no frame draws one since the Buttons frame was removed
+ * (round 2 list), and the painters keep it.
  */
 export type DiscOverlay = {
   kind: 'disc'
@@ -119,7 +121,7 @@ export function cssOverlays(overlays: Overlay[]): {
 
 /**
  * The background for an element. `overlays` are top first (the glass tint,
- * a lens's icon backing); `offset` is where the frame's origin sits inside
+ * a disc); `offset` is where the frame's origin sits inside
  * the element.
  */
 export function cssBackground(

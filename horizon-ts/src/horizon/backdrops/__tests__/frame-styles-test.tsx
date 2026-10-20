@@ -1,7 +1,7 @@
 /*
- * Live fix batch 1: the lens fix (the lens under its icon, the backdrop
- * visible through it), the three new phone frame styles (Edges, Gutter,
- * Header) and the backdrop softness of dim and dark.
+ * Live fix batch 1: the phone frame styles (Edges, Gutter, Header; Header
+ * bare since the round 2 list, which also retired Buttons and its lenses)
+ * and the backdrop softness of dim and dark.
  */
 
 import {createContext as mockCreateContext} from 'react'
@@ -12,41 +12,27 @@ import {act, render} from '@testing-library/react-native'
 import type * as ThemesModule from '#/alf/themes'
 import * as store from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
-import {
-  compileBackdrop,
-  hexToRgb,
-  type RGB,
-  rgbToHsl,
-} from '#/horizon/backdrops/compile'
+import {compileBackdrop, type RGB, rgbToHsl} from '#/horizon/backdrops/compile'
 import {
   EDGE_BAND,
-  LENS_BACKING,
-  lensGlass,
-  lensIconColor,
-  type LensKind,
-  lensOverlays,
-  TAB_LENS_SHAPE,
   type WindowKind,
   windowMode,
   windowOverlays,
 } from '#/horizon/backdrops/frame'
-import {FRAME_STYLES, type FrameStyle} from '#/horizon/backdrops/frame-style'
-import {FrameLens} from '#/horizon/backdrops/FrameLens'
-import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {
-  colorsUnderGlass,
-  composite,
-  contrast,
-  MAX_GLASS_ALPHA,
-} from '#/horizon/backdrops/glass'
+  FRAME_STYLES,
+  type FrameStyle,
+  parseFrameStyle,
+} from '#/horizon/backdrops/frame-style'
+import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {insetReadingCardOn} from '#/horizon/backdrops/inset'
-import {BACKDROP_DEFS, registryDef} from '#/horizon/backdrops/registry'
+import {registryDef} from '#/horizon/backdrops/registry'
 import {
   DEFAULT_SOFTNESS,
   softenRgb,
   softnessAmount,
 } from '#/horizon/backdrops/softness'
-import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
+import {type ThemeName} from '#/horizon/backdrops/types'
 
 let mockTheme: ThemeName = 'light'
 const mockFrame = {width: 390, height: 844}
@@ -95,9 +81,6 @@ jest.mock('#/horizon/backdrops/viewport', () => ({
   useViewportFrame: () => mockFrame,
 }))
 
-const THEMES: ThemeName[] = ['light', 'dim', 'dark']
-const KINDS: LensKind[] = ['tab', 'headerButton', 'fab']
-const DEFS = BACKDROP_DEFS.filter(def => def.id !== 'none')
 const trans = registryDef('pride.trans')!
 
 beforeEach(() => {
@@ -124,119 +107,11 @@ function divs(json: unknown): Json[] {
   return out
 }
 
-/** The lens's backdrop colours with the def's softness, for `theme`. */
-function softened(def: BackdropDef, theme: ThemeName): BackdropDef {
-  const soften = softnessAmount(DEFAULT_SOFTNESS, theme)
-  return soften > 0 ? {...def, soften} : def
-}
-
-describe('the lens sits under its icon (live fix 1)', () => {
-  it('the lens is the first child and paints at z-index -1', () => {
-    act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    act(() => store.setFrameStyle('buttons'))
-    mockTheme = 'dark'
-    for (const kind of KINDS) {
-      const view = render(
-        <View>
-          <FrameLens kind={kind} />
-          <View testID="icon" />
-        </View>,
-      )
-      const json = view.toJSON() as Json
-      const first = json.children?.[0] as Json
-      expect(first.type).toBe('div')
-      expect(first.props.style).toMatchObject({
-        position: 'absolute',
-        zIndex: -1,
-        pointerEvents: 'none',
-      })
-      // Painted below the icon that follows it in the tree.
-      expect(view.getByTestId('icon')).toBeTruthy()
-    }
-  })
-
-  it('the lens is no uniform tint: only a disc behind the icon', () => {
-    for (const def of DEFS) {
-      for (const theme of THEMES) {
-        for (const kind of KINDS) {
-          const overlays = lensOverlays(
-            softened(def, theme),
-            theme,
-            kind,
-            false,
-          )
-          for (const overlay of overlays) {
-            expect(typeof overlay).toBe('object')
-          }
-        }
-      }
-    }
-  })
-
-  it('the lens alpha stays in a visible range', () => {
-    // The pill's rim shows the backdrop untinted; the disc is the icon's.
-    const pill = TAB_LENS_SHAPE.width! * TAB_LENS_SHAPE.height!
-    const {fade} = LENS_BACKING.tab
-    expect(Math.PI * fade * fade).toBeLessThan(0.65 * pill)
-    expect(LENS_BACKING.tab.solid).toBeGreaterThanOrEqual(13)
-    for (const def of DEFS) {
-      for (const theme of THEMES) {
-        for (const kind of KINDS) {
-          const {alpha} = lensGlass(softened(def, theme), theme, kind)
-          expect(alpha).toBeGreaterThanOrEqual(0)
-          expect(alpha).toBeLessThanOrEqual(MAX_GLASS_ALPHA)
-        }
-      }
-    }
-    // The tab lens over the default pastel in dark: well under the old
-    // whole-pill tint, and none at all in light.
-    const custom = registryDef('materials.glass')!
-    expect(
-      lensGlass(softened(custom, 'dark'), 'dark', 'tab').alpha,
-    ).toBeLessThan(0.4)
-    expect(lensGlass(trans, 'light', 'tab').alpha).toBe(0)
-    expect(lensOverlays(trans, 'light', 'tab', false)).toEqual([])
-  })
-
-  it('the backing gives the icon its own colour at 3:1', () => {
-    for (const def of DEFS) {
-      for (const theme of THEMES) {
-        for (const kind of KINDS) {
-          const d = softened(def, theme)
-          const {tint, alpha} = lensGlass(d, theme, kind)
-          if (alpha >= MAX_GLASS_ALPHA) continue
-          const icon = lensIconColor(theme, kind)
-          const worst = Math.min(
-            ...colorsUnderGlass(d, theme).map(color =>
-              contrast(composite(tint, color, alpha), icon),
-            ),
-          )
-          expect(worst).toBeGreaterThanOrEqual(3)
-        }
-      }
-    }
-    // Header buttons are secondary ghost: their icon is contrast_600.
-    const dark =
-      jest.requireActual<typeof ThemesModule>('#/alf/themes').themes.dark
-    expect(lensIconColor('dark', 'headerButton')).toEqual(
-      hexToRgb(dark.palette.contrast_600),
-    )
-  })
-
-  it('paints the disc over the backdrop, then the backdrop', () => {
-    act(() => store.selectBackdrop(undefined, 'pride.trans'))
-    act(() => store.setFrameStyle('buttons'))
-    mockTheme = 'dark'
-    // The clip, the frame-sized backdrop, then the disc above it.
-    const [, backdrop, disc] = divs(render(<FrameLens kind="tab" />).toJSON())
-    expect(String(disc.props.style?.backgroundImage)).toMatch(
-      /^radial-gradient\(circle at 50% 50%, rgba\(0, 0, 0, 0\.\d+\) 0px, rgba\(0, 0, 0, 0\.\d+\) 15px, rgba\(0, 0, 0, 0\) 19px\)$/,
-    )
-    expect(disc.props.style?.backgroundSize).toBe('100% 100%')
-    expect(String(backdrop.props.style?.backgroundImage)).toMatch(
-      /^linear-gradient\(/,
-    )
-    expect(backdrop.props.style?.backgroundSize).toBe('390px 844px')
+describe('Buttons is retired (round 2 list, item 3)', () => {
+  it('the picker offers four styles; a stored Buttons reads as Bars', () => {
+    expect(FRAME_STYLES).toEqual(['bars', 'edges', 'gutter', 'headerBand'])
+    expect(parseFrameStyle('buttons')).toBe('bars')
+    expect(parseFrameStyle('buttons', true)).toBe('bars')
   })
 })
 
@@ -258,8 +133,7 @@ describe('phone frame styles (live fix 1)', () => {
       bars: ['bare', 'bare', 'bare', 'full'],
       edges: ['edge', 'edge', 'edge', 'full'],
       gutter: [null, null, null, 'full'],
-      headerBand: ['full', 'full', null, 'full'],
-      buttons: [null, null, null, null],
+      headerBand: ['bare', 'bare', null, 'full'],
     })
     // Bare windows need the web shades: native keeps the glass.
     expect(
@@ -302,13 +176,18 @@ describe('phone frame styles (live fix 1)', () => {
     expect(windowOverlays(trans, 'dark', 'edge', false)).toEqual([])
   })
 
-  it('Header: the top bars under glass, the tab bar stock', () => {
+  it('Header: the top bars bare like Bars, the tab bar stock', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     act(() => store.setFrameStyle('headerBand'))
-    const [, , glass] = divs(render(<FrameWindow kind="homeHeader" />).toJSON())
-    expect(String(glass.props.style?.backgroundImage)).toMatch(
-      /^linear-gradient\(rgba\(255, 255, 255, 0\.55\)/,
+    const [, backdrop, ...rest] = divs(
+      render(<FrameWindow kind="homeHeader" />).toJSON(),
     )
+    // The clip and the backdrop only: no glass layer.
+    expect(rest).toEqual([])
+    expect(String(backdrop.props.style?.backgroundImage)).toMatch(
+      /^linear-gradient\(\d/,
+    )
+    expect(render(<FrameWindow kind="header" />).toJSON()).not.toBeNull()
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
   })
 

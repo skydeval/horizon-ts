@@ -25,6 +25,7 @@ import {
   POSTING_DEFAULTS_RKEY,
 } from '#/horizon/lexicons/posting-defaults'
 import {
+  audienceRecord,
   buildPostingDefaultsRecord,
   DEFAULT_PRIVATE_DEFAULTS,
   parsePostingDefaultsRecord,
@@ -63,10 +64,10 @@ function writeDeviceDefaults(did: string, defaults: PrivateDefaults) {
     deviceKey(did),
     JSON.stringify({
       startAs: defaults.startAs,
-      audience:
-        defaults.audience.kind === 'list'
-          ? {mode: 'list', list: defaults.audience.uri}
-          : {mode: defaults.audience.mode},
+      // None chosen stays none (`record.ts`).
+      ...(defaults.audience
+        ? {audience: audienceRecord(defaults.audience)}
+        : {}),
     }),
   )
 }

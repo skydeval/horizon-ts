@@ -6,11 +6,11 @@ import type * as ThemesModule from '#/alf/themes'
 import {themes} from '#/alf/themes'
 import * as store from '#/horizon/appearance/store'
 import {
+  barShadesOn,
   horizonInnerHeaderSticky,
   horizonTabBarBg,
   windowActive,
 } from '#/horizon/backdrops/frame'
-import {FrameLens} from '#/horizon/backdrops/FrameLens'
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {insetReadingCardOn} from '#/horizon/backdrops/inset'
 import {ReadingSurface} from '#/horizon/backdrops/ReadingSurface.web'
@@ -78,12 +78,22 @@ function surfaceStyle() {
 }
 
 describe('COMPACT_FRAME_WINDOWS off', () => {
-  it('compact screens are stock: no window, no lens, stock values', () => {
+  it('compact screens are stock: no window, no shade, stock values', () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
     expect(render(<FrameWindow kind="drawer" />).toJSON()).toBeNull()
-    act(() => store.setFrameStyle('buttons'))
-    expect(render(<FrameLens kind="fab" />).toJSON()).toBeNull()
+    act(() => store.setFrameStyle('headerBand'))
+    expect(render(<FrameWindow kind="homeHeader" />).toJSON()).toBeNull()
+    expect(
+      barShadesOn({
+        def: registryDef('pride.trans')!,
+        frameStyle: 'bars',
+        kind: 'title',
+        gtMobile: false,
+        isWithinDialog: false,
+        web: true,
+      }),
+    ).toBe(false)
     expect(
       windowActive({
         def: registryDef('pride.trans')!,

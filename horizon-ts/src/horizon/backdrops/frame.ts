@@ -1,8 +1,8 @@
 /*
  * The compact frame (Phase 3 design, section 9; live fix batch 1): when a
- * window or a lens is drawn and how, the glass it lays over the backdrop,
- * and the two value hooks that let the Home header's inner pieces show its
- * window (BD-13, BD-14). Pure and shared; the painters are
+ * window is drawn and how, the glass it lays over the backdrop, the bare
+ * windows' shades, and the two value hooks that let the Home header's inner
+ * pieces show its window (BD-13, BD-14). Pure and shared; the painters are
  * `BackdropWindow.web.tsx` (web) and `BackdropWindow.tsx` (native).
  */
 
@@ -15,11 +15,10 @@ import {
   hexToRgb,
   type RGB,
 } from '#/horizon/backdrops/compile'
-import {type DiscOverlay, type Overlay} from '#/horizon/backdrops/css'
+import {type Overlay} from '#/horizon/backdrops/css'
 import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {
   backdropKey,
-  colorsUnderGlass,
   composite,
   contrast,
   FULL_RANGE,
@@ -31,7 +30,6 @@ import {
   REDUCED_TRANSPARENCY_ALPHA,
   rgba,
   sampledColors,
-  smallestAlpha,
 } from '#/horizon/backdrops/glass'
 import {BACKDROP_LOOK} from '#/horizon/backdrops/look'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
@@ -42,20 +40,18 @@ export {type FrameStyle} from '#/horizon/backdrops/frame-style'
 /** The frame pieces that can become windows (9.3). */
 export type WindowKind = 'homeHeader' | 'header' | 'bottomBar' | 'drawer'
 
-/** The buttons that become lenses with the "Buttons" phone frame (9.7). */
-export type LensKind = 'tab' | 'headerButton' | 'fab'
-
 /**
  * How a window is drawn: `full` covers the piece under the glass; `bare`
  * covers it with no glass at all, the piece's buttons, title and tabs each
- * on a small shade (`BarShade`, the Bars frame, batch A); `edge` is the
- * slim band of the Edges frame, along the header's bottom edge or the
- * bottom bar's top edge, with no glass (nothing is written on it).
+ * on a small shade (`BarShade`; Bars, batch A, and Header's top bars,
+ * round 2 list); `edge` is the slim band of the Edges frame, along the
+ * header's bottom edge or the bottom bar's top edge, with no glass (nothing
+ * is written on it).
  */
 export type WindowMode = 'full' | 'bare' | 'edge'
 
 /**
- * Where a window or a lens sits inside its piece, absolutely positioned.
+ * Where a window sits inside its piece, absolutely positioned.
  * Plain numbers (pixels) and one percentage, so both painters can use it.
  */
 export type WindowShape = {
@@ -74,9 +70,6 @@ export type WindowShape = {
 /** The piece's whole padding box. */
 export const FILL_SHAPE: WindowShape = {top: 0, right: 0, bottom: 0, left: 0}
 
-/** Large enough for any button to read as a circle. */
-export const ROUND_RADIUS = 999
-
 /** The Edges frame's band, in pixels. */
 export const EDGE_BAND = 4
 
@@ -94,19 +87,6 @@ export const HEADER_EDGE_SHAPE: WindowShape = {
  */
 export function bottomBarEdgeShape(hairline: number): WindowShape {
   return {top: -hairline, left: 0, right: 0, height: EDGE_BAND + hairline}
-}
-
-/**
- * The bottom tab lens (9.7): a 56 x 34 pill, radius 17, centred, its centre
- * on the icon's (the item's `paddingTop: 13` plus half a 26px icon).
- */
-export const TAB_LENS_SHAPE: WindowShape = {
-  top: 9,
-  left: '50%',
-  marginLeft: -28,
-  width: 56,
-  height: 34,
-  borderRadius: 17,
 }
 
 /**
@@ -149,8 +129,8 @@ const WINDOW_MODES: Record<
     drawer: 'full',
   },
   gutter: {drawer: 'full'},
-  headerBand: {homeHeader: 'full', header: 'full', drawer: 'full'},
-  buttons: {},
+  // Bare like Bars since the round 2 list; the bottom bar stays stock.
+  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'full'},
 }
 
 /**
@@ -192,30 +172,6 @@ export function windowActive(args: Parameters<typeof windowMode>[0]): boolean {
 }
 
 /**
- * Whether a lens is drawn (9.7): a backdrop is active, the frame is
- * "Buttons", the button is not inside a dialog, and a header button only
- * below 800px.
- */
-export function lensActive({
-  def,
-  frameStyle,
-  kind,
-  gtMobile,
-  isWithinDialog,
-}: {
-  def: BackdropDef | null
-  frameStyle: FrameStyle
-  kind: LensKind
-  gtMobile: boolean
-  isWithinDialog: boolean
-}): boolean {
-  if (!compactFrameOn() || def === null) return false
-  if (frameStyle !== 'buttons' || isWithinDialog) return false
-  if (kind === 'headerButton') return !gtMobile
-  return true
-}
-
-/**
  * A window's overlays, top first: for a full window the theme's glass tint
  * at the adaptive alpha (7.3, with the reduced-transparency floor); none
  * for the Edges band, which carries no text, and none for a bare window,
@@ -231,107 +187,12 @@ export function windowOverlays(
 }
 
 /*
- * Lenses (live fix batch 1). The first build laid one uniform tint over the
- * whole lens, checked against `t.atoms.text`; over pale backdrops in dark
- * that read as a flat grey pill, and the header buttons' grey icons
- * (`contrast_600`) vanished in it. Now the lens shows the backdrop
- * untinted, and only a small disc behind the icon (the backing) carries the
- * tint, at the smallest alpha that gives the icon's own colour 3:1.
- */
-
-/** The lowest alpha a lens's backing goes to: none when not needed. */
-export const LENS_MIN_ALPHA = 0
-
-/** WCAG 1.4.11 for icons. */
-export const LENS_TARGET = 3
-
-/**
- * The backing disc of each lens, in pixels from the icon's centre: full
- * tint to `solid`, faded out by `fade`. Sized to the icon (26px tab icons,
- * 24px header icons, the compose icon) so the rest of the lens shows the
- * backdrop.
- */
-export const LENS_BACKING: Record<LensKind, {solid: number; fade: number}> = {
-  tab: {solid: 15, fade: 19},
-  headerButton: {solid: 13, fade: 16},
-  fab: {solid: 16, fade: 22},
-}
-
-const WHITE: RGB = {r: 255, g: 255, b: 255}
-const BLACK: RGB = {r: 0, g: 0, b: 0}
-
-/**
- * The colour of a lens's icon: the tab icons use `t.atoms.text`, the header
- * buttons (secondary ghost) `contrast_600`, the compose icon white.
- */
-export function lensIconColor(theme: ThemeName, kind: LensKind): RGB {
-  if (kind === 'fab') return WHITE
-  const t = themes[theme]
-  return hexToRgb(kind === 'tab' ? t.atoms.text.color : t.palette.contrast_600)
-}
-
-const lensCache = new Map<string, number>()
-
-/**
- * A lens backing's tint and alpha: the theme's glass tint (black for the
- * compose button) at the smallest alpha from 0 that gives the icon's colour
- * 3:1 over the backdrop. Before the reduced-transparency floor; memoised per
- * def, theme, kind and look.
- */
-export function lensGlass(
-  def: BackdropDef,
-  theme: ThemeName,
-  kind: LensKind,
-): {tint: RGB; alpha: number} {
-  const tint = kind === 'fab' ? BLACK : GLASS[theme].tint
-  const key = `${backdropKey(def)}|${theme}|${kind}|${BACKDROP_LOOK}`
-  let alpha = lensCache.get(key)
-  if (alpha === undefined) {
-    alpha = smallestAlpha({
-      under: colorsUnderGlass(def, theme),
-      tint,
-      text: lensIconColor(theme, kind),
-      target: LENS_TARGET,
-      min: LENS_MIN_ALPHA,
-      max: MAX_GLASS_ALPHA,
-    })
-    // Custom previews add a key per slider position; keep the cache small.
-    if (lensCache.size >= 512) lensCache.clear()
-    lensCache.set(key, alpha)
-  }
-  return {tint, alpha}
-}
-
-/**
- * A lens's overlays: its icon backing, or nothing when the backdrop alone
- * gives the icon 3:1 (and transparency is not reduced).
- */
-export function lensOverlays(
-  def: BackdropDef,
-  theme: ThemeName,
-  kind: LensKind,
-  reduced: boolean = prefersReducedTransparency(),
-): DiscOverlay[] {
-  const {tint, alpha} = lensGlass(def, theme, kind)
-  const shown = reduced ? Math.max(alpha, REDUCED_TRANSPARENCY_ALPHA) : alpha
-  if (shown <= 0) return []
-  return [
-    {
-      kind: 'disc',
-      color: rgba(tint, shown),
-      clear: rgba(tint, 0),
-      ...LENS_BACKING[kind],
-    },
-  ]
-}
-
-/*
- * Bar shades (the Bars frame, batch A). A bare window shows the backdrop
- * with no glass, edge to edge, as Gutter's margins do; each thing written
- * on it (a bottom tab, a header button, the title, a Home feed tab, the
- * logo) gets a small soft oblong of the theme's tint under it instead, at
- * the smallest alpha that gives the item's own colour 3:1 over the
- * backdrop, as the lens backing does.
+ * Bar shades (the Bars frame, batch A; the Header frame's top bars since
+ * the round 2 list). A bare window shows the backdrop with no glass, edge
+ * to edge, as Gutter's margins do; each thing written on it (a bottom tab,
+ * a header button, the title, a Home feed tab, the logo) gets a small soft
+ * oblong of the theme's tint under it instead, at the smallest alpha that
+ * gives the item's own colour 3:1 over the backdrop.
  *
  * The window sets each kind's colour as a CSS custom property on its piece
  * (`barShadeVars`), and a shade paints `var(...)`: a shade inherits a
@@ -379,8 +240,8 @@ export type ShadeShape = {
 /**
  * Each kind's shade: an oblong whose solid middle covers the item and
  * whose wide soft ends reach past it. The tab one is centred on the 26px
- * tab icon (its centre 26px down, as the tab lens); the header buttons'
- * on the 34px button, the logo's on the logo. The text kinds fill their
+ * tab icon (its centre 26px down: the item's `paddingTop: 13` plus half the
+ * icon); the header buttons' on the 34px button, the logo's on the logo. The text kinds fill their
  * text's box, which `TEXT_SHADE_PADDING` grows by the fades without moving
  * the text; the Home feed tab's follows its label (`BarShade.web.tsx`).
  */
@@ -567,12 +428,16 @@ export function barShadeVars(
   return vars
 }
 
+/** The shade kinds of the bottom bar, bare only with Bars. */
+const BOTTOM_BAR_SHADES: ReadonlySet<ShadeKind> = new Set(['tab', 'brand'])
+
 /**
  * Whether a shade is rendered at all: web, a backdrop, the compact frame
- * on, the Bars frame, not inside a dialog, and below 800px except for the
- * signed-out bottom bar's logo group (that bar is a window up to 1300px).
- * Where it renders outside a bare window it inherits no colour and draws
- * nothing (a non-sticky header, say).
+ * on, a frame whose bars are bare (Bars; Header for the top bars' kinds
+ * only, its bottom bar being stock), not inside a dialog, and below 800px
+ * except for the signed-out bottom bar's logo group (that bar is a window
+ * up to 1300px). Where it renders outside a bare window it inherits no
+ * colour and draws nothing (a non-sticky header, say).
  */
 export function barShadesOn({
   def,
@@ -593,7 +458,8 @@ export function barShadesOn({
     web &&
     compactFrameOn() &&
     def !== null &&
-    frameStyle === 'bars' &&
+    (frameStyle === 'bars' ||
+      (frameStyle === 'headerBand' && !BOTTOM_BAR_SHADES.has(kind))) &&
     !isWithinDialog &&
     (kind === 'brand' || !gtMobile)
   )
@@ -601,10 +467,10 @@ export function barShadesOn({
 
 /*
  * The fixed layer below 800px (performance fix 7c). There the reading
- * surface is opaque and covers the viewport, and every window and lens
- * paints its own backdrop, so the full-screen layer is never seen; only
- * Gutter's margins show it. Not drawing it saves a full-screen layer
- * composited under a transparent scroller on every frame.
+ * surface is opaque and covers the viewport, and every window paints its
+ * own backdrop, so the full-screen layer is never seen; only Gutter's
+ * margins show it. Not drawing it saves a full-screen layer composited
+ * under a transparent scroller on every frame.
  */
 
 /** Whether the fixed backdrop layer is drawn. */

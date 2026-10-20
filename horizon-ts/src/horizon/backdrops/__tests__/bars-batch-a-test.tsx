@@ -29,6 +29,8 @@ import {
   shadeItemColors,
   type ShadeKind,
   shadeVar,
+  type WindowKind,
+  windowMode,
   windowOverlays,
   windowRange,
 } from '#/horizon/backdrops/frame'
@@ -137,12 +139,91 @@ describe('Bars: the windows are bare (batch A, item 1)', () => {
     expect(barShadesOn({...base, web: false})).toBe(false)
     expect(barShadesOn({...base, isWithinDialog: true})).toBe(false)
     for (const frameStyle of FRAME_STYLES) {
-      if (frameStyle === 'bars') continue
+      if (frameStyle === 'bars' || frameStyle === 'headerBand') continue
       expect(barShadesOn({...base, frameStyle})).toBe(false)
     }
     // From 800 up only the signed-out bar's logo group (a window to 1300).
     expect(barShadesOn({...base, gtMobile: true})).toBe(false)
     expect(barShadesOn({...base, gtMobile: true, kind: 'brand'})).toBe(true)
+  })
+})
+
+describe('Header goes bare like Bars (round 2 list, item 4)', () => {
+  const base = {
+    def: trans,
+    frameStyle: 'headerBand' as const,
+    gtMobile: false,
+    isWithinDialog: false,
+    web: true,
+  }
+
+  it('the top bars are bare windows, the bottom bar stock, the drawer glass', () => {
+    const mode = (kind: WindowKind, web = true) =>
+      windowMode({...base, kind, web})
+    expect(mode('homeHeader')).toBe('bare')
+    expect(mode('header')).toBe('bare')
+    expect(mode('bottomBar')).toBeNull()
+    expect(mode('drawer')).toBe('full')
+    // Native keeps the glass, as with Bars.
+    expect(mode('homeHeader', false)).toBe('full')
+    // No glass over the backdrop, as with Bars.
+    expect(windowOverlays(trans, 'dark', 'bare', false)).toEqual([])
+  })
+
+  it('the top bars items get shades, the bottom bar items do not', () => {
+    for (const kind of [
+      'button',
+      'title',
+      'subtitle',
+      'label',
+      'logo',
+    ] as const) {
+      expect(barShadesOn({...base, kind})).toBe(true)
+      expect(barShadesOn({...base, kind, gtMobile: true})).toBe(false)
+      expect(barShadesOn({...base, kind, isWithinDialog: true})).toBe(false)
+    }
+    expect(barShadesOn({...base, kind: 'tab'})).toBe(false)
+    expect(barShadesOn({...base, kind: 'brand'})).toBe(false)
+    expect(barShadesOn({...base, kind: 'brand', gtMobile: true})).toBe(false)
+  })
+
+  it('the shade components render for the top bars only', () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    act(() => store.setFrameStyle('headerBand'))
+    expect(render(<BarShade kind="title" />).toJSON()).not.toBeNull()
+    expect(render(<BarShade kind="logo" />).toJSON()).not.toBeNull()
+    expect(render(<BarShade kind="tab" />).toJSON()).toBeNull()
+    expect(render(<BarShade kind="brand" />).toJSON()).toBeNull()
+    expect(
+      divs(
+        render(
+          <BarSlot>
+            <View />
+          </BarSlot>,
+        ).toJSON(),
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('vibrant at softness 0, duller as softness rises', () => {
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    act(() => store.setFrameStyle('headerBand'))
+    mockTheme = 'dark'
+    act(() => store.setBackdropSoftness('dark', 0))
+    const raw = renderHook(() => useActiveBackdrop()).result.current
+    expect(raw?.soften ?? 0).toBe(0)
+    act(() => store.setBackdropSoftness('dark', 60))
+    const soft = renderHook(() => useActiveBackdrop()).result.current
+    expect(soft?.soften).toBeGreaterThan(0)
+    // The header strip of the softened backdrop is duller: lower saturation.
+    const range: GradientRange = [0, 0.2]
+    const chroma = (def: BackdropDef) =>
+      Math.max(
+        ...sampledColors(def, 'dark', undefined, range).map(
+          c => Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b),
+        ),
+      )
+    expect(chroma(soft!)).toBeLessThan(chroma(raw!))
   })
 })
 
@@ -277,8 +358,9 @@ describe('the shade components on web (batch A, item 1)', () => {
     expect(render(<BarShade kind="title" />).toJSON()).toBeNull()
     expect(render(<BarShade kind="brand" />).toJSON()).not.toBeNull()
     mockGtMobile = false
-    act(() => store.setFrameStyle('buttons'))
+    act(() => store.setFrameStyle('edges'))
     expect(render(<BarShade kind="tab" />).toJSON()).toBeNull()
+    expect(render(<BarShade kind="title" />).toJSON()).toBeNull()
   })
 
   it('a slot: one shade, none when empty, none twice when nested', () => {
