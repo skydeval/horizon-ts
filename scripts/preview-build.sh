@@ -51,6 +51,14 @@ build() {
     *) echo "the origin must be https: $origin"; exit 1 ;;
   esac
   cd "$APP"
+  # A production build drops each string's English and looks it up in the
+  # compiled catalogs, so Horizon's own strings must be extracted first or
+  # they show as message ids. Done on this build copy only: the repo keeps
+  # upstream's .po files, so merges stay clean; every locale falls back to
+  # English for strings it has no translation of.
+  echo "Extracting and compiling translation catalogs"
+  pnpm intl:extract:all
+  pnpm intl:compile
   echo "Building the web app for $origin"
   NODE_OPTIONS=--max-old-space-size=8192 \
     EXPO_PUBLIC_ENV=production \
