@@ -442,6 +442,11 @@ released version yet; everything so far is under `[Unreleased]`.
   take the upload, on public and private posts. A private post now uploads
   all its media before writing its reply and quote limits, so a failed
   upload writes nothing.
+- **A quoted private post keeps its spoilers and content warning.** In a
+  quote, alone or with media, and in a quote inside a quote, its spoilers are
+  covered, its CW line reads as a warning with the body in a drawer, and its
+  media are blurred as on the post itself, in the feed, threads, the quote
+  screen, notifications and Saved.
 
 ### Changed
 

@@ -5,7 +5,8 @@
  * the root's threadgate when prism serves them (2H design 5.1: a field is
  * used when present and well formed), `viewer.pinned` for the account's own
  * pinned post, and the post's facts written to the side store (with
- * `countsServed` and the audience prism serves). Reply context (6.2) is
+ * `countsServed` and the audience prism serves). A quoted private post in
+ * its embed view is converted as the post itself is. Reply context (6.2) is
  * layered on by the feed and thread adapters.
  */
 
@@ -160,7 +161,9 @@ function ownPinnedUri(authorDid: string): string | undefined {
  * prism may serve them already (P-1); a value it serves is not repeated.
  */
 function withSelfLabels(
-  view: PrivateViewInput,
+  view: Pick<PrivateViewInput, 'uri' | 'cid' | 'record' | 'indexedAt'> & {
+    labels?: com.atproto.label.defs.Label[]
+  },
   authorDid: string,
 ): com.atproto.label.defs.Label[] {
   const labels = view.labels ?? []
@@ -183,6 +186,110 @@ function withSelfLabels(
       cts,
     }))
   return [...labels, ...added]
+}
+
+type EmbedView = NonNullable<app.bsky.feed.defs.PostView['embed']>
+
+const PRIVATE_POST = 'tools.kryphocron.feed.postPrivate'
+
+/**
+ * How deep quotes inside quotes are converted: the quote's own `embeds`, and
+ * the quotes those carry. The stock embed draws no deeper.
+ */
+const QUOTE_DEPTH = 2
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * A served `#viewRecord` of a private post with its `value` converted as a
+ * top-level private post's record is (facets, embed, languages, self-labels),
+ * and its self-labels added to its `labels`, so the stock quote renderer, the
+ * CW line and the media covers read the quoted post as they read the post
+ * itself. Its `embeds` are converted in turn, `depth` levels down. Any other
+ * record, or a value that does not convert, is returned as it is.
+ */
+function convertedQuoteRecord(record: unknown, depth: number): unknown {
+  if (
+    !isObject(record) ||
+    record.$type !== 'app.bsky.embed.record#viewRecord'
+  ) {
+    return record
+  }
+  let next = record as unknown as app.bsky.embed.record.ViewRecord
+  const value: unknown = next.value
+  if (isObject(value) && value.$type === PRIVATE_POST) {
+    const converted = toBskyRecord(value)
+    if (converted) {
+      // A quote shows no reply context; a ref without a cid fails the lexicon.
+      if (
+        converted.reply &&
+        (!converted.reply.root.cid || !converted.reply.parent.cid)
+      ) {
+        delete converted.reply
+      }
+      next = {
+        ...next,
+        value: converted,
+        labels: withSelfLabels(
+          {
+            uri: next.uri,
+            cid: next.cid,
+            record: value,
+            indexedAt: next.indexedAt,
+            labels: next.labels,
+          },
+          next.author.did,
+        ),
+      }
+    } else {
+      logger.warn('quoted private post left unconverted: unexpected shape', {
+        uri: next.uri,
+      })
+    }
+  }
+  if (depth > 0 && next.embeds?.length) {
+    const embeds = next.embeds
+    const convertedEmbeds = embeds.map(embed =>
+      withConvertedQuotes(embed, depth - 1),
+    )
+    if (convertedEmbeds.some((embed, i) => embed !== embeds[i])) {
+      next = {...next, embeds: convertedEmbeds}
+    }
+  }
+  return next
+}
+
+/**
+ * An embed view with every quoted private post's `#viewRecord` converted
+ * ({@link convertedQuoteRecord}): a quote, the quote of a quote with media,
+ * and the quotes in their `embeds`. prism serves a quoted private post's
+ * whole decoded record as `value`, and only the top-level record is
+ * converted otherwise. Unchanged parts keep their identity.
+ */
+export function withConvertedQuotes<E extends EmbedView>(
+  embed: E,
+  depth: number = QUOTE_DEPTH,
+): E {
+  if (!isObject(embed)) return embed
+  if (embed.$type === 'app.bsky.embed.record#view') {
+    const view = embed as unknown as app.bsky.embed.record.View
+    const record = convertedQuoteRecord(view.record, depth)
+    return record === view.record ? embed : ({...embed, record} as unknown as E)
+  }
+  if (embed.$type === 'app.bsky.embed.recordWithMedia#view') {
+    const view = embed as unknown as app.bsky.embed.recordWithMedia.View
+    if (!isObject(view.record)) return embed
+    const inner = withConvertedQuotes(
+      {...view.record, $type: 'app.bsky.embed.record#view'},
+      depth,
+    )
+    return inner.record === view.record.record
+      ? embed
+      : {...embed, record: {...view.record, record: inner.record}}
+  }
+  return embed
 }
 
 /**
@@ -257,6 +364,6 @@ export function toPostView(
   ) {
     postView.threadgate = served.threadgate
   }
-  if (embed) postView.embed = embed
+  if (embed) postView.embed = withConvertedQuotes(embed)
   return postView
 }

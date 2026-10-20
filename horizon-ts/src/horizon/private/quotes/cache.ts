@@ -37,10 +37,12 @@ export type QuoteData = JsonValue | null
 /**
  * The persisted query key of the quoted private post at `uri`. Version 2
  * drops quotes cached with a video on the video service's CDN, from before a
- * private video played from its author's PDS.
+ * private video played from its author's PDS. Version 3 drops quotes cached
+ * with a quoted private post of their own left unconverted (no spoilers or
+ * content warning).
  */
 export function privateQuoteQueryKey(uri: string) {
-  return createQueryKey('horizon-private-quote', {uri}, {persistedVersion: 2})
+  return createQueryKey('horizon-private-quote', {uri}, {persistedVersion: 3})
 }
 
 /**

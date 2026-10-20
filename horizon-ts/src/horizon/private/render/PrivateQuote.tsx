@@ -5,30 +5,9 @@ import {atoms as a, useTheme} from '#/alf'
 import * as Skeleton from '#/components/Skeleton'
 import {useIsMember} from '#/horizon/private/membership'
 import {usePrivateQuoteQuery} from '#/horizon/private/quotes/cache'
+import {toQuoteEmbed} from '#/horizon/private/render/quote-embed'
 import {StandIn} from '#/horizon/private/render/StandIn'
-import {type app} from '#/lexicons'
 import {type EmbedType} from '#/types/bsky/post'
-
-/**
- * A private post as the stock parsed quote embed, for `QuoteEmbed`.
- */
-export function toQuoteEmbed(
-  post: app.bsky.feed.defs.PostView,
-): EmbedType<'post'> {
-  return {
-    type: 'post',
-    view: {
-      $type: 'app.bsky.embed.record#viewRecord',
-      uri: post.uri,
-      cid: post.cid,
-      author: post.author,
-      value: post.record,
-      labels: post.labels,
-      indexedAt: post.indexedAt,
-      embeds: post.embed ? [post.embed] : undefined,
-    },
-  }
-}
 
 /**
  * The quote card's space while its post is read: the stock card's border,
