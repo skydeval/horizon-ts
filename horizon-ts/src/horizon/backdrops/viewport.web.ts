@@ -13,10 +13,39 @@ import {type Frame} from '#/horizon/backdrops/compile'
 let frame: Frame | null = null
 const listeners = new Set<() => void>()
 
+/**
+ * The large viewport's height (`100lvh`): the height with the browser's
+ * toolbars retracted. 0 where the unit is unknown.
+ */
+function largeViewportHeight(): number {
+  if (typeof CSS === 'undefined' || !CSS.supports?.('height', '100lvh')) {
+    return 0
+  }
+  const probe = document.createElement('div')
+  probe.style.cssText =
+    'position:fixed;top:0;left:0;width:0;height:100lvh;visibility:hidden;pointer-events:none'
+  document.documentElement.appendChild(probe)
+  const height = probe.getBoundingClientRect().height
+  probe.remove()
+  return height
+}
+
+/*
+ * The height is the larger of the initial containing block and the large
+ * viewport. On iOS Safari the containing block is the small viewport (the
+ * toolbar shown), so when the toolbar retracts on scroll the bottom bar
+ * slides below a frame of that height and showed the page colour under the
+ * backdrop's last pixels (live check, 2026-10-20). The large viewport
+ * covers every toolbar state and does not change with it, so the gradient
+ * is not recomputed as the toolbar moves.
+ */
 function read(): Frame {
   if (typeof document === 'undefined') return {width: 0, height: 0}
   const root = document.documentElement
-  return {width: root.clientWidth, height: root.clientHeight}
+  return {
+    width: root.clientWidth,
+    height: Math.max(root.clientHeight, largeViewportHeight()),
+  }
 }
 
 function getFrame(): Frame {
