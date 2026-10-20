@@ -24,11 +24,66 @@ import {useAppearanceState} from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {
   barShadesOn,
+  haloVar,
+  SHADE_KINDS,
   SHADE_SHAPES,
+  SHADE_STYLE,
   type ShadeKind,
   shadeVar,
   TEXT_SHADE_PADDING,
 } from '#/horizon/backdrops/frame'
+import {prefersReducedTransparency} from '#/horizon/backdrops/glass'
+
+/*
+ * The halo look (`SHADE_STYLE`): the item gets a `data-horizon-halo`
+ * attribute naming its kind, and one stylesheet maps it to the kind's
+ * colour and draws a soft `text-shadow` round its text and a `drop-shadow`
+ * round its icons. An attribute rather than a class, because RN-web
+ * rewrites `className` when a view's style changes (hover, press), and
+ * React leaves attributes it did not set alone. Static shadows on small
+ * elements, painted once, not a live blur. Where the browser asks for
+ * reduced transparency the boxes are kept: they are near-solid there.
+ */
+const HALO_ATTRIBUTE = 'data-horizon-halo'
+
+let haloSheetAdded = false
+
+function addHaloSheet() {
+  if (haloSheetAdded || typeof document === 'undefined') return
+  haloSheetAdded = true
+  const c = 'var(--horizon-halo)'
+  const rules = SHADE_KINDS.map(
+    kind =>
+      `[${HALO_ATTRIBUTE}="${kind}"]{--horizon-halo:var(${haloVar(kind)},transparent)}`,
+  )
+  rules.push(
+    `[${HALO_ATTRIBUTE}]{text-shadow:0 0 1px ${c},0 0 2px ${c},0 0 4px ${c}}`,
+    `[${HALO_ATTRIBUTE}] svg{filter:drop-shadow(0 0 1px ${c}) drop-shadow(0 0 3px ${c})}`,
+  )
+  const sheet = document.createElement('style')
+  sheet.setAttribute('data-horizon', 'bar-halo')
+  sheet.textContent = rules.join('\n')
+  document.head.appendChild(sheet)
+}
+
+function usesHalo(): boolean {
+  return SHADE_STYLE === 'halo' && !prefersReducedTransparency()
+}
+
+/** Marks the item it is placed in (its parent) for a halo of `kind`. */
+function Halo({kind}: {kind: ShadeKind}) {
+  const ref = useRef<HTMLSpanElement>(null)
+
+  useLayoutEffect(() => {
+    const item = ref.current?.parentElement
+    if (!item) return
+    addHaloSheet()
+    item.setAttribute(HALO_ATTRIBUTE, kind)
+    return () => item.removeAttribute(HALO_ATTRIBUTE)
+  }, [kind])
+
+  return <span ref={ref} aria-hidden style={{display: 'none'}} />
+}
 
 /** Whether a shade of `kind` is rendered here. */
 function useShadesOn(kind: ShadeKind): boolean {
@@ -137,6 +192,7 @@ export function BarShade({
 }) {
   const on = useShadesOn(kind)
   if (!show || !on) return null
+  if (usesHalo()) return <Halo kind={kind} />
   if (kind === 'label') return <LabelShade />
   return <div aria-hidden style={{...shadePaint(kind), ...shadeBox(kind)}} />
 }
@@ -157,10 +213,14 @@ export function BarSlot({children}: {children?: React.ReactNode}) {
   }
   return (
     <InSlot.Provider value>
-      <div
-        aria-hidden
-        style={{...shadePaint('button'), ...shadeBox('button')}}
-      />
+      {usesHalo() ? (
+        <Halo kind="button" />
+      ) : (
+        <div
+          aria-hidden
+          style={{...shadePaint('button'), ...shadeBox('button')}}
+        />
+      )}
       {children}
     </InSlot.Provider>
   )
@@ -177,7 +237,8 @@ export function useBarTextShade(
   style?: StyleProp<TextStyle>,
 ): TextStyle | undefined {
   const on = useShadesOn(kind)
-  if (!on) return undefined
+  // A halo hugs the text: the box padding is not needed.
+  if (!on || usesHalo()) return undefined
   const align = StyleSheet.flatten(style)?.textAlign
   const {horizontal, vertical} = TEXT_SHADE_PADDING
   return {

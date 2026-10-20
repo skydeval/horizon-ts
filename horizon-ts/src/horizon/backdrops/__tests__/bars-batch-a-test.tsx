@@ -23,6 +23,8 @@ import {
   barShadesOn,
   barShadeVars,
   fixedLayerDrawn,
+  haloAlpha,
+  haloVar,
   SHADE_KINDS,
   SHADE_TARGET,
   shadeAlpha,
@@ -51,7 +53,13 @@ import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 let mockTheme: ThemeName = 'light'
 let mockGtMobile = false
 let mockWithinDialog = false
+let mockReduced = true
 const mockFrame = {width: 390, height: 844}
+
+jest.mock('#/horizon/backdrops/glass', () => ({
+  ...jest.requireActual<Record<string, unknown>>('#/horizon/backdrops/glass'),
+  prefersReducedTransparency: () => mockReduced,
+}))
 
 jest.mock('#/horizon/switches', () => ({
   BACKDROPS: true,
@@ -112,6 +120,8 @@ function divs(json: unknown): Json[] {
 }
 
 beforeEach(() => {
+  // The box look; the halo tests turn it off.
+  mockReduced = true
   mockTheme = 'light'
   mockGtMobile = false
   mockWithinDialog = false
@@ -319,12 +329,15 @@ describe('the shades keep their item at 3:1 (batch A, item 1)', () => {
   it('one stable set of variables per def, theme, range and flag', () => {
     const vars = barShadeVars(trans, 'dark', [0, 0.2], false)
     expect(barShadeVars(trans, 'dark', [0, 0.2], false)).toBe(vars)
-    expect(Object.keys(vars).sort()).toEqual(SHADE_KINDS.map(shadeVar).sort())
+    expect(Object.keys(vars).sort()).toEqual(
+      [...SHADE_KINDS.map(shadeVar), ...SHADE_KINDS.map(haloVar)].sort(),
+    )
     for (const value of Object.values(vars)) {
       expect(value).toMatch(/^rgba\(\d+, \d+, \d+, [\d.]+\)$/)
     }
     const reduced = barShadeVars(trans, 'dark', [0, 0.2], true)
-    for (const value of Object.values(reduced)) {
+    for (const kind of SHADE_KINDS) {
+      const value = reduced[shadeVar(kind)]
       const alpha = Number(/, ([\d.]+)\)$/.exec(value)![1])
       expect(alpha).toBeGreaterThanOrEqual(0.85)
     }
@@ -379,6 +392,54 @@ describe('the shades keep the theme`s hue over bright backdrops', () => {
         const now = composite(fill.color, mean, fill.alpha)
         expect(chroma(now)).toBeLessThan(chroma(old) / 2)
       }
+    }
+  })
+})
+
+describe('the halo look (live check, 2026-10-20)', () => {
+  type Node = {type: string; props: Record<string, unknown>}
+  const spans = (json: unknown): Node[] => {
+    const out: Node[] = []
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== 'object') return
+      if (Array.isArray(node)) return node.forEach(walk)
+      const n = node as Node & {children?: unknown[]}
+      if (n.type === 'span') out.push(n)
+      n.children?.forEach(walk)
+    }
+    walk(json)
+    return out
+  }
+
+  it('a hidden marker instead of a box, and no box padding on titles', () => {
+    mockReduced = false
+    act(() => store.selectBackdrop(undefined, 'pride.trans'))
+    const tab = render(<BarShade kind="tab" />).toJSON()
+    expect(divs(tab)).toHaveLength(0)
+    expect(spans(tab)).toHaveLength(1)
+    expect(spans(tab)[0].props.style).toEqual({display: 'none'})
+    const slot = render(
+      <BarSlot>
+        <View />
+      </BarSlot>,
+    ).toJSON()
+    expect(divs(slot)).toHaveLength(0)
+    expect(spans(slot)).toHaveLength(1)
+    expect(
+      renderHook(() => useBarTextShade('title')).result.current,
+    ).toBeUndefined()
+    // Off with the other frames, as the boxes are.
+    act(() => store.setFrameStyle('edges'))
+    expect(render(<BarShade kind="tab" />).toJSON()).toBeNull()
+  })
+
+  it('no halo where no shade is needed, denser than the box elsewhere', () => {
+    expect(haloAlpha(0)).toBe(0)
+    expect(haloAlpha(0.3)).toBeGreaterThan(0.3)
+    expect(haloAlpha(0.9)).toBeLessThanOrEqual(0.95)
+    const vars = barShadeVars(trans, 'dark', [0, 0.2], false)
+    for (const kind of SHADE_KINDS) {
+      expect(vars[haloVar(kind)]).toMatch(/^rgba\(0, 0, 0, [\d.]+\)$/)
     }
   })
 })

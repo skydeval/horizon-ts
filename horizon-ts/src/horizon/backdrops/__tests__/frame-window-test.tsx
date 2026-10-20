@@ -642,7 +642,7 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(inner.style.transform).toBe('translate3d(0px, -790px, 0)')
     // The bare window hands its items their shade colours.
     expect(vars.get(shadeVar('tab'))).toMatch(/^rgba\(255, 255, 255, /)
-    expect([...vars.keys()]).toHaveLength(7)
+    expect([...vars.keys()]).toHaveLength(14)
   })
 
   it('a footerMode change re-measures with no scroll', async () => {
@@ -732,7 +732,7 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
   it('unmounting takes the shade colours off the piece', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     const view = await mount(<FrameWindow kind="homeHeader" />)
-    expect(vars.size).toBe(7)
+    expect(vars.size).toBe(14)
     view.unmount()
     expect(vars.size).toBe(0)
   })
@@ -748,7 +748,7 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(String(backdrop.props.style?.backgroundImage)).toMatch(
       /^linear-gradient\(\d/,
     )
-    expect(vars.size).toBe(7)
+    expect(vars.size).toBe(14)
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
   })
 })

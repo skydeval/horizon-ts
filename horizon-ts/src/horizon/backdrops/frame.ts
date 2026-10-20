@@ -524,6 +524,29 @@ export function shadeFill(
   return fill
 }
 
+/*
+ * How a bare window's items are kept readable (live check, 2026-10-20):
+ * `halo` draws a soft glow of the theme's tint hugging each glyph and icon
+ * (`text-shadow`, `drop-shadow`), as map labels and captions do; `box`
+ * draws the oblong under each item. The boxes read as grey blocks over
+ * bright backdrops, so halo is the default.
+ */
+export const SHADE_STYLE: 'halo' | 'box' = 'halo'
+
+/** The CSS custom property that carries a kind's halo colour. */
+export function haloVar(kind: ShadeKind): string {
+  return `--horizon-halo-${kind}`
+}
+
+/**
+ * A halo's alpha from its box shade's: none where the backdrop needs no
+ * shade, and denser than the box, since it only covers the glyph's edge.
+ */
+export function haloAlpha(boxAlpha: number): number {
+  if (boxAlpha === 0) return 0
+  return Math.min(0.95, 0.35 + boxAlpha)
+}
+
 const shadeVarsCache = new Map<string, Record<string, string>>()
 
 /**
@@ -545,6 +568,10 @@ export function barShadeVars(
     const tint = GLASS[theme].tint
     vars = {}
     for (const kind of SHADE_KINDS) {
+      vars[haloVar(kind)] = rgba(
+        tint,
+        haloAlpha(shadeAlpha(def, theme, kind, range)),
+      )
       if (reduced) {
         // Near-opaque: the plain tint, which the backdrop barely shows through.
         const alpha = shadeAlpha(def, theme, kind, range)
