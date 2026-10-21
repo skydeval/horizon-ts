@@ -1,8 +1,8 @@
 /*
  * The device value under `horizon:appearance` (Phase 3 design, 6.1): this
  * device's own appearance, the opt-out, a copy per account and the
- * device-only settings (the phone frame, the backdrop softness and the
- * grain). Parsed leniently, field by field; a missing, unparsable or
+ * device-only settings (the phone frame, the backdrop softness, the grain
+ * and the hemisphere "Follow the season" uses). Parsed leniently, field by field; a missing, unparsable or
  * other-version value reads as the default. A stored id of a removed solid
  * reads as a custom one-tone of its colour (change list 2, item 9).
  */
@@ -79,6 +79,12 @@ export type DeviceAppearanceV1 = {
    * Device only, like the softness: it is about the screen.
    */
   grain: boolean
+  /**
+   * Whether "Follow the season" uses southern-hemisphere months (change
+   * list 3, item 4); false, the northern ones, by default. Device only: it
+   * is about where the device is.
+   */
+  southern: boolean
 }
 
 export function defaultDeviceValue(): DeviceAppearanceV1 {
@@ -90,6 +96,7 @@ export function defaultDeviceValue(): DeviceAppearanceV1 {
     frameStyle: DEFAULT_FRAME_STYLE,
     softness: DEFAULT_SOFTNESS,
     grain: false,
+    southern: false,
   }
 }
 
@@ -181,6 +188,7 @@ export function parseDeviceValue(json: string | undefined): DeviceAppearanceV1 {
     frameStyle: parseFrameStyle(value.frameStyle, value.insetCard),
     softness: parseSoftness(value.softness),
     grain: value.grain === true,
+    southern: value.southern === true,
   }
 }
 

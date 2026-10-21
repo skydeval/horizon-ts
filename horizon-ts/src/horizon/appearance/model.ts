@@ -8,18 +8,39 @@
 
 import {type Hex, type PatternName} from '#/horizon/backdrops/types'
 
+/** A custom backdrop's kinds: one colour, two, or stripes (change list 3). */
+export type CustomMode = 'solid' | 'twoTone' | 'stripes'
+
+export const CUSTOM_MODES: readonly CustomMode[] = [
+  'solid',
+  'twoTone',
+  'stripes',
+]
+
 export type CustomConfig = {
-  mode: 'solid' | 'twoTone'
+  mode: CustomMode
   /** Solid colour, or Top Left in two-tone. */
   a: Hex
   /** Bottom Right in two-tone; kept while solid so switching back restores it. */
   b: Hex
   /**
    * A quiet pattern over a one-tone (change list 2, item 7); absent for
-   * none. Kept while two-tone, where it is not drawn.
+   * none. Kept while two-tone or striped, where it is not drawn.
    */
   pattern?: PatternName
+  /**
+   * The custom stripes, top to bottom (change list 3, item 10), between
+   * `STRIPES_MIN` and `STRIPES_MAX` colours. Absent until the stripes are
+   * first made; kept in the other modes so switching back restores them.
+   */
+  stripes?: Hex[]
 }
+
+/** The fewest custom stripes. */
+export const STRIPES_MIN = 2
+
+/** The most custom stripes. */
+export const STRIPES_MAX = 8
 
 export const DEFAULT_CUSTOM: CustomConfig = {
   mode: 'twoTone',

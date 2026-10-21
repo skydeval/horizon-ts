@@ -1,7 +1,8 @@
 /*
  * The native painter (Phase 3 design, 4.6): a compiled backdrop as
  * `react-native-svg` rects, one per layer, with user-space gradients or
- * pattern tiles, then one rect per uniform overlay. The grain is web only
+ * pattern tiles (a quiet pattern, or the starfield's tile of circles,
+ * change list 3), then one rect per uniform overlay. The grain is web only
  * and draws nothing here. Imported only by native components.
  */
 
@@ -25,6 +26,7 @@ import {
   type ResolvedStop,
   rgbToHex,
 } from '#/horizon/backdrops/compile'
+import {STAR_TILE, STARS} from '#/horizon/backdrops/stars'
 
 function stops(list: ResolvedStop[]) {
   return list.map((stop, i) => (
@@ -65,6 +67,28 @@ function PatternTile({id, layer}: {id: string; layer: ResolvedPattern}) {
   )
 }
 
+/** The starfield's tile: the same stars the web tile draws. */
+function StarTile({id}: {id: string}) {
+  return (
+    <Pattern
+      id={id}
+      patternUnits="userSpaceOnUse"
+      width={STAR_TILE}
+      height={STAR_TILE}>
+      {STARS.map((star, i) => (
+        <Circle
+          key={i}
+          cx={star.x}
+          cy={star.y}
+          r={star.r}
+          fill="#FFFFFF"
+          fillOpacity={star.a}
+        />
+      ))}
+    </Pattern>
+  )
+}
+
 function LayerDef({id, layer}: {id: string; layer: ResolvedLayer}) {
   switch (layer.kind) {
     case 'linear':
@@ -92,6 +116,8 @@ function LayerDef({id, layer}: {id: string; layer: ResolvedLayer}) {
       )
     case 'pattern':
       return <PatternTile id={id} layer={layer} />
+    case 'stars':
+      return <StarTile id={id} />
     case 'grain':
       return null
   }

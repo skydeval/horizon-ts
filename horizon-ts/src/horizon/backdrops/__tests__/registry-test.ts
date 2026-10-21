@@ -137,26 +137,78 @@ const ADDED: [string, string, string, number, number][] = [
   ['nature.sakura', 'nature', 'FFF1F4 FBD5DF F5B3C6 E894AE C97B9A', 135, 0.1],
   ['nature.autumn', 'nature', 'F6D9A8 EEAE5E D9783A B0502E 7E3A2A', 135, 0.1],
   ['nature.moss', 'nature', 'E7EBCF C6D09A 9BAE6B 738A4C 4E6436', 135, 0.1],
+  /*
+   * Change list 3 (items 7 and 8): the flags, stripes top to bottom, as
+   * listed in the log.
+   */
+  [
+    'pride.bigender',
+    'pride',
+    'C479A2 EDA5CD D6C7E8 FFFFFF D6C7E8 9AC7E8 6D82D1',
+    165,
+    0.1,
+  ],
+  [
+    'pride.transfeminine',
+    'pride',
+    '73DEFF FFE1ED FFB5D6 FE8CBF FFB5D6 FFE1ED 73DEFF',
+    165,
+    0.1,
+  ],
+  [
+    'pride.transmasculine',
+    'pride',
+    'FF8ABD CDF5FE 9AEBFF 74DFFF 9AEBFF CDF5FE FF8ABD',
+    165,
+    0.1,
+  ],
+  ['pride.graysexual', 'pride', '740195 B2B2B2 FFFFFF B2B2B2 740195', 165, 0.1],
+  [
+    'pride.grayromantic',
+    'pride',
+    '087D16 B2B2B2 FFFFFF B2B2B2 087D16',
+    165,
+    0.1,
+  ],
+  ['pride.omnisexual', 'pride', 'FC9CCC FC54BC 240444 645CFC 8CA4FC', 165, 0.1],
+  ['pride.polysexual', 'pride', 'F61CB9 07D569 1C92F6', 165, 0.1],
+  ['pride.abrosexual', 'pride', '65C286 B4E4CC FFFFFF E796B7 D9446E', 165, 0.1],
+  [
+    'pride.queer',
+    'pride',
+    '000000 99D9EA 00A2E8 B5E61D FFFFFF FFC90E FD6666 FFAEC9',
+    165,
+    0.1,
+  ],
 ]
 
-/* The picker's order after change list 2. */
+/* The picker's order after change list 3. */
 const ORDER = [
   'none',
   'pride.lesbian',
   'pride.trans',
+  'pride.transfeminine',
+  'pride.transmasculine',
   'pride.bi',
   'pride.rainbow',
   'pride.philly',
+  'pride.queer',
   'pride.gay',
   'pride.pan',
+  'pride.omnisexual',
+  'pride.polysexual',
+  'pride.abrosexual',
   'pride.ace',
   'pride.demisexual',
+  'pride.graysexual',
   'pride.aromantic',
   'pride.demiromantic',
+  'pride.grayromantic',
   'pride.aroace',
   'pride.nonbinary',
   'pride.genderqueer',
   'pride.genderfluid',
+  'pride.bigender',
   'pride.agender',
   'pride.intersex',
   'pride.disability',
@@ -168,12 +220,24 @@ const ORDER = [
   'materials.clay',
   'materials.fog',
   'materials.inkwash',
+  'calm.hush',
+  'calm.sand',
+  'calm.sage',
+  'calm.stillwater',
+  'calm.lilac',
+  'calm.slate',
+  'calm.charcoal',
   'nature.ocean',
   'nature.forest',
   'nature.desert',
   'nature.sakura',
   'nature.autumn',
   'nature.moss',
+  'seasonal.auto',
+  'seasonal.spring',
+  'seasonal.summer',
+  'seasonal.spooky',
+  'seasonal.winter',
   'skies.auto',
   'skies.dawn',
   'skies.day',
@@ -182,11 +246,29 @@ const ORDER = [
   'skies.twilight',
   'skies.night',
   'skies.aurora',
+  'space.nebula',
+  'space.galaxy',
+  'space.starfield',
+  'gems.amethyst',
+  'gems.emerald',
+  'gems.sapphire',
+  'gems.rosequartz',
+  'gems.opal',
+  'gems.oilslick',
+  'gems.holographic',
   'blobs.peach',
   'blobs.lagoon',
   'blobs.berry',
   'blobs.citrus',
   'blobs.midnight',
+  'aesthetics.frutigeraero',
+  'aesthetics.vaporwave',
+  'aesthetics.synthwave',
+  'aesthetics.y2k',
+  'aesthetics.cottagecore',
+  'aesthetics.darkacademia',
+  'aesthetics.pastelgoth',
+  'aesthetics.retro70s',
 ]
 
 /* The 3.1 tuning table: light s/b, dim s/b, dark s/b. */
@@ -202,7 +284,7 @@ const TUNING: Record<string, number[]> = {
 }
 
 describe('BACKDROP_DEFS', () => {
-  it('has the 3.1 entries, less the solids, and the change list 2 ones, in order', () => {
+  it('has the 3.1 entries, less the solids, and the change list 2 and 3 ones, in order', () => {
     expect(BACKDROP_DEFS.map(def => def.id)).toEqual(ORDER)
     const ids = new Set(BACKDROP_DEFS.map(def => def.id))
     for (const row of [...TABLE, ...ADDED]) expect(ids.has(row[0])).toBe(true)
@@ -241,9 +323,9 @@ describe('BACKDROP_DEFS', () => {
     }
   })
 
-  it('locks colours on exactly the 19 pride flags', () => {
+  it('locks colours on exactly the 28 pride flags', () => {
     const locked = BACKDROP_DEFS.filter(def => def.lockColors).map(d => d.id)
-    expect(locked).toHaveLength(19)
+    expect(locked).toHaveLength(28)
     expect(locked.every(id => id.startsWith('pride.'))).toBe(true)
   })
 

@@ -15,13 +15,14 @@ import {
   rgbToHex,
 } from '#/horizon/backdrops/compile'
 import {GRAIN_TILE, grainTileUrl} from '#/horizon/backdrops/grain'
+import {STAR_TILE, starTileUrl} from '#/horizon/backdrops/stars'
 
 /** The CSS background properties the painter sets. */
 export type WebBackgroundStyle = {
   backgroundImage: string
   backgroundSize: string
   backgroundPosition: string
-  /** `no-repeat`, or a list when a pattern or the grain tiles. */
+  /** `no-repeat`, or a list when a pattern, the stars or the grain tile. */
   backgroundRepeat: string
   backgroundColor: string
 }
@@ -199,6 +200,14 @@ function layerCss(
   frameSize: string,
 ): {image: string; size: string; repeat: string} {
   if (layer.kind === 'pattern') return patternCss(layer, frameSize)
+  if (layer.kind === 'stars') {
+    // Anchored at the frame's origin like the gradients and the grain.
+    return {
+      image: `url("${starTileUrl()}")`,
+      size: `${STAR_TILE}px ${STAR_TILE}px`,
+      repeat: 'repeat',
+    }
+  }
   if (layer.kind === 'grain') {
     const tile = grainTileUrl()
     // `none` keeps the layer count (and so the positions) the same.

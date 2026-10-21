@@ -9,6 +9,13 @@
  * 7), and `colorMode`, `darkTheme`, `font` and `fontSize` on the record
  * (item 11). A field an account never set is absent, and a reader keeps
  * its own setting for it.
+ *
+ * Change list 3 (item 10) added the `stripes` mode on `#customBackdrop` and
+ * its optional `stripes` (2 to 8 colours, top to bottom). `a` and `b` are
+ * still written, so the one-tone and two-tone come back when switched to.
+ * A client from before change list 3 reads the unknown mode as no custom
+ * (its default two-tone) and keeps every other field, so nothing breaks;
+ * a record without `stripes` reads here exactly as before.
  */
 
 import {l} from '@atproto/lex'
@@ -18,11 +25,13 @@ export const APPEARANCE_RKEY = 'self'
 
 /** `#customBackdrop`. */
 export type CustomBackdropRecord = {
-  mode: 'solid' | 'twoTone' | l.UnknownString
+  mode: 'solid' | 'twoTone' | 'stripes' | l.UnknownString
   a: string
   b?: string
   /** A quiet pattern over a one-tone. */
   pattern?: 'dots' | 'grid' | 'lines' | l.UnknownString
+  /** The custom stripes, top to bottom, `#RRGGBB`. */
+  stripes?: string[]
 }
 
 /** `#preset`. */
@@ -52,11 +61,17 @@ export type AppearanceRecord = {
 }
 
 const customBackdrop = l.object({
-  mode: l.string<{knownValues: ['solid', 'twoTone']}>(),
+  mode: l.string<{knownValues: ['solid', 'twoTone', 'stripes']}>(),
   a: l.string({minLength: 7, maxLength: 7}),
   b: l.optional(l.string({minLength: 7, maxLength: 7})),
   pattern: l.optional(
     l.string<{knownValues: ['dots', 'grid', 'lines']}>({maxLength: 32}),
+  ),
+  stripes: l.optional(
+    l.array(l.string({minLength: 7, maxLength: 7}), {
+      minLength: 2,
+      maxLength: 8,
+    }),
   ),
 })
 

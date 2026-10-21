@@ -12,11 +12,24 @@ export type ThemeName = 'light' | 'dim' | 'dark'
 export type Hex = string
 
 /**
- * The picker's groups, in its order. `solids` is gone (change list 2, item
- * 9): a stored solid id reads as a custom one-tone (`registry.ts`).
+ * The registry's groups. `solids` is gone (change list 2, item 9): a stored
+ * solid id reads as a custom one-tone (`registry.ts`). Change list 3 added
+ * `calm`, `seasonal`, `space`, `gems` and `aesthetics`. The picker's order
+ * is `PICKER_ORDER` (`appearance/settings/picker.ts`).
  */
 export type BackdropCollection =
-  'system' | 'pride' | 'materials' | 'nature' | 'skies' | 'blobs' | 'custom'
+  | 'system'
+  | 'pride'
+  | 'materials'
+  | 'calm'
+  | 'nature'
+  | 'seasonal'
+  | 'skies'
+  | 'space'
+  | 'gems'
+  | 'blobs'
+  | 'aesthetics'
+  | 'custom'
 
 /**
  * A quiet repeating pattern over a custom one-tone (change list 2, item 7).
@@ -79,6 +92,12 @@ export type PatternLayer = {
  */
 export type GrainLayer = {kind: 'grain'}
 
+/**
+ * A starfield (change list 3, item 3): a static tile of small stars, made
+ * once and repeated, between a pattern and the grain.
+ */
+export type StarsLayer = {kind: 'stars'}
+
 /** A gradient layer, as a def lists them (`BackdropDef.layers`). */
 export type Layer = LinearLayer | RadialLayer
 
@@ -125,4 +144,6 @@ export type BackdropDef = {
    * sets it, from the device's setting.
    */
   grain?: boolean
+  /** A starfield over the layers (change list 3, item 3). */
+  stars?: boolean
 }

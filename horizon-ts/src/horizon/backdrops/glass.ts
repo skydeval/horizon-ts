@@ -13,6 +13,7 @@ import {
   type RGB,
 } from '#/horizon/backdrops/compile'
 import {BACKDROP_LOOK, type BackdropLook} from '#/horizon/backdrops/look'
+import {STAR_MAX_ALPHA} from '#/horizon/backdrops/stars'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 
 /** The highest alpha the rule goes to. */
@@ -186,6 +187,15 @@ export function sampledColors(
       }
     }
   }
+  /*
+   * A starfield (change list 3): text may sit over a star, so its brightest
+   * white over every colour sampled so far.
+   */
+  if (def.stars) {
+    const white = {r: 255, g: 255, b: 255}
+    const under = [...out]
+    for (const color of under) out.push(composite(white, color, STAR_MAX_ALPHA))
+  }
   return out
 }
 
@@ -233,9 +243,9 @@ export function colorsUnderGlass(
   return sampledColors(def, theme, look)
 }
 
-/** What a def's glass depends on: its id, colours, layers and softness. */
+/** What a def's glass depends on: its id, colours, layers, stars and softness. */
 export function backdropKey(def: BackdropDef) {
-  return `${def.id}|${def.stripes.join(',')}|${layersKey(def.layers)}|${def.soften ?? 0}`
+  return `${def.id}|${def.stripes.join(',')}|${layersKey(def.layers)}|${def.stars ? 1 : 0}|${def.soften ?? 0}`
 }
 
 const alphaCache = new Map<string, number>()

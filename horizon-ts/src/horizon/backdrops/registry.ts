@@ -10,16 +10,22 @@
  * radial layers), and the "Time of day" sky. The nine solids are gone; a
  * stored solid id reads as a custom one-tone of the same colour
  * (`REMOVED_SOLIDS`, applied by the record and device parsers).
+ *
+ * Change list 3 (2026-10-20): nine more flags, the Calm, Seasonal (with
+ * "Follow the season"), Space (with the static Starfield), Gems and
+ * Aesthetics collections, and custom stripes.
  */
 
 import {msg} from '@lingui/core/macro'
 
 import {type Appearance, type CustomConfig} from '#/horizon/appearance/model'
+import {makeStripedStops} from '#/horizon/backdrops/stripes'
 import {
   type BackdropCollection,
   type BackdropDef,
   type Hex,
   type Layer,
+  type LinearLayer,
   type RadialLayer,
   type ThemeName,
   type Tuning,
@@ -30,6 +36,9 @@ export const BACKDROP_CUSTOM = 'custom'
 
 /** The sky that follows the local hour (change list 2, item 3). */
 export const BACKDROP_SKIES_AUTO = 'skies.auto'
+
+/** The seasonal backdrop that follows the date (change list 3, item 4). */
+export const BACKDROP_SEASON_AUTO = 'seasonal.auto'
 
 const EDGE_EPSILON = 0.002
 
@@ -173,6 +182,74 @@ function sky(
   })
 }
 
+/** A corner-to-corner two-colour base. */
+function cornerBase(from: Hex, to: Hex): LinearLayer {
+  return {
+    kind: 'linear',
+    direction: {kind: 'corner'},
+    opacity: 1,
+    stops: [
+      {color: from, pos: 0},
+      {color: to, pos: 1},
+    ],
+  }
+}
+
+/** A gradient at `deg` through colours at their positions. */
+function linearBase(deg: number, stops: [Hex, number][]): LinearLayer {
+  return {
+    kind: 'linear',
+    direction: {kind: 'angle', deg},
+    opacity: 1,
+    stops: stops.map(([color, pos]) => ({color, pos})),
+  }
+}
+
+/**
+ * A def drawn from its own layers (change list 3): `stripes` are its
+ * representative colours (the base's, then each pool's centre).
+ */
+function layered(
+  id: string,
+  name: BackdropDef['name'],
+  collection: BackdropCollection,
+  layers: Layer[],
+  intent: string[],
+): BackdropDef {
+  const colors: Hex[] = []
+  for (const layer of layers) {
+    if (layer.kind === 'radial') colors.push(layer.stops[0].color)
+    else for (const stop of layer.stops) colors.push(stop.color)
+  }
+  return def({
+    id,
+    name,
+    collection,
+    version: 1,
+    intent: [...intent, collection],
+    stripes: colors.filter((c, i) => colors.indexOf(c) === i),
+    angleDeg: 135,
+    bloom: 0,
+    tuning: FLAT,
+    layers,
+  })
+}
+
+/**
+ * Pools of colour over a corner-to-corner base, as the colour blobs are
+ * drawn; also gems, space, seasonal and aesthetics entries.
+ */
+function pooled(
+  id: string,
+  name: BackdropDef['name'],
+  collection: BackdropCollection,
+  [from, to]: [Hex, Hex],
+  pools: RadialLayer[],
+  intent: string[],
+): BackdropDef {
+  return layered(id, name, collection, [cornerBase(from, to), ...pools], intent)
+}
+
 /**
  * Colour blobs: a pale (or deep) corner-to-corner base under overlapping
  * pools of colour.
@@ -194,19 +271,34 @@ function blobs(
     angleDeg: 135,
     bloom: 0,
     tuning: FLAT,
-    layers: [
-      {
-        kind: 'linear',
-        direction: {kind: 'corner'},
-        opacity: 1,
-        stops: [
-          {color: from, pos: 0},
-          {color: to, pos: 1},
-        ],
-      },
-      ...pools,
-    ],
+    layers: [cornerBase(from, to), ...pools],
   })
+}
+
+/**
+ * A Calm backdrop (change list 3, item 5): one gentle top-to-bottom
+ * gradient through three neighbouring shades of one muted colour. No pools,
+ * no stripes, no texture: nothing in it draws the eye.
+ */
+function calm(
+  id: string,
+  name: BackdropDef['name'],
+  [top, middle, bottom]: [Hex, Hex, Hex],
+  intent: string[],
+): BackdropDef {
+  return layered(
+    id,
+    name,
+    'calm',
+    [
+      linearBase(180, [
+        [top, 0],
+        [middle, 0.5],
+        [bottom, 1],
+      ]),
+    ],
+    [...intent, 'quiet', 'low contrast'],
+  )
 }
 
 const SKY_NIGHT = sky(
@@ -264,6 +356,104 @@ const SKY_AURORA = sky(
   ],
 )
 
+/* Seasonal (change list 3, item 4), in the year's order. */
+const SEASON_SPRING = pooled(
+  'seasonal.spring',
+  msg({message: 'Spring Bloom', context: 'backdrop name'}),
+  'seasonal',
+  ['#F7FBEF', '#FDF1F5'],
+  [
+    pool('#F7B6CF', 0.2, 0.25, 0.5, 0.5),
+    pool('#BFE6A3', 0.82, 0.7, 0.55, 0.45),
+    pool('#D9C6F2', 0.75, 0.15, 0.4, 0.4),
+    pool('#FFE7A6', 0.3, 0.88, 0.4, 0.4),
+  ],
+  ['soft', 'fresh'],
+)
+const SEASON_SUMMER = pooled(
+  'seasonal.summer',
+  msg({message: 'Summer Haze', context: 'backdrop name'}),
+  'seasonal',
+  ['#FFF3DC', '#FCE1D2'],
+  [
+    pool('#FFC870', 0.75, 0.2, 0.6, 0.55),
+    pool('#FFA28A', 0.2, 0.75, 0.55, 0.4),
+    pool('#A9D8F2', 0.15, 0.12, 0.45, 0.35),
+  ],
+  ['warm', 'bright'],
+)
+const SEASON_SPOOKY = pooled(
+  'seasonal.spooky',
+  msg({message: 'Spooky', context: 'backdrop name'}),
+  'seasonal',
+  ['#120C17', '#1D0F24'],
+  [
+    pool('#6A2FA0', 0.2, 0.2, 0.55, 0.5),
+    pool('#3B0F4A', 0.85, 0.4, 0.5, 0.45),
+    pool('#E8701E', 0.5, 1.05, 0.65, 0.5),
+  ],
+  ['dark', 'autumn'],
+)
+const SEASON_WINTER = pooled(
+  'seasonal.winter',
+  msg({message: 'Winter Frost', context: 'backdrop name'}),
+  'seasonal',
+  ['#EEF5FB', '#D6E6F3'],
+  [
+    pool('#FFFFFF', 0.15, 0.15, 0.55, 0.7),
+    pool('#B8D4EE', 0.85, 0.8, 0.55, 0.5),
+    pool('#DCE3F7', 0.6, 0.35, 0.4, 0.4),
+  ],
+  ['cool', 'airy'],
+)
+
+/**
+ * The seasonal backdrop for a month (0-11), for "Follow the season":
+ * meteorological seasons, northern months unless `southern`. Autumn is
+ * Spooky. Switches by date only; nothing animates.
+ */
+export function seasonForMonth(month: number, southern = false): BackdropDef {
+  const m = southern ? (month + 6) % 12 : month
+  if (m >= 2 && m <= 4) return SEASON_SPRING
+  if (m >= 5 && m <= 7) return SEASON_SUMMER
+  if (m >= 8 && m <= 10) return SEASON_SPOOKY
+  return SEASON_WINTER
+}
+
+/** The local month and hemisphere "Follow the season" resolves with. */
+export type SeasonInput = {month: number; southern: boolean}
+
+/* The Starfield's base (change list 3, item 3): a near-black night. */
+const STARFIELD: BackdropDef = {
+  ...layered(
+    'space.starfield',
+    msg({message: 'Starfield', context: 'backdrop name'}),
+    'space',
+    [
+      linearBase(180, [
+        ['#03040A', 0],
+        ['#070A18', 0.55],
+        ['#0C1124', 1],
+      ]),
+      pool('#1A2350', 0.5, 1.1, 0.8, 0.35),
+    ],
+    ['dark', 'stars'],
+  ),
+  stars: true,
+}
+
+/*
+ * Retro 70s (change list 3, item 1): stacked horizontal bands with hard
+ * edges, built with the flags' stripe stops at 180 degrees.
+ */
+const RETRO_BANDS: Hex[] = [
+  '#F2C14E',
+  '#F08A3C',
+  '#D9612B',
+  '#A0452A',
+  '#5C3520',
+]
+
 /**
  * The sky for a local hour (0-23), for "Time of day". Aurora is never
  * picked: it is not a time of day.
@@ -312,6 +502,34 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     bloom: 0.12,
     tuning: FLAT,
   }),
+  flag(
+    'pride.transfeminine',
+    msg({message: 'Transfeminine Pride', context: 'backdrop name'}),
+    [
+      '#73DEFF',
+      '#FFE1ED',
+      '#FFB5D6',
+      '#FE8CBF',
+      '#FFB5D6',
+      '#FFE1ED',
+      '#73DEFF',
+    ],
+    ['airy'],
+  ),
+  flag(
+    'pride.transmasculine',
+    msg({message: 'Transmasculine Pride', context: 'backdrop name'}),
+    [
+      '#FF8ABD',
+      '#CDF5FE',
+      '#9AEBFF',
+      '#74DFFF',
+      '#9AEBFF',
+      '#CDF5FE',
+      '#FF8ABD',
+    ],
+    ['airy'],
+  ),
   def({
     id: 'pride.bi',
     name: msg({message: 'Bi Pride', context: 'backdrop name'}),
@@ -350,6 +568,22 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ],
     ['bright', 'celebratory'],
   ),
+  // The 2015 striped queer flag (skydeval, change list 3, item 8).
+  flag(
+    'pride.queer',
+    msg({message: 'Queer Pride', context: 'backdrop name'}),
+    [
+      '#000000',
+      '#99D9EA',
+      '#00A2E8',
+      '#B5E61D',
+      '#FFFFFF',
+      '#FFC90E',
+      '#FD6666',
+      '#FFAEC9',
+    ],
+    ['bright'],
+  ),
   def({
     id: 'pride.gay',
     name: msg({message: 'Gay Pride', context: 'backdrop name'}),
@@ -372,6 +606,24 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     bloom: 0.1,
     tuning: FLAT,
   }),
+  flag(
+    'pride.omnisexual',
+    msg({message: 'Omnisexual Pride', context: 'backdrop name'}),
+    ['#FC9CCC', '#FC54BC', '#240444', '#645CFC', '#8CA4FC'],
+    ['bold'],
+  ),
+  flag(
+    'pride.polysexual',
+    msg({message: 'Polysexual Pride', context: 'backdrop name'}),
+    ['#F61CB9', '#07D569', '#1C92F6'],
+    ['bright'],
+  ),
+  flag(
+    'pride.abrosexual',
+    msg({message: 'Abrosexual Pride', context: 'backdrop name'}),
+    ['#65C286', '#B4E4CC', '#FFFFFF', '#E796B7', '#D9446E'],
+    ['soft'],
+  ),
   def({
     id: 'pride.ace',
     name: msg({message: 'Ace Pride', context: 'backdrop name'}),
@@ -393,6 +645,12 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ['#000000', '#FFFFFF', '#FFFFFF', '#6E0070', '#D2D2D2', '#D2D2D2'],
     ['quiet'],
   ),
+  flag(
+    'pride.graysexual',
+    msg({message: 'Graysexual Pride', context: 'backdrop name'}),
+    ['#740195', '#B2B2B2', '#FFFFFF', '#B2B2B2', '#740195'],
+    ['quiet'],
+  ),
   def({
     id: 'pride.aromantic',
     name: msg({message: 'Aromantic Pride', context: 'backdrop name'}),
@@ -408,6 +666,12 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     'pride.demiromantic',
     msg({message: 'Demiromantic Pride', context: 'backdrop name'}),
     ['#000000', '#FFFFFF', '#FFFFFF', '#3DA542', '#D2D2D2', '#D2D2D2'],
+    ['calm'],
+  ),
+  flag(
+    'pride.grayromantic',
+    msg({message: 'Grayromantic Pride', context: 'backdrop name'}),
+    ['#087D16', '#B2B2B2', '#FFFFFF', '#B2B2B2', '#087D16'],
     ['calm'],
   ),
   flag(
@@ -438,6 +702,20 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     msg({message: 'Genderfluid Pride', context: 'backdrop name'}),
     ['#FF76A4', '#FFFFFF', '#C011D7', '#000000', '#2F3CBE'],
     ['bold'],
+  ),
+  flag(
+    'pride.bigender',
+    msg({message: 'Bigender Pride', context: 'backdrop name'}),
+    [
+      '#C479A2',
+      '#EDA5CD',
+      '#D6C7E8',
+      '#FFFFFF',
+      '#D6C7E8',
+      '#9AC7E8',
+      '#6D82D1',
+    ],
+    ['soft'],
   ),
   flag(
     'pride.agender',
@@ -580,6 +858,48 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     bloom: 0.1,
     tuning: tuning([0.86, 1.01], [0.84, 0.97], [0.82, 0.89]),
   }),
+  calm(
+    'calm.hush',
+    msg({message: 'Hush', context: 'backdrop name'}),
+    ['#E8E5E0', '#E4E1DC', '#DFDBD6'],
+    ['warm', 'neutral'],
+  ),
+  calm(
+    'calm.sand',
+    msg({message: 'Sand', context: 'backdrop name'}),
+    ['#E9E4DB', '#E4DFD5', '#DED8CD'],
+    ['warm'],
+  ),
+  calm(
+    'calm.sage',
+    msg({message: 'Soft Sage', context: 'backdrop name'}),
+    ['#DEE3DA', '#D9DFD5', '#D3D9CE'],
+    ['green'],
+  ),
+  calm(
+    'calm.stillwater',
+    msg({message: 'Still Water', context: 'backdrop name'}),
+    ['#DDE4E7', '#D8E0E3', '#D2DADE'],
+    ['cool'],
+  ),
+  calm(
+    'calm.lilac',
+    msg({message: 'Quiet Lilac', context: 'backdrop name'}),
+    ['#E3E0E8', '#DEDBE4', '#D8D5DF'],
+    ['cool'],
+  ),
+  calm(
+    'calm.slate',
+    msg({message: 'Calm Slate', context: 'backdrop name'}),
+    ['#2C3136', '#2A2F34', '#272B30'],
+    ['dark', 'cool'],
+  ),
+  calm(
+    'calm.charcoal',
+    msg({message: 'Charcoal', context: 'backdrop name'}),
+    ['#232426', '#212224', '#1E1F21'],
+    ['dark', 'neutral'],
+  ),
   nature(
     'nature.ocean',
     msg({message: 'Ocean', context: 'backdrop name'}),
@@ -617,6 +937,16 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ['calm', 'earthy'],
   ),
   {
+    ...SEASON_SPRING,
+    id: BACKDROP_SEASON_AUTO,
+    name: msg({message: 'Follow the Season', context: 'backdrop name'}),
+    intent: ['seasonal', 'follows the date'],
+  },
+  SEASON_SPRING,
+  SEASON_SUMMER,
+  SEASON_SPOOKY,
+  SEASON_WINTER,
+  {
     ...SKY_DAY,
     id: BACKDROP_SKIES_AUTO,
     name: msg({message: 'Time of Day', context: 'backdrop name'}),
@@ -629,6 +959,121 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
   SKY_TWILIGHT,
   SKY_NIGHT,
   SKY_AURORA,
+  pooled(
+    'space.nebula',
+    msg({message: 'Nebula', context: 'backdrop name'}),
+    'space',
+    ['#07060F', '#140A26'],
+    [
+      pool('#6A2C8C', 0.3, 0.35, 0.6, 0.55),
+      pool('#B03A6E', 0.7, 0.6, 0.45, 0.4),
+      pool('#1E4E8C', 0.8, 0.15, 0.5, 0.45),
+      pool('#2A1250', 0.25, 0.9, 0.5, 0.5),
+    ],
+    ['dark', 'vivid'],
+  ),
+  pooled(
+    'space.galaxy',
+    msg({message: 'Galaxy', context: 'backdrop name'}),
+    'space',
+    ['#04050C', '#0B1026'],
+    [
+      pool('#2E3A8C', 0.5, 0.5, 0.7, 0.45),
+      pool('#6B5BB8', 0.32, 0.35, 0.4, 0.35),
+      pool('#1B2A5A', 0.72, 0.68, 0.45, 0.5),
+      pool('#8C7AD9', 0.5, 0.48, 0.16, 0.3),
+    ],
+    ['dark', 'deep'],
+  ),
+  STARFIELD,
+  pooled(
+    'gems.amethyst',
+    msg({message: 'Amethyst', context: 'backdrop name'}),
+    'gems',
+    ['#3A1D5C', '#7E4FB5'],
+    [
+      pool('#D2B4FF', 0.22, 0.18, 0.45, 0.45),
+      pool('#A77BE0', 0.75, 0.3, 0.35, 0.35),
+      pool('#2A1147', 0.85, 0.85, 0.55, 0.55),
+    ],
+    ['deep', 'jewel'],
+  ),
+  pooled(
+    'gems.emerald',
+    msg({message: 'Emerald', context: 'backdrop name'}),
+    'gems',
+    ['#0A3A2B', '#1E8558'],
+    [
+      pool('#8EE3B4', 0.22, 0.18, 0.45, 0.4),
+      pool('#3FBF84', 0.75, 0.3, 0.35, 0.35),
+      pool('#052419', 0.85, 0.85, 0.55, 0.55),
+    ],
+    ['deep', 'jewel'],
+  ),
+  pooled(
+    'gems.sapphire',
+    msg({message: 'Sapphire', context: 'backdrop name'}),
+    'gems',
+    ['#0A1C4A', '#2253B2'],
+    [
+      pool('#8DB2FF', 0.22, 0.18, 0.45, 0.4),
+      pool('#4C82E0', 0.75, 0.3, 0.35, 0.35),
+      pool('#06122F', 0.85, 0.85, 0.55, 0.55),
+    ],
+    ['deep', 'jewel'],
+  ),
+  pooled(
+    'gems.rosequartz',
+    msg({message: 'Rose Quartz', context: 'backdrop name'}),
+    'gems',
+    ['#F8DDE2', '#EBBCC7'],
+    [
+      pool('#FFFFFF', 0.22, 0.18, 0.45, 0.55),
+      pool('#F3C9D3', 0.7, 0.3, 0.35, 0.35),
+      pool('#D898A9', 0.85, 0.85, 0.5, 0.45),
+    ],
+    ['soft', 'jewel'],
+  ),
+  pooled(
+    'gems.opal',
+    msg({message: 'Opal', context: 'backdrop name'}),
+    'gems',
+    ['#F4F2F7', '#EAF4F4'],
+    [
+      pool('#FFC4DA', 0.2, 0.25, 0.4, 0.5),
+      pool('#A4EBE2', 0.8, 0.3, 0.4, 0.5),
+      pool('#C9BAFF', 0.35, 0.8, 0.4, 0.45),
+      pool('#FFF0B8', 0.75, 0.85, 0.35, 0.45),
+    ],
+    ['soft', 'iridescent'],
+  ),
+  pooled(
+    'gems.oilslick',
+    msg({message: 'Oil Slick', context: 'backdrop name'}),
+    'gems',
+    ['#0D0E13', '#17142B'],
+    [
+      pool('#B0358C', 0.25, 0.3, 0.45, 0.45),
+      pool('#1E8C8A', 0.75, 0.35, 0.45, 0.45),
+      pool('#A8891E', 0.6, 0.85, 0.4, 0.4),
+      pool('#4A2E9E', 0.2, 0.85, 0.4, 0.45),
+    ],
+    ['dark', 'iridescent'],
+  ),
+  pooled(
+    'gems.holographic',
+    msg({message: 'Holographic', context: 'backdrop name'}),
+    'gems',
+    ['#EEE8FF', '#E5FAFF'],
+    [
+      pool('#FF9DE6', 0.15, 0.2, 0.45, 0.55),
+      pool('#8CEFFF', 0.85, 0.25, 0.45, 0.55),
+      pool('#BCA2FF', 0.5, 0.6, 0.4, 0.5),
+      pool('#FFF29E', 0.25, 0.9, 0.4, 0.5),
+      pool('#9DFFC8', 0.85, 0.85, 0.35, 0.45),
+    ],
+    ['bright', 'iridescent'],
+  ),
   blobs(
     'blobs.peach',
     msg({message: 'Peach', context: 'backdrop name'}),
@@ -684,6 +1129,120 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ],
     ['dark', 'moody'],
   ),
+  layered(
+    'aesthetics.frutigeraero',
+    msg({message: 'Frutiger Aero', context: 'backdrop name'}),
+    'aesthetics',
+    [
+      linearBase(180, [
+        ['#3AA0EE', 0],
+        ['#9BE3F2', 0.5],
+        ['#E8F8F0', 0.7],
+        ['#78C850', 0.86],
+        ['#4E9E35', 1],
+      ]),
+      pool('#FFFFFF', 0.3, 0.12, 0.45, 0.55),
+      pool('#5FE0E8', 0.85, 0.4, 0.35, 0.35),
+    ],
+    ['bright', 'glossy'],
+  ),
+  pooled(
+    'aesthetics.vaporwave',
+    msg({message: 'Vaporwave', context: 'backdrop name'}),
+    'aesthetics',
+    ['#F5B8E4', '#B9A3F0'],
+    [
+      pool('#5EE6E0', 0.8, 0.25, 0.5, 0.55),
+      pool('#FF71CE', 0.15, 0.75, 0.5, 0.5),
+      pool('#9B6BFF', 0.55, 0.95, 0.45, 0.45),
+    ],
+    ['vivid', 'haze'],
+  ),
+  layered(
+    'aesthetics.synthwave',
+    msg({message: 'Synthwave', context: 'backdrop name'}),
+    'aesthetics',
+    [
+      linearBase(180, [
+        ['#12052A', 0],
+        ['#2D0B4E', 0.45],
+        ['#7A1A6E', 0.8],
+        ['#E0457B', 1],
+      ]),
+      pool('#FF4FA3', 0.5, 1.0, 0.75, 0.3),
+      pool('#FF9A3C', 0.5, 1.02, 0.42, 0.6),
+    ],
+    ['dark', 'vivid'],
+  ),
+  layered(
+    'aesthetics.y2k',
+    msg({message: 'Y2K', context: 'backdrop name'}),
+    'aesthetics',
+    [
+      linearBase(160, [
+        ['#E9E3F7', 0],
+        ['#C7C1E4', 0.25],
+        ['#F6F8FC', 0.45],
+        ['#A9C8EC', 0.65],
+        ['#D8CCF2', 0.85],
+        ['#BFE2F7', 1],
+      ]),
+      pool('#FFFFFF', 0.3, 0.2, 0.4, 0.5),
+    ],
+    ['cool', 'chrome'],
+  ),
+  def({
+    id: 'aesthetics.cottagecore',
+    name: msg({message: 'Cottagecore', context: 'backdrop name'}),
+    collection: 'aesthetics',
+    version: 1,
+    intent: ['warm', 'soft', 'aesthetics'],
+    stripes: ['#F6EEDF', '#D9DEC4', '#B4C29D', '#E8CFC4', '#D6A3A0'],
+    angleDeg: 135,
+    bloom: 0.1,
+    tuning: FLAT,
+  }),
+  pooled(
+    'aesthetics.darkacademia',
+    msg({message: 'Dark Academia', context: 'backdrop name'}),
+    'aesthetics',
+    ['#2B1D15', '#4A1B22'],
+    [
+      pool('#E6D5AE', 0.2, 0.15, 0.5, 0.3),
+      pool('#6E1F2B', 0.8, 0.75, 0.5, 0.5),
+      pool('#5A3A26', 0.3, 0.85, 0.45, 0.45),
+    ],
+    ['dark', 'warm'],
+  ),
+  pooled(
+    'aesthetics.pastelgoth',
+    msg({message: 'Pastel Goth', context: 'backdrop name'}),
+    'aesthetics',
+    ['#131118', '#1C1822'],
+    [
+      pool('#C4A3F0', 0.2, 0.25, 0.5, 0.4),
+      pool('#9EEBCF', 0.82, 0.75, 0.5, 0.35),
+      pool('#F2A7CF', 0.75, 0.15, 0.35, 0.25),
+    ],
+    ['dark', 'soft'],
+  ),
+  layered(
+    'aesthetics.retro70s',
+    msg({message: 'Retro 70s', context: 'backdrop name'}),
+    'aesthetics',
+    [
+      {
+        kind: 'linear',
+        direction: {kind: 'angle', deg: 180},
+        opacity: 1,
+        stops: makeStripedStops(RETRO_BANDS, {
+          edgeEpsilon: EDGE_EPSILON,
+          softenEdges: false,
+        }),
+      },
+    ],
+    ['warm', 'striped'],
+  ),
 ]
 
 /** The Custom entry's name. The picker's chip says "Custom". */
@@ -733,18 +1292,32 @@ export function registryDef(id: string): BackdropDef | undefined {
 
 /**
  * The Custom entry for a configuration: 1.0's inputs, one stripe per colour
- * (two of the same colour when solid), and the pattern on a one-tone.
+ * (two of the same colour when solid), and the pattern on a one-tone. Custom
+ * stripes (change list 3, item 10) are drawn as the flags are: their
+ * colours top to bottom, at the flags' angle and bloom.
  */
 export function customDef(config: CustomConfig): BackdropDef {
   const solid = config.mode === 'solid'
+  const striped =
+    config.mode === 'stripes' &&
+    config.stripes !== undefined &&
+    config.stripes.length >= 2
   const out: BackdropDef = {
     id: BACKDROP_CUSTOM,
     name: CUSTOM_NAME,
     collection: 'custom',
     version: 1,
     intent: ['custom', config.mode],
-    stripes: solid ? [config.a, config.a] : [config.a, config.b],
-    stripe: {angleDeg: 180, edgeEpsilon: EDGE_EPSILON, softenEdges: true},
+    stripes: striped
+      ? [...config.stripes!]
+      : solid
+        ? [config.a, config.a]
+        : [config.a, config.b],
+    stripe: {
+      angleDeg: striped ? 165 : 180,
+      edgeEpsilon: EDGE_EPSILON,
+      softenEdges: true,
+    },
     bloomOpacity: 0.1,
     lockColors: false,
   }
@@ -755,16 +1328,21 @@ export function customDef(config: CustomConfig): BackdropDef {
 /**
  * The def an appearance draws: null for `none` and for ids this build does
  * not know (kept in the appearance, drawn as none). "Time of day" draws
- * the sky of `hour` (0-23, the local hour by default).
+ * the sky of `hour` (0-23, the local hour by default); "Follow the season"
+ * the seasonal backdrop of `season` (the local month, northern by default).
  */
 export function resolveBackdrop(
   appearance: Appearance,
   hour: number = new Date().getHours(),
+  season: SeasonInput = {month: new Date().getMonth(), southern: false},
 ): BackdropDef | null {
   if (appearance.backdrop === BACKDROP_NONE) return null
   if (appearance.backdrop === BACKDROP_CUSTOM) {
     return customDef(appearance.custom)
   }
   if (appearance.backdrop === BACKDROP_SKIES_AUTO) return skyForHour(hour)
+  if (appearance.backdrop === BACKDROP_SEASON_AUTO) {
+    return seasonForMonth(season.month, season.southern)
+  }
   return BY_ID.get(appearance.backdrop) ?? null
 }

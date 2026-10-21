@@ -365,6 +365,16 @@ export function setGrain(on: boolean) {
   setDeviceValue({...device, grain: on})
 }
 
+/**
+ * Southern-hemisphere months for "Follow the season" (change list 3, item
+ * 4). Device only.
+ */
+export function setSouthernHemisphere(on: boolean) {
+  const device = load().device
+  if (device.southern === on) return
+  setDeviceValue({...device, southern: on})
+}
+
 /** Tests only: forget the loaded state so the next read reloads it. */
 export function resetAppearanceStoreForTests() {
   unsubscribeDevice?.()

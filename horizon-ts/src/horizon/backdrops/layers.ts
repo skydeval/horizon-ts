@@ -12,6 +12,7 @@ import {
   type Layer,
   type PatternLayer,
   type PatternName,
+  type StarsLayer,
 } from '#/horizon/backdrops/types'
 
 function stripedStops(def: BackdropDef) {
@@ -31,14 +32,16 @@ export const PATTERN_TILES: Record<PatternName, PatternLayer[]> = {
   lines: [{kind: 'pattern', shape: 'diagonal', size: 14}],
 }
 
+/** A texture layer, as `textureLayers` lists them. */
+export type TextureLayer = PatternLayer | StarsLayer | GrainLayer
+
 /**
- * The texture over a def's layers, bottom first: its pattern's tiles, then
- * the grain. The same in both looks.
+ * The texture over a def's layers, bottom first: its pattern's tiles, the
+ * starfield (change list 3), then the grain. The same in both looks.
  */
-export function textureLayers(def: BackdropDef): (PatternLayer | GrainLayer)[] {
-  const out: (PatternLayer | GrainLayer)[] = def.pattern
-    ? [...PATTERN_TILES[def.pattern]]
-    : []
+export function textureLayers(def: BackdropDef): TextureLayer[] {
+  const out: TextureLayer[] = def.pattern ? [...PATTERN_TILES[def.pattern]] : []
+  if (def.stars) out.push({kind: 'stars'})
   if (def.grain) out.push({kind: 'grain'})
   return out
 }

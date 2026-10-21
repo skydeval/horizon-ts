@@ -10,6 +10,7 @@ import {countGraphemes} from 'unicode-segmenter/grapheme'
 import {
   type Appearance,
   type AppearanceField,
+  CUSTOM_MODES,
   type CustomConfig,
   DEFAULT_APPEARANCE,
   DEFAULT_CUSTOM,
@@ -20,6 +21,8 @@ import {
   type Preset,
   PRESET_SLOT_COUNT,
   type PresetSlots,
+  STRIPES_MAX,
+  STRIPES_MIN,
   THEME_PREF_FIELDS,
 } from '#/horizon/appearance/model'
 import {migrateRemovedSolid, REMOVED_SOLIDS} from '#/horizon/backdrops/registry'
@@ -44,16 +47,32 @@ function isSlot(value: unknown): value is number {
   )
 }
 
+/**
+ * Custom stripes (change list 3, item 10): 2 to 8 colours, uppercased;
+ * undefined for anything else.
+ */
+export function parseStripes(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  if (value.length < STRIPES_MIN || value.length > STRIPES_MAX) return undefined
+  if (!value.every(isHex)) return undefined
+  return value.map(hex => hex.toUpperCase())
+}
+
 /** A custom configuration, or null when it does not parse (5.3). */
 export function parseCustom(value: unknown): CustomConfig | null {
   if (!isObject(value)) return null
-  const {mode, a, b} = value
-  if (mode !== 'solid' && mode !== 'twoTone') return null
+  const {a, b} = value
+  if (!(CUSTOM_MODES as readonly unknown[]).includes(value.mode)) return null
   if (!isHex(a)) return null
   if (b !== undefined && !isHex(b)) return null
   const upperA = a.toUpperCase()
+  const stripes = parseStripes(value.stripes)
   const config: CustomConfig = {
-    mode,
+    // Stripes without usable colours read as the two-tone of `a` and `b`.
+    mode:
+      value.mode === 'stripes' && !stripes
+        ? 'twoTone'
+        : (value.mode as CustomConfig['mode']),
     a: upperA,
     b: b === undefined ? upperA : b.toUpperCase(),
   }
@@ -61,6 +80,7 @@ export function parseCustom(value: unknown): CustomConfig | null {
   if ((PATTERN_NAMES as readonly unknown[]).includes(value.pattern)) {
     config.pattern = value.pattern as PatternName
   }
+  if (stripes) config.stripes = stripes
   return config
 }
 
@@ -134,6 +154,7 @@ function customRecord(config: CustomConfig): CustomBackdropRecord {
     b: config.b,
   }
   if (config.pattern) out.pattern = config.pattern
+  if (config.stripes) out.stripes = [...config.stripes]
   return out
 }
 

@@ -2,7 +2,8 @@
  * Horizon's Appearance sections (Phase 3 design, section 10), after Dark
  * theme and before Font (BD-11): the Backdrops group (the shown name, the
  * swatches in sections by collection (change list 2), the Custom chip and,
- * while Custom is selected, its card), the per-device opt-out ("Keep this
+ * while Custom is selected, its card; while "Follow the season" is selected,
+ * the "Southern hemisphere" switch, change list 3), the per-device opt-out ("Keep this
  * device's own appearance", which since change list 2 covers the theme
  * settings too), "Backdrop softness" (live fix batch 1), "Film grain" (web,
  * change list 2), then the "Phone frame" picker of 10.8 (while
@@ -40,6 +41,7 @@ import {
   setFrameStyle,
   setGrain,
   setOptOut,
+  setSouthernHemisphere,
   useAppearanceState,
 } from '#/horizon/appearance/store'
 import {useCoarsePointer} from '#/horizon/backdrops/coarse-pointer'
@@ -52,6 +54,7 @@ import {
 import {
   BACKDROP_CUSTOM,
   BACKDROP_DEFS,
+  BACKDROP_SEASON_AUTO,
   BACKDROP_SKIES_AUTO,
   CUSTOM_NAME,
   customDef,
@@ -242,9 +245,18 @@ function BackdropGroup() {
     system: '',
     pride: l({message: 'Flags', context: 'backdrop group'}),
     materials: l({message: 'Materials', context: 'backdrop group'}),
+    calm: l({message: 'Calm', context: 'backdrop group'}),
     nature: l({message: 'Nature', context: 'backdrop group'}),
+    seasonal: l({message: 'Seasonal', context: 'backdrop group'}),
     skies: l({message: 'Skies', context: 'backdrop group'}),
+    space: l({message: 'Space', context: 'backdrop group'}),
+    gems: l({message: 'Gems', context: 'backdrop group'}),
     blobs: l({message: 'Color blobs', context: 'backdrop group'}),
+    aesthetics: l({message: 'Aesthetics', context: 'backdrop group'}),
+  }
+  const season = {
+    month: new Date().getMonth(),
+    southern: state.device.southern,
   }
 
   const selectedId = committed.backdrop
@@ -291,8 +303,13 @@ function BackdropGroup() {
                 <Swatch
                   key={def.id}
                   def={
-                    def.id === BACKDROP_SKIES_AUTO
-                      ? (resolveBackdrop({...shown, backdrop: def.id}) ?? def)
+                    def.id === BACKDROP_SKIES_AUTO ||
+                    def.id === BACKDROP_SEASON_AUTO
+                      ? (resolveBackdrop(
+                          {...shown, backdrop: def.id},
+                          undefined,
+                          season,
+                        ) ?? def)
                       : def
                   }
                   name={i18n._(def.name)}
@@ -313,15 +330,43 @@ function BackdropGroup() {
           />
         </View>
       </View>
+      {selectedId === BACKDROP_SEASON_AUTO && <HemisphereToggle />}
       {isCustom && (
         <CustomEditor
-          key={`${committed.custom.mode}${committed.custom.a}${committed.custom.b}${committed.custom.pattern ?? ''}`}
+          key={`${committed.custom.mode}${committed.custom.a}${committed.custom.b}${committed.custom.pattern ?? ''}${committed.custom.stripes?.join('') ?? ''}`}
           did={did}
           committed={committed.custom}
           presets={committed.presets}
         />
       )}
     </SettingsList.Group>
+  )
+}
+
+/*
+ * "Follow the season" uses northern months unless this is on (change list
+ * 3, item 4). This device only; shown while the season is followed.
+ */
+function HemisphereToggle() {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const {device} = useAppearanceState()
+  const label = l`Southern hemisphere`
+  return (
+    <View style={[a.w_full, a.gap_xs, {marginTop: GAP}]}>
+      <Toggle.Item
+        name="horizon_backdrop_southern"
+        label={label}
+        value={device.southern}
+        onChange={setSouthernHemisphere}
+        style={[a.w_full]}>
+        <Toggle.LabelText style={[a.flex_1]}>{label}</Toggle.LabelText>
+        <Toggle.Platform />
+      </Toggle.Item>
+      <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
+        {l`Follows the seasons by southern months: summer from December, winter from June.`}
+      </Text>
+    </View>
   )
 }
 

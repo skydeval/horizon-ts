@@ -5,7 +5,9 @@
  * current theme (live fix batch 1) and its grain setting (change list 2,
  * item 6), so every painter and the glass rule see the same treated
  * colours. "Time of day" resolves to the sky of the local hour, followed
- * only while it is selected (`hour.ts`).
+ * only while it is selected (`hour.ts`); "Follow the season" to the
+ * seasonal backdrop of the local month and the device's hemisphere,
+ * followed only while it is selected (`season.ts`, change list 3).
  */
 
 import {useTheme} from '#/alf'
@@ -16,9 +18,11 @@ import {
 import {compileKey} from '#/horizon/backdrops/compile'
 import {useHour} from '#/horizon/backdrops/hour'
 import {
+  BACKDROP_SEASON_AUTO,
   BACKDROP_SKIES_AUTO,
   resolveBackdrop,
 } from '#/horizon/backdrops/registry'
+import {useMonth} from '#/horizon/backdrops/season'
 import {softnessAmount} from '#/horizon/backdrops/softness'
 import {type BackdropDef} from '#/horizon/backdrops/types'
 import {BACKDROPS} from '#/horizon/switches'
@@ -48,8 +52,14 @@ export function useActiveBackdrop(): BackdropDef | null {
   const appearance = useEffectiveAppearance()
   const {device} = useAppearanceState()
   const hour = useHour(BACKDROPS && appearance.backdrop === BACKDROP_SKIES_AUTO)
+  const month = useMonth(
+    BACKDROPS && appearance.backdrop === BACKDROP_SEASON_AUTO,
+  )
   if (!BACKDROPS) return null
-  const def = resolveBackdrop(appearance, hour)
+  const def = resolveBackdrop(appearance, hour, {
+    month,
+    southern: device.southern,
+  })
   if (!def) return null
   const soften = softnessAmount(device.softness, t.name)
   const treated: BackdropDef = {...def}

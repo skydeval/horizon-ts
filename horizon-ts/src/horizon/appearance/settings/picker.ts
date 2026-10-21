@@ -1,8 +1,11 @@
 /*
  * The Backdrops picker's sections (change list 2): the registry grouped by
- * collection, None first on its own, then Flags, Materials, Nature, Skies
- * and Color blobs, each under a small heading, in registry order inside.
- * The Custom chip follows the sections.
+ * collection, None first on its own, then each collection under a small
+ * heading, in registry order inside. The Custom chip follows the sections.
+ *
+ * Change list 3's order: Flags; the quiet ones (Materials, then Calm);
+ * the world outside (Nature, Seasonal, Skies, Space); then the richer
+ * colour (Gems, Color blobs) and Aesthetics last, the loudest.
  */
 
 import {BACKDROP_DEFS} from '#/horizon/backdrops/registry'
@@ -19,9 +22,14 @@ export const PICKER_ORDER: readonly PickerCollection[] = [
   'system',
   'pride',
   'materials',
+  'calm',
   'nature',
+  'seasonal',
   'skies',
+  'space',
+  'gems',
   'blobs',
+  'aesthetics',
 ]
 
 export type PickerSection = {

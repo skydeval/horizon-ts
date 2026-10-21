@@ -57,8 +57,11 @@ export type ResolvedPattern = RGB & {
 /** The grain tile (change list 2, item 6). */
 export type ResolvedGrain = {kind: 'grain'}
 
+/** The starfield tile (change list 3, item 3); its stars are `STARS`. */
+export type ResolvedStars = {kind: 'stars'}
+
 /** A texture layer, drawn over the gradients. */
-export type ResolvedTexture = ResolvedPattern | ResolvedGrain
+export type ResolvedTexture = ResolvedPattern | ResolvedStars | ResolvedGrain
 
 /** Any layer a painter draws. */
 export type ResolvedLayer = ResolvedLinear | ResolvedRadial | ResolvedTexture
@@ -67,8 +70,8 @@ export type Compiled = {
   /** The gradients, bottom first, as drawn. */
   layers: (ResolvedLinear | ResolvedRadial)[]
   /**
-   * The texture over them (a pattern's tiles, then the grain, change list
-   * 2), bottom first; absent when there is none.
+   * The texture over them (a pattern's tiles, the starfield, then the
+   * grain; change lists 2 and 3), bottom first; absent when there is none.
    */
   texture?: ResolvedTexture[]
   /** The last stop colour of the first linear layer; painted under the image. */
@@ -228,6 +231,7 @@ export function compileKey(def: BackdropDef): string {
     layersKey(def.layers),
     def.pattern ?? '',
     def.grain ? 1 : 0,
+    def.stars ? 1 : 0,
   ].join('|')
 }
 
@@ -361,14 +365,14 @@ function compileUncached(
   const compiled: Compiled = {layers: resolved, base}
 
   const texture = textureLayers(def).map((layer): ResolvedTexture =>
-    layer.kind === 'grain'
-      ? {kind: 'grain'}
-      : {
+    layer.kind === 'pattern'
+      ? {
           kind: 'pattern',
           shape: layer.shape,
           size: layer.size,
           ...patternColor(layer.shape, base),
-        },
+        }
+      : {kind: layer.kind},
   )
   if (texture.length > 0) compiled.texture = texture
   return compiled

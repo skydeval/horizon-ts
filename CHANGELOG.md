@@ -487,6 +487,24 @@ released version yet; everything so far is under `[Unreleased]`.
   applied on account switch like the backdrop. An account that never set
   them leaves the device's settings as they are; signed out, the device's
   own settings apply.
+- **Nine more pride flags** (change list 3, items 7 and 8): Bigender,
+  Transfeminine, Transmasculine, Graysexual, Grayromantic, Omnisexual,
+  Polysexual, Abrosexual and Queer (the 2015 striped flag), striped like the
+  rest with their colours locked.
+- **More backdrops** (change list 3, items 1 to 5): Calm (Hush, Sand, Soft
+  Sage, Still Water, Quiet Lilac, Calm Slate, Charcoal: very low contrast
+  and low colour, for anyone sensitive to busy backgrounds), Seasonal
+  (Spring Bloom, Summer Haze, Spooky, Winter Frost, and Follow the Season,
+  which switches by the date, northern months unless "Southern hemisphere"
+  is on), Space (Nebula, Galaxy, and Starfield, a fixed field of small
+  stars drawn once), Gems (Amethyst, Emerald, Sapphire, Rose Quartz, Opal,
+  Oil Slick, Holographic) and Aesthetics (Frutiger Aero, Vaporwave,
+  Synthwave, Y2K, Cottagecore, Dark Academia, Pastel Goth, Retro 70s).
+  Nothing in them moves or is redrawn as the page scrolls.
+- **Custom stripes** (change list 3, item 10): the custom backdrop has a
+  third kind, Stripes, beside Solid and Two-tone: 2 to 8 colours in your
+  own order, added, removed and moved up or down, drawn like the flags.
+  Saved with the account's appearance and in presets.
 
 ### Fixed
 

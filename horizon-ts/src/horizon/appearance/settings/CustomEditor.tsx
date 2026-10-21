@@ -1,14 +1,17 @@
 /*
- * The Custom Backdrop Color card (Phase 3 design, 10.4): Solid or Two-tone,
- * each colour with a hex field, a swatch and R, G and B sliders, a quiet
- * pattern for Solid (change list 2), Apply, and the presets. The editor is keyed by its parent on the committed colours,
- * so a preset load or a fresh record resets it. The backdrop follows the
+ * The Custom Backdrop Color card (Phase 3 design, 10.4): Solid, Two-tone
+ * or Stripes (change list 3), each colour with a hex field, a swatch and R,
+ * G and B sliders, a quiet pattern for Solid (change list 2), Apply, and
+ * the presets. Stripes shows its 2 to 8 colours as a row of chips, top
+ * first; the chosen one is edited below, moved up or down, or removed, and
+ * "Add stripe" adds one at the bottom. The editor is keyed by its parent on
+ * the committed colours, so a preset load or a fresh record resets it. The backdrop follows the
  * editor through the store's preview, 150 ms after the last change; the
  * preview is cleared on Apply and when the editor unmounts.
  */
 
 import {useEffect, useState} from 'react'
-import {View} from 'react-native'
+import {Pressable, View} from 'react-native'
 import {useLingui} from '@lingui/react/macro'
 
 import {useHaptics} from '#/lib/haptics'
@@ -19,10 +22,14 @@ import * as TextField from '#/components/forms/TextField'
 import {Text} from '#/components/Typography'
 import {
   type CustomConfig,
+  type CustomMode,
   PATTERN_NAMES,
   type PresetSlots,
 } from '#/horizon/appearance/model'
 import {
+  addStripe,
+  canAddStripe,
+  canRemoveStripe,
   type Channel,
   type ColorDraft,
   editorConfig,
@@ -30,10 +37,14 @@ import {
   initEditor,
   isDraftValid,
   isEditorValid,
+  moveStripe,
   onHexBlur,
   onHexChange,
   onSlider,
+  removeStripe,
   sameConfig,
+  setMode,
+  setStripe,
 } from '#/horizon/appearance/settings/editor'
 import {Presets} from '#/horizon/appearance/settings/Presets'
 import {RgbSlider} from '#/horizon/appearance/settings/RgbSlider'
@@ -159,6 +170,121 @@ function PatternPicker({
   )
 }
 
+/*
+ * The custom stripes (change list 3, item 10): a chip per stripe, top
+ * first, the chosen one's colour column, and buttons to move it, remove it
+ * (not below 2) or add one (not above 8).
+ */
+function StripesEditor({
+  state,
+  onChange,
+}: {
+  state: EditorState
+  onChange: (update: (s: EditorState) => EditorState) => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const [chosen, setChosen] = useState(0)
+  const stripes = state.stripes ?? []
+  const index = Math.min(chosen, stripes.length - 1)
+  const draft = stripes[index]
+  if (!draft) return null
+  const move = (by: number) => {
+    onChange(s => moveStripe(s, index, by))
+    setChosen(Math.max(0, Math.min(stripes.length - 1, index + by)))
+  }
+  return (
+    <View style={[a.gap_sm]}>
+      <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+        {l`Stripes, top to bottom`}
+      </Text>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={l`Custom stripes`}
+        accessibilityHint=""
+        style={[a.flex_row, a.flex_wrap, {gap: 8}]}>
+        {stripes.map((stripe, i) => {
+          const hex = rgbToHex(stripe.rgb)
+          const selected = i === index
+          return (
+            <Pressable
+              key={i}
+              accessibilityRole="radio"
+              accessibilityLabel={l`Stripe ${i + 1}, ${hex}`}
+              accessibilityHint={selected ? '' : l`Edits this stripe`}
+              accessibilityState={{checked: selected}}
+              onPress={() => setChosen(i)}
+              style={[
+                {
+                  width: 32,
+                  height: 32,
+                  borderRadius: 9,
+                  borderWidth: selected ? 2 : 1,
+                  backgroundColor: hex,
+                },
+                selected
+                  ? {borderColor: t.atoms.text.color}
+                  : t.atoms.border_contrast_low,
+              ]}
+            />
+          )
+        })}
+      </View>
+      <ColorColumn
+        label={l`Stripe ${index + 1}`}
+        draft={draft}
+        onChange={next => onChange(s => setStripe(s, index, next))}
+      />
+      <View style={[a.flex_row, a.flex_wrap, {gap: 8}]}>
+        <Button
+          label={l`Move stripe ${index + 1} up`}
+          color="secondary"
+          size="small"
+          disabled={index === 0}
+          onPress={() => move(-1)}>
+          <ButtonText>
+            {l({message: 'Up', context: 'move a stripe'})}
+          </ButtonText>
+        </Button>
+        <Button
+          label={l`Move stripe ${index + 1} down`}
+          color="secondary"
+          size="small"
+          disabled={index === stripes.length - 1}
+          onPress={() => move(1)}>
+          <ButtonText>
+            {l({message: 'Down', context: 'move a stripe'})}
+          </ButtonText>
+        </Button>
+        <Button
+          label={l`Remove stripe ${index + 1}`}
+          color="secondary"
+          size="small"
+          disabled={!canRemoveStripe(state)}
+          onPress={() => {
+            onChange(s => removeStripe(s, index))
+            setChosen(Math.max(0, index - 1))
+          }}>
+          <ButtonText>
+            {l({message: 'Remove', context: 'remove a stripe'})}
+          </ButtonText>
+        </Button>
+        <Button
+          label={l`Add stripe`}
+          color="secondary"
+          size="small"
+          disabled={!canAddStripe(state)}
+          onPress={() => {
+            onChange(addStripe)
+            setChosen(stripes.length)
+          }}>
+          <ButtonText>{l`Add stripe`}</ButtonText>
+        </Button>
+      </View>
+    </View>
+  )
+}
+
 /** The card. Mount it keyed on the committed colours. */
 export function CustomEditor({
   did,
@@ -177,19 +303,22 @@ export function CustomEditor({
   const valid = isEditorValid(state)
 
   const {mode, a: colorA, b: colorB, pattern} = config
+  // The stripes as one string, so the effect sees a value, not a new array.
+  const stripesKey = config.stripes?.join(',') ?? ''
   const unchanged = sameConfig(config, committed)
   useEffect(() => {
     const timer = setTimeout(() => {
-      setAppearancePreview(
-        unchanged
-          ? null
-          : pattern
-            ? {mode, a: colorA, b: colorB, pattern}
-            : {mode, a: colorA, b: colorB},
-      )
+      if (unchanged) {
+        setAppearancePreview(null)
+        return
+      }
+      const preview: CustomConfig = {mode, a: colorA, b: colorB}
+      if (pattern) preview.pattern = pattern
+      if (stripesKey) preview.stripes = stripesKey.split(',')
+      setAppearancePreview(preview)
     }, PREVIEW_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [mode, colorA, colorB, pattern, unchanged])
+  }, [mode, colorA, colorB, pattern, stripesKey, unchanged])
 
   useEffect(() => () => setAppearancePreview(null), [])
 
@@ -227,24 +356,35 @@ export function CustomEditor({
         type="radio"
         label={l`Custom backdrop type`}
         value={state.mode}
-        onChange={next => setState(s => ({...s, mode: next}))}>
+        onChange={(next: CustomMode) => setState(s => setMode(s, next))}>
         <SegmentedControl.Item value="solid" label={l`Solid`}>
           <SegmentedControl.ItemText>{l`Solid`}</SegmentedControl.ItemText>
         </SegmentedControl.Item>
         <SegmentedControl.Item value="twoTone" label={l`Two-tone`}>
           <SegmentedControl.ItemText>{l`Two-tone`}</SegmentedControl.ItemText>
         </SegmentedControl.Item>
+        <SegmentedControl.Item
+          value="stripes"
+          label={l({message: 'Stripes', context: 'custom backdrop type'})}>
+          <SegmentedControl.ItemText>
+            {l({message: 'Stripes', context: 'custom backdrop type'})}
+          </SegmentedControl.ItemText>
+        </SegmentedControl.Item>
       </SegmentedControl.Root>
-      <View style={[a.flex_row, a.flex_wrap, {gap: 10}]}>
-        {columns.map(column => (
-          <ColorColumn
-            key={column.key}
-            label={column.label}
-            draft={state[column.key]}
-            onChange={next => setState(s => ({...s, [column.key]: next}))}
-          />
-        ))}
-      </View>
+      {state.mode === 'stripes' ? (
+        <StripesEditor state={state} onChange={setState} />
+      ) : (
+        <View style={[a.flex_row, a.flex_wrap, {gap: 10}]}>
+          {columns.map(column => (
+            <ColorColumn
+              key={column.key}
+              label={column.label}
+              draft={state[column.key]}
+              onChange={next => setState(s => ({...s, [column.key]: next}))}
+            />
+          ))}
+        </View>
+      )}
       {state.mode === 'solid' && (
         <PatternPicker
           value={state.pattern}
