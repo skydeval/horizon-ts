@@ -494,7 +494,7 @@ released version yet; everything so far is under `[Unreleased]`.
 - **More backdrops** (change list 3, items 1 to 5): Calm (Hush, Sand, Soft
   Sage, Still Water, Quiet Lilac, Calm Slate, Charcoal: very low contrast
   and low colour, for anyone sensitive to busy backgrounds), Seasonal
-  (Spring Bloom, Summer Haze, Hallows’ Eve, Winter Frost, and Follow the Season,
+  (Spring Bloom, Summer Haze, Autumn, Winter Frost, and Follow the Season,
   which switches by the date, northern months unless "Southern hemisphere"
   is on), Space (Nebula, Galaxy, and Starfield, a fixed field of small
   stars drawn once), Gems (Amethyst, Emerald, Sapphire, Rose Quartz, Opal,

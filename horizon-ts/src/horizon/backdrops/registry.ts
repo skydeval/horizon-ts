@@ -382,9 +382,9 @@ const SEASON_SUMMER = pooled(
   ],
   ['warm', 'bright'],
 )
-const SEASON_HALLOWS = pooled(
-  'seasonal.hallows',
-  msg({message: 'Hallows’ Eve', context: 'backdrop name'}),
+const SEASON_AUTUMN = pooled(
+  'seasonal.autumn',
+  msg({message: 'Autumn', context: 'backdrop name'}),
   'seasonal',
   ['#120C17', '#1D0F24'],
   [
@@ -406,21 +406,6 @@ const SEASON_WINTER = pooled(
   ],
   ['cool', 'airy'],
 )
-const SEASON_CHRISTMAS = pooled(
-  'seasonal.christmas',
-  msg({message: 'Christmas', context: 'backdrop name'}),
-  'seasonal',
-  ['#0D2318', '#122C20'],
-  [
-    pool('#B32234', 0.2, 0.25, 0.55, 0.45),
-    pool('#2E7D4F', 0.85, 0.35, 0.5, 0.45),
-    pool('#E3B24A', 0.6, 0.95, 0.5, 0.35),
-    pool('#F2F5F7', 0.1, 0.9, 0.35, 0.2),
-  ],
-  ['dark', 'festive'],
-)
-
-/* Nature's Autumn, which "Follow the season" also uses (2026-10-21). */
 const NATURE_AUTUMN = nature(
   'nature.autumn',
   msg({message: 'Autumn', context: 'backdrop name'}),
@@ -429,20 +414,16 @@ const NATURE_AUTUMN = nature(
 )
 
 /**
- * The seasonal backdrop for a month (0-11), for "Follow the season"
- * (skydeval, 2026-10-21). October is Hallows' Eve and December is Christmas in
- * both hemispheres: they follow the calendar, not the weather. The other
- * months follow meteorological seasons, northern unless `southern`:
- * spring, summer, autumn (Nature's Autumn), winter. Switches by date only;
- * nothing animates.
+ * The seasonal backdrop for a month (0-11), for "Follow the season": the
+ * four seasons, meteorological, northern months unless `southern`
+ * (skydeval, 2026-10-21: four seasons, no holiday backdrops). Switches by
+ * date only; nothing animates.
  */
 export function seasonForMonth(month: number, southern = false): BackdropDef {
-  if (month === 9) return SEASON_HALLOWS
-  if (month === 11) return SEASON_CHRISTMAS
   const m = southern ? (month + 6) % 12 : month
   if (m >= 2 && m <= 4) return SEASON_SPRING
   if (m >= 5 && m <= 7) return SEASON_SUMMER
-  if (m >= 8 && m <= 10) return NATURE_AUTUMN
+  if (m >= 8 && m <= 10) return SEASON_AUTUMN
   return SEASON_WINTER
 }
 
@@ -965,8 +946,7 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
   },
   SEASON_SPRING,
   SEASON_SUMMER,
-  SEASON_HALLOWS,
-  SEASON_CHRISTMAS,
+  SEASON_AUTUMN,
   SEASON_WINTER,
   {
     ...SKY_DAY,
@@ -1291,12 +1271,16 @@ export const REMOVED_SOLIDS: Readonly<Record<string, Hex>> = {
 }
 
 /**
- * Backdrop ids that were renamed, old to new. `seasonal.spooky` became
- * `seasonal.hallows` with the name Hallows' Eve (skydeval, 2026-10-21):
- * "spook" is a racist slur, and the record is public.
+ * Backdrop ids that were renamed or folded into another, old to new
+ * (skydeval, 2026-10-21). The October backdrop was "Spooky" ("spook" is a
+ * racist slur, and the record is public), briefly Hallows' Eve, and is now
+ * Autumn. The short-lived Christmas backdrop was removed in favour of four
+ * seasons; it reads as Winter Frost.
  */
 export const RENAMED_BACKDROPS: Readonly<Record<string, string>> = {
-  'seasonal.spooky': 'seasonal.hallows',
+  'seasonal.spooky': 'seasonal.autumn',
+  'seasonal.hallows': 'seasonal.autumn',
+  'seasonal.christmas': 'seasonal.winter',
 }
 
 /**

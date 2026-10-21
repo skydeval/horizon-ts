@@ -158,8 +158,7 @@ describe('the new collections (items 1 to 5)', () => {
       'seasonal.auto',
       'seasonal.spring',
       'seasonal.summer',
-      'seasonal.hallows',
-      'seasonal.christmas',
+      'seasonal.autumn',
       'seasonal.winter',
     ])
     expect(ids('calm').length).toBeGreaterThanOrEqual(5)
@@ -285,7 +284,7 @@ describe('Calm (item 5)', () => {
 })
 
 describe('Follow the season (item 4)', () => {
-  it('Hallows Eve in October, Christmas in December, seasons otherwise', () => {
+  it('four meteorological seasons, northern months by default', () => {
     const north = Array.from({length: 12}, (_v, m) => seasonForMonth(m).id)
     expect(north).toEqual([
       'seasonal.winter',
@@ -296,10 +295,10 @@ describe('Follow the season (item 4)', () => {
       'seasonal.summer',
       'seasonal.summer',
       'seasonal.summer',
-      'nature.autumn',
-      'seasonal.hallows',
-      'nature.autumn',
-      'seasonal.christmas',
+      'seasonal.autumn',
+      'seasonal.autumn',
+      'seasonal.autumn',
+      'seasonal.winter',
     ])
     const south = Array.from(
       {length: 12},
@@ -308,36 +307,41 @@ describe('Follow the season (item 4)', () => {
     expect(south).toEqual([
       'seasonal.summer',
       'seasonal.summer',
-      'nature.autumn',
-      'nature.autumn',
-      'nature.autumn',
+      'seasonal.autumn',
+      'seasonal.autumn',
+      'seasonal.autumn',
       'seasonal.winter',
       'seasonal.winter',
       'seasonal.winter',
       'seasonal.spring',
-      // October and December follow the calendar in both hemispheres.
-      'seasonal.hallows',
       'seasonal.spring',
-      'seasonal.christmas',
+      'seasonal.spring',
+      'seasonal.summer',
     ])
   })
 
-  it('the old Spooky id reads as Hallows Eve, which keeps the backdrop', () => {
-    const old = {...DEFAULT_APPEARANCE, backdrop: 'seasonal.spooky'}
-    expect(migrateRemovedSolid(old).backdrop).toBe('seasonal.hallows')
-    expect(registryDef('seasonal.spooky')).toBeUndefined()
-    expect(registryDef('seasonal.hallows')!.name.message).toBe('Hallows’ Eve')
+  it('old ids read as the four seasons, keeping a backdrop', () => {
+    const read = (backdrop: string) =>
+      migrateRemovedSolid({...DEFAULT_APPEARANCE, backdrop}).backdrop
+    expect(read('seasonal.spooky')).toBe('seasonal.autumn')
+    expect(read('seasonal.hallows')).toBe('seasonal.autumn')
+    expect(read('seasonal.christmas')).toBe('seasonal.winter')
+    for (const id of [
+      'seasonal.spooky',
+      'seasonal.hallows',
+      'seasonal.christmas',
+    ]) {
+      expect(registryDef(id)).toBeUndefined()
+    }
+    expect(registryDef('seasonal.autumn')!.name.message).toBe('Autumn')
   })
 
   it('resolves by the month given, the auto entry in Seasonal', () => {
     const auto = {...DEFAULT_APPEARANCE, backdrop: BACKDROP_SEASON_AUTO}
     expect(resolveBackdrop(auto, 12, {month: 9, southern: false})!.id).toBe(
-      'seasonal.hallows',
+      'seasonal.autumn',
     )
     expect(resolveBackdrop(auto, 12, {month: 9, southern: true})!.id).toBe(
-      'seasonal.hallows',
-    )
-    expect(resolveBackdrop(auto, 12, {month: 8, southern: true})!.id).toBe(
       'seasonal.spring',
     )
     expect(registryDef(BACKDROP_SEASON_AUTO)!.collection).toBe('seasonal')
