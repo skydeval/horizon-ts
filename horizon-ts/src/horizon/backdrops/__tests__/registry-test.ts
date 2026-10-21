@@ -237,6 +237,7 @@ const ORDER = [
   'seasonal.spring',
   'seasonal.summer',
   'seasonal.spooky',
+  'seasonal.christmas',
   'seasonal.winter',
   'skies.auto',
   'skies.dawn',

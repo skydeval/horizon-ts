@@ -406,17 +406,43 @@ const SEASON_WINTER = pooled(
   ],
   ['cool', 'airy'],
 )
+const SEASON_CHRISTMAS = pooled(
+  'seasonal.christmas',
+  msg({message: 'Christmas', context: 'backdrop name'}),
+  'seasonal',
+  ['#0D2318', '#122C20'],
+  [
+    pool('#B32234', 0.2, 0.25, 0.55, 0.45),
+    pool('#2E7D4F', 0.85, 0.35, 0.5, 0.45),
+    pool('#E3B24A', 0.6, 0.95, 0.5, 0.35),
+    pool('#F2F5F7', 0.1, 0.9, 0.35, 0.2),
+  ],
+  ['dark', 'festive'],
+)
+
+/* Nature's Autumn, which "Follow the season" also uses (2026-10-21). */
+const NATURE_AUTUMN = nature(
+  'nature.autumn',
+  msg({message: 'Autumn', context: 'backdrop name'}),
+  ['#F6D9A8', '#EEAE5E', '#D9783A', '#B0502E', '#7E3A2A'],
+  ['warm', 'cozy'],
+)
 
 /**
- * The seasonal backdrop for a month (0-11), for "Follow the season":
- * meteorological seasons, northern months unless `southern`. Autumn is
- * Spooky. Switches by date only; nothing animates.
+ * The seasonal backdrop for a month (0-11), for "Follow the season"
+ * (skydeval, 2026-10-21). October is Spooky and December is Christmas in
+ * both hemispheres: they follow the calendar, not the weather. The other
+ * months follow meteorological seasons, northern unless `southern`:
+ * spring, summer, autumn (Nature's Autumn), winter. Switches by date only;
+ * nothing animates.
  */
 export function seasonForMonth(month: number, southern = false): BackdropDef {
+  if (month === 9) return SEASON_SPOOKY
+  if (month === 11) return SEASON_CHRISTMAS
   const m = southern ? (month + 6) % 12 : month
   if (m >= 2 && m <= 4) return SEASON_SPRING
   if (m >= 5 && m <= 7) return SEASON_SUMMER
-  if (m >= 8 && m <= 10) return SEASON_SPOOKY
+  if (m >= 8 && m <= 10) return NATURE_AUTUMN
   return SEASON_WINTER
 }
 
@@ -924,12 +950,7 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ['#FFF1F4', '#FBD5DF', '#F5B3C6', '#E894AE', '#C97B9A'],
     ['warm', 'airy'],
   ),
-  nature(
-    'nature.autumn',
-    msg({message: 'Autumn', context: 'backdrop name'}),
-    ['#F6D9A8', '#EEAE5E', '#D9783A', '#B0502E', '#7E3A2A'],
-    ['warm', 'cozy'],
-  ),
+  NATURE_AUTUMN,
   nature(
     'nature.moss',
     msg({message: 'Moss', context: 'backdrop name'}),
@@ -945,6 +966,7 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
   SEASON_SPRING,
   SEASON_SUMMER,
   SEASON_SPOOKY,
+  SEASON_CHRISTMAS,
   SEASON_WINTER,
   {
     ...SKY_DAY,

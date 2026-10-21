@@ -158,6 +158,7 @@ describe('the new collections (items 1 to 5)', () => {
       'seasonal.spring',
       'seasonal.summer',
       'seasonal.spooky',
+      'seasonal.christmas',
       'seasonal.winter',
     ])
     expect(ids('calm').length).toBeGreaterThanOrEqual(5)
@@ -283,7 +284,7 @@ describe('Calm (item 5)', () => {
 })
 
 describe('Follow the season (item 4)', () => {
-  it('meteorological seasons, northern months by default', () => {
+  it('Spooky in October, Christmas in December, seasons otherwise', () => {
     const north = Array.from({length: 12}, (_v, m) => seasonForMonth(m).id)
     expect(north).toEqual([
       'seasonal.winter',
@@ -294,19 +295,30 @@ describe('Follow the season (item 4)', () => {
       'seasonal.summer',
       'seasonal.summer',
       'seasonal.summer',
+      'nature.autumn',
       'seasonal.spooky',
-      'seasonal.spooky',
-      'seasonal.spooky',
-      'seasonal.winter',
+      'nature.autumn',
+      'seasonal.christmas',
     ])
     const south = Array.from(
       {length: 12},
       (_v, m) => seasonForMonth(m, true).id,
     )
-    expect(south[0]).toBe('seasonal.summer')
-    expect(south[3]).toBe('seasonal.spooky')
-    expect(south[6]).toBe('seasonal.winter')
-    expect(south[9]).toBe('seasonal.spring')
+    expect(south).toEqual([
+      'seasonal.summer',
+      'seasonal.summer',
+      'nature.autumn',
+      'nature.autumn',
+      'nature.autumn',
+      'seasonal.winter',
+      'seasonal.winter',
+      'seasonal.winter',
+      'seasonal.spring',
+      // October and December follow the calendar in both hemispheres.
+      'seasonal.spooky',
+      'seasonal.spring',
+      'seasonal.christmas',
+    ])
   })
 
   it('resolves by the month given, the auto entry in Seasonal', () => {
@@ -315,6 +327,9 @@ describe('Follow the season (item 4)', () => {
       'seasonal.spooky',
     )
     expect(resolveBackdrop(auto, 12, {month: 9, southern: true})!.id).toBe(
+      'seasonal.spooky',
+    )
+    expect(resolveBackdrop(auto, 12, {month: 8, southern: true})!.id).toBe(
       'seasonal.spring',
     )
     expect(registryDef(BACKDROP_SEASON_AUTO)!.collection).toBe('seasonal')
