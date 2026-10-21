@@ -15,10 +15,15 @@ import {
   DEFAULT_CUSTOM,
   emptyPresetSlots,
   isHex,
+  parseThemePrefs,
+  PATTERN_NAMES,
   type Preset,
   PRESET_SLOT_COUNT,
   type PresetSlots,
+  THEME_PREF_FIELDS,
 } from '#/horizon/appearance/model'
+import {migrateRemovedSolid, REMOVED_SOLIDS} from '#/horizon/backdrops/registry'
+import {type PatternName} from '#/horizon/backdrops/types'
 import {
   APPEARANCE_COLLECTION,
   type AppearanceRecord,
@@ -47,7 +52,16 @@ export function parseCustom(value: unknown): CustomConfig | null {
   if (!isHex(a)) return null
   if (b !== undefined && !isHex(b)) return null
   const upperA = a.toUpperCase()
-  return {mode, a: upperA, b: b === undefined ? upperA : b.toUpperCase()}
+  const config: CustomConfig = {
+    mode,
+    a: upperA,
+    b: b === undefined ? upperA : b.toUpperCase(),
+  }
+  // An unknown pattern reads as none; the colours still count.
+  if ((PATTERN_NAMES as readonly unknown[]).includes(value.pattern)) {
+    config.pattern = value.pattern as PatternName
+  }
+  return config
 }
 
 /** A backdrop id: a string of 1-64 characters, else the default. */
@@ -102,17 +116,25 @@ export function parseAppearanceRecord(
   }
   const {$type: _type, ...raw} = value
   return {
-    appearance: {
+    // A removed solid reads as a custom one-tone (change list 2, item 9).
+    appearance: migrateRemovedSolid({
       backdrop: parseBackdropId(value.backdrop),
       custom: parseCustom(value.custom) ?? DEFAULT_CUSTOM,
       presets: parsePresetItems(value.presets),
-    },
+      ...parseThemePrefs(value),
+    }),
     raw,
   }
 }
 
 function customRecord(config: CustomConfig): CustomBackdropRecord {
-  return {mode: config.mode, a: config.a, b: config.b}
+  const out: CustomBackdropRecord = {
+    mode: config.mode,
+    a: config.a,
+    b: config.b,
+  }
+  if (config.pattern) out.pattern = config.pattern
+  return out
 }
 
 function presetRecord(slot: number, preset: Preset): PresetRecord {
@@ -148,9 +170,25 @@ export function buildAppearanceRecord(
   const base: Record<string, unknown> = raw ? {...raw} : {}
   const named = new Set(fields)
   const all = raw === null
+  /*
+   * A record still naming a removed solid was read as Custom one-tone of
+   * its colour (item 9): any write puts that reading back, so the record
+   * and what this device shows agree whatever field the edit named.
+   */
+  if (typeof raw?.backdrop === 'string' && raw.backdrop in REMOVED_SOLIDS) {
+    named.add('backdrop')
+    named.add('custom')
+  }
 
   if (all || named.has('backdrop')) base.backdrop = appearance.backdrop
   if (all || named.has('custom')) base.custom = customRecord(appearance.custom)
+  // The theme settings (item 11): written when set, removed when cleared.
+  for (const field of THEME_PREF_FIELDS) {
+    if (!all && !named.has(field)) continue
+    const value = appearance[field]
+    if (value === undefined) delete base[field]
+    else base[field] = value
+  }
 
   const replaced = new Set<number>()
   if (all) {

@@ -8,7 +8,10 @@ import {
   resolveBackdrop,
 } from '#/horizon/backdrops/registry'
 
-/* The 3.1 table: id, collection, stripes, angle, bloom. */
+/*
+ * The 3.1 table: id, collection, stripes, angle, bloom; the solids left in
+ * change list 2 (item 9), and the entries it added follow (`ADDED`).
+ */
 const TABLE: [string, string, string, number, number][] = [
   ['none', 'system', '', 0, 0],
   ['pride.lesbian', 'pride', 'D52D00 FF9A56 FFFFFF D162A4 A30262', 165, 0.16],
@@ -84,15 +87,106 @@ const TABLE: [string, string, string, number, number][] = [
     120,
     0.1,
   ],
-  ['solids.slate', 'solids', '1F2937 1F2937', 180, 0.1],
-  ['solids.mist', 'solids', 'E9EEF5 E9EEF5', 180, 0.08],
-  ['solids.red', 'solids', 'B4534B B4534B', 180, 0.1],
-  ['solids.orange', 'solids', 'C26A3B C26A3B', 180, 0.1],
-  ['solids.yellow', 'solids', 'B79B2A B79B2A', 180, 0.12],
-  ['solids.green', 'solids', '2F7D5C 2F7D5C', 180, 0.1],
-  ['solids.blue', 'solids', '2F5F9E 2F5F9E', 180, 0.1],
-  ['solids.indigo', 'solids', '3A3F8F 3A3F8F', 180, 0.1],
-  ['solids.violet', 'solids', '6B4A8E 6B4A8E', 180, 0.1],
+]
+
+/*
+ * Change list 2: the flags (item 2) and the Nature palettes (item 5), as
+ * the 3.1 rows.
+ */
+const ADDED: [string, string, string, number, number][] = [
+  [
+    'pride.philly',
+    'pride',
+    '000000 784F17 E40303 FF8C00 FFED00 008026 004DFF 750787',
+    165,
+    0.1,
+  ],
+  [
+    'pride.demisexual',
+    'pride',
+    '000000 FFFFFF FFFFFF 6E0070 D2D2D2 D2D2D2',
+    165,
+    0.1,
+  ],
+  [
+    'pride.demiromantic',
+    'pride',
+    '000000 FFFFFF FFFFFF 3DA542 D2D2D2 D2D2D2',
+    165,
+    0.1,
+  ],
+  ['pride.aroace', 'pride', 'E28C00 ECCD00 FFFFFF 62AEDC 203856', 165, 0.1],
+  ['pride.genderqueer', 'pride', 'B57EDC FFFFFF 4A8123', 165, 0.1],
+  [
+    'pride.genderfluid',
+    'pride',
+    'FF76A4 FFFFFF C011D7 000000 2F3CBE',
+    165,
+    0.1,
+  ],
+  [
+    'pride.agender',
+    'pride',
+    '000000 BCC4C7 FFFFFF B7F684 FFFFFF BCC4C7 000000',
+    165,
+    0.1,
+  ],
+  ['nature.ocean', 'nature', 'D7F0F5 9FD6E2 62B6CC 3B8FB0 2A6D91', 135, 0.1],
+  ['nature.forest', 'nature', 'E3EDD9 B5CFA0 7FA872 4F7F52 2F5A3C', 135, 0.1],
+  ['nature.desert', 'nature', 'F7E6C8 EDC99A DDA46E C47F52 9C5B3E', 135, 0.1],
+  ['nature.sakura', 'nature', 'FFF1F4 FBD5DF F5B3C6 E894AE C97B9A', 135, 0.1],
+  ['nature.autumn', 'nature', 'F6D9A8 EEAE5E D9783A B0502E 7E3A2A', 135, 0.1],
+  ['nature.moss', 'nature', 'E7EBCF C6D09A 9BAE6B 738A4C 4E6436', 135, 0.1],
+]
+
+/* The picker's order after change list 2. */
+const ORDER = [
+  'none',
+  'pride.lesbian',
+  'pride.trans',
+  'pride.bi',
+  'pride.rainbow',
+  'pride.philly',
+  'pride.gay',
+  'pride.pan',
+  'pride.ace',
+  'pride.demisexual',
+  'pride.aromantic',
+  'pride.demiromantic',
+  'pride.aroace',
+  'pride.nonbinary',
+  'pride.genderqueer',
+  'pride.genderfluid',
+  'pride.agender',
+  'pride.intersex',
+  'pride.disability',
+  'pride.neurodiversity',
+  'materials.paper',
+  'materials.glass',
+  'materials.granite',
+  'materials.fabric',
+  'materials.clay',
+  'materials.fog',
+  'materials.inkwash',
+  'nature.ocean',
+  'nature.forest',
+  'nature.desert',
+  'nature.sakura',
+  'nature.autumn',
+  'nature.moss',
+  'skies.auto',
+  'skies.dawn',
+  'skies.day',
+  'skies.golden',
+  'skies.dusk',
+  'skies.twilight',
+  'skies.night',
+  'skies.aurora',
+  'blobs.peach',
+  'blobs.lagoon',
+  'blobs.berry',
+  'blobs.citrus',
+  'blobs.midnight',
 ]
 
 /* The 3.1 tuning table: light s/b, dim s/b, dark s/b. */
@@ -105,23 +199,17 @@ const TUNING: Record<string, number[]> = {
   'materials.clay': [0.96, 1.02, 0.94, 0.98, 0.92, 0.9],
   'materials.fog': [0.7, 1.04, 0.68, 1.0, 0.66, 0.92],
   'materials.inkwash': [0.86, 1.01, 0.84, 0.97, 0.82, 0.89],
-  'solids.slate': [0.85, 1.02, 0.85, 1.0, 0.85, 0.95],
-  'solids.mist': [0.75, 1.03, 0.74, 1.0, 0.72, 0.93],
-  'solids.red': [0.92, 1.02, 0.9, 0.99, 0.88, 0.92],
-  'solids.orange': [0.92, 1.02, 0.9, 0.99, 0.88, 0.92],
-  'solids.yellow': [0.86, 1.02, 0.84, 0.99, 0.82, 0.92],
-  'solids.green': [0.92, 1.01, 0.9, 0.98, 0.88, 0.9],
-  'solids.blue': [0.92, 1.01, 0.9, 0.98, 0.88, 0.9],
-  'solids.indigo': [0.9, 1.01, 0.88, 0.98, 0.86, 0.9],
-  'solids.violet': [0.9, 1.01, 0.88, 0.98, 0.86, 0.9],
 }
 
 describe('BACKDROP_DEFS', () => {
-  it('has the 29 entries in the 3.1 order', () => {
-    expect(BACKDROP_DEFS.map(def => def.id)).toEqual(TABLE.map(row => row[0]))
+  it('has the 3.1 entries, less the solids, and the change list 2 ones, in order', () => {
+    expect(BACKDROP_DEFS.map(def => def.id)).toEqual(ORDER)
+    const ids = new Set(BACKDROP_DEFS.map(def => def.id))
+    for (const row of [...TABLE, ...ADDED]) expect(ids.has(row[0])).toBe(true)
+    expect(BACKDROP_DEFS.some(def => def.id.startsWith('solids.'))).toBe(false)
   })
 
-  it.each(TABLE)(
+  it.each([...TABLE, ...ADDED])(
     '%s matches the 3.1 table',
     (id, collection, stripes, angle, bloom) => {
       const def = registryDef(id)!
@@ -153,9 +241,9 @@ describe('BACKDROP_DEFS', () => {
     }
   })
 
-  it('locks colours on exactly the 12 pride flags', () => {
+  it('locks colours on exactly the 19 pride flags', () => {
     const locked = BACKDROP_DEFS.filter(def => def.lockColors).map(d => d.id)
-    expect(locked).toHaveLength(12)
+    expect(locked).toHaveLength(19)
     expect(locked.every(id => id.startsWith('pride.'))).toBe(true)
   })
 

@@ -1,10 +1,13 @@
 /*
  * Horizon's Appearance sections (Phase 3 design, section 10), after Dark
  * theme and before Font (BD-11): the Backdrops group (the shown name, the
- * swatch grid, the Custom chip and, while Custom is selected, its card), the
- * per-device opt-out, "Backdrop softness" (live fix batch 1), then the
- * "Phone frame" picker of 10.8 (while `SHOW_FRAME_STYLE_PICKER`), whose
- * Gutter style replaced the "Reading card on small screens" toggle.
+ * swatches in sections by collection (change list 2), the Custom chip and,
+ * while Custom is selected, its card), the per-device opt-out ("Keep this
+ * device's own appearance", which since change list 2 covers the theme
+ * settings too), "Backdrop softness" (live fix batch 1), "Film grain" (web,
+ * change list 2), then the "Phone frame" picker of 10.8 (while
+ * `SHOW_FRAME_STYLE_PICKER`), whose Gutter style replaced the "Reading card
+ * on small screens" toggle.
  */
 
 import {useState} from 'react'
@@ -25,12 +28,17 @@ import {IS_WEB} from '#/env'
 import {BackdropFill} from '#/horizon/appearance/settings/BackdropFill'
 import {CustomEditor} from '#/horizon/appearance/settings/CustomEditor'
 import {swatchKeyDown} from '#/horizon/appearance/settings/keys'
+import {
+  PICKER_SECTIONS,
+  type PickerCollection,
+} from '#/horizon/appearance/settings/picker'
 import {SoftnessSlider} from '#/horizon/appearance/settings/SoftnessSlider'
 import {
   effectiveAppearance,
   selectBackdrop,
   setBackdropSoftness,
   setFrameStyle,
+  setGrain,
   setOptOut,
   useAppearanceState,
 } from '#/horizon/appearance/store'
@@ -44,9 +52,11 @@ import {
 import {
   BACKDROP_CUSTOM,
   BACKDROP_DEFS,
+  BACKDROP_SKIES_AUTO,
   CUSTOM_NAME,
   customDef,
   registryDef,
+  resolveBackdrop,
 } from '#/horizon/backdrops/registry'
 import {SWATCH_SIZE, swatchDef} from '#/horizon/backdrops/swatch'
 import {type BackdropDef} from '#/horizon/backdrops/types'
@@ -228,6 +238,14 @@ function BackdropGroup() {
   const shown = effectiveAppearance(state, did)
   const committed = effectiveAppearance({...state, preview: null}, did)
   const [hoverName, setHoverName] = useState<string | null>(null)
+  const sectionTitles: Record<PickerCollection, string> = {
+    system: '',
+    pride: l({message: 'Flags', context: 'backdrop group'}),
+    materials: l({message: 'Materials', context: 'backdrop group'}),
+    nature: l({message: 'Nature', context: 'backdrop group'}),
+    skies: l({message: 'Skies', context: 'backdrop group'}),
+    blobs: l({message: 'Color blobs', context: 'backdrop group'}),
+  }
 
   const selectedId = committed.backdrop
   const isCustom = selectedId === BACKDROP_CUSTOM
@@ -255,27 +273,49 @@ function BackdropGroup() {
         accessibilityRole="radiogroup"
         accessibilityLabel={l`Backdrop`}
         accessibilityHint=""
-        style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP, marginTop: GAP}]}>
-        {BACKDROP_DEFS.map(def => (
-          <Swatch
-            key={def.id}
-            def={def}
-            name={i18n._(def.name)}
-            selected={def.id === selectedId}
-            onSelect={() => selectBackdrop(did, def.id)}
+        style={[a.w_full, {gap: GAP, marginTop: GAP}]}>
+        {PICKER_SECTIONS.map(section => (
+          <View key={section.collection} style={[a.w_full, {gap: 6}]}>
+            {section.collection !== 'system' && (
+              <Text
+                style={[
+                  a.text_xs,
+                  a.font_semi_bold,
+                  t.atoms.text_contrast_medium,
+                ]}>
+                {sectionTitles[section.collection]}
+              </Text>
+            )}
+            <View style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP}]}>
+              {section.defs.map(def => (
+                <Swatch
+                  key={def.id}
+                  def={
+                    def.id === BACKDROP_SKIES_AUTO
+                      ? (resolveBackdrop({...shown, backdrop: def.id}) ?? def)
+                      : def
+                  }
+                  name={i18n._(def.name)}
+                  selected={def.id === selectedId}
+                  onSelect={() => selectBackdrop(did, def.id)}
+                  onShowName={setHoverName}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+        <View style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP}]}>
+          <CustomChip
+            def={customDef(shown.custom)}
+            selected={isCustom}
+            onSelect={() => selectBackdrop(did, BACKDROP_CUSTOM)}
             onShowName={setHoverName}
           />
-        ))}
-        <CustomChip
-          def={customDef(shown.custom)}
-          selected={isCustom}
-          onSelect={() => selectBackdrop(did, BACKDROP_CUSTOM)}
-          onShowName={setHoverName}
-        />
+        </View>
       </View>
       {isCustom && (
         <CustomEditor
-          key={`${committed.custom.mode}${committed.custom.a}${committed.custom.b}`}
+          key={`${committed.custom.mode}${committed.custom.a}${committed.custom.b}${committed.custom.pattern ?? ''}`}
           did={did}
           committed={committed.custom}
           presets={committed.presets}
@@ -289,7 +329,7 @@ function DeviceOptOutGroup() {
   const t = useTheme()
   const {t: l} = useLingui()
   const {device} = useAppearanceState()
-  const label = l`Keep this device’s own backdrop`
+  const label = l`Keep this device’s own appearance`
   return (
     <SettingsList.Item style={[a.flex_col, a.align_start, a.gap_xs]}>
       <Toggle.Item
@@ -302,7 +342,35 @@ function DeviceOptOutGroup() {
         <Toggle.Platform />
       </Toggle.Item>
       <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
-        {l`Changes made here stay on this device and are not saved to your account.`}
+        {l`The backdrop, color mode, dark theme, font and font size set here stay on this device and are not saved to your account.`}
+      </Text>
+    </SettingsList.Item>
+  )
+}
+
+/*
+ * Film grain (change list 2, item 6): a static noise tile over the
+ * backdrop, this device only, off by default. Web only: native draws no
+ * grain.
+ */
+function GrainGroup() {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const {device} = useAppearanceState()
+  const label = l`Film grain`
+  return (
+    <SettingsList.Item style={[a.flex_col, a.align_start, a.gap_xs]}>
+      <Toggle.Item
+        name="horizon_backdrop_grain"
+        label={label}
+        value={device.grain}
+        onChange={setGrain}
+        style={[a.w_full]}>
+        <Toggle.LabelText style={[a.flex_1]}>{label}</Toggle.LabelText>
+        <Toggle.Platform />
+      </Toggle.Item>
+      <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
+        {l`A fine grain over the backdrop that softens its gradients.`}
       </Text>
     </SettingsList.Item>
   )
@@ -398,6 +466,7 @@ export function HorizonAppearanceSections() {
       <BackdropGroup />
       {hasSession && <DeviceOptOutGroup />}
       <SoftnessGroup />
+      {IS_WEB && <GrainGroup />}
       {SHOW_FRAME_STYLE_PICKER && COMPACT_FRAME_WINDOWS && <FrameStyleGroup />}
     </Animated.View>
   )

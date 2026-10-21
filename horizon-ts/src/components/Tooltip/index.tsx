@@ -106,6 +106,8 @@ export function Outer({
   color?: TooltipColor
   visible: boolean
   onVisibleChange: (visible: boolean) => void
+  /** HORIZON: web only (a hover hint leaves focus alone); unused here. */
+  takesFocus?: boolean
 }) {
   /**
    * Lagging state to track the externally-controlled visibility of the

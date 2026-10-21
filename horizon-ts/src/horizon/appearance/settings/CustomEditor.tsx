@@ -1,7 +1,7 @@
 /*
  * The Custom Backdrop Color card (Phase 3 design, 10.4): Solid or Two-tone,
- * each colour with a hex field, a swatch and R, G and B sliders, Apply, and
- * the presets. The editor is keyed by its parent on the committed colours,
+ * each colour with a hex field, a swatch and R, G and B sliders, a quiet
+ * pattern for Solid (change list 2), Apply, and the presets. The editor is keyed by its parent on the committed colours,
  * so a preset load or a fresh record resets it. The backdrop follows the
  * editor through the store's preview, 150 ms after the last change; the
  * preview is cleared on Apply and when the editor unmounts.
@@ -17,7 +17,11 @@ import {Button, ButtonText} from '#/components/Button'
 import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import * as TextField from '#/components/forms/TextField'
 import {Text} from '#/components/Typography'
-import {type CustomConfig, type PresetSlots} from '#/horizon/appearance/model'
+import {
+  type CustomConfig,
+  PATTERN_NAMES,
+  type PresetSlots,
+} from '#/horizon/appearance/model'
 import {
   type Channel,
   type ColorDraft,
@@ -35,6 +39,7 @@ import {Presets} from '#/horizon/appearance/settings/Presets'
 import {RgbSlider} from '#/horizon/appearance/settings/RgbSlider'
 import {applyCustom, setAppearancePreview} from '#/horizon/appearance/store'
 import {rgbToHex} from '#/horizon/backdrops/compile'
+import {type PatternName} from '#/horizon/backdrops/types'
 
 /** The preview's debounce after the last change. */
 export const PREVIEW_DELAY_MS = 150
@@ -108,6 +113,52 @@ function ColorColumn({
   )
 }
 
+/*
+ * The one-tone's quiet pattern (change list 2, item 7): none, dots, a grid
+ * or diagonal lines, drawn faintly over the colour. Previewed and applied
+ * with the colour.
+ */
+function PatternPicker({
+  value,
+  onChange,
+}: {
+  value: PatternName | undefined
+  onChange: (next: PatternName | undefined) => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const labels: Record<PatternName | 'none', string> = {
+    none: l({message: 'None', context: 'backdrop pattern'}),
+    dots: l({message: 'Dots', context: 'backdrop pattern'}),
+    grid: l({message: 'Grid', context: 'backdrop pattern'}),
+    lines: l({message: 'Lines', context: 'backdrop pattern'}),
+  }
+  const options: (PatternName | 'none')[] = ['none', ...PATTERN_NAMES]
+  return (
+    <View style={[a.gap_xs]}>
+      <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+        {l({message: 'Pattern', context: 'custom backdrop pattern'})}
+      </Text>
+      <SegmentedControl.Root
+        type="radio"
+        label={l`Custom backdrop pattern`}
+        value={value ?? 'none'}
+        onChange={next => onChange(next === 'none' ? undefined : next)}>
+        {options.map(option => (
+          <SegmentedControl.Item
+            key={option}
+            value={option}
+            label={labels[option]}>
+            <SegmentedControl.ItemText>
+              {labels[option]}
+            </SegmentedControl.ItemText>
+          </SegmentedControl.Item>
+        ))}
+      </SegmentedControl.Root>
+    </View>
+  )
+}
+
 /** The card. Mount it keyed on the committed colours. */
 export function CustomEditor({
   did,
@@ -125,14 +176,20 @@ export function CustomEditor({
   const config = editorConfig(state)
   const valid = isEditorValid(state)
 
-  const {mode, a: colorA, b: colorB} = config
+  const {mode, a: colorA, b: colorB, pattern} = config
   const unchanged = sameConfig(config, committed)
   useEffect(() => {
     const timer = setTimeout(() => {
-      setAppearancePreview(unchanged ? null : {mode, a: colorA, b: colorB})
+      setAppearancePreview(
+        unchanged
+          ? null
+          : pattern
+            ? {mode, a: colorA, b: colorB, pattern}
+            : {mode, a: colorA, b: colorB},
+      )
     }, PREVIEW_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [mode, colorA, colorB, unchanged])
+  }, [mode, colorA, colorB, pattern, unchanged])
 
   useEffect(() => () => setAppearancePreview(null), [])
 
@@ -188,6 +245,12 @@ export function CustomEditor({
           />
         ))}
       </View>
+      {state.mode === 'solid' && (
+        <PatternPicker
+          value={state.pattern}
+          onChange={next => setState(s => ({...s, pattern: next}))}
+        />
+      )}
       <View style={[a.flex_row]}>
         <Button
           label={l`Apply`}

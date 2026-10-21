@@ -23,6 +23,7 @@ describe('the device value (T10)', () => {
       accounts: {},
       frameStyle: 'bars',
       softness: {dim: 40, dark: 50},
+      grain: false,
     })
   })
 
@@ -126,6 +127,7 @@ describe('the device value (T10)', () => {
       optOut: true,
       frameStyle: 'headerBand',
       softness: {dim: 0, dark: 73},
+      grain: true,
       accounts: {
         'did:plc:a': {
           record: DEFAULT_APPEARANCE,

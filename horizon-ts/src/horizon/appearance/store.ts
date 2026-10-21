@@ -25,11 +25,15 @@ import {
   type AppearanceField,
   type CustomConfig,
   presetField,
+  THEME_PREF_FIELDS,
+  type ThemePrefField,
+  type ThemePrefs,
+  withoutThemePrefs,
 } from '#/horizon/appearance/model'
 import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {BACKDROP_CUSTOM} from '#/horizon/backdrops/registry'
 import {type SoftTheme} from '#/horizon/backdrops/softness'
-import {APPEARANCE_SYNC} from '#/horizon/switches'
+import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
 
 export type AppearanceState = {
   device: DeviceAppearanceV1
@@ -212,13 +216,55 @@ export function editAppearance(
     }
     setDeviceValue({
       ...device,
-      device: next,
+      device: withoutThemePrefs(next),
       accounts: {...device.accounts, [did]: {...copy, pending}},
     })
     syncHooks?.scheduleFlush(did)
   } else {
-    setDeviceValue({...device, device: next})
+    setDeviceValue({...device, device: withoutThemePrefs(next)})
   }
+}
+
+/*
+ * The theme settings per account (change list 2, item 11). The stock
+ * settings stay where they always were (colour mode and dark theme in the
+ * persisted store, font and size in device storage): they are the
+ * device's values, used signed out and with the opt-out on. An account's
+ * saved values are applied over them on account switch (`AppearanceSync`)
+ * and are never copied into this device's own appearance, so an account
+ * with none saved leaves the device's settings as they are.
+ */
+
+/** The theme settings `did` has saved, as this device last read or edited them. */
+export function accountThemePrefs(
+  current: AppearanceState,
+  did: string | undefined,
+): ThemePrefs {
+  const {device} = current
+  if (!did || device.optOut || !APPEARANCE_SYNC || !BACKDROPS) return {}
+  const copy = device.accounts[did]
+  const source = copy?.pending?.appearance ?? copy?.record
+  if (!source) return {}
+  const out: ThemePrefs = {}
+  for (const field of THEME_PREF_FIELDS) {
+    if (source[field] !== undefined)
+      Object.assign(out, {[field]: source[field]})
+  }
+  return out
+}
+
+/**
+ * Save one theme setting to `did`'s record, when signed in and not opted
+ * out; nothing otherwise (the stock setter has already set the device).
+ */
+export function saveThemePref<K extends ThemePrefField>(
+  did: string | undefined,
+  field: K,
+  value: ThemePrefs[K],
+) {
+  const device = load().device
+  if (!did || device.optOut || !APPEARANCE_SYNC || !BACKDROPS) return
+  editAppearance(did, [field], base => ({...base, [field]: value}))
 }
 
 /** Select a registry backdrop, `none` or `custom`. */
@@ -299,6 +345,24 @@ export function setBackdropSoftness(theme: SoftTheme, value: number) {
   const next = Math.max(0, Math.min(100, Math.round(value)))
   if (device.softness[theme] === next) return
   setDeviceValue({...device, softness: {...device.softness, [theme]: next}})
+}
+
+/**
+ * For the stock Appearance screen: saves a theme setting the user just
+ * picked to the current account (`saveThemePref`).
+ */
+export function useSaveThemePref() {
+  const {currentAccount} = useSession()
+  const did = currentAccount?.did
+  return <K extends ThemePrefField>(field: K, value: ThemePrefs[K]) =>
+    saveThemePref(did, field, value)
+}
+
+/** Film grain over the backdrop (change list 2, item 6). Device only. */
+export function setGrain(on: boolean) {
+  const device = load().device
+  if (device.grain === on) return
+  setDeviceValue({...device, grain: on})
 }
 
 /** Tests only: forget the loaded state so the next read reloads it. */

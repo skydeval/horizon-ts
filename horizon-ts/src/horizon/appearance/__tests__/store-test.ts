@@ -64,14 +64,14 @@ describe('effectiveAppearance (T11)', () => {
   it('signed out, opted out and with sync off: the device appearance', () => {
     const record = {...DEFAULT_APPEARANCE, backdrop: 'pride.bi'}
     seed({
-      device: {...DEFAULT_APPEARANCE, backdrop: 'solids.red'},
+      device: {...DEFAULT_APPEARANCE, backdrop: 'materials.paper'},
       accounts: {
         [DID]: {...store.emptyCopy(), record, raw: {}, cid: 'c', syncedAt: 1},
       },
     })
     const state = store.getAppearanceState()
     expect(store.effectiveAppearance(state, undefined).backdrop).toBe(
-      'solids.red',
+      'materials.paper',
     )
     expect(store.effectiveAppearance(state, DID).backdrop).toBe('pride.bi')
     expect(
@@ -79,9 +79,11 @@ describe('effectiveAppearance (T11)', () => {
         {...state, device: {...state.device, optOut: true}},
         DID,
       ).backdrop,
-    ).toBe('solids.red')
+    ).toBe('materials.paper')
     mockSync = false
-    expect(store.effectiveAppearance(state, DID).backdrop).toBe('solids.red')
+    expect(store.effectiveAppearance(state, DID).backdrop).toBe(
+      'materials.paper',
+    )
     // With sync off an edit still shows.
     store.selectBackdrop(DID, 'pride.gay')
     expect(
@@ -188,7 +190,7 @@ describe('edits (T11)', () => {
     ).toBe('pride.gay')
 
     scheduled.length = 0
-    store.selectBackdrop(DID, 'solids.red')
+    store.selectBackdrop(DID, 'materials.paper')
     expect(device().accounts[DID].pending).toBeNull()
     expect(scheduled).toEqual([])
 
@@ -208,11 +210,11 @@ describe('edits (T11)', () => {
     store.subscribeAppearance(listener)
     mockJson = serializeDeviceValue({
       ...defaultDeviceValue(),
-      device: {...DEFAULT_APPEARANCE, backdrop: 'solids.blue'},
+      device: {...DEFAULT_APPEARANCE, backdrop: 'materials.fog'},
     })
     mockListeners.forEach(l => l())
     expect(listener).toHaveBeenCalled()
-    expect(device().device.backdrop).toBe('solids.blue')
+    expect(device().device.backdrop).toBe('materials.fog')
   })
 
   it('device-only settings', () => {

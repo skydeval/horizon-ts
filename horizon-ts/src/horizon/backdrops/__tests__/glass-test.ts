@@ -16,6 +16,7 @@ import {
   BACKDROP_DEFS,
   customDef,
   registryDef,
+  REMOVED_SOLIDS,
 } from '#/horizon/backdrops/registry'
 import {DEFAULT_SOFTNESS} from '#/horizon/backdrops/softness'
 
@@ -64,9 +65,16 @@ describe('glass (T7)', () => {
   })
 
   it('reproduces the 7.3 alpha table', () => {
-    for (const def of BACKDROP_DEFS) {
-      if (def.id === 'none') continue
-      const row = TABLE[def.id]
+    /*
+     * Change list 2: the removed solids' rows now hold for the custom
+     * one-tone each is read as, so their glass is unchanged; the defs
+     * added since have no rows here (their 4.5:1 is checked below).
+     */
+    for (const [id, row] of Object.entries(TABLE)) {
+      const solid = REMOVED_SOLIDS[id]
+      const def =
+        registryDef(id) ?? customDef({mode: 'solid', a: solid, b: solid})
+      expect(def).toBeTruthy()
       expect([
         glassAlpha(def, 'light'),
         glassAlpha(def, 'dim'),

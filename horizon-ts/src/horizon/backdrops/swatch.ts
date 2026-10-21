@@ -19,6 +19,8 @@ export const SWATCH_SIZE = 36
 export function isPaleSwatch(def: BackdropDef, theme: ThemeName): boolean {
   if (theme === 'light') return false
   if (def.collection === 'pride' || def.stripes.length === 0) return false
+  // A def with its own layers (skies, blobs) is drawn as it is.
+  if (def.layers) return false
   return def.stripes.every(
     color => luminance(hexToRgb(color)) >= PALE_LUMINANCE,
   )

@@ -46,7 +46,8 @@ describe('compileBackdrop (T4)', () => {
   })
 
   it('angle endpoints', () => {
-    const layer = linearOf('solids.red', 1440, 900, 'spec')
+    // A sky's own top-to-bottom layer (the solids, used here before, are gone).
+    const layer = linearOf('skies.dusk', 1440, 900, 'spec')
     expect(layer.cssDeg).toBe(180)
     expect(layer.x1).toBeCloseTo(720, 6)
     expect(layer.y1).toBeCloseTo(0, 6)

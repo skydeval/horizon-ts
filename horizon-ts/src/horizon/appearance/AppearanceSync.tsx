@@ -3,8 +3,9 @@
  * registers the signed-in account's PDS client with `sync.ts`, reads the
  * record at mount and on every account change, and again when the page or
  * app comes back after five minutes; deletes the copy of an account that has
- * left the session's list. Rendered by `HorizonHost` on web and by `App.tsx`
- * on native.
+ * left the session's list; and applies the account's saved theme settings
+ * (`ThemePrefsSync`, change list 2). Rendered by `HorizonHost` on web and
+ * by `App.tsx` on native.
  */
 
 import {useEffect} from 'react'
@@ -19,9 +20,10 @@ import {
   registerAppearanceClient,
   unregisterAppearanceClient,
 } from '#/horizon/appearance/sync'
+import {ThemePrefsSync} from '#/horizon/appearance/ThemePrefsSync'
 import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
 
-/** The sync host. Renders nothing. */
+/** The sync host. Renders only the theme settings' host. */
 export function AppearanceSync() {
   const {currentAccount, accounts} = useSession()
   const client = useMaybePdsClient()
@@ -61,5 +63,6 @@ export function AppearanceSync() {
     }
   }, [accounts])
 
-  return null
+  // The account's theme settings (change list 2, item 11).
+  return <ThemePrefsSync />
 }

@@ -462,6 +462,31 @@ released version yet; everything so far is under `[Unreleased]`.
   prism serves `private.mediaFilters` (its author feed's
   `posts_with_media` and `posts_with_video` filters, reposts left out);
   without it, and for non-members, the tabs are public-only.
+- **Hover hints on the composer toolbar** (change list 2, item 1, web): the
+  media, GIF, spoiler, content warning and emoji buttons say what they do
+  when the mouse rests on them. The hint never takes focus from the editor.
+- **More pride flags** (change list 2, item 2): Philly, Demisexual,
+  Demiromantic, Aroace, Genderqueer, Genderfluid and Agender. The demi
+  flags' chevron is a first stripe, as the intersex ring is.
+- **New backdrops** (change list 2, items 3 to 5): Nature (Ocean, Forest,
+  Desert, Sakura, Autumn, Moss), Skies (Dawn, Daylight, Golden Hour, Dusk,
+  Twilight, Night, Aurora, and Time of Day, which shows the sky of the local
+  hour and switches once when the hour changes, without a transition) and
+  Color blobs (Peach, Lagoon, Berry, Citrus, Midnight). The Backdrops
+  picker groups its swatches under Flags, Materials, Nature, Skies and
+  Color blobs.
+- **Film grain** (change list 2, item 6, web): an optional fine grain over
+  the backdrop, off by default, per device. It is a small static image
+  drawn once; nothing is filtered or redrawn as the page moves.
+- **Quiet patterns** (change list 2, item 7): a custom one-tone backdrop
+  can carry faint dots, a grid or diagonal lines, saved with the colour (and
+  in presets) in the appearance record.
+- **The theme follows the account** (change list 2, item 11): colour mode,
+  dark theme, font and font size are saved to the account's
+  `app.nearhorizon.actor.appearance` record when changed signed in, and
+  applied on account switch like the backdrop. An account that never set
+  them leaves the device's settings as they are; signed out, the device's
+  own settings apply.
 
 ### Fixed
 
@@ -488,6 +513,11 @@ released version yet; everything so far is under `[Unreleased]`.
 - **With a backdrop, Notifications has no opaque band across the top of the
   window.** Its header's background and fade cover only the centre column
   (or the Gutter card on phones), so the backdrop shows beside it.
+- **Turning a backdrop on or off no longer moves the desktop rails**
+  (change list 2, item 10). The rail and nav cards grow outward around
+  their content instead of padding it inward, so the avatar, the nav
+  items, the search box, the feeds and the trending list stay where they
+  are with or without a backdrop.
 
 ### Changed
 
@@ -516,9 +546,16 @@ released version yet; everything so far is under `[Unreleased]`.
 - **"Phone frame" in Appearance shows only where it applies** (change list
   item 3): below 800px or on a touch-first device, following window resizes
   live. A desktop window hides it; the saved choice is kept either way.
+- **"Keep this device's own backdrop" is now "Keep this device's own
+  appearance"** (change list 2, item 11): it keeps the theme settings on
+  this device too.
 
 ### Removed
 
+- **The nine solid backdrops** (Slate, Mist, Red, Orange, Yellow, Green,
+  Blue, Indigo, Violet; change list 2, item 9). Custom one-tone covers any
+  colour. A saved solid, in the account's record or on the device, reads as
+  a custom one-tone of the same colour, so nobody's backdrop changes.
 - **Usage metrics and error reporting to Bluesky.** No events are queued or
   sent, and Sentry stays off even if a DSN is set.
 - **Age assurance**, for every session, signed in or out.

@@ -12,7 +12,7 @@ import {t} from '@lingui/core/macro'
 
 import {logger} from '#/logger'
 import * as Toast from '#/components/Toast'
-import {type Appearance} from '#/horizon/appearance/model'
+import {type Appearance, isThemePrefField} from '#/horizon/appearance/model'
 import {
   buildAppearanceRecord,
   parseAppearanceRecord,
@@ -103,7 +103,10 @@ export function rebase(
   for (const field of fields) {
     if (field === 'backdrop') out = {...out, backdrop: pending.backdrop}
     else if (field === 'custom') out = {...out, custom: pending.custom}
-    else if (field.startsWith('preset:')) {
+    else if (isThemePrefField(field)) {
+      out = {...out, [field]: pending[field]}
+      if (pending[field] === undefined) delete out[field]
+    } else if (field.startsWith('preset:')) {
       const i = Number(field.slice('preset:'.length)) - 1
       if (i >= 0 && i < out.presets.length) out.presets[i] = pending.presets[i]
     }
@@ -195,7 +198,7 @@ function showBlockedToast() {
   if (toastShown) return
   toastShown = true
   Toast.show(
-    t`Your backdrop could not be saved to your account. It is saved on this device.`,
+    t`Your appearance could not be saved to your account. It is saved on this device.`,
     {type: 'warning'},
   )
 }

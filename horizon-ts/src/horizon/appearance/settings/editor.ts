@@ -6,6 +6,7 @@
 
 import {type CustomConfig, isHex} from '#/horizon/appearance/model'
 import {hexToRgb, type RGB, rgbToHex} from '#/horizon/backdrops/compile'
+import {type PatternName} from '#/horizon/backdrops/types'
 
 export type Channel = 'r' | 'g' | 'b'
 
@@ -15,6 +16,8 @@ export type EditorState = {
   mode: CustomConfig['mode']
   a: ColorDraft
   b: ColorDraft
+  /** The one-tone's pattern (change list 2, item 7); kept while two-tone. */
+  pattern?: PatternName
 }
 
 function draftOf(hex: string): ColorDraft {
@@ -23,7 +26,13 @@ function draftOf(hex: string): ColorDraft {
 
 /** The editor for a committed configuration. */
 export function initEditor(config: CustomConfig): EditorState {
-  return {mode: config.mode, a: draftOf(config.a), b: draftOf(config.b)}
+  const state: EditorState = {
+    mode: config.mode,
+    a: draftOf(config.a),
+    b: draftOf(config.b),
+  }
+  if (config.pattern) state.pattern = config.pattern
+  return state
 }
 
 function withHash(text: string) {
@@ -69,14 +78,21 @@ export function isEditorValid(state: EditorState): boolean {
 
 /** The configuration the editor shows. `b` is kept while solid. */
 export function editorConfig(state: EditorState): CustomConfig {
-  return {
+  const config: CustomConfig = {
     mode: state.mode,
     a: rgbToHex(state.a.rgb),
     b: rgbToHex(state.b.rgb),
   }
+  if (state.pattern) config.pattern = state.pattern
+  return config
 }
 
-/** Whether two configurations draw the same. */
+/** Whether two configurations are the same, pattern included. */
 export function sameConfig(x: CustomConfig, y: CustomConfig): boolean {
-  return x.mode === y.mode && x.a === y.a && x.b === y.b
+  return (
+    x.mode === y.mode &&
+    x.a === y.a &&
+    x.b === y.b &&
+    (x.pattern ?? null) === (y.pattern ?? null)
+  )
 }

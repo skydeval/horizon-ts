@@ -27,7 +27,11 @@ import {SidebarLiveEventFeedsBanner} from '#/features/liveEvents/components/Side
 // HORIZON: the rail scrolls as a whole under cards (Phase 3, rail fix)
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
 // HORIZON: frosted rail cards over the backdrop (Phase 3)
-import {RAIL_SCROLL_STYLE, RailCard} from '#/horizon/backdrops/RailCard'
+import {
+  RAIL_CARD_ROOM,
+  RAIL_SCROLL_STYLE,
+  RailCard,
+} from '#/horizon/backdrops/RailCard'
 
 function useWebQueryParams() {
   const navigation = useNavigation()
@@ -92,6 +96,12 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
         }),
         // HORIZON: the rail's own scroll under cards (Phase 3, rail fix)
         hasCards && web(RAIL_SCROLL_STYLE),
+        // HORIZON: room on the right for the cards' outset edges, content unmoved (change list 2)
+        hasCards &&
+          web({
+            paddingRight: 2 + RAIL_CARD_ROOM,
+            width: width + gutters.paddingLeft + 2 + RAIL_CARD_ROOM,
+          }),
       ]}>
       {/* HORIZON: the search card (Phase 3, BD-7) */}
       {!isSearchScreen && (

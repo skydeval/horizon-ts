@@ -2,8 +2,10 @@
  * Whether a backdrop is active (Phase 3 design, 3.5): the shown appearance
  * resolves to a def and the `BACKDROPS` switch is on. Everything Phase 3
  * draws is gated on this. The def carries the device's softness for the
- * current theme (live fix batch 1), so every painter and the glass rule
- * see the same treated colours.
+ * current theme (live fix batch 1) and its grain setting (change list 2,
+ * item 6), so every painter and the glass rule see the same treated
+ * colours. "Time of day" resolves to the sky of the local hour, followed
+ * only while it is selected (`hour.ts`).
  */
 
 import {useTheme} from '#/alf'
@@ -12,7 +14,11 @@ import {
   useEffectiveAppearance,
 } from '#/horizon/appearance/store'
 import {compileKey} from '#/horizon/backdrops/compile'
-import {resolveBackdrop} from '#/horizon/backdrops/registry'
+import {useHour} from '#/horizon/backdrops/hour'
+import {
+  BACKDROP_SKIES_AUTO,
+  resolveBackdrop,
+} from '#/horizon/backdrops/registry'
 import {softnessAmount} from '#/horizon/backdrops/softness'
 import {type BackdropDef} from '#/horizon/backdrops/types'
 import {BACKDROPS} from '#/horizon/switches'
@@ -41,9 +47,13 @@ export function useActiveBackdrop(): BackdropDef | null {
   const t = useTheme()
   const appearance = useEffectiveAppearance()
   const {device} = useAppearanceState()
+  const hour = useHour(BACKDROPS && appearance.backdrop === BACKDROP_SKIES_AUTO)
   if (!BACKDROPS) return null
-  const def = resolveBackdrop(appearance)
+  const def = resolveBackdrop(appearance, hour)
   if (!def) return null
   const soften = softnessAmount(device.softness, t.name)
-  return stableDef(soften > 0 ? {...def, soften} : def)
+  const treated: BackdropDef = {...def}
+  if (soften > 0) treated.soften = soften
+  if (device.grain) treated.grain = true
+  return stableDef(soften > 0 || device.grain ? treated : def)
 }

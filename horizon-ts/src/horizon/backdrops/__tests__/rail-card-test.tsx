@@ -81,12 +81,17 @@ describe('RailCard (T17)', () => {
   it('active: the rail card over a stock style, never blurred (7a)', () => {
     store.selectBackdrop(undefined, 'pride.trans')
     const style = rendered('rail', {paddingTop: 2, gap: 2})
+    // Outset around the stock box (change list 2, item 10).
     expect(style).toEqual({
       gap: 2,
-      paddingTop: 16,
-      paddingRight: 16,
-      paddingBottom: 16,
-      paddingLeft: 16,
+      marginTop: -5,
+      marginRight: -10,
+      marginBottom: -5,
+      marginLeft: -10,
+      paddingTop: 6,
+      paddingRight: 9,
+      paddingBottom: 4,
+      paddingLeft: 9,
       borderRadius: 16,
       borderWidth: 1,
       borderColor: BORDER,
@@ -133,6 +138,8 @@ describe('RailCard (T17)', () => {
     const ace = registryDef('pride.ace')!
     const opts = {borderColor: BORDER, reduced: false}
     expect(railCardStyle('nav', ace, 'light', opts).style).toEqual({
+      marginTop: -13,
+      marginBottom: -13,
       marginLeft: -9,
       marginRight: -9,
       paddingLeft: 8,
@@ -167,7 +174,7 @@ describe('RailCard (T17)', () => {
 describe('shell and navigation hooks, active', () => {
   it('the shell draws only for a live account with a backdrop', () => {
     expect(render(<ShellProbe />).getByText('false')).toBeTruthy()
-    act(() => store.selectBackdrop(undefined, 'solids.blue'))
+    act(() => store.selectBackdrop(undefined, 'materials.fog'))
     expect(render(<ShellProbe />).getByText('true')).toBeTruthy()
     expect(
       render(<ShellProbe status="takendown" />).getByText('false'),

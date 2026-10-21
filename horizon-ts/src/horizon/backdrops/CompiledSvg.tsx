@@ -1,13 +1,16 @@
 /*
  * The native painter (Phase 3 design, 4.6): a compiled backdrop as
- * `react-native-svg` rects, one per layer, with user-space gradients, then
- * one rect per uniform overlay. Imported only by native components.
+ * `react-native-svg` rects, one per layer, with user-space gradients or
+ * pattern tiles, then one rect per uniform overlay. The grain is web only
+ * and draws nothing here. Imported only by native components.
  */
 
 import {useId} from 'react'
 import Svg, {
+  Circle,
   Defs,
   LinearGradient,
+  Pattern,
   RadialGradient,
   Rect,
   Stop,
@@ -16,6 +19,9 @@ import Svg, {
 import {
   type Compiled,
   type Frame,
+  paintedLayers,
+  type ResolvedLayer,
+  type ResolvedPattern,
   type ResolvedStop,
   rgbToHex,
 } from '#/horizon/backdrops/compile'
@@ -29,6 +35,66 @@ function stops(list: ResolvedStop[]) {
       stopOpacity={stop.a}
     />
   ))
+}
+
+/** A pattern tile in user space, anchored at the frame's origin. */
+function PatternTile({id, layer}: {id: string; layer: ResolvedPattern}) {
+  const fill = rgbToHex(layer)
+  const s = layer.size
+  return (
+    <Pattern
+      id={id}
+      patternUnits="userSpaceOnUse"
+      width={s}
+      height={s}
+      patternTransform={layer.shape === 'diagonal' ? 'rotate(45)' : undefined}>
+      {layer.shape === 'dots' ? (
+        <Circle
+          cx={s / 2}
+          cy={s / 2}
+          r={1.5}
+          fill={fill}
+          fillOpacity={layer.a}
+        />
+      ) : layer.shape === 'vlines' ? (
+        <Rect width={1} height={s} fill={fill} fillOpacity={layer.a} />
+      ) : (
+        <Rect width={s} height={1} fill={fill} fillOpacity={layer.a} />
+      )}
+    </Pattern>
+  )
+}
+
+function LayerDef({id, layer}: {id: string; layer: ResolvedLayer}) {
+  switch (layer.kind) {
+    case 'linear':
+      return (
+        <LinearGradient
+          id={id}
+          gradientUnits="userSpaceOnUse"
+          x1={layer.x1}
+          y1={layer.y1}
+          x2={layer.x2}
+          y2={layer.y2}>
+          {stops(layer.stops)}
+        </LinearGradient>
+      )
+    case 'radial':
+      return (
+        <RadialGradient
+          id={id}
+          gradientUnits="userSpaceOnUse"
+          cx={layer.cx}
+          cy={layer.cy}
+          r={layer.r}>
+          {stops(layer.stops)}
+        </RadialGradient>
+      )
+    case 'pattern':
+      return <PatternTile id={id} layer={layer} />
+    case 'grain':
+      return null
+  }
 }
 
 /**
@@ -47,6 +113,7 @@ export function CompiledSvg({
   offset?: {x: number; y: number}
 }) {
   const base = useId().replace(/:/g, '')
+  const painted = paintedLayers(compiled)
   const W = frame.width
   const H = frame.height
   return (
@@ -56,34 +123,15 @@ export function CompiledSvg({
       style={{position: 'absolute', left: offset.x, top: offset.y}}
       pointerEvents="none">
       <Defs>
-        {compiled.layers.map((layer, i) =>
-          layer.kind === 'linear' ? (
-            <LinearGradient
-              key={i}
-              id={`${base}-${i}`}
-              gradientUnits="userSpaceOnUse"
-              x1={layer.x1}
-              y1={layer.y1}
-              x2={layer.x2}
-              y2={layer.y2}>
-              {stops(layer.stops)}
-            </LinearGradient>
-          ) : (
-            <RadialGradient
-              key={i}
-              id={`${base}-${i}`}
-              gradientUnits="userSpaceOnUse"
-              cx={layer.cx}
-              cy={layer.cy}
-              r={layer.r}>
-              {stops(layer.stops)}
-            </RadialGradient>
-          ),
-        )}
+        {painted.map((layer, i) => (
+          <LayerDef key={i} id={`${base}-${i}`} layer={layer} />
+        ))}
       </Defs>
-      {compiled.layers.map((_layer, i) => (
-        <Rect key={i} width={W} height={H} fill={`url(#${base}-${i})`} />
-      ))}
+      {painted.map((layer, i) =>
+        layer.kind === 'grain' ? null : (
+          <Rect key={i} width={W} height={H} fill={`url(#${base}-${i})`} />
+        ),
+      )}
       {[...overlays].reverse().map((color, i) => (
         <Rect key={`o${i}`} width={W} height={H} fill={color} />
       ))}

@@ -6,7 +6,12 @@
 
 import {themes} from '#/alf/themes'
 import {IS_WEB} from '#/env'
-import {compileBackdrop, hexToRgb, type RGB} from '#/horizon/backdrops/compile'
+import {
+  compileBackdrop,
+  hexToRgb,
+  layersKey,
+  type RGB,
+} from '#/horizon/backdrops/compile'
 import {BACKDROP_LOOK, type BackdropLook} from '#/horizon/backdrops/look'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 
@@ -165,6 +170,22 @@ export function sampledColors(
       out.push(lerp(a, b, f))
     }
   }
+  /*
+   * A def with its own layers (skies, colour blobs, change list 2) has
+   * radial pools over the linear base: each pool's colours, at their
+   * alpha, over every base sample, so the glass sees the pools too. The
+   * whole frame's pools count for any range: a pool is not on the line.
+   */
+  if (def.layers) {
+    const base = [...out]
+    for (const radial of compiled.layers) {
+      if (radial.kind !== 'radial') continue
+      for (const stop of radial.stops) {
+        if (stop.a < 0.02) continue
+        for (const under of base) out.push(composite(stop, under, stop.a))
+      }
+    }
+  }
   return out
 }
 
@@ -212,9 +233,9 @@ export function colorsUnderGlass(
   return sampledColors(def, theme, look)
 }
 
-/** What a def's glass depends on: its id, colours and softness. */
+/** What a def's glass depends on: its id, colours, layers and softness. */
 export function backdropKey(def: BackdropDef) {
-  return `${def.id}|${def.stripes.join(',')}|${def.soften ?? 0}`
+  return `${def.id}|${def.stripes.join(',')}|${layersKey(def.layers)}|${def.soften ?? 0}`
 }
 
 const alphaCache = new Map<string, number>()

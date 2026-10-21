@@ -5,12 +5,14 @@
  * (`CompiledSvg.tsx`) draw its output.
  */
 
-import {seenLayers, specLayers} from '#/horizon/backdrops/layers'
+import {seenLayers, specLayers, textureLayers} from '#/horizon/backdrops/layers'
 import {BACKDROP_LOOK, type BackdropLook} from '#/horizon/backdrops/look'
 import {softenRgb} from '#/horizon/backdrops/softness'
 import {
   type BackdropDef,
   type Hex,
+  type Layer,
+  type PatternLayer,
   type Stop,
   type ThemeName,
   type Tuning,
@@ -43,11 +45,41 @@ export type ResolvedRadial = {
   stops: ResolvedStop[]
 }
 
+/** A pattern tile (change list 2, item 7), its colour chosen for the base. */
+export type ResolvedPattern = RGB & {
+  kind: 'pattern'
+  shape: PatternLayer['shape']
+  /** The tile's side, pixels. */
+  size: number
+  a: number
+}
+
+/** The grain tile (change list 2, item 6). */
+export type ResolvedGrain = {kind: 'grain'}
+
+/** A texture layer, drawn over the gradients. */
+export type ResolvedTexture = ResolvedPattern | ResolvedGrain
+
+/** Any layer a painter draws. */
+export type ResolvedLayer = ResolvedLinear | ResolvedRadial | ResolvedTexture
+
 export type Compiled = {
-  /** Bottom first, as drawn. */
+  /** The gradients, bottom first, as drawn. */
   layers: (ResolvedLinear | ResolvedRadial)[]
+  /**
+   * The texture over them (a pattern's tiles, then the grain, change list
+   * 2), bottom first; absent when there is none.
+   */
+  texture?: ResolvedTexture[]
   /** The last stop colour of the first linear layer; painted under the image. */
   base: RGB
+}
+
+/** Every layer a painter draws, bottom first: the gradients, then the texture. */
+export function paintedLayers(compiled: Compiled): ResolvedLayer[] {
+  return compiled.texture
+    ? [...compiled.layers, ...compiled.texture]
+    : compiled.layers
 }
 
 function clamp01(value: number) {
@@ -159,6 +191,24 @@ function resolveStops(
   return resolved
 }
 
+/*
+ * A def's own layers as a string, once per layers array: the registry's
+ * arrays are shared by every copy of a def (softened, grained), so the
+ * compile key never re-serialises them on a render.
+ */
+const layerKeys = new WeakMap<Layer[], string>()
+
+/** `layers` as a key string, memoised by array. */
+export function layersKey(layers: Layer[] | undefined): string {
+  if (!layers) return ''
+  let key = layerKeys.get(layers)
+  if (key === undefined) {
+    key = JSON.stringify(layers)
+    layerKeys.set(layers, key)
+  }
+  return key
+}
+
 /**
  * Everything a def's compiled output depends on, as a string: two defs with
  * the same key compile to the same layers (custom defs are rebuilt on every
@@ -175,7 +225,31 @@ export function compileKey(def: BackdropDef): string {
     def.lockColors ? 1 : 0,
     def.tuning ? JSON.stringify(def.tuning) : '',
     def.soften ?? 0,
+    layersKey(def.layers),
+    def.pattern ?? '',
+    def.grain ? 1 : 0,
   ].join('|')
+}
+
+/*
+ * A pattern's alpha (change list 2, item 7): black over a light base, white
+ * over a dark one, faint enough that text over it reads as over the base.
+ */
+const PATTERN_ALPHA: Record<PatternLayer['shape'], number> = {
+  dots: 0.13,
+  hlines: 0.07,
+  vlines: 0.07,
+  diagonal: 0.07,
+}
+
+/** A pattern tile's colour over `base`. */
+export function patternColor(
+  shape: PatternLayer['shape'],
+  base: RGB,
+): RGB & {a: number} {
+  const light = rgbToHsl(base).l >= 0.5
+  const v = light ? 0 : 255
+  return {r: v, g: v, b: v, a: PATTERN_ALPHA[shape] * (light ? 1 : 0.8)}
 }
 
 /*
@@ -209,6 +283,50 @@ export function compileBackdrop(
   return compiled
 }
 
+function resolveGeometric(
+  layer: Layer,
+  stops: ResolvedStop[],
+  W: number,
+  H: number,
+): ResolvedLinear | ResolvedRadial {
+  if (layer.kind === 'radial') {
+    return {
+      kind: 'radial',
+      cx: layer.cx * W,
+      cy: layer.cy * H,
+      r: layer.r * Math.max(W, H),
+      stops,
+    }
+  }
+  if (layer.direction.kind === 'corner') {
+    return {
+      kind: 'linear',
+      cssDeg: 90 + (Math.atan2(H, W) * 180) / Math.PI,
+      x1: 0,
+      y1: 0,
+      x2: W,
+      y2: H,
+      stops,
+    }
+  }
+  const deg = layer.direction.deg
+  const rad = (deg * Math.PI) / 180
+  const sin = Math.sin(rad)
+  const cos = Math.cos(rad)
+  const L = Math.abs(W * sin) + Math.abs(H * cos)
+  const dx = (sin * L) / 2
+  const dy = (-cos * L) / 2
+  return {
+    kind: 'linear',
+    cssDeg: deg,
+    x1: W / 2 - dx,
+    y1: H / 2 - dy,
+    x2: W / 2 + dx,
+    y2: H / 2 + dy,
+    stops,
+  }
+}
+
 function compileUncached(
   def: BackdropDef,
   theme: ThemeName,
@@ -222,54 +340,36 @@ function compileUncached(
   const W = frame.width
   const H = frame.height
 
-  const resolved = layers.map((layer): ResolvedLinear | ResolvedRadial => {
-    const stops = resolveStops(
-      layer.stops,
-      layer.opacity,
-      tuning,
-      tuneColors,
-      theme,
-      def.soften ?? 0,
-    )
-    if (layer.kind === 'radial') {
-      return {
-        kind: 'radial',
-        cx: layer.cx * W,
-        cy: layer.cy * H,
-        r: layer.r * Math.max(W, H),
-        stops,
-      }
-    }
-    if (layer.direction.kind === 'corner') {
-      return {
-        kind: 'linear',
-        cssDeg: 90 + (Math.atan2(H, W) * 180) / Math.PI,
-        x1: 0,
-        y1: 0,
-        x2: W,
-        y2: H,
-        stops,
-      }
-    }
-    const deg = layer.direction.deg
-    const rad = (deg * Math.PI) / 180
-    const sin = Math.sin(rad)
-    const cos = Math.cos(rad)
-    const L = Math.abs(W * sin) + Math.abs(H * cos)
-    const dx = (sin * L) / 2
-    const dy = (-cos * L) / 2
-    return {
-      kind: 'linear',
-      cssDeg: deg,
-      x1: W / 2 - dx,
-      y1: H / 2 - dy,
-      x2: W / 2 + dx,
-      y2: H / 2 + dy,
-      stops,
-    }
-  })
-
+  const resolved = layers.map(layer =>
+    resolveGeometric(
+      layer,
+      resolveStops(
+        layer.stops,
+        layer.opacity,
+        tuning,
+        tuneColors,
+        theme,
+        def.soften ?? 0,
+      ),
+      W,
+      H,
+    ),
+  )
   const first = resolved.find(layer => layer.kind === 'linear') ?? resolved[0]
   const last = first.stops[first.stops.length - 1]
-  return {layers: resolved, base: {r: last.r, g: last.g, b: last.b}}
+  const base = {r: last.r, g: last.g, b: last.b}
+  const compiled: Compiled = {layers: resolved, base}
+
+  const texture = textureLayers(def).map((layer): ResolvedTexture =>
+    layer.kind === 'grain'
+      ? {kind: 'grain'}
+      : {
+          kind: 'pattern',
+          shape: layer.shape,
+          size: layer.size,
+          ...patternColor(layer.shape, base),
+        },
+  )
+  if (texture.length > 0) compiled.texture = texture
+  return compiled
 }

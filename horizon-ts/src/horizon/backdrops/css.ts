@@ -8,16 +8,21 @@
 import {
   type Compiled,
   type Frame,
+  paintedLayers,
+  type ResolvedLayer,
+  type ResolvedPattern,
   type ResolvedStop,
   rgbToHex,
 } from '#/horizon/backdrops/compile'
+import {GRAIN_TILE, grainTileUrl} from '#/horizon/backdrops/grain'
 
 /** The CSS background properties the painter sets. */
 export type WebBackgroundStyle = {
   backgroundImage: string
   backgroundSize: string
   backgroundPosition: string
-  backgroundRepeat: 'no-repeat'
+  /** `no-repeat`, or a list when a pattern or the grain tiles. */
+  backgroundRepeat: string
   backgroundColor: string
 }
 
@@ -118,25 +123,98 @@ export function cssBackground(
     images.push(overlayImage(overlay))
     sizes.push('100% 100%')
   }
+  const repeats: string[] = overlays.map(() => 'no-repeat')
   const frameSize = `${px(frame.width)} ${px(frame.height)}`
-  for (const layer of [...compiled.layers].reverse()) {
-    const stops = layer.stops.map(stopCss).join(', ')
-    images.push(
-      layer.kind === 'linear'
-        ? `linear-gradient(${formatNumber(layer.cssDeg, 2)}deg, ${stops})`
-        : `radial-gradient(circle ${px(layer.r)} at ${px(layer.cx)} ${px(layer.cy)}, ${stops})`,
-    )
-    sizes.push(frameSize)
+  const painted = paintedLayers(compiled)
+  for (const layer of [...painted].reverse()) {
+    const css = layerCss(layer, frameSize)
+    images.push(css.image)
+    sizes.push(css.size)
+    repeats.push(css.repeat)
   }
   return {
     backgroundImage: images.join(', '),
     backgroundSize: sizes.join(', '),
     backgroundPosition: cssBackgroundPosition(
       overlays.length,
-      compiled.layers.length,
+      painted.length,
       offset,
     ),
-    backgroundRepeat: 'no-repeat',
+    // One value when nothing tiles, as before patterns and grain.
+    backgroundRepeat: repeats.every(r => r === 'no-repeat')
+      ? 'no-repeat'
+      : repeats.join(', '),
     backgroundColor: rgbToHex(compiled.base),
+  }
+}
+
+function rgba(layer: ResolvedPattern, alpha: number) {
+  return `rgba(${layer.r}, ${layer.g}, ${layer.b}, ${formatNumber(alpha, 3)})`
+}
+
+/*
+ * A pattern tile as CSS (change list 2, item 7). Each tile is anchored at
+ * the frame's origin like the gradients, so a window's offset lines it up
+ * with the fixed layer. The diagonal lines are one repeating gradient over
+ * the frame; the others are a small tile repeated.
+ */
+function patternCss(
+  layer: ResolvedPattern,
+  frameSize: string,
+): {image: string; size: string; repeat: string} {
+  const on = rgba(layer, layer.a)
+  const off = rgba(layer, 0)
+  const tile = `${layer.size}px ${layer.size}px`
+  switch (layer.shape) {
+    case 'dots':
+      return {
+        image: `radial-gradient(circle at 50% 50%, ${on} 0px, ${on} 1.25px, ${off} 1.75px)`,
+        size: tile,
+        repeat: 'repeat',
+      }
+    case 'hlines':
+      return {
+        image: `linear-gradient(180deg, ${on} 0px, ${on} 1px, ${off} 1px)`,
+        size: tile,
+        repeat: 'repeat',
+      }
+    case 'vlines':
+      return {
+        image: `linear-gradient(90deg, ${on} 0px, ${on} 1px, ${off} 1px)`,
+        size: tile,
+        repeat: 'repeat',
+      }
+    case 'diagonal':
+      return {
+        image: `repeating-linear-gradient(45deg, ${on} 0px, ${on} 1px, ${off} 1px, ${off} ${layer.size}px)`,
+        size: frameSize,
+        repeat: 'no-repeat',
+      }
+  }
+}
+
+/** One compiled layer as a CSS background image, its size and repeat. */
+function layerCss(
+  layer: ResolvedLayer,
+  frameSize: string,
+): {image: string; size: string; repeat: string} {
+  if (layer.kind === 'pattern') return patternCss(layer, frameSize)
+  if (layer.kind === 'grain') {
+    const tile = grainTileUrl()
+    // `none` keeps the layer count (and so the positions) the same.
+    return {
+      image: tile ? `url("${tile}")` : 'none',
+      size: `${GRAIN_TILE}px ${GRAIN_TILE}px`,
+      repeat: 'repeat',
+    }
+  }
+  const stops = layer.stops.map(stopCss).join(', ')
+  return {
+    image:
+      layer.kind === 'linear'
+        ? `linear-gradient(${formatNumber(layer.cssDeg, 2)}deg, ${stops})`
+        : `radial-gradient(circle ${px(layer.r)} at ${px(layer.cx)} ${px(layer.cy)}, ${stops})`,
+    size: frameSize,
+    repeat: 'no-repeat',
   }
 }

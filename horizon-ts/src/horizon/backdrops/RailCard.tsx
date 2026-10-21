@@ -30,33 +30,89 @@ export const RAIL_CARD_RADIUS = 16
 const BORDER = 1
 
 /*
- * Longhands only, so a stock `padding*` on `style` is overridden predictably.
- * RN-web boxes are border-box: the nav card's 1px border sits inside its
- * width, so its content keeps the stock width (7.4).
+ * Change list 2, item 10: a card grows outward around its content instead
+ * of pushing it in. Each side's edge sits `RAIL_CARD_OUTSET` outside the
+ * stock box (a negative margin), and the padding is whatever puts the
+ * content exactly where the stock box puts it: the stock padding and border
+ * plus the outset, less the card's own border. So turning a backdrop on or
+ * off never moves the rail's or the nav's content. In the right rail the
+ * stock gap between sections is 16px, so the cards' vertical outset is
+ * small (5px, leaving 6px between cards); the rail grows on its right by
+ * `RAIL_CARD_ROOM` so the cards' right edges are not clipped. The nav's
+ * values are its former padding (8 or 12 beside, 12 above and below, plus
+ * the border), now as outsets. RN-web boxes are border-box, so a border
+ * sits inside the box's width.
  */
-const SHAPES: Record<RailCardVariant, ViewStyle> = {
-  rail: {
-    paddingTop: 16,
-    paddingRight: 16,
-    paddingBottom: 16,
-    paddingLeft: 16,
-  },
-  nav: {
-    marginLeft: -9,
-    marginRight: -9,
-    paddingLeft: 8,
-    paddingRight: 8,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  navMinimal: {
-    marginLeft: -13,
-    marginRight: -13,
-    paddingLeft: 12,
-    paddingRight: 12,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
+
+/** How far a card's edges sit outside the stock box, beside and above/below. */
+export const RAIL_CARD_OUTSET: Record<RailCardVariant, {x: number; y: number}> =
+  {
+    rail: {x: 10, y: 5},
+    nav: {x: 9, y: 13},
+    navMinimal: {x: 13, y: 13},
+  }
+
+/** The width the right rail adds on its right while cards are drawn. */
+export const RAIL_CARD_ROOM = RAIL_CARD_OUTSET.rail.x
+
+type Side = 'Top' | 'Right' | 'Bottom' | 'Left'
+
+const SIDES: Side[] = ['Top', 'Right', 'Bottom', 'Left']
+
+function num(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined
+}
+
+/** A flattened style's value for one side: longhand, then axis, then all. */
+function sideValue(
+  flat: Record<string, unknown>,
+  prop: 'padding' | 'margin',
+  side: Side,
+): number {
+  const axis = side === 'Top' || side === 'Bottom' ? 'Vertical' : 'Horizontal'
+  return (
+    num(flat[`${prop}${side}`]) ??
+    num(flat[`${prop}${axis}`]) ??
+    num(flat[prop]) ??
+    0
+  )
+}
+
+function borderValue(flat: Record<string, unknown>, side: Side): number {
+  return num(flat[`border${side}Width`]) ?? num(flat.borderWidth) ?? 0
+}
+
+/**
+ * Where a stock box puts its content, from each outer edge: its padding
+ * plus its border, per side.
+ */
+export function stockInset(style: StyleProp<ViewStyle>): Record<Side, number> {
+  const flat: Record<string, unknown> = {...StyleSheet.flatten(style)}
+  const out = {} as Record<Side, number>
+  for (const side of SIDES) {
+    out[side] = sideValue(flat, 'padding', side) + borderValue(flat, side)
+  }
+  return out
+}
+
+/**
+ * The card's margins and padding (longhands only, so they override a stock
+ * `padding*` predictably) for a variant over a stock style.
+ */
+export function cardShape(
+  variant: RailCardVariant,
+  style?: StyleProp<ViewStyle>,
+): ViewStyle {
+  const flat: Record<string, unknown> = {...StyleSheet.flatten(style)}
+  const inset = stockInset(style)
+  const {x, y} = RAIL_CARD_OUTSET[variant]
+  const out: Record<string, number> = {}
+  for (const side of SIDES) {
+    const outset = side === 'Top' || side === 'Bottom' ? y : x
+    out[`margin${side}`] = sideValue(flat, 'margin', side) - outset
+    out[`padding${side}`] = inset[side] + outset - BORDER
+  }
+  return out
 }
 
 /*
@@ -120,12 +176,21 @@ export function railCardStyle(
   variant: RailCardVariant,
   def: BackdropDef,
   theme: ThemeName,
-  {borderColor, reduced}: {borderColor: string; reduced?: boolean},
+  {
+    borderColor,
+    reduced,
+    stock,
+  }: {
+    borderColor: string
+    reduced?: boolean
+    /** The stock style of the view the card replaces, if any. */
+    stock?: StyleProp<ViewStyle>
+  },
 ): {style: ViewStyle; glass: string} {
   const glass = glassFor(def, theme, reduced)
   return {
     style: {
-      ...SHAPES[variant],
+      ...cardShape(variant, stock),
       borderRadius: RAIL_CARD_RADIUS,
       borderWidth: BORDER,
       borderColor,
@@ -160,6 +225,7 @@ export function RailCard({
   }
   const card = railCardStyle(variant, def, t.name, {
     borderColor: t.atoms.border_contrast_low.borderColor,
+    stock: style,
   })
   return (
     <View style={[cardStockStyle(style), card.style]}>

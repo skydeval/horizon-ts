@@ -25,6 +25,7 @@ import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlashIcon} from '#/components/ico
 import {TriangleExclamation_Stroke2_Corner2_Rounded as WarningIcon} from '#/components/icons/TriangleExclamation'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
+import {ToolbarHint} from '#/horizon/composer-hints/ToolbarHint'
 import {convertAltSpoilers} from '#/horizon/spoilers/alias'
 import {
   cutGraphemes,
@@ -209,34 +210,48 @@ export function ContentWarningButton({postId}: {postId: string}) {
   if (!contentWarningsOn() || !IS_WEB) return null
   const on = contentWarningOf(snap, postId) !== undefined
   return (
-    <Button
-      testID="contentWarningBtn"
-      onPress={() => {
-        setContentWarning(postId, on ? undefined : '')
-      }}
+    // A hover hint (change list 2).
+    <ToolbarHint
       label={
         on
           ? l({
-              message: 'Remove content warning',
-              comment: 'The composer button that turns a content warning off',
+              message: 'Remove the content warning',
+              comment: 'Hover hint of the composer content warning button, on',
             })
           : l({
-              message: 'Add content warning',
-              comment: 'The composer button that turns a content warning on',
+              message: 'Add a content warning',
+              comment: 'Hover hint of the composer content warning button, off',
             })
-      }
-      accessibilityHint={l({
-        message:
-          'Hides the post behind a warning line and blurs its images and videos',
-        comment: 'Screen reader hint of the composer content warning button',
-      })}
-      accessibilityState={{checked: on}}
-      style={a.p_sm}
-      variant="ghost"
-      shape="round"
-      color={on ? 'primary_subtle' : 'primary'}>
-      <WarningIcon size="lg" />
-    </Button>
+      }>
+      <Button
+        testID="contentWarningBtn"
+        onPress={() => {
+          setContentWarning(postId, on ? undefined : '')
+        }}
+        label={
+          on
+            ? l({
+                message: 'Remove content warning',
+                comment: 'The composer button that turns a content warning off',
+              })
+            : l({
+                message: 'Add content warning',
+                comment: 'The composer button that turns a content warning on',
+              })
+        }
+        accessibilityHint={l({
+          message:
+            'Hides the post behind a warning line and blurs its images and videos',
+          comment: 'Screen reader hint of the composer content warning button',
+        })}
+        accessibilityState={{checked: on}}
+        style={a.p_sm}
+        variant="ghost"
+        shape="round"
+        color={on ? 'primary_subtle' : 'primary'}>
+        <WarningIcon size="lg" />
+      </Button>
+    </ToolbarHint>
   )
 }
 

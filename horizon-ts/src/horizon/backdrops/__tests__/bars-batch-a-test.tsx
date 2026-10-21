@@ -49,7 +49,11 @@ import {
   MAX_GLASS_ALPHA,
   sampledColors,
 } from '#/horizon/backdrops/glass'
-import {BACKDROP_DEFS, registryDef} from '#/horizon/backdrops/registry'
+import {
+  BACKDROP_DEFS,
+  customDef,
+  registryDef,
+} from '#/horizon/backdrops/registry'
 import {DEFAULT_SOFTNESS, softnessAmount} from '#/horizon/backdrops/softness'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 
@@ -381,8 +385,11 @@ describe('the shades keep the theme`s hue over bright backdrops', () => {
 
   it('over vivid yellow in dark, a near-neutral chip, not olive', () => {
     // Softness 0, as in the live check: the yellow at full strength.
-    for (const id of ['solids.yellow', 'pride.intersex']) {
-      const d = registryDef(id)!
+    // The yellow solid is now a custom one-tone of its colour (change list 2).
+    for (const d of [
+      customDef({mode: 'solid', a: '#B79B2A', b: '#B79B2A'}),
+      registryDef('pride.intersex')!,
+    ]) {
       const range: GradientRange = [0, 0.2]
       const under = sampledColors(d, 'dark', undefined, range)
       const mean = {

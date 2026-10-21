@@ -11,8 +11,17 @@ export type ThemeName = 'light' | 'dim' | 'dark'
 /** `#RRGGBB`, uppercase. */
 export type Hex = string
 
+/**
+ * The picker's groups, in its order. `solids` is gone (change list 2, item
+ * 9): a stored solid id reads as a custom one-tone (`registry.ts`).
+ */
 export type BackdropCollection =
-  'system' | 'pride' | 'materials' | 'solids' | 'custom'
+  'system' | 'pride' | 'materials' | 'nature' | 'skies' | 'blobs' | 'custom'
+
+/**
+ * A quiet repeating pattern over a custom one-tone (change list 2, item 7).
+ */
+export type PatternName = 'dots' | 'grid' | 'lines'
 
 /**
  * Where a linear layer's gradient runs. `angle` is the CSS convention:
@@ -50,6 +59,27 @@ export type RadialLayer = {
   opacity: number
 }
 
+/**
+ * One tile of a quiet pattern (change list 2, item 7), repeated over the
+ * frame from its origin: `dots` a dot at each tile's centre, `hlines` and
+ * `vlines` a 1px line along each tile's top or left edge (a grid is both),
+ * `diagonal` 1px lines at 45 degrees. The colour is chosen by the compiler
+ * against the backdrop's base so the contrast stays low.
+ */
+export type PatternLayer = {
+  kind: 'pattern'
+  shape: 'dots' | 'hlines' | 'vlines' | 'diagonal'
+  /** The tile's side, in pixels. */
+  size: number
+}
+
+/**
+ * Film grain (change list 2, item 6): a small static noise tile, made once
+ * per page and repeated. Always the top layer.
+ */
+export type GrainLayer = {kind: 'grain'}
+
+/** A gradient layer, as a def lists them (`BackdropDef.layers`). */
 export type Layer = LinearLayer | RadialLayer
 
 /** Multipliers; missing means 1. */
@@ -81,4 +111,18 @@ export type BackdropDef = {
    * softness is the viewer's own treatment, not a tuning of the backdrop.
    */
   soften?: number
+  /**
+   * The def's own layers, bottom first (change list 2: skies and colour
+   * blobs). When set they replace the striped layers in both looks; the
+   * def's `stripes` are then only its representative colours, for the
+   * swatch rules and keys.
+   */
+  layers?: Layer[]
+  /** A quiet pattern over the layers (custom one-tone only). */
+  pattern?: PatternName
+  /**
+   * Film grain over everything. Like `soften`, only `useActiveBackdrop`
+   * sets it, from the device's setting.
+   */
+  grain?: boolean
 }

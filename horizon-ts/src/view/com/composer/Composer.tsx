@@ -145,6 +145,8 @@ import {
   IS_WEB_SAFARI,
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: hover hints on the composer toolbar (change list 2)
+import {ToolbarHint} from '#/horizon/composer-hints/ToolbarHint'
 // HORIZON: media spoilers and content warnings
 import {
   bindRestoredVideoSpoiler,
@@ -2353,17 +2355,24 @@ function ComposerFooter({
             <VideoUploadToolbar state={video} />
           ) : (
             <ToolbarWrapper style={[a.flex_row, a.align_center, a.gap_xs]}>
-              <SelectMediaButton
-                disabled={isMediaSelectionDisabled}
-                // HORIZON: the media picker offers what a private post can carry
-                allowedAssetTypes={privateAssetTypes(
-                  selectedAssetsType,
-                  isPrivate,
-                )}
-                selectedAssetsCount={selectedAssetsCount}
-                onSelectAssets={onSelectAssets}
-                autoOpen={openGallery}
-              />
+              {/* HORIZON: hover hints on the toolbar buttons (change list 2) */}
+              <ToolbarHint
+                label={l({
+                  message: 'Add images or a video',
+                  comment: 'Hover hint of the composer media button',
+                })}>
+                <SelectMediaButton
+                  disabled={isMediaSelectionDisabled}
+                  // HORIZON: the media picker offers what a private post can carry
+                  allowedAssetTypes={privateAssetTypes(
+                    selectedAssetsType,
+                    isPrivate,
+                  )}
+                  selectedAssetsCount={selectedAssetsCount}
+                  onSelectAssets={onSelectAssets}
+                  autoOpen={openGallery}
+                />
+              </ToolbarHint>
               <OpenCameraBtn
                 disabled={
                   media?.type === 'images' || media?.type === 'gallery'
@@ -2372,28 +2381,42 @@ function ComposerFooter({
                 }
                 onAdd={onImageAdd}
               />
-              <SelectGifBtn onSelectGif={onSelectGif} disabled={!!media} />
+              {/* HORIZON: hover hints on the toolbar buttons (change list 2) */}
+              <ToolbarHint
+                label={l({
+                  message: 'Add a GIF',
+                  comment: 'Hover hint of the composer GIF button',
+                })}>
+                <SelectGifBtn onSelectGif={onSelectGif} disabled={!!media} />
+              </ToolbarHint>
               {/* HORIZON: the spoiler button wraps the selection in spoiler markers */}
               <SpoilerButton />
               {/* HORIZON: the content warning toggle for the active post */}
               <ContentWarningButton postId={post.id} />
               {IS_WEB && gtPhone ? (
-                <EmojiPicker.Root nextFocusRef={textInputRef}>
-                  <EmojiPicker.Trigger label={l`Open emoji picker`}>
-                    {({props}) => (
-                      <Button
-                        style={a.p_sm}
-                        label={props.accessibilityLabel}
-                        variant="ghost"
-                        shape="round"
-                        color="primary"
-                        {...props}>
-                        <EmojiSmileIcon size="lg" />
-                      </Button>
-                    )}
-                  </EmojiPicker.Trigger>
-                  <EmojiPicker.Picker />
-                </EmojiPicker.Root>
+                // HORIZON: hover hints on the toolbar buttons (change list 2)
+                <ToolbarHint
+                  label={l({
+                    message: 'Add an emoji',
+                    comment: 'Hover hint of the composer emoji button',
+                  })}>
+                  <EmojiPicker.Root nextFocusRef={textInputRef}>
+                    <EmojiPicker.Trigger label={l`Open emoji picker`}>
+                      {({props}) => (
+                        <Button
+                          style={a.p_sm}
+                          label={props.accessibilityLabel}
+                          variant="ghost"
+                          shape="round"
+                          color="primary"
+                          {...props}>
+                          <EmojiSmileIcon size="lg" />
+                        </Button>
+                      )}
+                    </EmojiPicker.Trigger>
+                    <EmojiPicker.Picker />
+                  </EmojiPicker.Root>
+                </ToolbarHint>
               ) : null}
             </ToolbarWrapper>
           )}

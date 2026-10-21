@@ -23,13 +23,16 @@ type TooltipContextType = {
   position: 'top' | 'bottom'
   color: TooltipColor
   onVisibleChange: (open: boolean) => void
+  // HORIZON: a hover hint never takes focus (change list 2)
+  takesFocus: boolean
 }
 
 const TooltipContext = createContext<
-  Pick<TooltipContextType, 'position' | 'color'>
+  Pick<TooltipContextType, 'position' | 'color' | 'takesFocus'>
 >({
   position: 'bottom',
   color: 'default',
+  takesFocus: true,
 })
 TooltipContext.displayName = 'TooltipContext'
 
@@ -39,14 +42,21 @@ export function Outer({
   color = 'default',
   visible,
   onVisibleChange,
+  // HORIZON: a hover hint never takes focus (change list 2)
+  takesFocus = true,
 }: {
   children: React.ReactNode
   position?: 'top' | 'bottom'
   color?: TooltipColor
   visible: boolean
   onVisibleChange: (visible: boolean) => void
+  /** HORIZON: false leaves focus where it is as the bubble opens and closes. */
+  takesFocus?: boolean
 }) {
-  const ctx = useMemo(() => ({position, color}), [position, color])
+  const ctx = useMemo(
+    () => ({position, color, takesFocus}),
+    [position, color, takesFocus],
+  )
   return (
     <Popover.Root open={visible} onOpenChange={onVisibleChange}>
       <TooltipContext.Provider value={ctx}>{children}</TooltipContext.Provider>
@@ -70,13 +80,16 @@ export function Content({
   label: string
 }) {
   const t = useTheme()
-  const {position, color} = useContext(TooltipContext)
+  const {position, color, takesFocus} = useContext(TooltipContext)
   const style = getTooltipStyle(t, color)
   return (
     <Popover.Portal>
       <Popover.Content
         className="radix-popover-content"
         aria-label={label}
+        // HORIZON: a hover hint leaves the composer's focus alone (change list 2)
+        onOpenAutoFocus={takesFocus ? undefined : evt => evt.preventDefault()}
+        onCloseAutoFocus={takesFocus ? undefined : evt => evt.preventDefault()}
         side={position}
         sideOffset={4}
         collisionPadding={MIN_EDGE_SPACE}

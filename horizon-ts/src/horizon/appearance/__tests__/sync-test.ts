@@ -217,7 +217,7 @@ describe('sync (T12)', () => {
       'pride.bi',
       'pride.ace',
       'pride.pan',
-      'solids.red',
+      'materials.paper',
     ]) {
       store.selectBackdrop(DID, id)
       jest.advanceTimersByTime(300)
@@ -226,7 +226,9 @@ describe('sync (T12)', () => {
     jest.advanceTimersByTime(1000)
     for (let i = 0; i < 20; i++) await new Promise(r => setImmediate(r))
     expect(puts(server)).toHaveLength(1)
-    expect(puts(server)[0].body!.record).toMatchObject({backdrop: 'solids.red'})
+    expect(puts(server)[0].body!.record).toMatchObject({
+      backdrop: 'materials.paper',
+    })
   })
 
   it('InvalidSwap: re-read, rebase and retry', async () => {

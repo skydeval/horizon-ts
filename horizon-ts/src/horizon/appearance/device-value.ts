@@ -1,9 +1,10 @@
 /*
  * The device value under `horizon:appearance` (Phase 3 design, 6.1): this
  * device's own appearance, the opt-out, a copy per account and the
- * device-only settings (the phone frame and the backdrop softness). Parsed
- * leniently, field by field; a
- * missing, unparsable or other-version value reads as the default.
+ * device-only settings (the phone frame, the backdrop softness and the
+ * grain). Parsed leniently, field by field; a missing, unparsable or
+ * other-version value reads as the default. A stored id of a removed solid
+ * reads as a custom one-tone of its colour (change list 2, item 9).
  */
 
 import {
@@ -12,8 +13,10 @@ import {
   DEFAULT_APPEARANCE,
   DEFAULT_CUSTOM,
   emptyPresetSlots,
+  parseThemePrefs,
   PRESET_SLOT_COUNT,
   type PresetSlots,
+  THEME_PREF_FIELDS,
 } from '#/horizon/appearance/model'
 import {
   parseBackdropId,
@@ -25,6 +28,7 @@ import {
   type FrameStyle,
   parseFrameStyle,
 } from '#/horizon/backdrops/frame-style'
+import {migrateRemovedSolid} from '#/horizon/backdrops/registry'
 import {
   DEFAULT_SOFTNESS,
   parseSoftness,
@@ -70,6 +74,11 @@ export type DeviceAppearanceV1 = {
    * only: how calm a backdrop should look depends on the screen.
    */
   softness: SoftnessValues
+  /**
+   * Film grain over the backdrop (change list 2, item 6), off by default.
+   * Device only, like the softness: it is about the screen.
+   */
+  grain: boolean
 }
 
 export function defaultDeviceValue(): DeviceAppearanceV1 {
@@ -80,6 +89,7 @@ export function defaultDeviceValue(): DeviceAppearanceV1 {
     accounts: {},
     frameStyle: DEFAULT_FRAME_STYLE,
     softness: DEFAULT_SOFTNESS,
+    grain: false,
   }
 }
 
@@ -90,6 +100,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 const FIELDS = new Set<string>([
   'backdrop',
   'custom',
+  ...THEME_PREF_FIELDS,
   ...Array.from({length: PRESET_SLOT_COUNT}, (_v, i) => `preset:${i + 1}`),
 ])
 
@@ -105,11 +116,13 @@ function parseSlots(value: unknown): PresetSlots {
 /** An appearance as this module stores it, parsed with the 5.3 rules. */
 export function parseStoredAppearance(value: unknown): Appearance | null {
   if (!isObject(value)) return null
-  return {
+  // A removed solid reads as a custom one-tone (change list 2, item 9).
+  return migrateRemovedSolid({
     backdrop: parseBackdropId(value.backdrop),
     custom: parseCustom(value.custom) ?? DEFAULT_CUSTOM,
     presets: parseSlots(value.presets),
-  }
+    ...parseThemePrefs(value),
+  })
 }
 
 function parsePending(value: unknown): AccountCopy['pending'] {
@@ -167,6 +180,7 @@ export function parseDeviceValue(json: string | undefined): DeviceAppearanceV1 {
     accounts,
     frameStyle: parseFrameStyle(value.frameStyle, value.insetCard),
     softness: parseSoftness(value.softness),
+    grain: value.grain === true,
   }
 }
 

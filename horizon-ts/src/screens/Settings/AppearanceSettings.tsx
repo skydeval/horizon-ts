@@ -25,6 +25,10 @@ import * as Layout from '#/components/Layout'
 import {Text} from '#/components/Typography'
 // HORIZON: the Backdrops sections (Phase 3)
 import {HorizonAppearanceSections} from '#/horizon/appearance/settings/AppearanceSections'
+// HORIZON: the theme settings follow the account (change list 2)
+import {useSaveThemePref} from '#/horizon/appearance/store'
+// HORIZON: the theme settings follow the account (change list 2)
+import {fontSizeOfScale} from '#/horizon/appearance/theme-prefs'
 import * as SettingsList from './components/SettingsList'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'AppearanceSettings'>
@@ -34,33 +38,43 @@ export function AppearanceSettingsScreen({}: Props) {
 
   const {colorMode, darkTheme} = useThemePrefs()
   const {setColorMode, setDarkTheme} = useSetThemePrefs()
+  // HORIZON: the theme settings follow the account (change list 2)
+  const saveThemePref = useSaveThemePref()
 
   const onChangeAppearance = useCallback(
     (value: 'light' | 'system' | 'dark') => {
       setColorMode(value)
+      // HORIZON: saved to the account (change list 2)
+      saveThemePref('colorMode', value)
     },
-    [setColorMode],
+    [setColorMode, saveThemePref],
   )
 
   const onChangeDarkTheme = useCallback(
     (value: 'dim' | 'dark') => {
       setDarkTheme(value)
+      // HORIZON: saved to the account (change list 2)
+      saveThemePref('darkTheme', value)
     },
-    [setDarkTheme],
+    [setDarkTheme, saveThemePref],
   )
 
   const onChangeFontFamily = useCallback(
     (value: 'system' | 'theme') => {
       fonts.setFontFamily(value)
+      // HORIZON: saved to the account (change list 2)
+      saveThemePref('font', value)
     },
-    [fonts],
+    [fonts, saveThemePref],
   )
 
   const onChangeFontScale = useCallback(
     (value: Alf['fonts']['scale']) => {
       fonts.setFontScale(value)
+      // HORIZON: saved to the account (change list 2)
+      saveThemePref('fontSize', fontSizeOfScale(value))
     },
-    [fonts],
+    [fonts, saveThemePref],
   )
 
   return (

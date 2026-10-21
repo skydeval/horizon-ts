@@ -40,7 +40,7 @@ import {useContext, useLayoutEffect, useRef} from 'react'
 import {NavigationContainerRefContext} from '@react-navigation/native'
 
 import {useTheme} from '#/alf'
-import {compileBackdrop} from '#/horizon/backdrops/compile'
+import {compileBackdrop, paintedLayers} from '#/horizon/backdrops/compile'
 import {
   cssBackground,
   cssBackgroundPosition,
@@ -204,7 +204,8 @@ export function BackdropWindow({
   const compiled = compileBackdrop(def, theme, frame)
   const drawn = compiled !== null
   const overlayCount = overlays.length
-  const layerCount = compiled?.layers.length ?? 0
+  // Gradients and texture (change list 2): every image after the overlays.
+  const layerCount = compiled ? paintedLayers(compiled).length : 0
 
   useLayoutEffect(() => {
     const outer = outerRef.current

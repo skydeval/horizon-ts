@@ -13,7 +13,6 @@ const PALE = [
   'materials.clay',
   'materials.fog',
   'materials.inkwash',
-  'solids.mist',
 ]
 
 function toLab({r, g, b}: RGB) {
@@ -71,7 +70,8 @@ function distance(x: BackdropDef, y: BackdropDef, theme: ThemeName) {
 }
 
 describe('swatches (T8)', () => {
-  it('the pale set is the 7 materials and Mist, in dim and dark only', () => {
+  // Mist left the set with the solids (change list 2, item 9).
+  it('the pale set is the 7 materials, in dim and dark only', () => {
     for (const theme of ['dim', 'dark'] as const) {
       const pale = BACKDROP_DEFS.filter(def => isPaleSwatch(def, theme)).map(
         def => def.id,
