@@ -261,6 +261,57 @@ export const privateUpdateSeen = l.procedure(
 )
 
 /**
+ * One reason's private notification preference: stock
+ * `app.bsky.notification.defs#filterablePreference`. `push` is stored but
+ * has no effect while there is no private push.
+ */
+export const privateNotificationPreference = l.object({
+  include: l.string<{knownValues: ['all', 'follows']}>(),
+  list: l.boolean(),
+  push: l.boolean(),
+})
+
+/** The reasons a private notification has (prism, 2026-10-21). */
+const privateNotificationPreferences = l.object({
+  like: privateNotificationPreference,
+  mention: privateNotificationPreference,
+  quote: privateNotificationPreference,
+  reply: privateNotificationPreference,
+  repost: privateNotificationPreference,
+})
+
+/**
+ * `app.nearhorizon.private.getNotificationPreferences`: the reader's own,
+ * every reason present, each `{include: 'all', list: true, push: true}`
+ * until changed.
+ */
+export const privateGetNotificationPreferences = l.query(
+  'app.nearhorizon.private.getNotificationPreferences',
+  l.params(),
+  l.jsonPayload({preferences: privateNotificationPreferences}),
+  NOT_MEMBER_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.private.putNotificationPreferences`: stock V2
+ * semantics, each reason sent replaces that reason's whole object and the
+ * others are kept; returns the full preferences after the write.
+ */
+export const privatePutNotificationPreferences = l.procedure(
+  'app.nearhorizon.private.putNotificationPreferences',
+  l.params(),
+  l.jsonPayload({
+    like: l.optional(privateNotificationPreference),
+    mention: l.optional(privateNotificationPreference),
+    quote: l.optional(privateNotificationPreference),
+    reply: l.optional(privateNotificationPreference),
+    repost: l.optional(privateNotificationPreference),
+  }),
+  l.jsonPayload({preferences: privateNotificationPreferences}),
+  ['InvalidRequest', ...NOT_MEMBER_ERRORS],
+)
+
+/**
  * `app.nearhorizon.private.searchPosts` (P-7): words, each contained in the
  * text, and `from:<did>`; newest first whatever `sort` says. A page may be
  * short or empty and still carry a cursor.

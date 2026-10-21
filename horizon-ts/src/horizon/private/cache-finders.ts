@@ -21,6 +21,14 @@ type PostView = app.bsky.feed.defs.PostView
  */
 export const PRIVATE_NOTIFICATIONS_ROOT = 'horizon-private-notifications'
 
+/*
+ * The private unread counts' query roots (`notifications/unread.ts`), here
+ * so a module can invalidate them without importing the counts' heavy
+ * dependencies.
+ */
+export const PRIVATE_UNREAD_ROOT = 'horizon-private-unread'
+export const PRIVATE_UNREAD_OWN_ROOT = 'horizon-private-unread-own'
+
 /**
  * The private search query root (`search/results.ts`).
  */

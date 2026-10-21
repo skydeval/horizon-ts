@@ -135,7 +135,6 @@ const ADDED: [string, string, string, number, number][] = [
   ['nature.forest', 'nature', 'E3EDD9 B5CFA0 7FA872 4F7F52 2F5A3C', 135, 0.1],
   ['nature.desert', 'nature', 'F7E6C8 EDC99A DDA46E C47F52 9C5B3E', 135, 0.1],
   ['nature.sakura', 'nature', 'FFF1F4 FBD5DF F5B3C6 E894AE C97B9A', 135, 0.1],
-  ['nature.autumn', 'nature', 'F6D9A8 EEAE5E D9783A B0502E 7E3A2A', 135, 0.1],
   ['nature.moss', 'nature', 'E7EBCF C6D09A 9BAE6B 738A4C 4E6436', 135, 0.1],
   /*
    * Change list 3 (items 7 and 8): the flags, stripes top to bottom, as
@@ -231,7 +230,6 @@ const ORDER = [
   'nature.forest',
   'nature.desert',
   'nature.sakura',
-  'nature.autumn',
   'nature.moss',
   'seasonal.auto',
   'seasonal.spring',

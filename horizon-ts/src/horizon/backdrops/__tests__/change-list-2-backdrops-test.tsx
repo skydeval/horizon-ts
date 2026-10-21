@@ -176,7 +176,6 @@ describe('Nature (item 5)', () => {
       'nature.forest',
       'nature.desert',
       'nature.sakura',
-      'nature.autumn',
       'nature.moss',
     ])
     for (const def of nature) {

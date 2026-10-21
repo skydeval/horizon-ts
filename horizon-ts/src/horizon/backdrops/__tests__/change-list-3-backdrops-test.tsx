@@ -326,10 +326,12 @@ describe('Follow the season (item 4)', () => {
     expect(read('seasonal.spooky')).toBe('seasonal.autumn')
     expect(read('seasonal.hallows')).toBe('seasonal.autumn')
     expect(read('seasonal.christmas')).toBe('seasonal.winter')
+    expect(read('nature.autumn')).toBe('seasonal.autumn')
     for (const id of [
       'seasonal.spooky',
       'seasonal.hallows',
       'seasonal.christmas',
+      'nature.autumn',
     ]) {
       expect(registryDef(id)).toBeUndefined()
     }

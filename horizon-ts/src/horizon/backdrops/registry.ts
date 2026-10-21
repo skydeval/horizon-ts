@@ -386,13 +386,18 @@ const SEASON_AUTUMN = pooled(
   'seasonal.autumn',
   msg({message: 'Autumn', context: 'backdrop name'}),
   'seasonal',
-  ['#120C17', '#1D0F24'],
+  /*
+   * Warm russet, amber and gold over a light parchment, like the other
+   * seasons' light bases (skydeval, 2026-10-21; it was a Halloween purple).
+   */
+  ['#FBEEDD', '#F4DCC0'],
   [
-    pool('#6A2FA0', 0.2, 0.2, 0.55, 0.5),
-    pool('#3B0F4A', 0.85, 0.4, 0.5, 0.45),
-    pool('#E8701E', 0.5, 1.05, 0.65, 0.5),
+    pool('#C8612F', 0.2, 0.22, 0.55, 0.5),
+    pool('#E9A23B', 0.82, 0.3, 0.5, 0.5),
+    pool('#9E3B26', 0.75, 0.88, 0.5, 0.4),
+    pool('#EBC867', 0.25, 0.85, 0.45, 0.45),
   ],
-  ['dark', 'autumn'],
+  ['warm', 'cozy'],
 )
 const SEASON_WINTER = pooled(
   'seasonal.winter',
@@ -405,12 +410,6 @@ const SEASON_WINTER = pooled(
     pool('#DCE3F7', 0.6, 0.35, 0.4, 0.4),
   ],
   ['cool', 'airy'],
-)
-const NATURE_AUTUMN = nature(
-  'nature.autumn',
-  msg({message: 'Autumn', context: 'backdrop name'}),
-  ['#F6D9A8', '#EEAE5E', '#D9783A', '#B0502E', '#7E3A2A'],
-  ['warm', 'cozy'],
 )
 
 /**
@@ -931,7 +930,6 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
     ['#FFF1F4', '#FBD5DF', '#F5B3C6', '#E894AE', '#C97B9A'],
     ['warm', 'airy'],
   ),
-  NATURE_AUTUMN,
   nature(
     'nature.moss',
     msg({message: 'Moss', context: 'backdrop name'}),
@@ -1275,12 +1273,14 @@ export const REMOVED_SOLIDS: Readonly<Record<string, Hex>> = {
  * (skydeval, 2026-10-21). The October backdrop was "Spooky" ("spook" is a
  * racist slur, and the record is public), briefly Hallows' Eve, and is now
  * Autumn. The short-lived Christmas backdrop was removed in favour of four
- * seasons; it reads as Winter Frost.
+ * seasons; it reads as Winter Frost. Nature's Autumn was removed so there
+ * is one Autumn; it reads as the seasonal one.
  */
 export const RENAMED_BACKDROPS: Readonly<Record<string, string>> = {
   'seasonal.spooky': 'seasonal.autumn',
   'seasonal.hallows': 'seasonal.autumn',
   'seasonal.christmas': 'seasonal.winter',
+  'nature.autumn': 'seasonal.autumn',
 }
 
 /**

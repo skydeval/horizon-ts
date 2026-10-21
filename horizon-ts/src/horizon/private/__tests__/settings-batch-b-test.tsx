@@ -1,5 +1,8 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
-import {act, render, renderHook} from '@testing-library/react-native'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {act, render, renderHook, waitFor} from '@testing-library/react-native'
+
+import {nearhorizon} from '#/horizon/lexicons'
 
 /*
  * Phase 3, batch B: who sees the Interaction settings sections, the
@@ -11,10 +14,37 @@ import {act, render, renderHook} from '@testing-library/react-native'
 const DID = 'did:plc:privateaaaaaaaaaaaaaaaaa'
 
 let mockIsMember = true
+/** prism's answers to the private notification preference calls. */
+const mockPrismCall = jest.fn<(...args: unknown[]) => Promise<unknown>>()
 jest.mock('#/horizon/private/membership', () => ({
   useIsMember: () => mockIsMember,
   useIsConfirmedMember: () => mockIsMember,
+  usePrivateFeedSource: () =>
+    mockIsMember
+      ? {did: 'did:plc:privateaaaaaaaaaaaaaaaaa', prism: {call: mockPrismCall}}
+      : undefined,
 }))
+let mockFeatures = new Set<string>()
+jest.mock('#/horizon/private/features-hooks', () => ({
+  usePrismFeature: (feature: string) => mockFeatures.has(feature),
+}))
+/** Segmented controls' handlers by label, to call them. */
+const mockSegments = new Map<string, (value: string) => void>()
+jest.mock('#/components/forms/SegmentedControl', () => {
+  const pass = (props: {children?: unknown}) => props.children ?? null
+  return {
+    Root: (props: {
+      label: string
+      onChange: (mockValue: string) => void
+      children?: unknown
+    }) => {
+      mockSegments.set(props.label, props.onChange)
+      return props.children ?? null
+    },
+    Item: pass,
+    ItemText: pass,
+  }
+})
 jest.mock('#/state/session', () => ({
   useSession: () => ({currentAccount: {did: DID}}),
 }))
@@ -83,6 +113,8 @@ jest.mock('#/lib/haptics', () => ({useHaptics: () => ({selection: () => {}})}))
 const mockGroups = new Map<string, (values: string[]) => void>()
 const mockGroupValues = new Map<string, string[]>()
 const mockItems: string[] = []
+/** Single toggles' handlers by name, to call them. */
+const mockToggles = new Map<string, (value: boolean) => void>()
 jest.mock('#/components/forms/Toggle', () => {
   const pass = (props: {children?: unknown}) =>
     typeof props.children === 'function'
@@ -99,10 +131,16 @@ jest.mock('#/components/forms/Toggle', () => {
       mockGroupValues.set(props.label, props.values)
       return props.children ?? null
     },
-    Item: (props: {name: string; children?: unknown}) => {
+    Item: (props: {
+      name: string
+      onChange?: (mockValue: boolean) => void
+      children?: unknown
+    }) => {
       mockItems.push(props.name)
+      if (props.onChange) mockToggles.set(props.name, props.onChange)
       return pass(props)
     },
+    Platform: () => null,
     Panel: pass,
     PanelGroup: pass,
     PanelText: pass,
@@ -238,15 +276,21 @@ import {
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
 function show(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {queries: {retry: false}, mutations: {retry: false}},
+  })
   return render(ui, {
     wrapper: ({children}) => (
-      <I18nProvider i18n={i18n}>{children}</I18nProvider>
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider i18n={i18n}>{children}</I18nProvider>
+      </QueryClientProvider>
     ),
   })
 }
 
 beforeEach(() => {
   mockIsMember = true
+  mockFeatures = new Set()
   mockDefaultsSwitch = true
   mockSettingsTabsSwitch = true
   mockDefaults = {startAs: 'public', audience: {kind: 'mode', mode: 'everyone'}}
@@ -438,6 +482,86 @@ describe('Notifications settings tabs (item 6)', () => {
             .accessibilityState?.disabled === true,
       ).length,
     ).toBeGreaterThanOrEqual(5)
+  })
+})
+
+describe('private notification preferences (prism, 2026-10-21)', () => {
+  const all = {include: 'all', list: true, push: true}
+  const preferences = {
+    like: all,
+    reply: all,
+    mention: all,
+    quote: all,
+    repost: all,
+  }
+
+  beforeEach(() => {
+    mockFeatures = new Set(['private.notificationPreferences'])
+    mockPrismCall.mockReset()
+    mockToggles.clear()
+    mockSegments.clear()
+  })
+
+  it('with the feature, the rows are live, with no note', async () => {
+    mockPrismCall.mockResolvedValue({preferences})
+    const screen = show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockToggles.has('private_notification_like')).toBe(true),
+    )
+    expect(
+      screen.queryByText(
+        'Private notification settings arrive with server support.',
+      ),
+    ).toBeNull()
+    for (const reason of ['like', 'reply', 'mention', 'quote', 'repost']) {
+      expect(mockToggles.has(`private_notification_${reason}`)).toBe(true)
+    }
+  })
+
+  it('turning a reason off sends that reason whole, the rest kept', async () => {
+    mockPrismCall.mockResolvedValue({preferences})
+    show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockToggles.has('private_notification_like')).toBe(true),
+    )
+    mockPrismCall.mockResolvedValue({
+      preferences: {...preferences, like: {...all, list: false}},
+    })
+    act(() => mockToggles.get('private_notification_like')!(false))
+    const put = await waitFor(() => {
+      const call = mockPrismCall.mock.calls.find(
+        ([method]) => method === nearhorizon.privatePutNotificationPreferences,
+      )
+      expect(call).toBeTruthy()
+      return call
+    })
+    expect(put?.[1]).toEqual({like: {include: 'all', list: false, push: true}})
+  })
+
+  it('"People I follow" sends include follows', async () => {
+    mockPrismCall.mockResolvedValue({preferences})
+    show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockSegments.has('Whose activity notifies you')).toBe(true),
+    )
+    act(() => mockSegments.get('Whose activity notifies you')!('follows'))
+    const put = await waitFor(() => {
+      const call = mockPrismCall.mock.calls.find(
+        ([method]) => method === nearhorizon.privatePutNotificationPreferences,
+      )
+      expect(call).toBeTruthy()
+      return call
+    })
+    expect(Object.values(put?.[1] as object)[0]).toMatchObject({
+      include: 'follows',
+      list: true,
+    })
+  })
+
+  it('without the feature, prism is not asked', () => {
+    mockFeatures = new Set()
+    show(<PrivateNotificationSettings />)
+    expect(mockPrismCall).not.toHaveBeenCalled()
   })
 })
 

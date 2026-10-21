@@ -12,12 +12,15 @@ import {
   listPrivateNotifications,
   updatePrivateSeen,
 } from '#/horizon/private/api/reads'
+import {
+  PRIVATE_UNREAD_OWN_ROOT,
+  PRIVATE_UNREAD_ROOT,
+} from '#/horizon/private/cache-finders'
 import {REPLY_REASONS} from '#/horizon/private/notifications/page'
 import {privateNotificationsServed} from '#/horizon/private/server-support'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 
-export const PRIVATE_UNREAD_ROOT = 'horizon-private-unread'
-export const PRIVATE_UNREAD_OWN_ROOT = 'horizon-private-unread-own'
+export {PRIVATE_UNREAD_OWN_ROOT, PRIVATE_UNREAD_ROOT}
 
 /**
  * The most private-only unread notifications counted; at this many the

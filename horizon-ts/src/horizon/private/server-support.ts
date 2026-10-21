@@ -85,6 +85,17 @@ export function privateNotificationsServed(opts?: ServedOptions): boolean {
 }
 
 /**
+ * prism serves private notification preferences
+ * (`private.notificationPreferences`, 2026-10-21): read and write per
+ * reason, honoured by the list and the unread count.
+ */
+export function privateNotificationPreferencesServed(
+  opts?: ServedOptions,
+): boolean {
+  return served('private.notificationPreferences', opts)
+}
+
+/**
  * prism pages past what the reader cannot read and filters its private
  * author feed like the stock one (`private.paging`, P-20, P-6, P-14), and
  * serves `getReplies`. Until then the profile's Posts tab filters prism's
