@@ -25,7 +25,11 @@ import {
   STRIPES_MIN,
   THEME_PREF_FIELDS,
 } from '#/horizon/appearance/model'
-import {migrateRemovedSolid, REMOVED_SOLIDS} from '#/horizon/backdrops/registry'
+import {
+  migrateRemovedSolid,
+  REMOVED_SOLIDS,
+  RENAMED_BACKDROPS,
+} from '#/horizon/backdrops/registry'
 import {type PatternName} from '#/horizon/backdrops/types'
 import {
   APPEARANCE_COLLECTION,
@@ -199,6 +203,10 @@ export function buildAppearanceRecord(
   if (typeof raw?.backdrop === 'string' && raw.backdrop in REMOVED_SOLIDS) {
     named.add('backdrop')
     named.add('custom')
+  }
+  // A renamed backdrop's old id is replaced in the record on any write.
+  if (typeof raw?.backdrop === 'string' && raw.backdrop in RENAMED_BACKDROPS) {
+    named.add('backdrop')
   }
 
   if (all || named.has('backdrop')) base.backdrop = appearance.backdrop

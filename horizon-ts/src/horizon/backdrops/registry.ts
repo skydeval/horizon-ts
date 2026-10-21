@@ -382,9 +382,9 @@ const SEASON_SUMMER = pooled(
   ],
   ['warm', 'bright'],
 )
-const SEASON_SPOOKY = pooled(
-  'seasonal.spooky',
-  msg({message: 'Spooky', context: 'backdrop name'}),
+const SEASON_HALLOWS = pooled(
+  'seasonal.hallows',
+  msg({message: 'Hallows’ Eve', context: 'backdrop name'}),
   'seasonal',
   ['#120C17', '#1D0F24'],
   [
@@ -430,14 +430,14 @@ const NATURE_AUTUMN = nature(
 
 /**
  * The seasonal backdrop for a month (0-11), for "Follow the season"
- * (skydeval, 2026-10-21). October is Spooky and December is Christmas in
+ * (skydeval, 2026-10-21). October is Hallows' Eve and December is Christmas in
  * both hemispheres: they follow the calendar, not the weather. The other
  * months follow meteorological seasons, northern unless `southern`:
  * spring, summer, autumn (Nature's Autumn), winter. Switches by date only;
  * nothing animates.
  */
 export function seasonForMonth(month: number, southern = false): BackdropDef {
-  if (month === 9) return SEASON_SPOOKY
+  if (month === 9) return SEASON_HALLOWS
   if (month === 11) return SEASON_CHRISTMAS
   const m = southern ? (month + 6) % 12 : month
   if (m >= 2 && m <= 4) return SEASON_SPRING
@@ -965,7 +965,7 @@ export const BACKDROP_DEFS: readonly BackdropDef[] = [
   },
   SEASON_SPRING,
   SEASON_SUMMER,
-  SEASON_SPOOKY,
+  SEASON_HALLOWS,
   SEASON_CHRISTMAS,
   SEASON_WINTER,
   {
@@ -1291,11 +1291,23 @@ export const REMOVED_SOLIDS: Readonly<Record<string, Hex>> = {
 }
 
 /**
+ * Backdrop ids that were renamed, old to new. `seasonal.spooky` became
+ * `seasonal.hallows` with the name Hallows' Eve (skydeval, 2026-10-21):
+ * "spook" is a racist slur, and the record is public.
+ */
+export const RENAMED_BACKDROPS: Readonly<Record<string, string>> = {
+  'seasonal.spooky': 'seasonal.hallows',
+}
+
+/**
  * An appearance with a removed solid selected, read as Custom one-tone of
- * that colour; any other appearance unchanged. The custom `b` (the
- * two-tone's second colour) and the pattern are kept.
+ * that colour, or with a renamed backdrop selected, read with its new id;
+ * any other appearance unchanged. The custom `b` (the two-tone's second
+ * colour) and the pattern are kept.
  */
 export function migrateRemovedSolid(appearance: Appearance): Appearance {
+  const renamed = RENAMED_BACKDROPS[appearance.backdrop]
+  if (renamed) return {...appearance, backdrop: renamed}
   const color = REMOVED_SOLIDS[appearance.backdrop]
   if (!color) return appearance
   return {

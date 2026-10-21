@@ -35,6 +35,7 @@ import {
   BACKDROP_DEFS,
   BACKDROP_SEASON_AUTO,
   customDef,
+  migrateRemovedSolid,
   registryDef,
   resolveBackdrop,
   seasonForMonth,
@@ -157,7 +158,7 @@ describe('the new collections (items 1 to 5)', () => {
       'seasonal.auto',
       'seasonal.spring',
       'seasonal.summer',
-      'seasonal.spooky',
+      'seasonal.hallows',
       'seasonal.christmas',
       'seasonal.winter',
     ])
@@ -284,7 +285,7 @@ describe('Calm (item 5)', () => {
 })
 
 describe('Follow the season (item 4)', () => {
-  it('Spooky in October, Christmas in December, seasons otherwise', () => {
+  it('Hallows Eve in October, Christmas in December, seasons otherwise', () => {
     const north = Array.from({length: 12}, (_v, m) => seasonForMonth(m).id)
     expect(north).toEqual([
       'seasonal.winter',
@@ -296,7 +297,7 @@ describe('Follow the season (item 4)', () => {
       'seasonal.summer',
       'seasonal.summer',
       'nature.autumn',
-      'seasonal.spooky',
+      'seasonal.hallows',
       'nature.autumn',
       'seasonal.christmas',
     ])
@@ -315,19 +316,26 @@ describe('Follow the season (item 4)', () => {
       'seasonal.winter',
       'seasonal.spring',
       // October and December follow the calendar in both hemispheres.
-      'seasonal.spooky',
+      'seasonal.hallows',
       'seasonal.spring',
       'seasonal.christmas',
     ])
   })
 
+  it('the old Spooky id reads as Hallows Eve, which keeps the backdrop', () => {
+    const old = {...DEFAULT_APPEARANCE, backdrop: 'seasonal.spooky'}
+    expect(migrateRemovedSolid(old).backdrop).toBe('seasonal.hallows')
+    expect(registryDef('seasonal.spooky')).toBeUndefined()
+    expect(registryDef('seasonal.hallows')!.name.message).toBe('Hallows’ Eve')
+  })
+
   it('resolves by the month given, the auto entry in Seasonal', () => {
     const auto = {...DEFAULT_APPEARANCE, backdrop: BACKDROP_SEASON_AUTO}
     expect(resolveBackdrop(auto, 12, {month: 9, southern: false})!.id).toBe(
-      'seasonal.spooky',
+      'seasonal.hallows',
     )
     expect(resolveBackdrop(auto, 12, {month: 9, southern: true})!.id).toBe(
-      'seasonal.spooky',
+      'seasonal.hallows',
     )
     expect(resolveBackdrop(auto, 12, {month: 8, southern: true})!.id).toBe(
       'seasonal.spring',
