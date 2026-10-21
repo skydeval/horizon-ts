@@ -230,11 +230,18 @@ function StripesEditor({
           )
         })}
       </View>
-      <ColorColumn
-        label={l`Stripe ${index + 1}`}
-        draft={draft}
-        onChange={next => onChange(s => setStripe(s, index, next))}
-      />
+      {/*
+       * In a row, as the other modes' columns are: the column shares a
+       * row's width (`flexBasis: 0`), which in a column collapsed its height
+       * and drew the buttons over it (live check, 2026-10-21).
+       */}
+      <View style={[a.flex_row]}>
+        <ColorColumn
+          label={l`Stripe ${index + 1}`}
+          draft={draft}
+          onChange={next => onChange(s => setStripe(s, index, next))}
+        />
+      </View>
       <View style={[a.flex_row, a.flex_wrap, {gap: 8}]}>
         <Button
           label={l`Move stripe ${index + 1} up`}

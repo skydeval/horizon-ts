@@ -1,12 +1,13 @@
 /*
  * Horizon's Appearance sections (Phase 3 design, section 10), after Dark
- * theme and before Font (BD-11): the Backdrops group (the shown name, the
- * swatches in sections by collection (change list 2), the Custom chip and,
- * while Custom is selected, its card; while "Follow the season" is selected,
- * the "Southern hemisphere" switch, change list 3), the per-device opt-out ("Keep this
- * device's own appearance", which since change list 2 covers the theme
- * settings too), "Backdrop softness" (live fix batch 1), "Film grain" (web,
- * change list 2), then the "Phone frame" picker of 10.8 (while
+ * theme and before Font (BD-11): the Backdrops group (the selected name, the
+ * swatches in sections by collection (change list 2), each section's title
+ * showing the hovered swatch's name, "Film grain" (web, change list 2) and
+ * the per-device opt-out ("Keep this device's own appearance", which since
+ * change list 2 covers the theme settings too) just above the Custom chip,
+ * then while Custom is selected, its card; while "Follow the season" is
+ * selected, the "Southern hemisphere" switch, change list 3), "Backdrop
+ * softness" (live fix batch 1), then the "Phone frame" picker of 10.8 (while
  * `SHOW_FRAME_STYLE_PICKER`), whose Gutter style replaced the "Reading card
  * on small screens" toggle.
  */
@@ -240,7 +241,18 @@ function BackdropGroup() {
   const state = useAppearanceState()
   const shown = effectiveAppearance(state, did)
   const committed = effectiveAppearance({...state, preview: null}, did)
-  const [hoverName, setHoverName] = useState<string | null>(null)
+  const {hasSession} = useSession()
+  /*
+   * The hovered or focused swatch's name, shown beside its own section's
+   * title rather than at the top of the group, which a long picker scrolls
+   * out of view (live check, 2026-10-21).
+   */
+  const [hover, setHover] = useState<{
+    collection: PickerCollection
+    name: string
+  } | null>(null)
+  const showName = (collection: PickerCollection) => (name: string | null) =>
+    setHover(name === null ? null : {collection, name})
   const sectionTitles: Record<PickerCollection, string> = {
     system: '',
     pride: l({message: 'Flags', context: 'backdrop group'}),
@@ -270,63 +282,85 @@ function BackdropGroup() {
     <SettingsList.Group iconInset={false}>
       <SettingsList.ItemIcon icon={PaintRollerIcon} />
       <SettingsList.ItemText>{l`Backdrops`}</SettingsList.ItemText>
-      {hoverName !== null ? (
-        <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          {hoverName}
-        </Text>
-      ) : (
-        <Text
-          accessibilityLiveRegion="polite"
-          style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          {selectedName}
-        </Text>
-      )}
+      <Text
+        accessibilityLiveRegion="polite"
+        style={[a.text_sm, t.atoms.text_contrast_medium]}>
+        {selectedName}
+      </Text>
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel={l`Backdrop`}
         accessibilityHint=""
         style={[a.w_full, {gap: GAP, marginTop: GAP}]}>
-        {PICKER_SECTIONS.map(section => (
-          <View key={section.collection} style={[a.w_full, {gap: 6}]}>
-            {section.collection !== 'system' && (
-              <Text
+        {PICKER_SECTIONS.map(section => {
+          const hovered =
+            hover?.collection === section.collection ? hover.name : null
+          return (
+            <View key={section.collection} style={[a.w_full, {gap: 6}]}>
+              {section.collection !== 'system' && (
+                <Text
+                  style={[
+                    a.text_xs,
+                    a.font_semi_bold,
+                    t.atoms.text_contrast_medium,
+                  ]}>
+                  {sectionTitles[section.collection]}
+                  {hovered !== null && (
+                    <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                      {` · ${hovered}`}
+                    </Text>
+                  )}
+                </Text>
+              )}
+              <View
                 style={[
-                  a.text_xs,
-                  a.font_semi_bold,
-                  t.atoms.text_contrast_medium,
+                  a.w_full,
+                  a.flex_row,
+                  a.flex_wrap,
+                  a.align_center,
+                  {gap: GAP},
                 ]}>
-                {sectionTitles[section.collection]}
-              </Text>
-            )}
-            <View style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP}]}>
-              {section.defs.map(def => (
-                <Swatch
-                  key={def.id}
-                  def={
-                    def.id === BACKDROP_SKIES_AUTO ||
-                    def.id === BACKDROP_SEASON_AUTO
-                      ? (resolveBackdrop(
-                          {...shown, backdrop: def.id},
-                          undefined,
-                          season,
-                        ) ?? def)
-                      : def
-                  }
-                  name={i18n._(def.name)}
-                  selected={def.id === selectedId}
-                  onSelect={() => selectBackdrop(did, def.id)}
-                  onShowName={setHoverName}
-                />
-              ))}
+                {section.defs.map(def => (
+                  <Swatch
+                    key={def.id}
+                    def={
+                      def.id === BACKDROP_SKIES_AUTO ||
+                      def.id === BACKDROP_SEASON_AUTO
+                        ? (resolveBackdrop(
+                            {...shown, backdrop: def.id},
+                            undefined,
+                            season,
+                          ) ?? def)
+                        : def
+                    }
+                    name={i18n._(def.name)}
+                    selected={def.id === selectedId}
+                    onSelect={() => selectBackdrop(did, def.id)}
+                    onShowName={showName(section.collection)}
+                  />
+                ))}
+                {/* The untitled first section (None) shows its name beside it. */}
+                {section.collection === 'system' && hovered !== null && (
+                  <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                    {hovered}
+                  </Text>
+                )}
+              </View>
             </View>
-          </View>
-        ))}
+          )
+        })}
+        {/*
+         * Film grain and the device switch sit just above the Custom chip
+         * (live check, 2026-10-21), so the custom card opens below them.
+         */}
+        {IS_WEB && <GrainToggle />}
+        {hasSession && <DeviceOptOutToggle />}
         <View style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP}]}>
           <CustomChip
             def={customDef(shown.custom)}
             selected={isCustom}
             onSelect={() => selectBackdrop(did, BACKDROP_CUSTOM)}
-            onShowName={setHoverName}
+            onShowName={() => {}}
           />
         </View>
       </View>
@@ -370,13 +404,13 @@ function HemisphereToggle() {
   )
 }
 
-function DeviceOptOutGroup() {
+function DeviceOptOutToggle() {
   const t = useTheme()
   const {t: l} = useLingui()
   const {device} = useAppearanceState()
   const label = l`Keep this device’s own appearance`
   return (
-    <SettingsList.Item style={[a.flex_col, a.align_start, a.gap_xs]}>
+    <View style={[a.w_full, a.gap_xs]}>
       <Toggle.Item
         name="horizon_backdrop_device_only"
         label={label}
@@ -389,7 +423,7 @@ function DeviceOptOutGroup() {
       <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
         {l`The backdrop, color mode, dark theme, font and font size set here stay on this device and are not saved to your account.`}
       </Text>
-    </SettingsList.Item>
+    </View>
   )
 }
 
@@ -398,13 +432,13 @@ function DeviceOptOutGroup() {
  * backdrop, this device only, off by default. Web only: native draws no
  * grain.
  */
-function GrainGroup() {
+function GrainToggle() {
   const t = useTheme()
   const {t: l} = useLingui()
   const {device} = useAppearanceState()
   const label = l`Film grain`
   return (
-    <SettingsList.Item style={[a.flex_col, a.align_start, a.gap_xs]}>
+    <View style={[a.w_full, a.gap_xs]}>
       <Toggle.Item
         name="horizon_backdrop_grain"
         label={label}
@@ -417,7 +451,7 @@ function GrainGroup() {
       <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
         {l`A fine grain over the backdrop that softens its gradients.`}
       </Text>
-    </SettingsList.Item>
+    </View>
   )
 }
 
@@ -503,15 +537,12 @@ function FrameStylePicker() {
 
 /** The Appearance screen's Horizon sections. Nothing with `BACKDROPS` off. */
 export function HorizonAppearanceSections() {
-  const {hasSession} = useSession()
   if (!BACKDROPS) return null
   return (
     <Animated.View layout={native(LinearTransition)}>
       <SettingsList.Divider />
       <BackdropGroup />
-      {hasSession && <DeviceOptOutGroup />}
       <SoftnessGroup />
-      {IS_WEB && <GrainGroup />}
       {SHOW_FRAME_STYLE_PICKER && COMPACT_FRAME_WINDOWS && <FrameStyleGroup />}
     </Animated.View>
   )
