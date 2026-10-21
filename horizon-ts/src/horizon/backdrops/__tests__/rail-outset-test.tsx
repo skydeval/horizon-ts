@@ -4,6 +4,7 @@ import {describe, expect, it, jest} from '@jest/globals'
 import type * as ThemesModule from '#/alf/themes'
 import {
   cardShape,
+  NAV_TOP_ALIGN,
   RAIL_CARD_OUTSET,
   RAIL_CARD_ROOM,
   railCardStyle,
@@ -51,7 +52,6 @@ const CARDS: {name: string; variant: RailCardVariant; stock?: ViewStyle}[] = [
     variant: 'rail',
     stock: {padding: 16, borderRadius: 8, borderWidth: 1},
   },
-  {name: 'the footer', variant: 'rail'},
 ]
 
 function num(style: ViewStyle, key: string) {
@@ -119,6 +119,24 @@ describe('rail cards grow outward (change list 2, item 10)', () => {
     expect(RAIL_CARD_OUTSET.nav.x).toBeLessThanOrEqual(16)
     // The tablet nav's card fits its 80px column: 48 + 2 x 13 = 74.
     expect(48 + 2 * RAIL_CARD_OUTSET.navMinimal.x).toBeLessThanOrEqual(80)
+  })
+
+  it('the footer keeps 16px padding, its edges in line with the rail cards', () => {
+    const footer = cardShape('footer')
+    const rail = cardShape('rail')
+    for (const side of SIDES) {
+      expect(footer[`padding${side}`]).toBe(16)
+      expect(footer[`margin${side}`]).toBe(rail[`margin${side}`])
+    }
+  })
+
+  it('the left nav card lines up with the right rail first card', () => {
+    // Rail: content 20px down, card 5px above it. Nav: content 16px down
+    // plus NAV_TOP_ALIGN, card 13px above it.
+    const railCardTop = 20 - RAIL_CARD_OUTSET.rail.y
+    const navCardTop = 16 + NAV_TOP_ALIGN - RAIL_CARD_OUTSET.nav.y
+    expect(navCardTop).toBe(railCardTop)
+    expect(NAV_TOP_ALIGN).toBe(12)
   })
 
   it('reads shorthand and longhand stock padding and borders', () => {

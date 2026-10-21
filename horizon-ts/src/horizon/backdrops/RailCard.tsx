@@ -21,7 +21,7 @@ import {type WindowShape} from '#/horizon/backdrops/frame'
 import {glassFor} from '#/horizon/backdrops/glass'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 
-export type RailCardVariant = 'rail' | 'nav' | 'navMinimal'
+export type RailCardVariant = 'rail' | 'nav' | 'navMinimal' | 'footer'
 
 /** The card's corner radius. */
 export const RAIL_CARD_RADIUS = 16
@@ -50,10 +50,30 @@ export const RAIL_CARD_OUTSET: Record<RailCardVariant, {x: number; y: number}> =
     rail: {x: 10, y: 5},
     nav: {x: 9, y: 13},
     navMinimal: {x: 13, y: 13},
+    footer: {x: 10, y: 5},
   }
+
+/*
+ * The footer card keeps the roomy 16px padding the cards had before change
+ * list 2 (live check, 2026-10-20): hugging its one line of links it read as
+ * a thin pill. Its edges line up with the other rail cards; its text moves
+ * in by the difference, which is harmless at the bottom of the rail.
+ */
+const FIXED_PADDING: Partial<Record<RailCardVariant, number>> = {footer: 16}
 
 /** The width the right rail adds on its right while cards are drawn. */
 export const RAIL_CARD_ROOM = RAIL_CARD_OUTSET.rail.x
+
+/*
+ * The left nav sits lower by this much, with or without a backdrop, so its
+ * card's top edge lines up with the right rail's first card (live check,
+ * 2026-10-20). The rail's content starts 20px down (its gutter) and its
+ * card 5px above that; the nav's content started 16px down (`a.p_lg`) and
+ * its card 13px above that. Applied in both states, so turning a backdrop
+ * on or off still moves nothing.
+ */
+export const NAV_TOP_ALIGN =
+  20 - RAIL_CARD_OUTSET.rail.y - (16 - RAIL_CARD_OUTSET.nav.y)
 
 type Side = 'Top' | 'Right' | 'Bottom' | 'Left'
 
@@ -106,11 +126,12 @@ export function cardShape(
   const flat: Record<string, unknown> = {...StyleSheet.flatten(style)}
   const inset = stockInset(style)
   const {x, y} = RAIL_CARD_OUTSET[variant]
+  const fixed = FIXED_PADDING[variant]
   const out: Record<string, number> = {}
   for (const side of SIDES) {
     const outset = side === 'Top' || side === 'Bottom' ? y : x
     out[`margin${side}`] = sideValue(flat, 'margin', side) - outset
-    out[`padding${side}`] = inset[side] + outset - BORDER
+    out[`padding${side}`] = fixed ?? inset[side] + outset - BORDER
   }
   return out
 }

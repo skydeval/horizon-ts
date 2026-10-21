@@ -121,7 +121,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
       {showExploreScreenDuplicatedContent && <SidebarTrendingTopics />}
 
       {/* HORIZON: start of the footer card (Phase 3, BD-8) */}
-      <RailCard>
+      <RailCard variant="footer">
         <Text style={[a.leading_snug, t.atoms.text_contrast_low]}>
           {hasSession && (
             <>

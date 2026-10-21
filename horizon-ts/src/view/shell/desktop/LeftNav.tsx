@@ -91,7 +91,7 @@ import {type Events} from '#/analytics/metrics/types'
 import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
 import {useActorStatus} from '#/features/liveNow'
 // HORIZON: the frosted nav card over the backdrop (Phase 3)
-import {RailCard} from '#/horizon/backdrops/RailCard'
+import {NAV_TOP_ALIGN, RailCard} from '#/horizon/backdrops/RailCard'
 import {type app} from '#/lexicons'
 import {router} from '#/routes'
 
@@ -647,6 +647,8 @@ export function DesktopLeftNav({routeName}: {routeName: string}) {
         a.fixed,
         a.top_0,
         a.p_lg,
+        // HORIZON: lower by NAV_TOP_ALIGN so the nav card lines up with the right rail's (Phase 3)
+        {paddingTop: a.p_lg.padding + NAV_TOP_ALIGN},
         styles.leftNav,
         !hasSession && !leftNavMinimal && {width: LEFT_NAV_PWI_WIDTH},
         leftNavMinimal && [
