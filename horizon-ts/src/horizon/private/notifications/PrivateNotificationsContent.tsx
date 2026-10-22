@@ -16,6 +16,7 @@ import {useSharedValue} from 'react-native-reanimated'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {useBottomBarOffset} from '#/lib/hooks/useBottomBarOffset'
+import {emitSoftReset} from '#/state/events'
 import {TabPills} from '#/screens/Notifications/components/TabPills'
 import {atoms as a, useTheme, web} from '#/alf'
 import * as Layout from '#/components/Layout'
@@ -64,6 +65,11 @@ export function PrivateNotificationsContent({
           dragProgress={progress}
           onSelectTab={key => {
             const next: PrivateTab = key === 'replies' ? 'replies' : 'all'
+            // Re-pressing the current pill scrolls it to the top, as stock
+            if (next === tab) {
+              emitSoftReset()
+              return
+            }
             progress.set(next === 'replies' ? 1 : 0)
             setTab(next)
           }}

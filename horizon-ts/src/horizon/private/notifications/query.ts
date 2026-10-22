@@ -17,13 +17,13 @@ import {moderateNotification} from '#/state/queries/notifications/grouped/modera
 import {useSession} from '#/state/session'
 import {useThreadgateHiddenReplyUris} from '#/state/threadgate-hidden-replies'
 import {getPrivateUnreadCount} from '#/horizon/private/api/reads'
-import {PRIVATE_NOTIFICATIONS_ROOT} from '#/horizon/private/cache-finders'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {
   fetchPrivateNotificationsPage,
   type PrivateNotificationsTab,
 } from '#/horizon/private/notifications/page'
+import {privateNotificationsQueryKey} from '#/horizon/private/notifications/refresh'
 import {
   countPrivateOnlyUnread,
   PRIVATE_UNREAD_OWN_ROOT,
@@ -36,12 +36,7 @@ import {PRIVATE_NOTIFICATIONS_SWITCH} from '#/horizon/switches'
  */
 export const PRIVATE_UNREAD_INTERVAL_MS = 30_000
 
-export function privateNotificationsQueryKey(
-  did: string,
-  tab: PrivateNotificationsTab,
-) {
-  return [PRIVATE_NOTIFICATIONS_ROOT, did, tab]
-}
+export {privateNotificationsQueryKey}
 
 /**
  * Whether the private notification queries run: the switch, a source, and
@@ -109,8 +104,17 @@ export function usePrivateNotificationsQuery({
  * prism's full unread count, for the Private tab's badge.
  */
 export function usePrivateUnreadCount(): number | undefined {
+  return usePrivateUnreadCheck()?.count
+}
+
+/**
+ * prism's full unread count and when it was last checked (or cleared by
+ * mark-seen), in ms since the epoch, for the Private list's "Refresh" pill.
+ */
+export function usePrivateUnreadCheck():
+  {count: number; checkedAt: number} | undefined {
   const source = useEnabledSource()
-  const {data} = useQuery({
+  const {data, dataUpdatedAt} = useQuery({
     enabled: !!source,
     queryKey: [PRIVATE_UNREAD_ROOT, source?.did ?? ''],
     queryFn: () => {
@@ -119,7 +123,9 @@ export function usePrivateUnreadCount(): number | undefined {
     },
     refetchInterval: PRIVATE_UNREAD_INTERVAL_MS,
   })
-  return source ? data : undefined
+  return source && data !== undefined
+    ? {count: data, checkedAt: dataUpdatedAt}
+    : undefined
 }
 
 /**

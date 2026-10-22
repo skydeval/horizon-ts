@@ -9,10 +9,17 @@
  * private notifications seen up to its request time, once this run's answer
  * lists `private.notifications`. Rows keep the read state prism served until
  * the list is asked again, so what was new stays tinted while it is open.
+ *
+ * Refresh (as the stock tabs have it): a soft reset (re-pressing the Private
+ * tab, the selected pill, or the Notifications tab button) scrolls to the top
+ * and asks for the first page again, and the stock "Refresh" pill is offered
+ * when prism's unread count says there's something new. The cached list stays
+ * shown while it asks, and if the ask fails.
  */
 
-import {useEffect, useRef, useState} from 'react'
+import {useEffect, useEffectEvent, useRef, useState} from 'react'
 import {ActivityIndicator, View} from 'react-native'
+import {useSharedValue} from 'react-native-reanimated'
 import {useLingui} from '@lingui/react/macro'
 import {useIsFocused} from '@react-navigation/native'
 import {useQueryClient} from '@tanstack/react-query'
@@ -21,18 +28,28 @@ import {isToday} from 'date-fns'
 import {useInitialNumToRender} from '#/lib/hooks/useInitialNumToRender'
 import {cleanError} from '#/lib/strings/errors'
 import {logger} from '#/logger'
+import {listenSoftReset} from '#/state/events'
 import {type NotificationView} from '#/state/queries/notifications/grouped'
 import {ErrorMessage} from '#/view/com/util/error/ErrorMessage'
-import {List} from '#/view/com/util/List'
+import {List, type ListMethods} from '#/view/com/util/List'
 import {NotificationFeedLoadingPlaceholder} from '#/view/com/util/LoadingPlaceholder'
 import {LoadMoreRetryBtn} from '#/view/com/util/LoadMoreRetryBtn'
 import {NotificationItem} from '#/screens/Notifications/components/NotificationItem'
+import {RefreshPill} from '#/screens/Notifications/components/RefreshPill'
 import {atoms as a, useTheme} from '#/alf'
 import {Text} from '#/components/Typography'
+import {IS_NATIVE} from '#/env'
 import {usePrismFeatureForWrite} from '#/horizon/private/features-hooks'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {type PrivateNotificationsTab} from '#/horizon/private/notifications/page'
-import {usePrivateNotificationsQuery} from '#/horizon/private/notifications/query'
+import {
+  usePrivateNotificationsQuery,
+  usePrivateUnreadCheck,
+} from '#/horizon/private/notifications/query'
+import {
+  isPrivateRefreshPillVisible,
+  refreshPrivateNotifications,
+} from '#/horizon/private/notifications/refresh'
 import {markPrivateNotificationsSeen} from '#/horizon/private/notifications/unread'
 
 type Row =
@@ -117,6 +134,32 @@ export function PrivateNotificationsList({
     })
   }, [topRequestedAt, mountedAt, isFocused, canMarkSeen, source, queryClient])
 
+  /*
+   * Back to the top and ask again, keeping the list shown while it asks. A
+   * failed ask keeps it too (the query keeps its data on error).
+   */
+  const listRef = useRef<ListMethods>(null)
+  const loadLatest = () => {
+    listRef.current?.scrollToOffset({animated: IS_NATIVE, offset: 0})
+    if (!source) return
+    void refreshPrivateNotifications(queryClient, source.did, tab)
+  }
+  const onSoftReset = useEffectEvent(loadLatest)
+  useEffect(() => {
+    if (!isFocused) return
+    return listenSoftReset(() => onSoftReset())
+  }, [isFocused])
+
+  const unread = usePrivateUnreadCheck()
+  const showRefreshPill = isPrivateRefreshPillVisible({
+    isActive: isFocused,
+    unread,
+    top,
+    isFetchingTop: isFetching && !isFetchingNextPage,
+  })
+  // The private pills don't hide on scroll, so the pill stays beneath them
+  const pillTitleHeight = useSharedValue(0)
+
   const notifications = data?.pages.flatMap(page => page.notifications) ?? []
   const isEmpty =
     isFetched && !isError && notifications.length === 0 && !hasNextPage
@@ -159,65 +202,74 @@ export function PrivateNotificationsList({
   }
 
   return (
-    <List
-      testID={`privateNotificationsList-${tab}`}
-      style={[a.flex_1]}
-      data={rows}
-      keyExtractor={(row: Row) => row.key}
-      renderItem={({item: row}: {item: Row}) => {
-        switch (row.type) {
-          case 'section':
-            return <SectionHeader section={row.section} />
-          case 'notification':
-            return <NotificationItem notification={row.notification} />
-          case 'loading':
-            return <NotificationFeedLoadingPlaceholder />
-          case 'empty':
-            return (
-              <View style={[a.px_lg, a.py_5xl]}>
-                <Text
-                  style={[
-                    a.text_md,
-                    a.leading_snug,
-                    a.text_center,
-                    t.atoms.text_contrast_medium,
-                  ]}>
-                  {l`No activity on your private posts yet.`}
-                </Text>
-              </View>
-            )
-          case 'error':
-            return (
-              <ErrorMessage
-                message={cleanError(error)}
-                onPressTryAgain={() => void refetch()}
-              />
-            )
-          case 'loadMoreError':
-            return (
-              <LoadMoreRetryBtn
-                label={l`There was an issue fetching notifications. Tap here to try again.`}
-                onPress={() => void fetchNextPage()}
-              />
-            )
+    <View style={[a.flex_1]}>
+      <List
+        ref={listRef}
+        testID={`privateNotificationsList-${tab}`}
+        style={[a.flex_1]}
+        data={rows}
+        keyExtractor={(row: Row) => row.key}
+        renderItem={({item: row}: {item: Row}) => {
+          switch (row.type) {
+            case 'section':
+              return <SectionHeader section={row.section} />
+            case 'notification':
+              return <NotificationItem notification={row.notification} />
+            case 'loading':
+              return <NotificationFeedLoadingPlaceholder />
+            case 'empty':
+              return (
+                <View style={[a.px_lg, a.py_5xl]}>
+                  <Text
+                    style={[
+                      a.text_md,
+                      a.leading_snug,
+                      a.text_center,
+                      t.atoms.text_contrast_medium,
+                    ]}>
+                    {l`No activity on your private posts yet.`}
+                  </Text>
+                </View>
+              )
+            case 'error':
+              return (
+                <ErrorMessage
+                  message={cleanError(error)}
+                  onPressTryAgain={() => void refetch()}
+                />
+              )
+            case 'loadMoreError':
+              return (
+                <LoadMoreRetryBtn
+                  label={l`There was an issue fetching notifications. Tap here to try again.`}
+                  onPress={() => void fetchNextPage()}
+                />
+              )
+          }
+        }}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={[a.pt_xl]}>
+              <ActivityIndicator />
+            </View>
+          ) : undefined
         }
-      }}
-      ListFooterComponent={
-        isFetchingNextPage ? (
-          <View style={[a.pt_xl]}>
-            <ActivityIndicator />
-          </View>
-        ) : undefined
-      }
-      refreshing={isPTRing}
-      onRefresh={() => void onRefresh()}
-      onEndReached={() => void onEndReached()}
-      onEndReachedThreshold={2}
-      contentContainerStyle={{paddingBottom: 200}}
-      initialNumToRender={initialNumToRender}
-      windowSize={11}
-      sideBorders={false}
-    />
+        refreshing={isPTRing}
+        onRefresh={() => void onRefresh()}
+        onEndReached={() => void onEndReached()}
+        onEndReachedThreshold={2}
+        contentContainerStyle={{paddingBottom: 200}}
+        initialNumToRender={initialNumToRender}
+        windowSize={11}
+        sideBorders={false}
+      />
+      <RefreshPill
+        visible={showRefreshPill}
+        headerHeight={0}
+        titleHeight={pillTitleHeight}
+        onPress={loadLatest}
+      />
+    </View>
   )
 }
 

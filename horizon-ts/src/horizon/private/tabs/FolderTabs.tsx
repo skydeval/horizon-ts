@@ -25,11 +25,17 @@ export function FolderTabs<K extends string>({
   tabs,
   selected,
   onSelect,
+  onReselect,
   testID,
 }: {
   tabs: FolderTab<K>[]
   selected: K
   onSelect: (key: K) => void
+  /**
+   * Pressing the tab already selected, e.g. to scroll its list to the top
+   * and refresh it, as re-pressing a stock tab does.
+   */
+  onReselect?: (key: K) => void
   testID?: string
 }) {
   const t = useTheme()
@@ -62,7 +68,10 @@ export function FolderTabs<K extends string>({
             }
             accessibilityHint=""
             onPress={() => {
-              if (isSelected) return
+              if (isSelected) {
+                onReselect?.(tab.key)
+                return
+              }
               haptics.selection()
               onSelect(tab.key)
             }}
