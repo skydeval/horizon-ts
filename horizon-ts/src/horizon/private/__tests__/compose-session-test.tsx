@@ -81,10 +81,24 @@ jest.mock('#/horizon/private/audiences/AudienceEditorDialog', () => ({
 jest.mock('#/horizon/private/audiences/useAudiencesQuery', () => ({
   useAudiencesQuery: () => ({data: []}),
 }))
-jest.mock('#/horizon/private/membership', () => ({
-  useIsMember: () => true,
-  useIsConfirmedMember: () => true,
-}))
+jest.mock('#/horizon/private/membership', () => {
+  const routes = {
+    repoRoute: 'locus',
+    postingRoute: 'locus',
+    reason: undefined,
+    indexing: false,
+  }
+  return {
+    useIsMember: () => true,
+    useCanPostPrivately: () => ({
+      offered: true,
+      route: 'locus',
+      reason: undefined,
+      showsRouteNote: false,
+      routes,
+    }),
+  }
+})
 jest.mock('#/horizon/private/render/AudienceLabel', () => ({
   usePostAudienceLabel: () => undefined,
 }))

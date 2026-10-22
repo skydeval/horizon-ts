@@ -26,13 +26,31 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+import {type WriteRoutes} from '#/horizon/routing/write-route'
 import {
   privateAssetTypes,
   privateComposeAllows,
   privateComposeBlocker,
+  privateRouteBlocker,
+  privateRouteNote,
 } from '../composer/blockers'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
+
+function routes(
+  postingRoute: WriteRoutes['postingRoute'],
+  extra: Partial<WriteRoutes> = {},
+): WriteRoutes {
+  return {
+    repoRoute: postingRoute === 'locus' ? 'locus' : 'stock',
+    postingRoute,
+    reason: undefined,
+    indexing: false,
+    ...extra,
+  }
+}
+
+const LOCUS = routes('locus')
 
 function post(overrides: Partial<PostDraft> = {}): PostDraft {
   return {
@@ -67,19 +85,19 @@ beforeEach(() => {
 describe('private compose blockers', () => {
   it('nothing blocks a plain post', () => {
     const t = thread(post())
-    expect(privateComposeBlocker(t)).toBeUndefined()
-    expect(privateComposeAllows(t, true)).toBe(true)
+    expect(privateComposeBlocker(t, LOCUS)).toBeUndefined()
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(true)
   })
 
   it('a video blocks only while PRIVATE_VIDEO is off', () => {
     const t = thread(
       post({embed: {quote: undefined, media: video, link: undefined}} as never),
     )
-    expect(privateComposeBlocker(t)).toMatch(/video/)
-    expect(privateComposeAllows(t, true)).toBe(false)
+    expect(privateComposeBlocker(t, LOCUS)).toMatch(/video/)
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(false)
     mockVideo = true
-    expect(privateComposeBlocker(t)).toBeUndefined()
-    expect(privateComposeAllows(t, true)).toBe(true)
+    expect(privateComposeBlocker(t, LOCUS)).toBeUndefined()
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(true)
   })
 
   it('a gallery blocks only while PRIVATE_GALLERY is off; four images pass', () => {
@@ -97,31 +115,31 @@ describe('private compose blockers', () => {
         },
       } as never),
     )
-    expect(privateComposeBlocker(five)).toMatch(/up to four images/)
-    expect(privateComposeAllows(five, true)).toBe(false)
-    expect(privateComposeBlocker(four)).toBeUndefined()
+    expect(privateComposeBlocker(five, LOCUS)).toMatch(/up to four images/)
+    expect(privateComposeAllows(five, true, LOCUS)).toBe(false)
+    expect(privateComposeBlocker(four, LOCUS)).toBeUndefined()
     mockGallery = true
-    expect(privateComposeBlocker(five)).toBeUndefined()
-    expect(privateComposeAllows(five, true)).toBe(true)
+    expect(privateComposeBlocker(five, LOCUS)).toBeUndefined()
+    expect(privateComposeAllows(five, true, LOCUS)).toBe(true)
   })
 
   it('a quote with images blocks', () => {
     const t = thread(
       post({embed: {quote, media: images, link: undefined}} as never),
     )
-    expect(privateComposeBlocker(t)).toMatch(/images and a quote/)
-    expect(privateComposeAllows(t, true)).toBe(false)
+    expect(privateComposeBlocker(t, LOCUS)).toMatch(/images and a quote/)
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(false)
   })
 
   it('a self-label blocks', () => {
     const t = thread(post({labels: ['sexual']} as never))
-    expect(privateComposeBlocker(t)).toMatch(/content warnings/)
-    expect(privateComposeAllows(t, true)).toBe(false)
+    expect(privateComposeBlocker(t, LOCUS)).toMatch(/content warnings/)
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(false)
   })
 
   it('a blocker in any post of a thread blocks', () => {
     const t = thread(post(), post({labels: ['nudity']} as never))
-    expect(privateComposeAllows(t, true)).toBe(false)
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(false)
   })
 
   it('with the 0.3.1 constants on (K-1, K-2), a quote with media and a content warning pass', () => {
@@ -133,8 +151,8 @@ describe('private compose blockers', () => {
         embed: {quote, media: images, link: undefined},
       } as never),
     )
-    expect(privateComposeBlocker(t)).toBeUndefined()
-    expect(privateComposeAllows(t, true)).toBe(true)
+    expect(privateComposeBlocker(t, LOCUS)).toBeUndefined()
+    expect(privateComposeAllows(t, true, LOCUS)).toBe(true)
   })
 
   it('nothing blocks a public compose', () => {
@@ -144,7 +162,33 @@ describe('private compose blockers', () => {
         embed: {quote, media: video, link: undefined},
       } as never),
     )
-    expect(privateComposeAllows(t, false)).toBe(true)
+    expect(privateComposeAllows(t, false, LOCUS)).toBe(true)
+  })
+
+  it('a private compose on posting route checking or none is blocked with the route’s text (2K T-13)', () => {
+    const t = thread(post())
+    expect(privateComposeBlocker(t, routes('checking'))).toBe(
+      'Horizon is still checking your account.',
+    )
+    expect(privateComposeAllows(t, true, routes('checking'))).toBe(false)
+    expect(privateComposeBlocker(t, routes('none'))).toBe(
+      'Private posting isn’t available for your account yet. Your server doesn’t have it, and Horizon can’t prepare private posts for you right now.',
+    )
+    expect(privateComposeAllows(t, true, routes('none'))).toBe(false)
+    // A public compose is never blocked by the route.
+    expect(privateComposeAllows(t, false, routes('none'))).toBe(true)
+    expect(privateRouteBlocker(LOCUS)).toBeUndefined()
+    expect(privateRouteBlocker(routes('encode'))).toBeUndefined()
+  })
+
+  it('the none note words indexing and a missing encoder (8.1)', () => {
+    expect(privateRouteNote(routes('none', {indexing: true}))).toBe(
+      'Private posting isn’t available for your account yet. Horizon is still checking your account.',
+    )
+    expect(privateRouteNote(routes('none', {reason: 'no-encoder'}))).toBe(
+      'Private posting isn’t available for your account yet. Posting privately from your server isn’t available in this app yet.',
+    )
+    expect(privateRouteNote(LOCUS)).toBeUndefined()
   })
 
   it('the media picker offers images only while private and PRIVATE_VIDEO is off', () => {

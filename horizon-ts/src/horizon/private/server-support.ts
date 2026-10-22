@@ -190,3 +190,11 @@ export const PRIVATE_MEDIA_EXTRAS: boolean = true
  * the dialog's note covers.
  */
 export const PRIVATE_AUDIENCE_CHANGE: boolean = true
+
+/**
+ * The change of audience on posting route `encode` (2K design 4.5: a local
+ * re-encode at the same rkey, written with `putRecord` and a swap). Off until
+ * 2K-8 builds it: "Who can see" is hidden on that route and nothing writes
+ * the change there.
+ */
+export const ENCODE_AUDIENCE_CHANGE: boolean = false

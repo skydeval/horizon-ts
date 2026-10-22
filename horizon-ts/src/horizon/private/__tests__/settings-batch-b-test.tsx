@@ -16,9 +16,22 @@ const DID = 'did:plc:privateaaaaaaaaaaaaaaaaa'
 let mockIsMember = true
 /** prism's answers to the private notification preference calls. */
 const mockPrismCall = jest.fn<(...args: unknown[]) => Promise<unknown>>()
+/** Whether the composer offers Private (2K design 4.7). */
+let mockOffered = true
 jest.mock('#/horizon/private/membership', () => ({
   useIsMember: () => mockIsMember,
-  useIsConfirmedMember: () => mockIsMember,
+  useCanPostPrivately: () => ({
+    offered: mockIsMember && mockOffered,
+    route: mockOffered ? 'locus' : 'none',
+    reason: undefined,
+    showsRouteNote: !mockOffered,
+    routes: {
+      repoRoute: mockOffered ? 'locus' : 'stock',
+      postingRoute: mockOffered ? 'locus' : 'none',
+      reason: undefined,
+      indexing: false,
+    },
+  }),
   usePrivateFeedSource: () =>
     mockIsMember
       ? {did: 'did:plc:privateaaaaaaaaaaaaaaaaa', prism: {call: mockPrismCall}}
@@ -424,6 +437,20 @@ describe('Interaction settings (item 5)', () => {
       mockGroupValues.get('Choose who can see your private posts by default'),
     ).toEqual(['everyone'])
     expect(JSON.stringify(screen.toJSON())).not.toContain('Until you choose')
+  })
+
+  it('without Private offered, "New posts start as" and "New audience…" are hidden; the default audience and Audiences stay (2K T-11)', () => {
+    mockOffered = false
+    try {
+      const screen = show(<PrivatePostsSection />)
+      expect(screen.queryByText('New posts start as')).toBeNull()
+      expect(JSON.stringify(screen.toJSON())).not.toContain('New audience')
+      expect(screen.getByText('Default audience')).toBeTruthy()
+      expect(mockLinks).toContain('/settings/audiences')
+      expect(mockItems).not.toContain('private')
+    } finally {
+      mockOffered = true
+    }
   })
 
   it('the old Audiences row is not shown while Audiences lives here', () => {

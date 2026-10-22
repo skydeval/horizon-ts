@@ -58,7 +58,9 @@ import {
   answerPrismFeatures,
   resetPrismFeatures,
 } from '#/horizon/routing/features'
+import {repoRouteForDid, resetWriteRoutes} from '#/horizon/routing/write-route'
 import {PrivateAudienceMissingError} from '../api/audiences'
+import {PrivateRouteUnavailableError} from '../api/writer'
 import {
   deletePrivatePost,
   postPrivate,
@@ -180,6 +182,8 @@ function fakePds() {
         const failure = failures.gateDelete?.(key)
         if (failure) return failure
         gates.delete(key)
+        // A stock PDS deletes a private post as any record (2K 4.4).
+        if (call.body?.collection === PP) repo.delete(call.body?.rkey as string)
         return {status: 200, body: {}}
       }
       case 'com.atproto.repo.listRecords':
@@ -242,6 +246,19 @@ function opts(
 
 function nsids(calls: Call[]) {
   return calls.map(call => call.nsid)
+}
+
+/** Publish the account's clients with its PDS at `pdsUrl`. */
+function publishPds(pdsUrl: string) {
+  clearCurrentClients()
+  publishCurrentClients({
+    did: DID,
+    handle: 'alice.test',
+    pdsUrl,
+    pdsClient: pds.client,
+    prismClient: prism.client,
+    appviewClient: appview,
+  })
 }
 
 async function settle() {
@@ -309,15 +326,9 @@ beforeEach(() => {
   )
   mockPrismClient = prism.client
   appview = fakeClient(DID, () => ({status: 500, body: {}})).client
-  clearCurrentClients()
-  publishCurrentClients({
-    did: DID,
-    handle: 'alice.test',
-    pdsUrl: 'https://pds.example',
-    pdsClient: pds.client,
-    prismClient: prism.client,
-    appviewClient: appview,
-  })
+  // The jest setup's locus origin: the locus writers (2K T-12).
+  publishPds('https://pds.example')
+  resetWriteRoutes()
   clearPrivateStores()
   setComposeVisibility({
     visibility: 'private',
@@ -1213,5 +1224,129 @@ describe('media spoilers and content warnings (2J, T5)', () => {
     ])
     // Only the first post, which has no content warning.
     expect(mockResolveSpoilerRT).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the write routes (2K-1)', () => {
+  /** Bluesky's PDS, and a stock PDS: repo route `stock`. */
+  const BSKY_SHARD = 'https://chalciporus.us-west.host.bsky.network'
+  const STOCK = 'https://pds.stock.example'
+  /** A kryphocron host missing from `LOCUS_PDS_ORIGINS` (PA-5). */
+  const OTHER_LOCUS = 'https://locus-two.example'
+
+  function store(rkey: string) {
+    pds.repo.set(rkey, {
+      cid: recordCids[0],
+      record: {$type: PP, text: 'mine', createdAt: '2026-10-15T12:00:00.000Z'},
+    })
+  }
+
+  it.each([BSKY_SHARD, STOCK])(
+    'on %s a private compose is refused before any read, upload or write (4.9, the 2K-1 fault)',
+    async pdsUrl => {
+      publishPds(pdsUrl)
+      mockResolveEmbed.mockClear()
+      const onStateChange = jest.fn()
+      const error = await postPrivate(new QueryClient(), {
+        ...opts(['hello']),
+        onStateChange,
+      }).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(PrivateRouteUnavailableError)
+      expect((error as Error).message).toBe(
+        'Private posting isn’t available for your account right now. Nothing was posted.',
+      )
+      expect(pds.calls).toEqual([])
+      expect(prism.calls).toEqual([])
+      expect(mockResolveEmbed).not.toHaveBeenCalled()
+      expect(onStateChange).not.toHaveBeenCalled()
+    },
+  )
+
+  it('on a stock PDS a private post is deleted with deleteRecord, then requestRecord (4.4, T-9)', async () => {
+    publishPds(STOCK)
+    store('3kmine222222')
+    await deletePrivatePost(pds.client, privateUri('3kmine222222'))
+    await settle()
+    expect(nsids(pds.calls)).toEqual(['com.atproto.repo.deleteRecord'])
+    expect(pds.calls[0].body).toEqual({
+      repo: DID,
+      collection: PP,
+      rkey: '3kmine222222',
+    })
+    expect(pds.repo.has('3kmine222222')).toBe(false)
+    expect(nsids(prism.calls)).toEqual(['app.nearhorizon.index.requestRecord'])
+  })
+
+  it('a stock delete that fails while the record remains rethrows; one already gone counts as done', async () => {
+    publishPds(STOCK)
+    pds.failures.gateDelete = () => ({status: 500, body: {error: 'Oops'}})
+    store('3kmine222222')
+    await expect(
+      deletePrivatePost(pds.client, privateUri('3kmine222222')),
+    ).rejects.toBeDefined()
+    await expect(
+      deletePrivatePost(pds.client, privateUri('3knotthere22')),
+    ).resolves.toBeUndefined()
+  })
+
+  it.each([
+    'KryphocronRecordRequiresDedicatedEndpoint',
+    'KryphocronRecordNotYetSupported',
+  ])(
+    'a stock delete refused with %s is retried once through deletePostPrivate, and the routes become locus (PA-5, T-8)',
+    async refusal => {
+      publishPds(OTHER_LOCUS)
+      expect(repoRouteForDid(DID)).toBe('stock')
+      pds.failures.gateDelete = key =>
+        key.startsWith(PP) ? {status: 400, body: {error: refusal}} : undefined
+      store('3kmine222222')
+      await deletePrivatePost(pds.client, privateUri('3kmine222222'))
+      expect(nsids(pds.calls)).toEqual([
+        'com.atproto.repo.deleteRecord',
+        'tools.kryphocron.feed.deletePostPrivate',
+      ])
+      expect(pds.repo.has('3kmine222222')).toBe(false)
+      expect(repoRouteForDid(DID)).toBe('locus')
+    },
+  )
+
+  it('a generic 400 on a stock delete is not a PA-5 match', async () => {
+    publishPds(OTHER_LOCUS)
+    pds.failures.gateDelete = () => ({
+      status: 400,
+      body: {error: 'InvalidRequest'},
+    })
+    store('3kmine222222')
+    await expect(
+      deletePrivatePost(pds.client, privateUri('3kmine222222')),
+    ).rejects.toBeDefined()
+    expect(nsids(pds.calls)).not.toContain(
+      'tools.kryphocron.feed.deletePostPrivate',
+    )
+    expect(repoRouteForDid(DID)).toBe('stock')
+  })
+
+  it('a compose’s rollback deletes through the repo writer taken at entry, though the route moved mid-compose (PA-20, T-17)', async () => {
+    pds.failures.create = (_call, index) => {
+      if (index !== 1) return undefined
+      // The account's PDS now reads as another host: the compose keeps its writers.
+      publishPds(STOCK)
+      return {status: 500, body: {error: 'InternalServerError'}}
+    }
+    await expect(
+      postPrivate(new QueryClient(), opts(['one', 'two'])),
+    ).rejects.toBeDefined()
+    expect(repoRouteForDid(DID)).toBe('stock')
+    expect(nsids(pds.calls)).toContain(
+      'tools.kryphocron.feed.deletePostPrivate',
+    )
+    expect(
+      pds.calls.filter(
+        c =>
+          c.nsid === 'com.atproto.repo.deleteRecord' &&
+          c.body?.collection === PP,
+      ),
+    ).toEqual([])
+    expect(pds.repo.size).toBe(0)
   })
 })

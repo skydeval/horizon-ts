@@ -7,6 +7,13 @@
  * content warning is blocked rather than published without it. These
  * messages are the interim behaviour of a server dependency, not a statement
  * that the feature is not coming.
+ *
+ * A private compose is also blocked while the account's posting route is
+ * `checking` or `none` (2K design 8.1): a locked reply, or a private draft
+ * restored, on an account that cannot post privately yet. The route always
+ * comes in as an argument from a hook (PA-26): the composer calls these in
+ * render, and React Compiler memoizes them on their arguments, so a store
+ * read in here would keep a stale answer.
  */
 
 import {t} from '@lingui/core/macro'
@@ -16,12 +23,50 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+import {PRODUCT_NAME} from '#/horizon/branding'
 import {
   PRIVATE_GALLERY,
   PRIVATE_LANGS_LABELS,
   PRIVATE_QUOTE_WITH_MEDIA,
   PRIVATE_VIDEO,
 } from '#/horizon/private/server-support'
+import {type WriteRoutes} from '#/horizon/routing/write-route'
+
+/**
+ * The first sentence of the `none` note, also the inert Private segment's
+ * accessibility hint.
+ */
+export function privateRouteHint(): string {
+  return t`Private posting isn’t available for your account yet.`
+}
+
+/**
+ * The note for posting route `checking` or `none` (8.1), else `undefined`.
+ * Neutral about locus versus elsewhere (LO-3, SQ-13).
+ */
+export function privateRouteNote(
+  routes: Pick<WriteRoutes, 'postingRoute' | 'reason' | 'indexing'>,
+): string | undefined {
+  if (routes.postingRoute === 'checking') {
+    return t`${PRODUCT_NAME} is still checking your account.`
+  }
+  if (routes.postingRoute !== 'none') return undefined
+  if (routes.reason === 'no-encoder') {
+    return t`Private posting isn’t available for your account yet. Posting privately from your server isn’t available in this app yet.`
+  }
+  if (routes.indexing) {
+    return t`Private posting isn’t available for your account yet. ${PRODUCT_NAME} is still checking your account.`
+  }
+  return t`Private posting isn’t available for your account yet. Your server doesn’t have it, and ${PRODUCT_NAME} can’t prepare private posts for you right now.`
+}
+
+/**
+ * What blocks a private compose because of the posting route: the note while
+ * it is `checking` or `none`, else `undefined`.
+ */
+export function privateRouteBlocker(routes: WriteRoutes): string | undefined {
+  return privateRouteNote(routes)
+}
 
 function hasVideo(post: PostDraft) {
   return post.embed.media?.type === 'video'
@@ -40,10 +85,15 @@ function hasSelfLabel(post: PostDraft) {
 }
 
 /**
- * The first blocker message that applies to a private compose of `thread`,
- * else `undefined`.
+ * The first blocker message that applies to a private compose of `thread` on
+ * `routes`, else `undefined`.
  */
-export function privateComposeBlocker(thread: ThreadDraft): string | undefined {
+export function privateComposeBlocker(
+  thread: ThreadDraft,
+  routes: WriteRoutes,
+): string | undefined {
+  const route = privateRouteBlocker(routes)
+  if (route) return route
   if (!PRIVATE_VIDEO && thread.posts.some(hasVideo)) {
     return t`Private posts can’t include video yet.`
   }
@@ -66,8 +116,9 @@ export function privateComposeBlocker(thread: ThreadDraft): string | undefined {
 export function privateComposeAllows(
   thread: ThreadDraft,
   isPrivate: boolean,
+  routes: WriteRoutes,
 ): boolean {
-  return !isPrivate || privateComposeBlocker(thread) === undefined
+  return !isPrivate || privateComposeBlocker(thread, routes) === undefined
 }
 
 /**

@@ -3,6 +3,9 @@
  * list audience (the Audiences screen's New list, and New audience... under
  * Who can see); `kind: 'replyList'` makes a Bluesky curate list for reply
  * rules (New reply list... under Who can reply, 5.5). Both are public lists.
+ * With `editing`, the same dialog edits a list audience (2K design 4.7):
+ * "Edit list", its name and people filled in, and Save, swapping on the CID
+ * it was listed with.
  *
  * The member picker is the stock `SearchablePeopleList`, shown as a second
  * step of the same dialog. That list closes its dialog from its own header
@@ -10,16 +13,17 @@
  * step instead, so the picker never closes the editor.
  */
 
-import {useContext, useState} from 'react'
+import {useContext, useEffect, useState} from 'react'
 import {View} from 'react-native'
+import {type DidString} from '@atproto/syntax'
 import {type ModerationOpts} from '@bsky/sdk/moderation'
 import {Trans, useLingui} from '@lingui/react/macro'
-import {useQueryClient} from '@tanstack/react-query'
+import {useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {cleanError} from '#/lib/strings/errors'
 import {logger} from '#/logger'
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
-import {usePdsClient, useSession} from '#/state/session'
+import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
 import {atoms as a, useTheme, web} from '#/alf'
 import {Admonition} from '#/components/Admonition'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
@@ -36,15 +40,32 @@ import {Loader} from '#/components/Loader'
 import * as ProfileCard from '#/components/ProfileCard'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
-import {createListAudience} from '#/horizon/private/api/audiences'
+import {
+  AudienceChangedError,
+  type AudienceEntry,
+  createListAudience,
+  updateListAudience,
+} from '#/horizon/private/api/audiences'
 import {
   createReplyList,
   ReplyListPartlyCreatedError,
 } from '#/horizon/private/api/reply-lists'
+import {PrivateKryphocronHostError} from '#/horizon/private/api/writer'
 import {getPrismClient} from '#/horizon/routing/prism'
+import {app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
 type Member = bsky.profile.AnyProfileView
+
+const PROFILES_BATCH = 25
+
+/**
+ * A list member before their profile has loaded: the DID stands in for the
+ * handle, so a member whose profile cannot be read is still kept on Save.
+ */
+function placeholderMember(did: string): Member {
+  return {did, handle: did} as Member
+}
 
 /**
  * What the editor creates.
@@ -53,21 +74,30 @@ export type ListEditorKind = 'audience' | 'replyList'
 
 /**
  * The editor dialog. `onCreated` runs after the dialog has closed, with the
- * new list's URI and name.
+ * new list's URI and name (not called for an edit).
  */
 export function AudienceEditorDialog({
   control,
   onCreated,
   kind = 'audience',
+  editing,
 }: {
   control: Dialog.DialogControlProps
   onCreated?: (uri: string, name: string) => void
   kind?: ListEditorKind
+  /** A list audience to edit instead of creating one. */
+  editing?: AudienceEntry
 }) {
   return (
     <Dialog.Outer control={control} nativeOptions={{fullHeight: true}}>
       <Dialog.Handle />
-      <EditorInner control={control} onCreated={onCreated} kind={kind} />
+      <EditorInner
+        key={editing?.uri ?? 'new'}
+        control={control}
+        onCreated={onCreated}
+        kind={kind}
+        editing={editing}
+      />
     </Dialog.Outer>
   )
 }
@@ -76,16 +106,49 @@ function EditorInner({
   control,
   onCreated,
   kind,
+  editing,
 }: {
   control: Dialog.DialogControlProps
   onCreated?: (uri: string, name: string) => void
   kind: ListEditorKind
+  editing: AudienceEntry | undefined
 }) {
+  const appviewClient = useAppviewClient()
   const [step, setStep] = useState<'details' | 'people'>('details')
-  const [name, setName] = useState('')
-  const [members, setMembers] = useState<Member[]>([])
+  const [name, setName] = useState(editing?.name ?? '')
+  const [members, setMembers] = useState<Member[]>(() =>
+    (editing?.members ?? []).map(placeholderMember),
+  )
   const dialogContext = useContext(DialogContext)
   const moderationOpts = useModerationOpts()
+
+  // An edited list's people, filled in as their profiles arrive.
+  const editedDids = editing?.members ?? []
+  const {data: profiles} = useQuery({
+    queryKey: ['horizon-audience-members', editing?.uri, editedDids],
+    queryFn: async () => {
+      const batches: DidString[][] = []
+      for (let i = 0; i < editedDids.length; i += PROFILES_BATCH) {
+        batches.push(editedDids.slice(i, i + PROFILES_BATCH) as DidString[])
+      }
+      const pages = await Promise.all(
+        batches.map(actors =>
+          appviewClient.call(app.bsky.actor.getProfiles, {actors}),
+        ),
+      )
+      return pages.flatMap(page => page.profiles)
+    },
+    enabled: editedDids.length > 0,
+  })
+  useEffect(() => {
+    if (!profiles) return
+    const byDid = new Map<string, Member>(
+      profiles.map(profile => [profile.did, profile]),
+    )
+    setMembers(current =>
+      current.map(member => byDid.get(member.did) ?? member),
+    )
+  }, [profiles])
 
   const toggleMember = (profile: Member) => {
     setMembers(current =>
@@ -125,6 +188,7 @@ function EditorInner({
       moderationOpts={moderationOpts}
       onCreated={onCreated}
       kind={kind}
+      editing={editing}
     />
   )
 }
@@ -188,6 +252,7 @@ function DetailsStep({
   moderationOpts,
   onCreated,
   kind,
+  editing,
 }: {
   control: Dialog.DialogControlProps
   name: string
@@ -198,6 +263,7 @@ function DetailsStep({
   moderationOpts: ModerationOpts | undefined
   onCreated?: (uri: string, name: string) => void
   kind: ListEditorKind
+  editing: AudienceEntry | undefined
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -217,6 +283,36 @@ function DetailsStep({
     setIsCreating(true)
     const memberDids = members.map(member => member.did)
     const listName = name.trim()
+    const clients = {
+      did: currentAccount.did,
+      pdsClient,
+      prismClient: getPrismClient(pdsClient),
+    }
+    if (editing) {
+      try {
+        await updateListAudience(queryClient, clients, {
+          entry: editing,
+          name,
+          members: memberDids,
+        })
+        control.close()
+      } catch (e) {
+        if (
+          e instanceof AudienceChangedError ||
+          e instanceof PrivateKryphocronHostError
+        ) {
+          setError(e.message)
+        } else {
+          logger.warn('editing a list failed', {
+            message: e instanceof Error ? e.message : String(e),
+          })
+          setError(cleanError(e instanceof Error ? e.message : String(e)))
+        }
+      } finally {
+        setIsCreating(false)
+      }
+      return
+    }
     try {
       const uri =
         kind === 'replyList'
@@ -225,15 +321,10 @@ function DetailsStep({
               {did: currentAccount.did, pdsClient},
               {name, members: memberDids},
             )
-          : await createListAudience(
-              queryClient,
-              {
-                did: currentAccount.did,
-                pdsClient,
-                prismClient: getPrismClient(pdsClient),
-              },
-              {name, members: memberDids},
-            )
+          : await createListAudience(queryClient, clients, {
+              name,
+              members: memberDids,
+            })
       control.close(() => onCreated?.(uri, listName))
     } catch (e) {
       if (e instanceof ReplyListPartlyCreatedError) {
@@ -255,10 +346,12 @@ function DetailsStep({
   }
 
   return (
-    <Dialog.ScrollableInner label={l`New list`} style={web({maxWidth: 480})}>
+    <Dialog.ScrollableInner
+      label={editing ? l`Edit list` : l`New list`}
+      style={web({maxWidth: 480})}>
       <View style={[a.gap_lg]}>
         <Text style={[a.text_2xl, a.font_bold]}>
-          <Trans>New list</Trans>
+          {editing ? <Trans>Edit list</Trans> : <Trans>New list</Trans>}
         </Text>
         <View>
           <TextField.LabelText>
@@ -338,14 +431,14 @@ function DetailsStep({
         {error ? <Admonition type="error">{error}</Admonition> : null}
 
         <Button
-          testID="audienceCreateButton"
-          label={l`Create list`}
+          testID={editing ? 'audienceSaveButton' : 'audienceCreateButton'}
+          label={editing ? l`Save list` : l`Create list`}
           color="primary"
           size="large"
           disabled={isCreating}
           onPress={() => void onCreate()}>
           <ButtonText>
-            <Trans>Create</Trans>
+            {editing ? <Trans>Save</Trans> : <Trans>Create</Trans>}
           </ButtonText>
           {isCreating && <ButtonIcon icon={Loader} />}
         </Button>

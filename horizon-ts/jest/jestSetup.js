@@ -5,6 +5,9 @@ import {configure} from '@testing-library/react-native'
 
 configure({asyncUtilTimeout: 20000})
 
+// HORIZON: the test PDS origin is a locus origin, so the private-posting tests run on the locus writers
+process.env.EXPO_PUBLIC_LOCUS_PDS_ORIGINS = 'https://pds.example'
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 )

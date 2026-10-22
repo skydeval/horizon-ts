@@ -23,6 +23,7 @@ import {logger} from '#/logger'
 import {nearhorizon} from '#/horizon/lexicons'
 import {
   answerPrismFeatures,
+  featuresAnswered,
   getPrismFeatures,
   loadPrismFeatures,
   type PrismFeatureList,
@@ -148,11 +149,31 @@ export function isPrivateMember(did: string | undefined): did is string {
 }
 
 /**
+ * Whether `did`'s membership answer may be acted on for a write or for the
+ * posting route (2K design PA-1a), per facet: `membership` (the state) and
+ * `features` (the feature list). The two differ: a `getMembership` answer
+ * with an unknown status records features without a state, and a
+ * `NotEnrolled` or `NotReady` from a private read answers a state without
+ * features. The only test of "answered"; today each facet is "answered by
+ * prism in this run". Fast reads (chainlink #5) adds a persisted answer still
+ * inside its validity here, and nowhere else.
+ */
+export function answerCurrent(did: string | undefined): {
+  membership: boolean
+  features: boolean
+} {
+  return {
+    membership: !!did && confirmed.has(did),
+    features: featuresAnswered(did),
+  }
+}
+
+/**
  * Whether `did`'s state was answered by prism in this run, rather than read
  * from the device. Writes that rely on membership need this.
  */
 export function isMembershipConfirmed(did: string | undefined): boolean {
-  return !!did && confirmed.has(did)
+  return answerCurrent(did).membership
 }
 
 /**

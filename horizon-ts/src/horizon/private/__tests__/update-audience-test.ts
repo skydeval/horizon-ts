@@ -4,6 +4,19 @@ import {beforeAll, beforeEach, describe, expect, it, jest} from '@jest/globals'
 jest.unmock('multiformats/cid')
 jest.unmock('multiformats/hashes/hasher')
 
+let mockEncodeAudienceChange = false
+jest.mock('#/horizon/private/server-support', () =>
+  Object.defineProperties(
+    {...jest.requireActual<object>('#/horizon/private/server-support')},
+    {
+      ENCODE_AUDIENCE_CHANGE: {
+        get: () => mockEncodeAudienceChange,
+        enumerable: true,
+      },
+    },
+  ),
+)
+
 import {i18n} from '@lingui/core'
 import {QueryClient} from '@tanstack/react-query'
 
@@ -14,11 +27,13 @@ import {
 } from '#/horizon/routing/current-clients'
 import {PrivateAudienceMissingError} from '../api/audiences'
 import {
+  audienceChangeOffered,
   canChangePostAudience,
   changePrivatePostAudience,
   PrivatePostChangedError,
   readOwnPostForSettings,
 } from '../api/update-audience'
+import {PrivateRouteUnavailableError} from '../api/writer'
 import {
   addPendingPost,
   clearPrivateStores,
@@ -252,6 +267,43 @@ describe('changePrivatePostAudience', () => {
     expect(pds.calls.map(c => c.nsid)).not.toContain(
       'tools.kryphocron.feed.updatePostPrivate',
     )
+  })
+})
+
+describe('Who can see by posting route (2K 8.1, T-13b)', () => {
+  it('is offered on locus, never on checking or none, and on encode only with ENCODE_AUDIENCE_CHANGE', () => {
+    mockEncodeAudienceChange = false
+    expect(audienceChangeOffered('locus')).toBe(true)
+    expect(audienceChangeOffered('checking')).toBe(false)
+    expect(audienceChangeOffered('none')).toBe(false)
+    expect(audienceChangeOffered('encode')).toBe(false)
+    mockEncodeAudienceChange = true
+    expect(audienceChangeOffered('encode')).toBe(true)
+    expect(audienceChangeOffered('none')).toBe(false)
+    mockEncodeAudienceChange = false
+  })
+
+  it('on any other PDS the change is refused before any read or write', async () => {
+    clearCurrentClients()
+    publishCurrentClients({
+      did: DID,
+      handle: 'alice.test',
+      pdsUrl: 'https://pds.stock.example',
+      pdsClient: pds.client,
+      prismClient: prism.client,
+      appviewClient: prism.client,
+    })
+    await expect(
+      changePrivatePostAudience({
+        queryClient: new QueryClient(),
+        clients: clients(),
+        postUri: POST,
+        swapCid: cids[0],
+        audience: {kind: 'mode', mode: 'followers'},
+      }),
+    ).rejects.toBeInstanceOf(PrivateRouteUnavailableError)
+    expect(pds.calls).toEqual([])
+    expect(prism.calls).toEqual([])
   })
 })
 

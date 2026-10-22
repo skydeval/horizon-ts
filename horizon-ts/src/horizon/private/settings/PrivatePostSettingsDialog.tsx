@@ -4,7 +4,9 @@
  *
  * - Who can see changes in place (7.8.1, `updatePostPrivate`, aurora A-9) on
  *   a top-level private post and on a branch root (A-13), while
- *   `PRIVATE_AUDIENCE_CHANGE` is on. Any other reply's audience is its
+ *   `PRIVATE_AUDIENCE_CHANGE` is on and the account's posting route offers
+ *   it (2K design 8.1: `locus`, and `encode` from 2K-8; never `checking` or
+ *   `none`). Any other reply's audience is its
  *   conversation's and is shown read-only. The post's record is read from the
  *   author's own PDS when the dialog opens: its CID is the swap, so a change
  *   made elsewhere since is refused rather than overwritten.
@@ -47,6 +49,7 @@ import {
   readRootThreadgate,
 } from '#/horizon/private/api/gates'
 import {
+  audienceChangeOffered,
   canChangePostAudience,
   changePrivatePostAudience,
   PrivatePostChangedError,
@@ -74,6 +77,7 @@ import {
 } from '#/horizon/private/settings/save-gates'
 import {usePrivatePostFacts} from '#/horizon/private/store'
 import {usePrismClient} from '#/horizon/routing/prism'
+import {useWriteRoute} from '#/horizon/routing/write-route'
 
 /**
  * After an audience change prism has not caught up with, the dialog's
@@ -138,6 +142,7 @@ function PrivatePostSettingsInner({
   const pdsClient = usePdsClient()
   const prismClient = usePrismClient()
   const queryClient = useQueryClient()
+  const {postingRoute} = useWriteRoute()
   const facts = usePrivatePostFacts(postUri)
   const isReply = rootPostUri !== postUri
   const ownsRoot =
@@ -161,7 +166,10 @@ function PrivatePostSettingsInner({
     isReply: stored ? stored.fields.isReply : isReply,
     parentUri: stored ? stored.fields.parent?.uri : parentUri,
   })
-  const canChangeAudience = PRIVATE_AUDIENCE_CHANGE && ownAudience
+  const canChangeAudience =
+    PRIVATE_AUDIENCE_CHANGE &&
+    ownAudience &&
+    audienceChangeOffered(postingRoute)
   const threadAudience = usePrismFeature('private.threadAudience')
   const warning = moveWarning({
     isReply: stored ? stored.fields.isReply : isReply,

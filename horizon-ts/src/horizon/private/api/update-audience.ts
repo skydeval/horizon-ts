@@ -8,14 +8,18 @@
  * reply's audience is its anchor's. The change applies downthread: replies
  * written later name the anchor's current audience (`reply-anchor.ts`), and
  * prism reads existing ones by it (P-21, P-22).
+ *
+ * The change goes through the posting writer (2K design 4.5): on posting
+ * route `locus` it is `updatePostPrivate`, as before; on `encode` it is
+ * offered from 2K-8 (`ENCODE_AUDIENCE_CHANGE`); on `checking` and `none` it is
+ * neither offered nor written.
  */
 
 import {type Client, XrpcResponseError} from '@atproto/lex'
-import {AtUri, type AtUriString, type DidString} from '@atproto/syntax'
+import {AtUri} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
 import {type QueryClient} from '@tanstack/react-query'
 
-import {kryphocron} from '#/horizon/lexicons'
 import {
   assertOwnAudienceExists,
   type AudienceClients,
@@ -27,13 +31,46 @@ import {
   readOwnPrivateRecord,
 } from '#/horizon/private/api/reply-anchor'
 import {requestRecordCaughtUp} from '#/horizon/private/api/request-record'
+import {
+  type PostingWriter,
+  postingWriterFor,
+} from '#/horizon/private/api/writer'
 import {type ComposeAudience} from '#/horizon/private/composer/state'
+import {ENCODE_AUDIENCE_CHANGE} from '#/horizon/private/server-support'
 import {applyPrivatePostAudience} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
+import {
+  clientDid,
+  getWriteRoute,
+  type PrivateWriteRoute,
+  type RepoRoute,
+} from '#/horizon/routing/write-route'
 
 /**
- * The post's record changed since its settings were opened (409
- * `InvalidSwap`); nothing was written.
+ * Whether "Who can see" is offered on posting route `route` (8.1): on
+ * `locus` as before, on `encode` only with `ENCODE_AUDIENCE_CHANGE`, never on
+ * `checking` or `none`.
+ */
+export function audienceChangeOffered(route: PrivateWriteRoute): boolean {
+  if (route === 'locus') return true
+  if (route === 'encode') return ENCODE_AUDIENCE_CHANGE
+  return false
+}
+
+/**
+ * A swap conflict: the error name `InvalidSwap` at any status on the stock
+ * repo route (a stock PDS answers 400), 409 on locus.
+ */
+function isSwapConflict(error: unknown, repoRoute: RepoRoute): boolean {
+  if (!(error instanceof XrpcResponseError)) return false
+  return repoRoute === 'stock'
+    ? error.error === 'InvalidSwap'
+    : error.status === 409
+}
+
+/**
+ * The post's record changed since its settings were opened (a swap
+ * conflict); nothing was written.
  */
 export class PrivatePostChangedError extends Error {
   constructor() {
@@ -80,9 +117,15 @@ async function resolveAudience(
   queryClient: QueryClient,
   clients: AudienceClients,
   audience: ComposeAudience,
+  writer: PostingWriter,
 ): Promise<string> {
   if (audience.kind === 'mode') {
-    return findOrCreateStandingAudience(queryClient, clients, audience.mode)
+    return findOrCreateStandingAudience(
+      queryClient,
+      clients,
+      audience.mode,
+      writer,
+    )
   }
   if (audience.kind === 'list') {
     await assertOwnAudienceExists(queryClient, clients, audience.uri)
@@ -98,8 +141,10 @@ async function resolveAudience(
  * whether it caught up, 2H design 5.7) and updates its facts, pinning the
  * new audience, and pending entry, so every label changes at once and does
  * not flip back. Returns the new audience, record CID and `caughtUp`. Throws
- * {@link PrivatePostChangedError} on a swap mismatch, and any other failure
- * as it comes.
+ * {@link PrivatePostChangedError} on a swap mismatch, and on the stock repo
+ * route without a swap CID (PA-24: a `putRecord` without one could re-create
+ * a deleted post); `PrivateRouteUnavailableError` before any read or write
+ * when the posting route offers no change; any other failure as it comes.
  */
 export async function changePrivatePostAudience({
   queryClient,
@@ -114,18 +159,27 @@ export async function changePrivatePostAudience({
   swapCid: string | undefined
   audience: ComposeAudience
 }): Promise<{audienceUri: string; cid: string; caughtUp: boolean}> {
-  const audienceUri = await resolveAudience(queryClient, clients, audience)
-  const {rkey} = new AtUri(postUri)
-  let res: {uri: string; cid: string}
+  // The writer, once (PA-20).
+  const routes = getWriteRoute(clientDid(clients.pdsClient) ?? clients.did)
+  const writer = postingWriterFor(
+    routes.postingRoute,
+    clients.pdsClient,
+    clients.did,
+  )
+  if (routes.repoRoute === 'stock' && !swapCid) {
+    throw new PrivatePostChangedError()
+  }
+  const audienceUri = await resolveAudience(
+    queryClient,
+    clients,
+    audience,
+    writer,
+  )
+  let res: {cid: string}
   try {
-    res = await clients.pdsClient.call(kryphocron.updatePostPrivate, {
-      repo: clients.did as DidString,
-      rkey,
-      audienceList: audienceUri as AtUriString,
-      ...(swapCid ? {swapRecord: swapCid} : {}),
-    })
+    res = await writer.changeAudience(postUri, swapCid, audienceUri)
   } catch (error) {
-    if (error instanceof XrpcResponseError && error.status === 409) {
+    if (isSwapConflict(error, routes.repoRoute)) {
       throw new PrivatePostChangedError()
     }
     throw error

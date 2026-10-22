@@ -2,7 +2,8 @@
  * One mount point for Horizon's app-wide pieces: the current-clients record
  * (first, so it is published before anything else runs), the in-place
  * sign-in window,
- * the password dialog, the membership probe and its notice, the appearance
+ * the password dialog, the membership probe and its notice, the write
+ * routes' PDS cross-check, the appearance
  * record's sync, the "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
@@ -21,6 +22,7 @@ import {
   MembershipProbe,
 } from '#/horizon/routing/MembershipNotice'
 import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
+import {WriteRouteResolver} from '#/horizon/routing/WriteRouteResolver'
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
 
 /**
@@ -65,6 +67,7 @@ export function HorizonHost() {
       <AppViewChangeReload />
       <MembershipProbe />
       <MembershipNotice />
+      <WriteRouteResolver />
       <AppearanceSync />
       <OtherAppSpoilersSync />
       <InPlaceSignInWindow />

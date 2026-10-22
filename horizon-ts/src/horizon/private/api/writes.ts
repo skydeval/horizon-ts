@@ -13,6 +13,11 @@
  * removes whatever was written, so a failed private compose leaves nothing
  * posted.
  *
+ * Each call takes its writers once, at entry, by the account's routes (2K
+ * design PA-9, PA-20): a compose goes through the posting writer, which
+ * refuses before any work while the posting route is `checking` or `none`;
+ * deletes and the rollback go through the repo writer, which every route has.
+ *
  * Logs name URIs only, never private text.
  */
 
@@ -68,6 +73,15 @@ import {
   requestRecordQuietly,
 } from '#/horizon/private/api/request-record'
 import {validatePrivateRecord} from '#/horizon/private/api/validate'
+import {
+  locusRepoWriter,
+  type PostingWriter,
+  postingWriterFor,
+  type PostProcedure,
+  PrivateKryphocronHostError,
+  type RepoWriter,
+  repoWriterFor,
+} from '#/horizon/private/api/writer'
 import {getComposeVisibility} from '#/horizon/private/composer/state'
 import {PRIVATE_LANGS_LABELS} from '#/horizon/private/server-support'
 import {
@@ -81,6 +95,7 @@ import {
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {getPrismClient} from '#/horizon/routing/prism'
+import {clientDid, getWriteRoute} from '#/horizon/routing/write-route'
 import {resolveSpoilerRT, spoilerWriteMode} from '#/horizon/spoilers/write'
 import {type app, com} from '#/lexicons'
 
@@ -118,16 +133,13 @@ export class PrivateGatesNotSavedError extends Error {
   }
 }
 
-type Procedure =
-  typeof kryphocron.createPostPrivate | typeof kryphocron.participatePrivate
-
 /**
  * What the first post of a compose is written under, decided before any
  * write.
  */
 type Plan = {
   audienceUri: string
-  procedure: Procedure
+  procedure: PostProcedure
   reply: {root: StrongRef; parent: StrongRef} | undefined
   /** The parent's view, when the parent is a private post. */
   parentView: app.bsky.feed.defs.PostView | undefined
@@ -153,6 +165,7 @@ async function planFirstPost(
   queryClient: QueryClient,
   clients: AudienceClients,
   opts: PostOpts,
+  writer: PostingWriter,
 ): Promise<Plan> {
   const replyTo = opts.replyTo
   if (replyTo && isPrivatePostUri(replyTo)) {
@@ -171,7 +184,12 @@ async function planFirstPost(
   const {audience} = getComposeVisibility()
   const audiencePromise = (async () => {
     if (audience.kind === 'mode') {
-      return findOrCreateStandingAudience(queryClient, clients, audience.mode)
+      return findOrCreateStandingAudience(
+        queryClient,
+        clients,
+        audience.mode,
+        writer,
+      )
     }
     if (audience.kind === 'list') {
       await assertOwnAudienceExists(queryClient, clients, audience.uri)
@@ -371,17 +389,19 @@ export function stopPrivateConfirmations() {
 }
 
 /**
- * Delete what a failed private compose wrote, newest first. Returns the URIs
- * that may remain.
+ * Delete what a failed private compose wrote, newest first, through the repo
+ * writer the compose took at its entry (PA-20), never one read again here.
+ * Returns the URIs that may remain.
  */
 async function rollBack(
+  writer: RepoWriter,
   pdsClient: Client,
   written: string[],
 ): Promise<string[]> {
   const remaining: string[] = []
   for (const uri of [...written].reverse()) {
     try {
-      await deletePrivatePost(pdsClient, uri)
+      await deleteThrough(writer, pdsClient, uri)
     } catch {
       remaining.push(uri)
     }
@@ -482,9 +502,23 @@ export async function postPrivate(
    * await (2J design, 4.6).
    */
   const composeSpoilers = getComposeSpoilers()
-  opts.onStateChange?.(t`Processing...`)
 
   const did = opts.pdsClient.assertDid
+  /*
+   * Both writers, once (PA-20): a route that changes during the compose does
+   * not move it, and its rollback deletes through the same repo writer. On
+   * posting route `checking` or `none` this throws before anything is
+   * resolved, uploaded or written.
+   */
+  const routes = getWriteRoute(did)
+  const postingWriter = postingWriterFor(
+    routes.postingRoute,
+    opts.pdsClient,
+    did,
+  )
+  const repoWriter = repoWriterFor(routes.repoRoute, opts.pdsClient)
+  opts.onStateChange?.(t`Processing...`)
+
   const prism = getPrismClient(opts.pdsClient)
   const clients: AudienceClients = {
     did,
@@ -492,7 +526,7 @@ export async function postPrivate(
     prismClient: prism,
   }
 
-  const plan = await planFirstPost(queryClient, clients, opts)
+  const plan = await planFirstPost(queryClient, clients, opts, postingWriter)
 
   /*
    * Every post's text and embed, resolved before any gate or post is
@@ -563,8 +597,8 @@ export async function postPrivate(
       opts.onStateChange?.(t`Posting privately...`)
       let cid: string | undefined
       try {
-        await opts.pdsClient.call(plan.procedure, {
-          repo: did,
+        await postingWriter.createPost({
+          procedure: plan.procedure,
           rkey,
           record,
         })
@@ -641,7 +675,7 @@ export async function postPrivate(
     }
   } catch (error) {
     const remaining = [
-      ...(await rollBack(opts.pdsClient, written)),
+      ...(await rollBack(repoWriter, opts.pdsClient, written)),
       ...(await deleteGates(opts.pdsClient, gateUris)),
     ]
     if (remaining.length > 0) {
@@ -688,25 +722,40 @@ export function invalidateAuthorPrivateFeeds(
 }
 
 /**
- * Delete a private post through `deletePostPrivate`. If the procedure fails,
- * `getRecord` decides: a post already gone counts as deleted; otherwise the
- * procedure's error is rethrown. Then prism is told, and the post's pending
- * entry and facts are forgotten.
+ * Delete a private post through `writer`. If the delete fails, `getRecord`
+ * decides: a post already gone counts as deleted; otherwise the error is
+ * rethrown. A stock delete that a kryphocron host refused (PA-5, which has
+ * already moved the routes) is retried once through `deletePostPrivate`.
+ * Then prism is told, and the post's pending entry and facts are forgotten.
  */
-export async function deletePrivatePost(
+async function deleteThrough(
+  writer: RepoWriter,
   pdsClient: Client,
   uri: string,
 ): Promise<void> {
   const {host, rkey} = new AtUri(uri)
   try {
-    await pdsClient.call(kryphocron.deletePostPrivate, {
-      repo: host as DidString,
-      rkey,
-    })
+    await writer.deletePost(uri)
   } catch (error) {
+    if (error instanceof PrivateKryphocronHostError) {
+      return deleteThrough(locusRepoWriter(pdsClient), pdsClient, uri)
+    }
     const {state} = await readRecordState(pdsClient, host, rkey)
     if (state !== 'absent') throw error
   }
   requestRecordQuietly(getPrismClient(pdsClient), uri)
   forgetPrivatePost(uri)
+}
+
+/**
+ * Delete a private post (4.4) through the repo writer of the account's repo
+ * route: `deletePostPrivate` on locus, `deleteRecord` on any other PDS.
+ * Never depends on the posting route, membership, prism or the encoder.
+ */
+export async function deletePrivatePost(
+  pdsClient: Client,
+  uri: string,
+): Promise<void> {
+  const {repoRoute} = getWriteRoute(clientDid(pdsClient))
+  await deleteThrough(repoWriterFor(repoRoute, pdsClient), pdsClient, uri)
 }

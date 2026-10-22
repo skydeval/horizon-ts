@@ -1,23 +1,40 @@
-import {type Client} from '@atproto/lex'
+import {
+  type Client,
+  XrpcInvalidResponseError,
+  XrpcResponseError,
+} from '@atproto/lex'
 import {type AtUriString} from '@atproto/syntax'
 
 import {logger} from '#/logger'
 import {nearhorizon} from '#/horizon/lexicons'
 
 /**
+ * What a failed `requestRecord` is logged with: the error name and the HTTP
+ * status, never a message (2K design 6: a server's message can echo the
+ * request).
+ */
+function failureFields(error: unknown): {name: string; status?: number} {
+  if (error instanceof XrpcResponseError) {
+    return {name: error.error, status: error.status}
+  }
+  if (error instanceof XrpcInvalidResponseError) {
+    return {name: 'InvalidResponse', status: error.response.status}
+  }
+  return {name: error instanceof Error ? error.name : 'unknown'}
+}
+
+/**
  * Ask prism to index one record of the caller's own repo now, after every
- * private create, private delete and audience create. Never throws: a
- * failure (prism's rate limit included) is logged and ignored, because the
- * firehose delivers the record anyway. Callers do not wait on it.
+ * private create, private delete and audience create, edit and delete.
+ * Never throws: a failure (prism's rate limit included) is logged and
+ * ignored, because the firehose delivers the record anyway. Callers do not
+ * wait on it.
  */
 export function requestRecordQuietly(prismClient: Client, uri: string): void {
   prismClient
     .call(nearhorizon.requestRecord, {uri: uri as AtUriString})
     .catch((error: unknown) => {
-      logger.warn('requestRecord failed', {
-        uri,
-        message: error instanceof Error ? error.message : String(error),
-      })
+      logger.warn('requestRecord failed', {uri, ...failureFields(error)})
     })
 }
 
@@ -43,10 +60,7 @@ export async function requestRecordCaughtUp(
     .then(
       res => res.caughtUp === true,
       (error: unknown) => {
-        logger.warn('requestRecord failed', {
-          uri,
-          message: error instanceof Error ? error.message : String(error),
-        })
+        logger.warn('requestRecord failed', {uri, ...failureFields(error)})
         return false
       },
     )

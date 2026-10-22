@@ -24,6 +24,12 @@ import {
   useConfirmedMember,
   useMembership,
 } from '#/horizon/routing/membership'
+import {
+  type PostingRouteReason,
+  type PrivateWriteRoute,
+  useWriteRoute,
+  type WriteRoutes,
+} from '#/horizon/routing/write-route'
 import {PRIVATE_READING} from '#/horizon/switches'
 
 /**
@@ -47,6 +53,38 @@ export function useIsConfirmedMember(): boolean {
   const confirmed = useConfirmedMember(currentAccount?.did)
   const served = usePrismFeatureForWrite('private')
   return confirmed && served
+}
+
+/**
+ * Whether the current account is offered Private in the composer, and why
+ * not (2K design 2.3). `offered` on posting route `locus` keeps today's test
+ * exactly ({@link useIsConfirmedMember}); on `encode` (from 2K-3) the route
+ * itself says so. `showsRouteNote` is who sees the `checking` and `none`
+ * interface instead (PA-3): on `checking` an account whose held membership is
+ * `member` or `indexing`; on `none` one answered `member` or `indexing` in
+ * this run. A non-member sees neither. `routes` words the note.
+ */
+export function useCanPostPrivately(): {
+  offered: boolean
+  route: PrivateWriteRoute
+  reason: PostingRouteReason | undefined
+  showsRouteNote: boolean
+  routes: WriteRoutes
+} {
+  const {currentAccount} = useSession()
+  const did = currentAccount?.did
+  // Every hook runs unconditionally (rules of hooks).
+  const routes = useWriteRoute()
+  const confirmed = useIsConfirmedMember()
+  const state = useMembership(did)
+  const answeredMember = useConfirmedMember(did)
+  const route = routes.postingRoute
+  const offered = (route === 'locus' && confirmed) || route === 'encode'
+  const showsRouteNote =
+    route === 'checking'
+      ? state === 'member' || state === 'indexing'
+      : route === 'none' && (answeredMember || routes.indexing)
+  return {offered, route, reason: routes.reason, showsRouteNote, routes}
 }
 
 /**

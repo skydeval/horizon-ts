@@ -1,24 +1,36 @@
 /*
  * Audience records (`tools.kryphocron.policy.audience`) in the account's own
  * repo: listing them, finding or creating the standing audiences the composer
- * offers (Everyone, Followers, People you follow, Only me), creating list
- * audiences, and their labels.
+ * offers (Everyone, Followers, People you follow, Only me), creating, editing
+ * and deleting list audiences, and their labels.
  *
- * aurora's `manageAudience` only creates (A-4), so there is no edit or
- * delete here yet.
+ * A create goes through the posting writer (2K design 4.7); an edit (lists
+ * only) and a delete through the repo writer, so they work on any PDS
+ * whatever the posting route. On locus they wait on A-4 (`AUDIENCE_EDIT`,
+ * PA-14): aurora's `manageAudience` only creates there today.
  */
 
-import {type Client} from '@atproto/lex'
+import {type Client, type LexMap, XrpcResponseError} from '@atproto/lex'
 import {AtUri, type DidString, toDatetimeString} from '@atproto/syntax'
 import {plural, t} from '@lingui/core/macro'
 import {type QueryClient} from '@tanstack/react-query'
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {STALE} from '#/state/queries'
-import {kryphocron} from '#/horizon/lexicons'
 import {requestRecordQuietly} from '#/horizon/private/api/request-record'
 import {utf8Length} from '#/horizon/private/api/validate'
+import {
+  type PostingWriter,
+  postingWriterForClient,
+  repoWriterForClient,
+} from '#/horizon/private/api/writer'
+import {AUDIENCE_EDIT} from '#/horizon/private/server-support'
 import {AUDIENCE_COLLECTION} from '#/horizon/private/uri'
+import {
+  clientDid,
+  type RepoRoute,
+  repoRouteForDid,
+} from '#/horizon/routing/write-route'
 import {com} from '#/lexicons'
 
 /**
@@ -37,6 +49,10 @@ export type AudienceEntry = {
   name?: string
   /** Member DIDs; other entries are ignored. */
   members: string[]
+  /** The record's CID as listed: the swap for an edit (4.7). */
+  cid?: string
+  /** The record's `createdAt`, kept by an edit. */
+  createdAt?: string
 }
 
 /**
@@ -75,6 +91,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 export function readAudienceRecord(
   uri: string,
   value: unknown,
+  cid?: string,
 ): AudienceEntry | undefined {
   if (!isObject(value)) return undefined
   const rkey = uri.split('/').pop() ?? ''
@@ -89,7 +106,9 @@ export function readAudienceRecord(
           typeof member === 'string' && member.startsWith('did:'),
       )
     : []
-  return {uri, rkey, mode, name, members}
+  const createdAt =
+    typeof value.createdAt === 'string' ? value.createdAt : undefined
+  return {uri, rkey, mode, name, members, cid, createdAt}
 }
 
 /**
@@ -110,7 +129,7 @@ export async function listAudiences(
       cursor,
     })
     for (const record of page.records) {
-      const entry = readAudienceRecord(record.uri, record.value)
+      const entry = readAudienceRecord(record.uri, record.value, record.cid)
       if (entry) entries.push(entry)
     }
     cursor = page.records.length > 0 ? page.cursor : undefined
@@ -190,27 +209,116 @@ export function orderAudiences(entries: readonly AudienceEntry[]): {
 }
 
 /**
- * The URI of the standing audience for `mode`, creating it when the account
- * has none. Two tabs creating one at once may make two records;
- * {@link pickStandingAudience} picks the same one afterwards. A failed create
- * throws.
+ * On repo route `stock`, a cached audience list older than this is not
+ * trusted for a write that names one of its audiences (4.7): the audience
+ * may have been deleted elsewhere since.
+ */
+export const CACHED_AUDIENCE_CONFIRM_MS = 10_000
+
+/**
+ * Whether one audience record exists on its owner's PDS: `present` for a
+ * record that parses, `absent` for `RecordNotFound`, `unknown` for any other
+ * error or a value that does not parse.
+ */
+export async function readAudienceState(
+  pdsClient: Client,
+  uri: string,
+): Promise<'present' | 'absent' | 'unknown'> {
+  try {
+    return (await readAudienceRecordAt(pdsClient, uri)) ? 'present' : 'unknown'
+  } catch (error) {
+    if (
+      error instanceof XrpcResponseError &&
+      error.error === 'RecordNotFound'
+    ) {
+      return 'absent'
+    }
+    return 'unknown'
+  }
+}
+
+/** Fetch the list fresh into the cache; a failure throws, before any write. */
+async function refetchAudiences(
+  queryClient: QueryClient,
+  clients: AudienceClients,
+): Promise<AudienceEntry[]> {
+  const fresh = await listAudiences(clients.pdsClient, clients.did)
+  queryClient.setQueryData(audiencesQueryKey(clients.did), fresh)
+  return fresh
+}
+
+/**
+ * The audience `pick` finds for a write, through the cache. On repo route
+ * `stock` a hit from a cached list older than
+ * {@link CACHED_AUDIENCE_CONFIRM_MS} is confirmed with one `getRecord`:
+ * `present` keeps it; `absent` fetches the list fresh and picks again
+ * without it, as if the cache had missed; `unknown` fetches the list fresh
+ * and lets it decide. With `refetchOnMiss`, a miss fetches the list fresh
+ * once.
+ */
+async function findForWrite(
+  queryClient: QueryClient,
+  clients: AudienceClients,
+  pick: (entries: readonly AudienceEntry[]) => AudienceEntry | undefined,
+  {refetchOnMiss}: {refetchOnMiss: boolean},
+): Promise<AudienceEntry | undefined> {
+  const repoRoute = repoRouteForDid(clientDid(clients.pdsClient) ?? clients.did)
+  const cached = await fetchAudiences(
+    queryClient,
+    clients.pdsClient,
+    clients.did,
+  )
+  const hit = pick(cached)
+  if (hit) {
+    const listedAt =
+      queryClient.getQueryState(audiencesQueryKey(clients.did))
+        ?.dataUpdatedAt ?? 0
+    if (
+      repoRoute !== 'stock' ||
+      Date.now() - listedAt <= CACHED_AUDIENCE_CONFIRM_MS
+    ) {
+      return hit
+    }
+    const state = await readAudienceState(clients.pdsClient, hit.uri)
+    if (state === 'present') return hit
+    const fresh = await refetchAudiences(queryClient, clients)
+    return pick(
+      state === 'absent' ? fresh.filter(entry => entry.uri !== hit.uri) : fresh,
+    )
+  }
+  if (!refetchOnMiss) return undefined
+  return pick(await refetchAudiences(queryClient, clients))
+}
+
+/**
+ * The URI of the standing audience for `mode`, creating it through the
+ * posting writer when the account has none. `writer` is the caller's, taken
+ * at its entry (PA-20); without one it is taken now. Two tabs creating one at
+ * once may make two records; {@link pickStandingAudience} picks the same one
+ * afterwards. A failed create throws.
  */
 export async function findOrCreateStandingAudience(
   queryClient: QueryClient,
   clients: AudienceClients,
   mode: StandingMode,
-): Promise<string> {
-  const entries = await fetchAudiences(
-    queryClient,
+  writer: PostingWriter = postingWriterForClient(
     clients.pdsClient,
     clients.did,
+  ),
+): Promise<string> {
+  const existing = await findForWrite(
+    queryClient,
+    clients,
+    entries => pickStandingAudience(entries, mode),
+    {refetchOnMiss: false},
   )
-  const existing = pickStandingAudience(entries, mode)
   if (existing) return existing.uri
   const now = toDatetimeString(new Date())
-  const res = await clients.pdsClient.call(kryphocron.manageAudience, {
-    repo: clients.did as DidString,
-    record: {$type: AUDIENCE_COLLECTION, mode, createdAt: now, updatedAt: now},
+  const res = await writer.createAudience({
+    $type: AUDIENCE_COLLECTION,
+    mode,
+    createdAt: now,
+    updatedAt: now,
   })
   requestRecordQuietly(clients.prismClient, res.uri)
   void queryClient.invalidateQueries({queryKey: audiencesQueryKey(clients.did)})
@@ -219,26 +327,24 @@ export async function findOrCreateStandingAudience(
 
 /**
  * Check that a list audience the composer names still exists in the
- * account's repo, refetching the list once if the cached one lacks it. aurora
- * does not check this, and a post naming a missing audience would be
- * readable by its author alone, so a miss throws
- * {@link PrivateAudienceMissingError} before anything is written.
+ * account's repo, refetching the list once if the cached one lacks it (and,
+ * on repo route `stock`, confirming an older cached hit). aurora does not
+ * check this, and a post naming a missing audience would be readable by its
+ * author alone, so a miss throws {@link PrivateAudienceMissingError} before
+ * anything is written.
  */
 export async function assertOwnAudienceExists(
   queryClient: QueryClient,
   clients: AudienceClients,
   uri: string,
 ): Promise<void> {
-  const cached = await fetchAudiences(
+  const found = await findForWrite(
     queryClient,
-    clients.pdsClient,
-    clients.did,
+    clients,
+    entries => entries.find(entry => entry.uri === uri),
+    {refetchOnMiss: true},
   )
-  if (cached.some(entry => entry.uri === uri)) return
-  const fresh = await listAudiences(clients.pdsClient, clients.did)
-  queryClient.setQueryData(audiencesQueryKey(clients.did), fresh)
-  if (fresh.some(entry => entry.uri === uri)) return
-  throw new PrivateAudienceMissingError()
+  if (!found) throw new PrivateAudienceMissingError()
 }
 
 /**
@@ -266,14 +372,8 @@ export function normalizeMembers(
   )
 }
 
-/**
- * Create a named list audience. Returns its URI.
- */
-export async function createListAudience(
-  queryClient: QueryClient,
-  clients: AudienceClients,
-  {name, members}: {name: string; members: readonly string[]},
-): Promise<string> {
+/** A list name, trimmed and checked as `manageAudience` checks it. */
+function listNameFor(name: string): string {
   const trimmed = name.trim()
   if (
     trimmed.length === 0 ||
@@ -282,23 +382,122 @@ export async function createListAudience(
   ) {
     throw new AudienceNameInvalidError()
   }
+  return trimmed
+}
+
+/**
+ * Create a named list audience through the posting writer. Returns its URI.
+ */
+export async function createListAudience(
+  queryClient: QueryClient,
+  clients: AudienceClients,
+  {name, members}: {name: string; members: readonly string[]},
+): Promise<string> {
+  const writer = postingWriterForClient(clients.pdsClient, clients.did)
+  const trimmed = listNameFor(name)
   const now = toDatetimeString(new Date())
-  const res = await clients.pdsClient.call(kryphocron.manageAudience, {
-    repo: clients.did as DidString,
-    record: {
-      $type: AUDIENCE_COLLECTION,
-      mode: 'list',
-      name: trimmed,
-      members: normalizeMembers(members, clients.did),
-      createdAt: now,
-      updatedAt: now,
-    },
+  const res = await writer.createAudience({
+    $type: AUDIENCE_COLLECTION,
+    mode: 'list',
+    name: trimmed,
+    members: normalizeMembers(members, clients.did),
+    createdAt: now,
+    updatedAt: now,
   })
   requestRecordQuietly(clients.prismClient, res.uri)
   await queryClient.invalidateQueries({
     queryKey: audiencesQueryKey(clients.did),
   })
   return res.uri
+}
+
+/**
+ * The list changed since its editor was opened (`InvalidSwap`); nothing was
+ * written.
+ */
+export class AudienceChangedError extends Error {
+  constructor() {
+    super(t`This list changed since you opened it. Close and try again.`)
+    this.name = 'AudienceChangedError'
+  }
+}
+
+/**
+ * Whether the Audiences screen offers edit and delete (PA-14): on repo route
+ * `stock` always, whatever the posting route; on locus once A-4 is live.
+ */
+export function audienceEditAvailable(repoRoute: RepoRoute): boolean {
+  return repoRoute === 'stock' || (repoRoute === 'locus' && AUDIENCE_EDIT)
+}
+
+/**
+ * Whether `entry` may be edited: lists only. A standing audience is never
+ * renamed, because {@link pickStandingAudience} would then skip it and the
+ * next compose would silently make a second one.
+ */
+export function isEditableAudience(entry: AudienceEntry): boolean {
+  return entry.mode === 'list'
+}
+
+/**
+ * Rename a list audience or change its members, through the repo writer,
+ * swapping on the CID it was listed with (always: PA-24). A stale CID fails
+ * as {@link AudienceChangedError}.
+ */
+export async function updateListAudience(
+  queryClient: QueryClient,
+  clients: AudienceClients,
+  {
+    entry,
+    name,
+    members,
+  }: {entry: AudienceEntry; name: string; members: readonly string[]},
+): Promise<void> {
+  const writer = repoWriterForClient(clients.pdsClient)
+  if (!isEditableAudience(entry) || !entry.cid) throw new AudienceChangedError()
+  const trimmed = listNameFor(name)
+  const now = toDatetimeString(new Date())
+  const record: LexMap = {
+    $type: AUDIENCE_COLLECTION,
+    mode: 'list',
+    name: trimmed,
+    members: normalizeMembers(members, clients.did),
+    createdAt: entry.createdAt ?? now,
+    updatedAt: now,
+  }
+  try {
+    await writer.updateAudienceRecord(entry.uri, record, entry.cid)
+  } catch (error) {
+    if (error instanceof XrpcResponseError && error.error === 'InvalidSwap') {
+      throw new AudienceChangedError()
+    }
+    throw error
+  }
+  requestRecordQuietly(clients.prismClient, entry.uri)
+  await queryClient.invalidateQueries({
+    queryKey: audiencesQueryKey(clients.did),
+  })
+}
+
+/**
+ * Delete an audience (any mode) through the repo writer. Posts naming it
+ * become visible to their author only; a standing mode's next compose makes
+ * a new one. The entry leaves the cached list once the delete succeeds, so
+ * no write trusts it (4.7), and the list is fetched again.
+ */
+export async function deleteAudience(
+  queryClient: QueryClient,
+  clients: AudienceClients,
+  uri: string,
+): Promise<void> {
+  const writer = repoWriterForClient(clients.pdsClient)
+  await writer.deleteAudience(uri)
+  queryClient.setQueryData<AudienceEntry[]>(
+    audiencesQueryKey(clients.did),
+    entries => entries?.filter(entry => entry.uri !== uri),
+  )
+  requestRecordQuietly(clients.prismClient, uri)
+  void queryClient.invalidateQueries({queryKey: audiencesQueryKey(clients.did)})
 }
 
 /**

@@ -324,7 +324,7 @@ export const ComposePost = ({
   const chatClient = useChatClient()
   const pdsClient = usePdsClient()
   // HORIZON: the composer owns the Public | Private record for its lifetime; a quote starts as the quoted post is
-  const isPrivate = usePrivateComposeSession(replyTo, initQuote)
+  const {isPrivate, postingRoute} = usePrivateComposeSession(replyTo, initQuote)
   // HORIZON: the composer owns the media spoiler and content warning snapshot for its lifetime
   const composeSpoilers = useComposeSpoilerSession()
   const queryClient = useQueryClient()
@@ -1038,7 +1038,7 @@ export const ComposePost = ({
 
   const canPost =
     // HORIZON: Publish is disabled while a private-post blocker applies
-    privateComposeAllows(thread, isPrivate) &&
+    privateComposeAllows(thread, isPrivate, postingRoute) &&
     !missingAltError &&
     !hasUnavailableChatInvite &&
     thread.posts.some(post => !isEmptyPost(post)) &&

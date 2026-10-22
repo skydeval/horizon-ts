@@ -8,19 +8,38 @@ import {i18n} from '@lingui/core'
 import {QueryClient} from '@tanstack/react-query'
 
 import {
+  clearCurrentClients,
+  publishCurrentClients,
+} from '#/horizon/routing/current-clients'
+import {repoRouteForDid, resetWriteRoutes} from '#/horizon/routing/write-route'
+import {
+  assertOwnAudienceExists,
+  AudienceChangedError,
+  audienceEditAvailable,
   type AudienceEntry,
   audienceLabel,
   AudienceNameInvalidError,
+  audiencesQueryKey,
+  CACHED_AUDIENCE_CONFIRM_MS,
   createListAudience,
+  deleteAudience,
   findOrCreateStandingAudience,
+  isEditableAudience,
   listAudiences,
   normalizeMembers,
   orderAudiences,
   pickStandingAudience,
   postAudienceLabel,
+  PrivateAudienceMissingError,
   readAudienceRecord,
   readAudienceRecordAt,
+  updateListAudience,
 } from '../api/audiences'
+import {
+  type PostingWriter,
+  PrivateKryphocronHostError,
+  PrivateRouteUnavailableError,
+} from '../api/writer'
 import {
   AUDIENCE,
   type Call,
@@ -49,7 +68,12 @@ function entry(
 let records: ReturnType<typeof entry>[] = []
 let createdUri = `at://${DID}/${COLLECTION}/3knewaudience`
 
+/** Answers ahead of the defaults below, for one test. */
+let extraHandler: ((call: Call) => Reply | undefined) | undefined
+
 function pdsHandler(call: Call): Reply {
+  const extra = extraHandler?.(call)
+  if (extra) return extra
   if (call.nsid === 'com.atproto.repo.listRecords') {
     return {status: 200, body: {records}}
   }
@@ -59,13 +83,26 @@ function pdsHandler(call: Call): Reply {
   return {status: 404, body: {error: 'NotFound'}}
 }
 
-function setup() {
+/**
+ * The account's clients, published with `pdsUrl` (default: the jest setup's
+ * locus origin, 2K T-12).
+ */
+function setup(pdsUrl = 'https://pds.example') {
   const pds = fakeClient(DID, pdsHandler)
   const prism = fakeClient(DID, () => ({
     status: 200,
     body: {status: 'indexed'},
   }))
   const queryClient = new QueryClient()
+  clearCurrentClients()
+  publishCurrentClients({
+    did: DID,
+    handle: 'alice.test',
+    pdsUrl,
+    pdsClient: pds.client,
+    prismClient: prism.client,
+    appviewClient: prism.client,
+  })
   return {
     pds,
     prism,
@@ -77,6 +114,8 @@ function setup() {
 beforeEach(() => {
   records = []
   createdUri = `at://${DID}/${COLLECTION}/3knewaudience`
+  extraHandler = undefined
+  resetWriteRoutes()
 })
 
 describe('reading audience records', () => {
@@ -353,5 +392,361 @@ describe('the audience label on a post (7.2)', () => {
     expect(pds.calls[0].params.get('repo')).toBe(OTHER_DID)
     expect(pds.calls[0].params.get('collection')).toBe(COLLECTION)
     expect(pds.calls[0].params.get('rkey')).toBe('3kaudience33')
+  })
+})
+
+/** Any PDS that is not locus: a stock repo route (2K design 2.2). */
+const STOCK_PDS = 'https://pds.stock.example'
+const LIST_CID = 'bafyreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm'
+
+function nsids(calls: Call[]) {
+  return calls.map(call => call.nsid)
+}
+
+describe('audience edit and delete by the repo route (2K 4.7, T-11)', () => {
+  const LIST = entry('3klist2222222', {
+    mode: 'list',
+    name: 'Close friends',
+    members: [OTHER_DID],
+    createdAt: '2026-10-01T00:00:00.000Z',
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  })
+
+  async function listed(pds: ReturnType<typeof setup>['pds']) {
+    const entries = await listAudiences(pds.client, DID)
+    return entries[0]
+  }
+
+  it('is offered on repo route stock, not on locus while AUDIENCE_EDIT is off; lists only are edited', () => {
+    expect(audienceEditAvailable('stock')).toBe(true)
+    expect(audienceEditAvailable('locus')).toBe(false)
+    const list: AudienceEntry = {uri: 'u', rkey: 'r', mode: 'list', members: []}
+    expect(isEditableAudience(list)).toBe(true)
+    expect(isEditableAudience({...list, mode: 'followers'})).toBe(false)
+    expect(isEditableAudience({...list, mode: 'everyone'})).toBe(false)
+  })
+
+  it('edits a list with putRecord, swapping on the listed CID, whatever the posting route', async () => {
+    records = [LIST]
+    extraHandler = call =>
+      call.nsid === 'com.atproto.repo.putRecord'
+        ? {status: 200, body: {uri: LIST.uri, cid: LIST_CID}}
+        : undefined
+    const {pds, prism, queryClient, clients} = setup(STOCK_PDS)
+    const current = await listed(pds)
+    expect(current.cid).toBe(LIST_CID)
+    // No membership answer: the posting route is `checking`.
+    await updateListAudience(queryClient, clients, {
+      entry: current,
+      name: ' Best friends ',
+      members: [OTHER_DID, DID],
+    })
+    const put = pds.calls.find(c => c.nsid === 'com.atproto.repo.putRecord')
+    expect(put?.body).toMatchObject({
+      repo: DID,
+      collection: COLLECTION,
+      rkey: '3klist2222222',
+      swapRecord: LIST_CID,
+    })
+    const record = put?.body?.record as Record<string, unknown>
+    expect(record).toMatchObject({
+      $type: COLLECTION,
+      mode: 'list',
+      name: 'Best friends',
+      members: [OTHER_DID],
+      createdAt: '2026-10-01T00:00:00.000Z',
+    })
+    expect(record.updatedAt).not.toBe('2026-10-01T00:00:00.000Z')
+    expect(nsids(pds.calls)).not.toContain(
+      'tools.kryphocron.policy.manageAudience',
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(nsids(prism.calls)).toEqual(['app.nearhorizon.index.requestRecord'])
+  })
+
+  it('a stale CID (InvalidSwap, 400 on a stock PDS) is AudienceChangedError', async () => {
+    records = [LIST]
+    extraHandler = call =>
+      call.nsid === 'com.atproto.repo.putRecord'
+        ? {status: 400, body: {error: 'InvalidSwap', message: 'swap'}}
+        : undefined
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    const error = await updateListAudience(queryClient, clients, {
+      entry: await listed(pds),
+      name: 'x',
+      members: [],
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(AudienceChangedError)
+    expect((error as Error).message).toBe(
+      'This list changed since you opened it. Close and try again.',
+    )
+  })
+
+  it('never writes an edit without a swap CID', async () => {
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    await expect(
+      updateListAudience(queryClient, clients, {
+        entry: {
+          uri: LIST.uri,
+          rkey: '3klist2222222',
+          mode: 'list',
+          members: [],
+        },
+        name: 'x',
+        members: [],
+      }),
+    ).rejects.toBeInstanceOf(AudienceChangedError)
+    expect(nsids(pds.calls)).not.toContain('com.atproto.repo.putRecord')
+  })
+
+  it('deletes any audience with deleteRecord and drops it from the cached list', async () => {
+    records = [LIST, entry('3keveryone22', {mode: 'everyone'})]
+    extraHandler = call =>
+      call.nsid === 'com.atproto.repo.deleteRecord'
+        ? {status: 200, body: {}}
+        : undefined
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    queryClient.setQueryData(
+      audiencesQueryKey(DID),
+      await listAudiences(pds.client, DID),
+    )
+    const everyone = `at://${DID}/${COLLECTION}/3keveryone22`
+    await deleteAudience(queryClient, clients, everyone)
+    const del = pds.calls.find(c => c.nsid === 'com.atproto.repo.deleteRecord')
+    expect(del?.body).toEqual({
+      repo: DID,
+      collection: COLLECTION,
+      rkey: '3keveryone22',
+    })
+    expect(
+      queryClient
+        .getQueryData<AudienceEntry[]>(audiencesQueryKey(DID))
+        ?.map(item => item.uri),
+    ).toEqual([LIST.uri])
+  })
+
+  it('on repo route locus with AUDIENCE_EDIT off, edit and delete write nothing', async () => {
+    records = [LIST]
+    const {pds, queryClient, clients} = setup()
+    const current = await listed(pds)
+    pds.calls.length = 0
+    await expect(
+      updateListAudience(queryClient, clients, {
+        entry: current,
+        name: 'x',
+        members: [],
+      }),
+    ).rejects.toThrow()
+    await expect(
+      deleteAudience(queryClient, clients, current.uri),
+    ).rejects.toThrow()
+    expect(pds.calls).toEqual([])
+  })
+
+  it('a create on posting route checking or none is refused before any write', async () => {
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    await expect(
+      createListAudience(queryClient, clients, {name: 'x', members: []}),
+    ).rejects.toBeInstanceOf(PrivateRouteUnavailableError)
+    await expect(
+      findOrCreateStandingAudience(queryClient, clients, 'everyone'),
+    ).rejects.toBeInstanceOf(PrivateRouteUnavailableError)
+    expect(pds.calls).toEqual([])
+  })
+})
+
+describe('PA-5 on the audience writes (T-8)', () => {
+  const LIST = entry('3klist2222222', {mode: 'list', name: 'L-13 test'})
+  const REFUSALS = [
+    'KryphocronRecordRequiresDedicatedEndpoint',
+    'KryphocronRecordNotYetSupported',
+  ]
+
+  it.each(REFUSALS)(
+    'a 400 %s on a delete or an edit shows PA-5’s text and makes the routes locus',
+    async refusal => {
+      records = [LIST]
+      extraHandler = call =>
+        call.nsid === 'com.atproto.repo.deleteRecord' ||
+        call.nsid === 'com.atproto.repo.putRecord'
+          ? {status: 400, body: {error: refusal, message: 'refused'}}
+          : undefined
+      const {pds, queryClient, clients} = setup(STOCK_PDS)
+      const current = (await listAudiences(pds.client, DID))[0]
+      const deleted = await deleteAudience(
+        queryClient,
+        clients,
+        current.uri,
+      ).catch((e: unknown) => e)
+      expect(deleted).toBeInstanceOf(PrivateKryphocronHostError)
+      expect((deleted as Error).message).toBe(
+        'Your server has its own way to post privately. Try again.',
+      )
+      expect(repoRouteForDid(DID)).toBe('locus')
+      resetWriteRoutes()
+      const edited = await updateListAudience(queryClient, clients, {
+        entry: current,
+        name: 'x',
+        members: [],
+      }).catch((e: unknown) => e)
+      expect(edited).toBeInstanceOf(PrivateKryphocronHostError)
+      expect(repoRouteForDid(DID)).toBe('locus')
+    },
+  )
+
+  it('a generic 400, and a 400 with another name, change no route', async () => {
+    for (const body of [
+      {error: 'InvalidRequest', message: 'no'},
+      {error: 'KryphocronSomethingElse', message: 'no'},
+    ]) {
+      extraHandler = call =>
+        call.nsid === 'com.atproto.repo.deleteRecord'
+          ? {status: 400, body}
+          : undefined
+      const {queryClient, clients} = setup(STOCK_PDS)
+      const error = await deleteAudience(queryClient, clients, LIST.uri).catch(
+        (e: unknown) => e,
+      )
+      expect(error).not.toBeInstanceOf(PrivateKryphocronHostError)
+      expect(repoRouteForDid(DID)).toBe('stock')
+    }
+  })
+})
+
+describe('the audience cache on repo route stock (4.7, T-11)', () => {
+  const LIST = entry('3klist2222222', {mode: 'list', name: 'Close friends'})
+  const FOLLOWERS = entry('3kfollowers2', {mode: 'followers'})
+
+  /** A posting writer double, for a standing audience's create. */
+  function writer(): PostingWriter & {created: number} {
+    const double = {
+      route: 'encode' as const,
+      created: 0,
+      createPost: () => Promise.resolve(),
+      changeAudience: () => Promise.resolve({cid: 'c'}),
+      createAudience: () => {
+        double.created++
+        return Promise.resolve({uri: createdUri})
+      },
+    }
+    return double
+  }
+
+  /** The cached list, listed `ageMs` ago. */
+  function cache(
+    queryClient: QueryClient,
+    entries: ReturnType<typeof entry>[],
+    ageMs: number,
+  ) {
+    queryClient.setQueryData(
+      audiencesQueryKey(DID),
+      entries.map(item => readAudienceRecord(item.uri, item.value, item.cid)),
+      {updatedAt: Date.now() - ageMs},
+    )
+  }
+
+  function answerGetRecord(reply: Reply) {
+    extraHandler = call =>
+      call.nsid === 'com.atproto.repo.getRecord' ? reply : undefined
+  }
+
+  const OLD = CACHED_AUDIENCE_CONFIRM_MS + 1_000
+
+  it('a hit from a list cached under 10 s is used as is', async () => {
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    cache(queryClient, [LIST], 1_000)
+    await assertOwnAudienceExists(queryClient, clients, LIST.uri)
+    expect(pds.calls).toEqual([])
+  })
+
+  it('an older hit is confirmed with one getRecord: present keeps it', async () => {
+    answerGetRecord({
+      status: 200,
+      body: {uri: LIST.uri, cid: LIST_CID, value: LIST.value},
+    })
+    const {pds, queryClient, clients} = setup(STOCK_PDS)
+    cache(queryClient, [LIST], OLD)
+    await assertOwnAudienceExists(queryClient, clients, LIST.uri)
+    expect(nsids(pds.calls)).toEqual(['com.atproto.repo.getRecord'])
+    expect(pds.calls[0].params.get('rkey')).toBe('3klist2222222')
+  })
+
+  it('RecordNotFound: the list is fetched fresh, a list is missing, a standing mode is made again', async () => {
+    answerGetRecord({
+      status: 400,
+      body: {error: 'RecordNotFound', message: 'Could not locate record'},
+    })
+    // The PDS still lists them: absent wins for the one read.
+    records = [LIST, FOLLOWERS]
+    const first = setup(STOCK_PDS)
+    cache(first.queryClient, [LIST], OLD)
+    await expect(
+      assertOwnAudienceExists(first.queryClient, first.clients, LIST.uri),
+    ).rejects.toBeInstanceOf(PrivateAudienceMissingError)
+    expect(nsids(first.pds.calls)).toEqual([
+      'com.atproto.repo.getRecord',
+      'com.atproto.repo.listRecords',
+    ])
+
+    records = []
+    const second = setup(STOCK_PDS)
+    cache(second.queryClient, [FOLLOWERS], OLD)
+    const double = writer()
+    const uri = await findOrCreateStandingAudience(
+      second.queryClient,
+      second.clients,
+      'followers',
+      double,
+    )
+    expect(uri).toBe(createdUri)
+    expect(double.created).toBe(1)
+  })
+
+  it.each([
+    ['a network error', new Error('offline')],
+    ['a 5xx', {status: 502, body: {error: 'BadGateway'}}],
+    ['a 429', {status: 429, body: {error: 'RateLimitExceeded'}}],
+  ] as [string, Reply][])(
+    '%s on the getRecord: the list fetched fresh decides',
+    async (_name, reply) => {
+      answerGetRecord(reply)
+      records = [LIST]
+      const {pds, queryClient, clients} = setup(STOCK_PDS)
+      cache(queryClient, [LIST], OLD)
+      await assertOwnAudienceExists(queryClient, clients, LIST.uri)
+      expect(nsids(pds.calls)).toEqual([
+        'com.atproto.repo.getRecord',
+        'com.atproto.repo.listRecords',
+      ])
+      records = []
+      cache(queryClient, [LIST], OLD)
+      await expect(
+        assertOwnAudienceExists(queryClient, clients, LIST.uri),
+      ).rejects.toBeInstanceOf(PrivateAudienceMissingError)
+    },
+  )
+
+  it('when the fresh list fails too, the write fails with the PDS’s error', async () => {
+    extraHandler = call =>
+      call.nsid === 'com.atproto.repo.getRecord' ||
+      call.nsid === 'com.atproto.repo.listRecords'
+        ? {status: 500, body: {error: 'InternalServerError'}}
+        : undefined
+    const {queryClient, clients} = setup(STOCK_PDS)
+    cache(queryClient, [LIST], OLD)
+    const error = await assertOwnAudienceExists(
+      queryClient,
+      clients,
+      LIST.uri,
+    ).catch((e: unknown) => e)
+    expect(error).toBeDefined()
+    expect(error).not.toBeInstanceOf(PrivateAudienceMissingError)
+  })
+
+  it('on repo route locus an older hit is trusted, as before', async () => {
+    const {pds, queryClient, clients} = setup()
+    cache(queryClient, [LIST], OLD)
+    await assertOwnAudienceExists(queryClient, clients, LIST.uri)
+    expect(pds.calls).toEqual([])
   })
 })

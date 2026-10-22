@@ -17,6 +17,10 @@
  *
  * Each choice is saved at once to the account's posting defaults record
  * (`query.ts`). Non-members see the stock screen: neither piece renders.
+ * "New posts start as" and "New audience..." are shown only while the
+ * composer offers Private (2K design 4.7): a member whose posting route is
+ * `checking` or `none` keeps the default audience and Audiences, which edit
+ * and delete what exists.
  */
 
 import {View} from 'react-native'
@@ -50,7 +54,7 @@ import {
   type DefaultAudience,
   type PrivateDefaults,
 } from '#/horizon/private/defaults/record'
-import {useIsMember} from '#/horizon/private/membership'
+import {useCanPostPrivately, useIsMember} from '#/horizon/private/membership'
 
 /**
  * Whether the screen shows its two sections: the switches are on and the
@@ -104,9 +108,9 @@ export function PrivatePostsSection() {
 }
 
 function PrivateDefaultsForm() {
-  const {t: l} = useLingui()
   const {data: defaults, isError} = usePostingDefaultsQuery({enabled: true})
   const {mutate: save} = useSetPostingDefaultsMutation()
+  const {offered} = useCanPostPrivately()
 
   if (!defaults) {
     return isError ? (
@@ -125,66 +129,82 @@ function PrivateDefaultsForm() {
 
   return (
     <>
-      <View style={[a.gap_sm]}>
-        <Text style={[a.text_md, a.font_medium]}>
-          <Trans>New posts start as</Trans>
-        </Text>
-        <Toggle.Group
-          type="radio"
-          label={l`Choose whether new posts start public or private`}
-          values={[defaults.startAs]}
-          onChange={values => {
-            const next = values[0]
-            if (
-              (next === 'public' || next === 'private') &&
-              next !== defaults.startAs
-            ) {
-              change({startAs: next})
-            }
-          }}>
-          <View style={[a.flex_row, a.gap_sm]}>
-            <Toggle.Item
-              testID="defaultStartPublic"
-              name="public"
-              label={l`New posts start public`}
-              style={[a.flex_1]}>
-              {({selected}) => (
-                <Toggle.Panel active={selected}>
-                  <Toggle.Radio />
-                  <Toggle.PanelText>
-                    <Trans>Public</Trans>
-                  </Toggle.PanelText>
-                </Toggle.Panel>
-              )}
-            </Toggle.Item>
-            <Toggle.Item
-              testID="defaultStartPrivate"
-              name="private"
-              label={l`New posts start private`}
-              style={[a.flex_1]}>
-              {({selected}) => (
-                <Toggle.Panel active={selected}>
-                  <Toggle.Radio />
-                  <Toggle.PanelText>
-                    <Trans>Private</Trans>
-                  </Toggle.PanelText>
-                </Toggle.Panel>
-              )}
-            </Toggle.Item>
-          </View>
-        </Toggle.Group>
-        <HintText>
-          <Trans>
-            Replies and quotes start as the post they reply to or quote. Replies
-            to private posts are always private.
-          </Trans>
-        </HintText>
-      </View>
+      {offered ? (
+        <StartAsForm
+          startAs={defaults.startAs}
+          onChange={startAs => change({startAs})}
+        />
+      ) : null}
       <DefaultAudienceForm
         audience={defaults.audience}
         onChange={audience => change({audience})}
+        canCreate={offered}
       />
     </>
+  )
+}
+
+function StartAsForm({
+  startAs,
+  onChange,
+}: {
+  startAs: PrivateDefaults['startAs']
+  onChange: (next: PrivateDefaults['startAs']) => void
+}) {
+  const {t: l} = useLingui()
+  return (
+    <View style={[a.gap_sm]}>
+      <Text style={[a.text_md, a.font_medium]}>
+        <Trans>New posts start as</Trans>
+      </Text>
+      <Toggle.Group
+        type="radio"
+        label={l`Choose whether new posts start public or private`}
+        values={[startAs]}
+        onChange={values => {
+          const next = values[0]
+          if ((next === 'public' || next === 'private') && next !== startAs) {
+            onChange(next)
+          }
+        }}>
+        <View style={[a.flex_row, a.gap_sm]}>
+          <Toggle.Item
+            testID="defaultStartPublic"
+            name="public"
+            label={l`New posts start public`}
+            style={[a.flex_1]}>
+            {({selected}) => (
+              <Toggle.Panel active={selected}>
+                <Toggle.Radio />
+                <Toggle.PanelText>
+                  <Trans>Public</Trans>
+                </Toggle.PanelText>
+              </Toggle.Panel>
+            )}
+          </Toggle.Item>
+          <Toggle.Item
+            testID="defaultStartPrivate"
+            name="private"
+            label={l`New posts start private`}
+            style={[a.flex_1]}>
+            {({selected}) => (
+              <Toggle.Panel active={selected}>
+                <Toggle.Radio />
+                <Toggle.PanelText>
+                  <Trans>Private</Trans>
+                </Toggle.PanelText>
+              </Toggle.Panel>
+            )}
+          </Toggle.Item>
+        </View>
+      </Toggle.Group>
+      <HintText>
+        <Trans>
+          Replies and quotes start as the post they reply to or quote. Replies
+          to private posts are always private.
+        </Trans>
+      </HintText>
+    </View>
   )
 }
 
@@ -197,9 +217,12 @@ function audienceValue(audience: DefaultAudience | undefined): string {
 function DefaultAudienceForm({
   audience,
   onChange,
+  canCreate,
 }: {
   audience: DefaultAudience | undefined
   onChange: (next: DefaultAudience) => void
+  /** "New audience..." is offered (Private is offered). */
+  canCreate: boolean
 }) {
   const {t: l} = useLingui()
   const modeLabel = useModeLabel()
@@ -299,23 +322,27 @@ function DefaultAudienceForm({
           <Trans>Your lists could not be loaded.</Trans>
         </HintText>
       ) : null}
-      <Button
-        testID="defaultNewAudience"
-        label={l`New audience…`}
-        onPress={() => editor.open()}>
-        {({hovered, pressed}) => (
-          <RowLink
-            icon={ListPlusIcon}
-            titleText={<Trans>New audience…</Trans>}
-            active={hovered || pressed}
+      {canCreate ? (
+        <>
+          <Button
+            testID="defaultNewAudience"
+            label={l`New audience…`}
+            onPress={() => editor.open()}>
+            {({hovered, pressed}) => (
+              <RowLink
+                icon={ListPlusIcon}
+                titleText={<Trans>New audience…</Trans>}
+                active={hovered || pressed}
+              />
+            )}
+          </Button>
+          <AudienceEditorDialog
+            control={editor}
+            kind="audience"
+            onCreated={uri => onChange({kind: 'list', uri})}
           />
-        )}
-      </Button>
-      <AudienceEditorDialog
-        control={editor}
-        kind="audience"
-        onCreated={uri => onChange({kind: 'list', uri})}
-      />
+        </>
+      ) : null}
     </View>
   )
 }

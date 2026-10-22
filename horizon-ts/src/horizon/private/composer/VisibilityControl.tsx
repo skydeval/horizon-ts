@@ -23,9 +23,14 @@
  * pill while Public, the drop-down takes the pill's place (who can see only)
  * while Private, and the visibility control sits above the pills at every
  * width.
+ *
+ * Private follows the account's posting route (2K design 8.1): offered on
+ * `locus` once membership is confirmed (and on `encode`, from 2K-3); not
+ * offered yet on `checking`; on `none` the Private segment is shown but inert,
+ * and pressing or focusing it shows the route's note under the control row.
  */
 
-import {createContext, useContext} from 'react'
+import {createContext, useContext, useEffect, useSyncExternalStore} from 'react'
 import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
@@ -43,7 +48,11 @@ import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Text} from '#/components/Typography'
 import {AudienceMenu} from '#/horizon/private/composer/AudienceMenu'
-import {privateComposeBlocker} from '#/horizon/private/composer/blockers'
+import {
+  privateComposeBlocker,
+  privateRouteHint,
+  privateRouteNote,
+} from '#/horizon/private/composer/blockers'
 import {isInteractionDirty} from '#/horizon/private/composer/interaction'
 import {
   chooseComposeVisibility,
@@ -51,7 +60,7 @@ import {
   useComposeVisibility,
 } from '#/horizon/private/composer/state'
 import {useReplyAnchor} from '#/horizon/private/composer/useReplyAnchor'
-import {useIsConfirmedMember} from '#/horizon/private/membership'
+import {useCanPostPrivately} from '#/horizon/private/membership'
 import {usePostAudienceLabel} from '#/horizon/private/render/AudienceLabel'
 import {COMPOSER_AUDIENCE_MENU, PRIVATE_POSTING} from '#/horizon/switches'
 
@@ -62,6 +71,32 @@ type ComposerAudienceContext = {
 }
 
 const Context = createContext<ComposerAudienceContext | null>(null)
+
+/*
+ * Whether the inert Private segment's note is showing: set when the segment
+ * is pressed or focused, cleared when it blurs or the control unmounts. Kept
+ * outside the pieces because the control and the row that shows the note
+ * are separate components.
+ */
+let inertNoteShown = false
+const inertNoteListeners = new Set<() => void>()
+
+function setInertNoteShown(next: boolean) {
+  if (inertNoteShown === next) return
+  inertNoteShown = next
+  inertNoteListeners.forEach(listener => listener())
+}
+
+function subscribeInertNote(listener: () => void) {
+  inertNoteListeners.add(listener)
+  return () => {
+    inertNoteListeners.delete(listener)
+  }
+}
+
+function useInertNoteShown(): boolean {
+  return useSyncExternalStore(subscribeInertNote, () => inertNoteShown)
+}
 
 /**
  * Hands the composer's reply target, thread and dispatch to the pieces.
@@ -85,13 +120,25 @@ export function ComposerAudienceProvider({
  */
 function useControlState() {
   const context = useContext(Context)
-  // A membership only persisted on the device does not offer Private yet.
-  const isMember = useIsConfirmedMember()
+  /*
+   * A membership only persisted on the device does not offer Private yet,
+   * and neither does a posting route that cannot write it (2K design 2.3).
+   */
+  const can = useCanPostPrivately()
+  const isMember = can.offered
   const compose = useComposeVisibility()
   const isPrivate = compose.visibility === 'private'
   const isReply = !!context?.replyTo
   const locked = PRIVATE_POSTING && compose.locked
-  const showsSegments = PRIVATE_POSTING && !locked && (isMember || isPrivate)
+  /** Private shown on posting route `none`, but not choosable (8.1). */
+  const inert =
+    PRIVATE_POSTING &&
+    !locked &&
+    !can.offered &&
+    can.route === 'none' &&
+    can.showsRouteNote
+  const showsSegments =
+    PRIVATE_POSTING && !locked && (isMember || isPrivate || inert)
   /*
    * The drop-down has something to set: a top-level compose (who can reply
    * and quote, and for a private one who can see), or a reply to a public
@@ -115,6 +162,8 @@ function useControlState() {
     showsPill,
     showsVisibility,
     locked,
+    inert,
+    routes: can.routes,
   }
 }
 
@@ -129,19 +178,25 @@ export function useShowsComposerAudiencePill(): boolean {
 /**
  * Rendered above the composer's pills (Comp 7): on a phone (or with the menu
  * off) the visibility control in its own centred row; on every width the
- * private blocker message, so it is never squeezed into the footer row.
+ * private blocker message, and the inert Private segment's note, so neither
+ * is ever squeezed into the footer row.
  */
 export function ComposerAudienceRow() {
   const t = useTheme()
   const {gtPhone} = useBreakpoints()
   const state = useControlState()
+  const noteShown = useInertNoteShown()
   if (!state.context) return null
   const inRow = state.showsVisibility && (!gtPhone || !COMPOSER_AUDIENCE_MENU)
   const blocker =
     PRIVATE_POSTING && state.isPrivate
-      ? privateComposeBlocker(state.context.thread)
+      ? privateComposeBlocker(state.context.thread, state.routes)
       : undefined
-  if (!inRow && !blocker) return null
+  const note =
+    !blocker && state.inert && noteShown
+      ? privateRouteNote(state.routes)
+      : undefined
+  if (!inRow && !blocker && !note) return null
   return (
     <View style={[t.atoms.bg]}>
       {inRow ? (
@@ -166,6 +221,15 @@ export function ComposerAudienceRow() {
               {color: t.palette.negative_500},
             ]}>
             {blocker}
+          </Text>
+        </View>
+      ) : null}
+      {note ? (
+        <View style={[a.px_md, a.pb_xs]}>
+          <Text
+            testID="composerPrivateRouteNote"
+            style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
+            {note}
           </Text>
         </View>
       ) : null}
@@ -199,11 +263,15 @@ export function ComposerAudienceSlot() {
 }
 
 /**
- * The Public | Private segmented control, or a locked reply's label.
+ * The Public | Private segmented control, or a locked reply's label. On
+ * posting route `none` the Private segment stays focusable but choosing it
+ * only shows the note, every time.
  */
 function VisibilityControl() {
   const {t: l} = useLingui()
-  const {context, compose, showsSegments, locked} = useControlState()
+  const {context, compose, showsSegments, locked, inert} = useControlState()
+  // The note never outlives the control (a remount, the composer closing).
+  useEffect(() => () => setInertNoteShown(false), [])
   if (!context) return null
 
   if (locked) {
@@ -222,7 +290,13 @@ function VisibilityControl() {
       label={l`Post visibility`}
       value={compose.visibility}
       style={[{maxWidth: 160}]}
-      onChange={visibility => chooseComposeVisibility({visibility})}>
+      onChange={visibility => {
+        if (inert && visibility === 'private') {
+          setInertNoteShown(true)
+          return
+        }
+        chooseComposeVisibility({visibility})
+      }}>
       <SegmentedControl.Item
         testID="composerVisibilityPublic"
         value="public"
@@ -232,7 +306,10 @@ function VisibilityControl() {
       <SegmentedControl.Item
         testID="composerVisibilityPrivate"
         value="private"
-        label={l`Private`}>
+        label={l`Private`}
+        accessibilityHint={inert ? privateRouteHint() : undefined}
+        onFocus={inert ? () => setInertNoteShown(true) : undefined}
+        onBlur={inert ? () => setInertNoteShown(false) : undefined}>
         <SegmentedControl.ItemText>{l`Private`}</SegmentedControl.ItemText>
       </SegmentedControl.Item>
     </SegmentedControl.Root>
