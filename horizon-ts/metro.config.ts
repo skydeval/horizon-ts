@@ -19,7 +19,8 @@ let config = getSentryExpoConfig(import.meta.dirname, {
       config.resolver.sourceExts.unshift(...process.env.RN_SRC_EXT.split(','))
     }
 
-    config.resolver.assetExts = [...config.resolver.assetExts, 'woff2']
+    // HORIZON: 'wasm' for the private post encoder's module (src/horizon/private/encoder)
+    config.resolver.assetExts = [...config.resolver.assetExts, 'woff2', 'wasm']
 
     if (config.resolver.resolveRequest) {
       throw Error('Update this override because it is conflicting now.')

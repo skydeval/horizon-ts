@@ -12,7 +12,8 @@
  * `tools.kryphocron.feed.postPublic` (its embed, facet and strong-ref defs,
  * as kryphocron-lexicons 0.3.1 defines them)
  * and `tools.kryphocron.policy.audience`. The encoded-content fields of
- * `postPrivate` are left out: the client never sends them.
+ * `postPrivate` are left out of `postPrivate`, which locus encodes; the
+ * client encoder's output has its own schema, `privateEncodedFields`.
  *
  * When kryphocron publishes lexicon files for the procedures, generated
  * schemas replace this file.
@@ -280,6 +281,41 @@ export type PostPrivate = l.InferOutput<typeof postPrivate>
 export type PostPrivateEmbed = NonNullable<PostPrivate['embed']>
 export type PostPrivateFacet = NonNullable<PostPrivate['facets']>[number]
 export type StrongRef = l.InferOutput<typeof strongRef>
+
+/**
+ * What the client encoder (`private/encoder`) returns, after `jsonToLex`:
+ * the three encoded fields, always, and the four derived clear fields when
+ * they are not empty (2K design PA-31). `mentionDids` items are plain
+ * strings here, so one odd DID does not fail the parse; the encoded record's
+ * validator decides (PA-10). The object schema keeps undeclared keys, so the
+ * encoder module also refuses any key not in
+ * {@link PRIVATE_ENCODED_FIELD_KEYS}.
+ */
+export const privateEncodedFields = l.object({
+  encodedContent: l.bytes({maxLength: 1_000_000}),
+  encodedContentCodec: l.string({maxLength: 128}),
+  encodedContentGeneration: l.string({maxLength: 128}),
+  embedBlobs: l.optional(l.array(l.blob())),
+  mentionDids: l.optional(l.array(l.string())),
+  quote: l.optional(strongRef),
+  mediaKinds: l.optional(l.array(l.string(), {maxLength: 2})),
+})
+
+export type PrivateEncodedFields = l.InferOutput<typeof privateEncodedFields>
+
+/**
+ * The seven keys the encoder owns: the only keys its output may carry.
+ */
+export const PRIVATE_ENCODED_FIELD_KEYS: readonly (keyof PrivateEncodedFields)[] =
+  [
+    'encodedContent',
+    'encodedContentCodec',
+    'encodedContentGeneration',
+    'embedBlobs',
+    'mentionDids',
+    'quote',
+    'mediaKinds',
+  ]
 
 /**
  * `tools.kryphocron.policy.audience`. `mode` absent reads as `list`; aurora's

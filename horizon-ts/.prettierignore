@@ -24,3 +24,5 @@ bskyweb/static
 coverage
 web-build
 dist
+# HORIZON: vendored builds stay byte for byte as built (checksums in their VERSION.md)
+vendor

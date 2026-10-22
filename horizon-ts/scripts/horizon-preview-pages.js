@@ -100,6 +100,11 @@ const PAGES_REDIRECTS = '/* /index.html 200\n'
  * - The client document: readable from any origin and revalidated on every
  *   fetch, so a changed document is seen at once.
  * - Metro's content-hashed bundle: cached for good.
+ * - The private post encoder's `.wasm` (a content-hashed Metro asset): served
+ *   as `application/wasm`, so the browser compiles it while it streams, and
+ *   cached for good. Whether Pages already sends that type, and whether this
+ *   line replaces its own or adds a second, is checked live (2K design L-2);
+ *   if it duplicates, keep only the cache line.
  */
 const PAGES_HEADERS = `/*
   X-Content-Type-Options: nosniff
@@ -112,6 +117,10 @@ const PAGES_HEADERS = `/*
   Cache-Control: no-cache
 
 /_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/vendor/kryphocron-web/*
+  Content-Type: application/wasm
   Cache-Control: public, max-age=31536000, immutable
 `
 

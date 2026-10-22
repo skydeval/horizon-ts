@@ -66,4 +66,14 @@ describe('preview build packaging', () => {
     expect(block).toContain('Access-Control-Allow-Origin: *')
     expect(block).toContain('Cache-Control: no-cache')
   })
+
+  it('the private post encoder is served as WebAssembly and cached for good', () => {
+    const block = PAGES_HEADERS.split('\n\n').find(b =>
+      b.startsWith('/assets/vendor/kryphocron-web/*\n'),
+    )
+    expect(block).toContain('Content-Type: application/wasm')
+    expect(block).toContain(
+      'Cache-Control: public, max-age=31536000, immutable',
+    )
+  })
 })

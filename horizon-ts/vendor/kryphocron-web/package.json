@@ -1,0 +1,21 @@
+{
+  "name": "kryphocron-web",
+  "version": "0.4.5",
+  "private": true,
+  "type": "module",
+  "main": "kryphocron_web.js",
+  "module": "kryphocron_web.js",
+  "types": "kryphocron_web.d.ts",
+  "files": [
+    "kryphocron_web.js",
+    "kryphocron_web.d.ts",
+    "kryphocron_web_bg.wasm",
+    "kryphocron_web_bg.wasm.d.ts",
+    "kryphocron_web_native.js",
+    "kryphocron_web_native.d.ts",
+    "kryphocron_web_bg.wasm2js.js",
+    "kryphocron_web_bg.wasm2js.d.ts"
+  ],
+  "sideEffects": false,
+  "license": "MPL-2.0"
+}
