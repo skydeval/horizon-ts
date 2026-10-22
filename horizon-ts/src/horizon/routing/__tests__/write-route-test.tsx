@@ -305,7 +305,7 @@ describe('the posting route (2K 2.1, PA-1a, T-1)', () => {
     })
   })
 
-  it('with permissions, privateIndexed decides: false is none for a member, true is encode while indexing (PA-1a)', async () => {
+  it('membership is required: privateIndexed false is none for a member, and true never makes an indexing account encode (PA-1a)', async () => {
     publish(DID, STOCK)
     await answerMembership({
       status: 'member',
@@ -319,7 +319,7 @@ describe('the posting route (2K 2.1, PA-1a, T-1)', () => {
       permissions: {privateRead: false, privateIndexed: true},
     })
     expect(getWriteRoute(DID)).toMatchObject({
-      postingRoute: 'encode',
+      postingRoute: 'none',
       indexing: true,
     })
     // A value that is not a boolean is ignored: the status decides.

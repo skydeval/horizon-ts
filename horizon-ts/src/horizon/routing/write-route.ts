@@ -187,9 +187,11 @@ const CHECKING: PostingAnswer = {
  * on and this platform can run the encoder (`none` with `no-encoder` when
  * only the encoder is missing); else `none`.
  *
- * Who may post privately: `permissions.privateIndexed` when the answer
- * carries `permissions`, else status `member`. `encoderAvailable()` is a
- * capability test; a failed load of the encoder never moves the route.
+ * Who may post privately: status `member` always, narrowed by
+ * `permissions.privateIndexed` when the answer carries it. prism also sends
+ * `privateIndexed: true` while an account is `indexing`, so it never grants
+ * posting on its own. `encoderAvailable()` is a capability test; a failed
+ * load of the encoder never moves the route.
  */
 export function resolvePostingRoute(
   did: string | undefined,
@@ -203,7 +205,7 @@ export function resolvePostingRoute(
   if (!answer.membership) return CHECKING
   const state = getMembership(did)
   const indexing = state === 'indexing'
-  const mayPost = getPrivateIndexed(did) ?? state === 'member'
+  const mayPost = state === 'member' && getPrivateIndexed(did) !== false
   if (mayPost && !answer.features) return CHECKING
   if (
     mayPost &&
