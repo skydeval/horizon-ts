@@ -187,6 +187,10 @@ import {
 } from '#/horizon/private/composer/VisibilityControl'
 // HORIZON: private composing
 import {skipQuoteCountWait} from '#/horizon/private/links'
+// HORIZON: an outbox compose keeps its source draft until it is posted
+import {attachSourceDraft} from '#/horizon/private/outbox'
+// HORIZON: an Unsent entry staged for Edit is restored into this composer
+import {useOutboxEdit} from '#/horizon/private/outbox/edit'
 // HORIZON: private composing
 import {isPrivatePostUri, navigateToPost} from '#/horizon/private/uri'
 // HORIZON: spoiler tags
@@ -776,6 +780,8 @@ export const ComposePost = ({
     },
     [composerDispatch, restoreVideo, ax],
   )
+  // HORIZON: an Unsent entry staged for Edit is restored into this composer
+  useOutboxEdit(composerDispatch, restoreVideo)
 
   const [publishOnUpload, setPublishOnUpload] = useState(false)
 
@@ -1273,10 +1279,19 @@ export const ComposePost = ({
         draftId: composerState.draftId,
         mediaFileCount: composerState.originalLocalRefs.size,
       })
-      cleanupPublishedDraft({
-        draftId: composerState.draftId,
-        originalLocalRefs: composerState.originalLocalRefs,
-      })
+      // HORIZON: an outbox compose keeps its source draft until it is posted
+      if (
+        !postUri ||
+        !attachSourceDraft(postUri, {
+          draftId: composerState.draftId,
+          originalLocalRefs: composerState.originalLocalRefs,
+        })
+      ) {
+        cleanupPublishedDraft({
+          draftId: composerState.draftId,
+          originalLocalRefs: composerState.originalLocalRefs,
+        })
+      }
     }
     setLangPrefs.savePostLanguageToHistory(fromPostLanguages(currentLanguages))
     // HORIZON: the quote count never changes for a private post or a private quote

@@ -3,7 +3,8 @@
  * (first, so it is published before anything else runs), the in-place
  * sign-in window,
  * the password dialog, the membership probe and its notice, the write
- * routes' PDS cross-check, the appearance
+ * routes' PDS cross-check, the private outbox and the direct `getPosts`
+ * token's prefetch, the appearance
  * record's sync, the "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
@@ -16,7 +17,9 @@ import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
+import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
+import {DirectPrismPrefetch} from '#/horizon/routing/DirectPrismPrefetch'
 import {
   MembershipNotice,
   MembershipProbe,
@@ -68,6 +71,8 @@ export function HorizonHost() {
       <MembershipProbe />
       <MembershipNotice />
       <WriteRouteResolver />
+      <DirectPrismPrefetch />
+      <OutboxHost />
       <AppearanceSync />
       <OtherAppSpoilersSync />
       <InPlaceSignInWindow />

@@ -14,7 +14,11 @@ import {
   privateGatesServed,
   privateInteractionsServed,
 } from '#/horizon/private/server-support'
-import {getPrivatePostFacts} from '#/horizon/private/store'
+import {
+  getPendingPost,
+  getPrivatePostFacts,
+  pendingPhase,
+} from '#/horizon/private/store'
 import {isPrivatePostPath, isPrivatePostUri} from '#/horizon/private/uri'
 import {PRIVATE_POST_DISPLAY} from '#/horizon/switches'
 
@@ -27,19 +31,38 @@ export function isPrivateDisplay(uri: string | undefined): boolean {
 }
 
 /**
+ * Whether the post at `uri` (or its thread root) is still being sent, or
+ * failed, in the outbox (2K design PA-28 step 3, K10-L3): its gates are the
+ * outbox's to write. Asked of the current account's pending posts, whose
+ * thread is on screen (K11-N2).
+ */
+export function isPendingUnwritten(uri: string | undefined): boolean {
+  if (!uri) return false
+  const entry = getPendingPost(uri)
+  return !!entry && pendingPhase(entry) !== 'written'
+}
+
+/**
  * Whether the stock controls that read a served threadgate are left out on
  * the post at `uri` whose thread root is `rootUri` (Anchor 2's who can
  * reply, Menu 3's hide reply for everyone): on a private post unless prism
  * applies the gates (`private.gates`, P-18) and the root is private (prism
  * applies only gates of private posts, so a private reply in a branch under
  * a public root keeps the interim behaviour). `forWrite` for Menu 3, whose
- * item writes a gate (4.7).
+ * item writes a gate (4.7). Also on a post (or root) whose pending entry is
+ * `sending` or `failed` (2K design K10-L3).
  */
 export function hidesGateControls(
   uri: string | undefined,
   rootUri: string | undefined = uri,
   {forWrite = false}: {forWrite?: boolean} = {},
 ): boolean {
+  if (
+    isPrivateDisplay(uri) &&
+    (isPendingUnwritten(uri) || isPendingUnwritten(rootUri))
+  ) {
+    return true
+  }
   return (
     isPrivateDisplay(uri) &&
     (!privateGatesServed({forWrite}) || !isPrivatePostUri(rootUri))

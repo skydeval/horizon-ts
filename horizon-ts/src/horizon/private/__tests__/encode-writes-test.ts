@@ -15,7 +15,8 @@ jest.unmock('multiformats/hashes/hasher')
 /*
  * 2K-3: private posting on posting route `encode` (2K design 4.2, 4.7, 4.9;
  * T-4, T-6, T-7, T-8, T-11, T-14). The encoder module is mocked (T-4): the
- * real one is never loaded in jest.
+ * real one is never loaded in jest. From 2K-9 the compose runs in the
+ * outbox's background job (PA-28): each test awaits the job after the press.
  */
 const mockResolveEmbed = jest.fn(() => Promise.resolve(undefined))
 const mockResolveReply = jest.fn()
@@ -78,22 +79,23 @@ import {
   repoRouteForDid,
   resetWriteRoutes,
 } from '#/horizon/routing/write-route'
+import {writeLocal} from '#/horizon/session/local-store'
 import {createListAudience} from '../api/audiences'
 import {changePrivatePostAudience} from '../api/update-audience'
 import {
   PrivateAudienceChangeUnavailableError,
   PrivateKryphocronHostError,
 } from '../api/writer'
-import {
-  postPrivate,
-  PrivateEncodeError,
-  stopPrivateConfirmations,
-} from '../api/writes'
+import {postPrivate, stopPrivateConfirmations} from '../api/writes'
 import {PUBLIC_COMPOSE, setComposeVisibility} from '../composer/state'
 import {
   type EncodeFailureClass,
   PrivateEncodeFailedError,
 } from '../encoder/types'
+import {resetOutbox, whenOutboxIdle} from '../outbox'
+import {resetLocalLocks} from '../outbox/locks'
+import {listOutboxRecords} from '../outbox/record'
+import {outboxFailureText} from '../outbox/texts'
 import {clearPrivateStores, getPendingPost} from '../store'
 import {
   type Call,
@@ -296,6 +298,8 @@ function writes() {
   )
 }
 
+let queryClient: QueryClient
+
 function publishPds(pdsUrl: string) {
   clearCurrentClients()
   publishCurrentClients({
@@ -305,7 +309,22 @@ function publishPds(pdsUrl: string) {
     pdsClient: pds.client,
     prismClient: prism.client,
     appviewClient: appview,
+    chatClient: appview,
+    queryClient,
   })
+}
+
+/** Press Post, then wait for the outbox's job (PA-28). */
+async function post(options: PostOpts) {
+  const result = await postPrivate(queryClient, options)
+  await whenOutboxIdle()
+  return result
+}
+
+function onlyRecord() {
+  const records = listOutboxRecords(DID)
+  expect(records).toHaveLength(1)
+  return records[0]
 }
 
 async function settle() {
@@ -360,6 +379,12 @@ function prismHandler(call: Call): Reply {
 }
 
 beforeEach(async () => {
+  queryClient = new QueryClient()
+  resetOutbox()
+  resetLocalLocks()
+  for (const record of listOutboxRecords(DID)) {
+    writeLocal(`horizon-outbox:${DID}:${record.id}`, undefined)
+  }
   pds = fakePds()
   prismPosts = new Map()
   caughtUp = false
@@ -412,7 +437,7 @@ describe('the encode route (2K-3)', () => {
     const before = Math.floor(Date.now() / 1000)
     const withLangs = opts(['hello'])
     withLangs.langs = ['en']
-    const {uris} = await postPrivate(new QueryClient(), withLangs)
+    const {uris} = await post(withLangs)
     const after = Math.floor(Date.now() / 1000)
 
     expect(nsids(pds.calls)).toEqual([
@@ -466,7 +491,7 @@ describe('the encode route (2K-3)', () => {
 
   it('the confirmation reads go to prism directly, never through the PDS (PA-7)', async () => {
     caughtUp = true
-    await postPrivate(new QueryClient(), opts(['hello']))
+    await post(opts(['hello']))
     await settle()
     expect(nsids(prism.calls)).toEqual(['app.nearhorizon.index.requestRecord'])
     expect(nsids(direct.calls)).toEqual(['app.nearhorizon.private.getPosts'])
@@ -480,10 +505,7 @@ describe('the encode route (2K-3)', () => {
       writesAtEncode.push(writes().length)
       return fieldsFor(input)
     })
-    const {uris} = await postPrivate(
-      new QueryClient(),
-      opts(['one', 'two', 'three'], undefined, LIMITS),
-    )
+    const {uris} = await post(opts(['one', 'two', 'three'], undefined, LIMITS))
     const rkeys = uris.map(uri => uri.split('/').pop())
     expect(order).toEqual(rkeys.map(rkey => `encode ${rkey}`))
     expect(mockEncode.mock.calls.map(([input]) => input.content.text)).toEqual([
@@ -530,16 +552,16 @@ describe('the encode route (2K-3)', () => {
           throw new PrivateEncodeFailedError(failureClass)
         })
       }
-      const error = await postPrivate(
-        new QueryClient(),
-        opts([SECRET], undefined, LIMITS),
-      ).catch((e: unknown) => e)
-      expect(error).toBeInstanceOf(PrivateEncodeError)
-      expect(error).toMatchObject({failureClass})
-      expect((error as Error).message).toBe(
+      // The press returns at once; the job fails at the encode (PA-28).
+      const {uris} = await post(opts([SECRET], undefined, LIMITS))
+      expect(writes()).toEqual([])
+      const record = onlyRecord()
+      expect(record).toMatchObject({state: 'failed', failure: 'encoder'})
+      expect(record.present).toEqual([])
+      expect(outboxFailureText(record.failure)).toBe(
         'Private posting isn’t available right now. Nothing was posted.',
       )
-      expect(writes()).toEqual([])
+      expect(getPendingPost(uris[0])?.phase).toBe('failed')
       expect(warn).toHaveBeenCalledWith('encode: failed', {failureClass})
       expect(JSON.stringify(warn.mock.calls)).not.toContain(SECRET)
     },
@@ -551,12 +573,8 @@ describe('the encode route (2K-3)', () => {
       ...fieldsFor(input),
       mentionDids: ['not a did'],
     }))
-    const failure = await postPrivate(
-      new QueryClient(),
-      opts([SECRET], undefined, LIMITS),
-    ).catch((e: unknown) => e)
-    expect(failure).toBeInstanceOf(PrivateEncodeError)
-    expect(failure).toMatchObject({failureClass: 'assembly'})
+    await post(opts([SECRET], undefined, LIMITS))
+    expect(onlyRecord()).toMatchObject({state: 'failed', failure: 'encoder'})
     expect(writes()).toEqual([])
     expect(error).toHaveBeenCalledWith('encode: assembled record invalid', {
       path: expect.stringMatching(/^mentionDids/),
@@ -566,7 +584,7 @@ describe('the encode route (2K-3)', () => {
 
   it('a first-use standing audience is created with createRecord and prism asked to catch up before the post is written (4.7, T-4)', async () => {
     pds.audiences.length = 0
-    await postPrivate(new QueryClient(), opts(['hello']))
+    await post(opts(['hello']))
     const audienceCreates = pds.calls.filter(
       c =>
         c.nsid === 'com.atproto.repo.createRecord' &&
@@ -594,7 +612,7 @@ describe('the encode route (2K-3)', () => {
       }),
     )
     setComposeVisibility(PUBLIC_COMPOSE)
-    await postPrivate(new QueryClient(), opts(['reply'], parentUri))
+    await post(opts(['reply'], parentUri))
     expect(nsids(prism.calls)[0]).toBe('app.nearhorizon.private.getPosts')
     expect(nsids(pds.calls)).not.toContain('com.atproto.server.getServiceAuth')
     expect(nsids(pds.calls)).not.toContain(
@@ -614,9 +632,9 @@ describe('the encode route (2K-3)', () => {
   })
 
   it('a reply to the writer’s own pending post places from the pending entry, with no prism read (L-22)', async () => {
-    const first = await postPrivate(new QueryClient(), opts(['first']))
+    const first = await post(opts(['first']))
     prism.calls.length = 0
-    await postPrivate(new QueryClient(), opts(['second'], first.uris[0]))
+    await post(opts(['second'], first.uris[0]))
     expect(nsids(prism.calls)).not.toContain('app.nearhorizon.private.getPosts')
     const record = postCreates()[1].body?.record as {
       reply: {parent: unknown}
@@ -627,23 +645,20 @@ describe('the encode route (2K-3)', () => {
     })
   })
 
-  it('until the outbox, a failure at post 2 rolls back post 1 and the gates with deleteRecord (T-7, interim)', async () => {
+  it('a failure at post 2 deletes nothing: post 1 and the gates stay, and the compose is Partly posted (T-7, v12)', async () => {
     pds.failures.create = (_call, index) =>
       index === 1
         ? {status: 500, body: {error: 'InternalServerError'}}
         : undefined
-    await expect(
-      postPrivate(new QueryClient(), opts(['one', 'two'], undefined, LIMITS)),
-    ).rejects.toBeDefined()
-    const postDeletes = pds.calls.filter(
-      c =>
-        c.nsid === 'com.atproto.repo.deleteRecord' && c.body?.collection === PP,
-    )
-    expect(postDeletes.map(c => c.body?.rkey)).toEqual([
-      postCreates()[0].body?.rkey,
-    ])
-    expect(pds.repo.size).toBe(0)
-    expect(pds.gates.size).toBe(0)
+    const {uris} = await post(opts(['one', 'two'], undefined, LIMITS))
+    expect(nsids(pds.calls)).not.toContain('com.atproto.repo.deleteRecord')
+    expect(pds.repo.size).toBe(1)
+    expect(pds.gates.size).toBe(3)
+    expect(onlyRecord()).toMatchObject({
+      state: 'failed',
+      failure: 'post',
+      present: [uris[0]],
+    })
     expect(nsids(pds.calls)).not.toContain(
       'tools.kryphocron.feed.deletePostPrivate',
     )
@@ -656,10 +671,15 @@ describe('the encode route (2K-3)', () => {
       status: 400,
       body: {error: 'KryphocronRecordRequiresDedicatedEndpoint'},
     })
-    const error = await postPrivate(new QueryClient(), opts(['hello'])).catch(
-      (e: unknown) => e,
+    await post(opts(['hello']))
+    expect(onlyRecord()).toMatchObject({
+      state: 'failed',
+      failure: 'kryphocron-host',
+      present: [],
+    })
+    expect(outboxFailureText('kryphocron-host')).toBe(
+      new PrivateKryphocronHostError().message,
     )
-    expect(error).toBeInstanceOf(PrivateKryphocronHostError)
     expect(pds.repo.size).toBe(0)
     expect(repoRouteForDid(DID)).toBe('locus')
     expect(getWriteRoute(DID).postingRoute).toBe('locus')
@@ -674,12 +694,12 @@ describe('the encode route (2K-3)', () => {
       body: {error: 'InternalServerError', message: SECRET},
     }))
     mockPrismClient = prism.client
-    await postPrivate(new QueryClient(), opts([SECRET]))
+    await post(opts([SECRET]))
     pds.failures.create = () => ({
       status: 500,
       body: {error: 'InternalServerError', message: SECRET},
     })
-    await postPrivate(new QueryClient(), opts([SECRET])).catch(() => {})
+    await post(opts([SECRET])).catch(() => {})
     await settle()
     for (const spy of spies) {
       expect(JSON.stringify(spy.mock.calls)).not.toContain(SECRET)

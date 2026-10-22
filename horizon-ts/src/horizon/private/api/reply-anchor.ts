@@ -38,6 +38,7 @@ import {
 import {
   getPendingPost,
   getPrivatePostFacts,
+  pendingPhase,
   pinPrivatePostAudience,
 } from '#/horizon/private/store'
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
@@ -131,16 +132,19 @@ type PlacedPost = {
 }
 
 /**
- * A private post: the current account's pending post when it is one (prism
- * does not serve it yet, and its record is exactly what was written, moves
- * included), else prism's view. `undefined` when prism does not return it.
+ * A private post: the writer's own pending post when it is one and is
+ * written (prism does not serve it yet, and its record is exactly what was
+ * written, moves included), else prism's view. `undefined` when prism does
+ * not return it. A pending post still being sent, or failed, is never placed
+ * from (2K design PA-28 steps 2 and 3): the outbox decides on it first.
  */
 async function readPrivatePost(
   prism: Client,
   uri: string,
+  did: string,
 ): Promise<PlacedPost | undefined> {
-  const pending = getPendingPost(uri)
-  if (pending) {
+  const pending = getPendingPost(uri, did)
+  if (pending && pendingPhase(pending) === 'written') {
     return {
       ref: {uri: pending.uri, cid: pending.cid},
       fields: placementFields(pending.record),
@@ -268,7 +272,8 @@ async function anchorAudience(
     }
   }
   if (!read) {
-    const post = known ?? (await readPrivatePost(clients.prismClient, uri))
+    const post =
+      known ?? (await readPrivatePost(clients.prismClient, uri, clients.did))
     if (!post) throw new PrivateReplyRefusedError()
     audienceUri = post.fields.audienceList
   }
@@ -358,6 +363,7 @@ async function findBranchRoot(
   prism: Client,
   start: PlacedPost,
   rootUri: string,
+  did: string,
 ): Promise<PlacedPost> {
   const firstUp = start.fields.parent?.uri
   if (firstUp && !isPrivatePostUri(firstUp)) return start
@@ -373,7 +379,7 @@ async function findBranchRoot(
       throw new PrivateReplyRefusedError()
     }
     seen.add(up)
-    const next = await readPrivatePost(prism, up)
+    const next = await readPrivatePost(prism, up, did)
     if (!next || next.fields.root?.uri !== rootUri) {
       throw new PrivateReplyRefusedError()
     }
@@ -392,7 +398,11 @@ export async function placePrivateReply(
   clients: PlacementClients,
   parentUri: string,
 ): Promise<PrivateReplyPlace> {
-  const parent = await readPrivatePost(clients.prismClient, parentUri)
+  const parent = await readPrivatePost(
+    clients.prismClient,
+    parentUri,
+    clients.did,
+  )
   if (!parent) throw new PrivateParentUnavailableError()
   const {fields} = parent
   if (fields.isReply && !fields.root) throw new PrivateReplyRefusedError()
@@ -408,7 +418,12 @@ export async function placePrivateReply(
     anchor = root.uri === parent.ref.uri ? parent : undefined
   } else {
     kind = 'branch'
-    anchor = await findBranchRoot(clients.prismClient, parent, root.uri)
+    anchor = await findBranchRoot(
+      clients.prismClient,
+      parent,
+      root.uri,
+      clients.did,
+    )
     anchorUri = anchor.ref.uri
   }
   const authorDid = authorOf(anchorUri)

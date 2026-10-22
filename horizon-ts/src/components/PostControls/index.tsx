@@ -26,6 +26,8 @@ import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 // HORIZON: a private post's reply and quote limits are checked before the composer opens
 import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
+// HORIZON: a sending or failed private post shows its status in place of the controls
+import {usePendingPostControls} from '#/horizon/private/composer/PendingPostStatus'
 // HORIZON: a private post shows counts only when prism served them
 import {privateControlsFor} from '#/horizon/private/render/controls'
 import {type app} from '#/lexicons'
@@ -206,6 +208,10 @@ let PostControls = ({
     big,
     gtPhone,
   })
+
+  // HORIZON: a sending or failed private post shows its status in place of the controls
+  const pendingControls = usePendingPostControls(post, {big, onPressReply})
+  if (pendingControls) return pendingControls
 
   return (
     <View

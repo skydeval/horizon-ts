@@ -19,6 +19,7 @@
 
 import {useSyncExternalStore} from 'react'
 
+import {type ComposerOptsPostRef} from '#/state/shell/composer'
 import {type StandingMode} from '#/horizon/private/api/audiences'
 import {
   type PrivateDefaults,
@@ -142,6 +143,22 @@ export function applyLateComposeDefaults(
  */
 export function useComposeVisibility(): ComposeVisibility {
   return useSyncExternalStore(subscribe, getComposeVisibility)
+}
+
+let composeReplyRef: ComposerOptsPostRef | undefined
+
+/**
+ * The reply ref the open composer was opened with, kept for the compose
+ * session (`usePrivateComposeSession`) so the outbox can capture it at press
+ * (2K design PA-28 step 1); `undefined` for a top-level compose or with no
+ * composer open.
+ */
+export function getComposeReplyRef(): ComposerOptsPostRef | undefined {
+  return composeReplyRef
+}
+
+export function setComposeReplyRef(ref: ComposerOptsPostRef | undefined) {
+  composeReplyRef = ref
 }
 
 /**

@@ -25,6 +25,8 @@ import {PencilLine_Stroke2_Corner2_Rounded as PencilIcon} from '#/components/ico
 import {ShieldCheck_Stroke2_Corner0_Rounded as ShieldIcon} from '#/components/icons/Shield'
 import {Trash_Stroke2_Corner2_Rounded} from '#/components/icons/Trash'
 import * as Layout from '#/components/Layout'
+// HORIZON: Private posts, with Unsent, for members
+import {PrivatePostsSettingsItem} from '#/horizon/private/settings/PrivatePostsSettingsItem'
 import {ChangeHandleDialog} from './components/ChangeHandleDialog'
 import {ChangePasswordDialog} from './components/ChangePasswordDialog'
 import {DeactivateAccountDialog} from './components/DeactivateAccountDialog'
@@ -163,6 +165,8 @@ export function AccountSettingsScreen({}: Props) {
               </SettingsList.BadgeText>
             )}
           </SettingsList.LinkItem>
+          {/* HORIZON: Private posts, with Unsent, for members */}
+          <PrivatePostsSettingsItem />
           <SettingsList.Divider />
           <SettingsList.PressableItem
             label={l`Export my data`}

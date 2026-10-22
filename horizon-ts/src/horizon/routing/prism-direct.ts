@@ -17,9 +17,11 @@
  *   dropped on an account switch, on sign-out and on a 401. Never persisted
  *   and never logged.
  *
- * 2K uses it for `app.nearhorizon.private.getPosts` (PA-7). The prefetch and
- * background refresh (PA-29) come with the outbox (2K-9); chainlink #5 moves
- * the other prism methods here.
+ * 2K uses it for `app.nearhorizon.private.getPosts` (PA-7), and prefetches
+ * that token on posting route `encode` only, refreshing it in the background
+ * while the app is in the foreground (PA-29, `startDirectTokenPrefetch`).
+ * The prefetch takes its methods and routes as parameters, so chainlink #5
+ * widens both without restructuring, and moves the other prism methods here.
  */
 
 import {type Client, type FetchHandler, XrpcResponseError} from '@atproto/lex'
@@ -37,6 +39,11 @@ import {
   subscribeCurrentClients,
 } from '#/horizon/routing/current-clients'
 import {PRISM_SERVICE, PRISM_URL} from '#/horizon/routing/prism'
+import {
+  getWriteRoute,
+  type PrivateWriteRoute,
+  subscribeWriteRoutes,
+} from '#/horizon/routing/write-route'
 
 /**
  * prism's own-post read, the method 2K calls directly.
@@ -345,6 +352,128 @@ export function getDirectPrismClient(pdsClient: Client): Client {
     directClients.set(pdsClient, client)
   }
   return client
+}
+
+/**
+ * What the prefetch mints, and on which posting routes (PA-29). 2K's: the
+ * `getPosts` token on `encode` only, so the locus route has nothing new on
+ * the wire (D-0.10).
+ */
+export type DirectPrefetchOptions = {
+  methods: readonly NsidString[]
+  routes: readonly PrivateWriteRoute[]
+}
+
+export const DIRECT_PREFETCH_2K: DirectPrefetchOptions = {
+  methods: [PRIVATE_GET_POSTS_LXM],
+  routes: ['encode'],
+}
+
+/**
+ * A token is refreshed in the background when this much of its life is
+ * left (PA-29).
+ */
+export const DIRECT_REFRESH_BEFORE_MS = 5 * 60_000
+
+/**
+ * The app's foreground state, as the prefetch needs it.
+ */
+export type ForegroundEnv = {
+  isForeground(): boolean
+  /** Calls the listener on every change; returns the unsubscribe. */
+  subscribe(listener: () => void): () => void
+}
+
+/**
+ * Prefetch and refresh the current account's tokens for `options.methods`
+ * while its posting route is one of `options.routes` and the app is in the
+ * foreground (PA-29): at sign-in, at resume and when the route becomes one
+ * of them (each a change this listens to), a missing or expired token is
+ * minted at once; a cached one is refreshed when
+ * {@link DIRECT_REFRESH_BEFORE_MS} of its life is left. Nothing is minted in
+ * the background or for an account that is not current. A failure is
+ * dropped: the read that needs the token mints it then. Returns the stop
+ * function.
+ */
+export function startDirectTokenPrefetch(
+  options: DirectPrefetchOptions,
+  env: ForegroundEnv,
+): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let stopped = false
+
+  const clear = () => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+  }
+
+  const active = () => {
+    const current = getCurrentClients()
+    if (!current || !env.isForeground()) return undefined
+    const route = getWriteRoute(current.did).postingRoute
+    return options.routes.includes(route) ? current : undefined
+  }
+
+  const schedule = (did: string) => {
+    clear()
+    if (stopped) return
+    let next = Number.POSITIVE_INFINITY
+    for (const lxm of options.methods) {
+      const cached = tokens.get(did)?.get(lxm)
+      if (!cached) continue
+      const at =
+        cached.receivedAt +
+        cached.lifetimeMs -
+        Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2)
+      next = Math.min(next, at)
+    }
+    if (next === Number.POSITIVE_INFINITY) return
+    timer = setTimeout(
+      () => tick({refresh: true}),
+      Math.max(0, next - Date.now()),
+    )
+  }
+
+  const tick = ({refresh = false}: {refresh?: boolean} = {}) => {
+    if (stopped) return
+    const current = active()
+    if (!current) {
+      clear()
+      return
+    }
+    const now = Date.now()
+    const asks = options.methods.map(lxm => {
+      const cached = tokens.get(current.did)?.get(lxm)
+      const due =
+        !cached ||
+        !usable(cached, now) ||
+        (refresh &&
+          now - cached.receivedAt >=
+            cached.lifetimeMs -
+              Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2))
+      if (!due) return Promise.resolve()
+      return getDirectPrismToken(current.pdsClient, lxm, {
+        fresh: !!cached,
+      }).then(
+        () => undefined,
+        () => undefined,
+      )
+    })
+    void Promise.all(asks).then(() => {
+      if (getCurrentClients()?.did === current.did) schedule(current.did)
+    })
+  }
+
+  const unsubscribes = [
+    subscribeWriteRoutes(() => tick()),
+    env.subscribe(() => tick()),
+  ]
+  tick()
+  return () => {
+    stopped = true
+    clear()
+    unsubscribes.forEach(unsubscribe => unsubscribe())
+  }
 }
 
 /**

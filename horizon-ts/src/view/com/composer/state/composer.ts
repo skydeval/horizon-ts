@@ -146,7 +146,8 @@ export type ComposerAction =
     }
   | {
       type: 'restore_from_draft'
-      draftId: string
+      // HORIZON: an Unsent entry not loaded from a draft restores with no draft id
+      draftId: string | undefined
       posts: PostDraft[]
       threadgateAllow: app.bsky.draft.defs.Draft['threadgateAllow']
       postgateEmbeddingRules: app.bsky.draft.defs.Draft['postgateEmbeddingRules']

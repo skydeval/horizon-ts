@@ -48,12 +48,17 @@ const ENCODED_KEYS: readonly string[] = PRIVATE_ENCODED_FIELD_KEYS
 
 /**
  * Whether this browser can run the encoder: WebAssembly, and a CSRNG for the
- * slug (the glue has no other source, D-0.8).
+ * slug (the glue has no other source, D-0.8). Also Web Locks: the outbox
+ * that posts on this route runs each compose under its run lock, so a
+ * browser without them (an old one, an insecure origin) gets posting route
+ * `none` with reason `no-encoder` (2K design PA-28, K9-N5).
  */
 export function encoderAvailable(): boolean {
   return (
     typeof WebAssembly === 'object' &&
-    typeof globalThis.crypto?.getRandomValues === 'function'
+    typeof globalThis.crypto?.getRandomValues === 'function' &&
+    typeof (globalThis as {navigator?: {locks?: unknown}}).navigator?.locks ===
+      'object'
   )
 }
 

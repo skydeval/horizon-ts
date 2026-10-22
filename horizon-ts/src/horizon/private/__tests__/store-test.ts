@@ -3,10 +3,14 @@ import {i18n} from '@lingui/core'
 
 import {postAudienceLabel} from '../api/audiences'
 import {
+  addPendingPost,
   applyPrivatePostAudience,
   AUDIENCE_PIN_MS,
   clearPrivateStores,
+  getPendingPost,
   getPrivatePostFacts,
+  PENDING_TTL_MS,
+  pendingPhase,
   pinPrivatePostAudience,
   setPrivatePostFacts,
 } from '../store'
@@ -165,5 +169,50 @@ describe('postAudienceLabel order (2H design 5.6, T7)', () => {
         },
       }),
     ).toBe('2 people')
+  })
+})
+
+describe('pending phases (2K design PA-28 step 3, T-23)', () => {
+  function entry(uri: string, phase: 'sending' | 'written' | 'failed') {
+    return {
+      uri,
+      cid: phase === 'written' ? RECORD_CID : '',
+      did: DID,
+      record: {
+        $type: 'tools.kryphocron.feed.postPrivate',
+        text: 'x',
+        createdAt: '2026-10-22T00:00:00.000Z',
+      } as never,
+      postView: {} as never,
+      feedItem: {} as never,
+      createdAt: '2026-10-22T00:00:00.000Z',
+      expiresAt:
+        phase === 'written'
+          ? Date.now() + PENDING_TTL_MS
+          : Number.POSITIVE_INFINITY,
+      phase,
+    }
+  }
+
+  it('sending and failed entries survive 11 minutes; a written one lapses after PENDING_TTL_MS', () => {
+    const start = Date.now()
+    const now = jest.spyOn(Date, 'now')
+    now.mockReturnValue(start)
+    addPendingPost(entry(privateUri('3ksending222'), 'sending'))
+    addPendingPost(entry(privateUri('3kfailed2222'), 'failed'))
+    addPendingPost(entry(privateUri('3kwritten222'), 'written'))
+    now.mockReturnValue(start + 11 * 60_000)
+    expect(getPendingPost(privateUri('3ksending222'), DID)).toBeDefined()
+    expect(getPendingPost(privateUri('3kfailed2222'), DID)).toBeDefined()
+    expect(getPendingPost(privateUri('3kwritten222'), DID)).toBeUndefined()
+  })
+
+  it('getPendingPost takes the entry’s DID and answers every phase', () => {
+    addPendingPost(entry(privateUri('3ksending333'), 'sending'))
+    const found = getPendingPost(privateUri('3ksending333'), DID)
+    expect(found && pendingPhase(found)).toBe('sending')
+    expect(
+      getPendingPost(privateUri('3ksending333'), OTHER_DID),
+    ).toBeUndefined()
   })
 })

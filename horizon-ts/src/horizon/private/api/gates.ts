@@ -134,23 +134,46 @@ export class PrivateGateWriteError extends Error {
  * `createRecord` refuses an rkey that already holds a record, so a gate never
  * replaces another post's. Returns the created URIs. On a failure the gates
  * already created are deleted and {@link PrivateGateWriteError} is thrown.
+ *
+ * The encode route's outbox (2K design 4.2 step 7, PA-28) passes
+ * `deleteOnFailure: false`, so a failure deletes nothing (the gates created
+ * are named in the error), and `beforeWrite`, which records the write in
+ * the outbox before each `createRecord`. `beforeWrite` runs outside the
+ * write's `try`, so its own failure passes through unwrapped: no gate write
+ * was made for it. `signal` gives each call its timeout.
  */
 export async function writeGatesForNewPost(
   pdsClient: Client,
   did: string,
   writes: GateWrite[],
+  {
+    deleteOnFailure = true,
+    beforeWrite,
+    signal,
+  }: {
+    deleteOnFailure?: boolean
+    beforeWrite?: (write: GateWrite) => void
+    signal?: () => AbortSignal | undefined
+  } = {},
 ): Promise<string[]> {
   const created: string[] = []
   for (const write of writes) {
+    beforeWrite?.(write)
     try {
-      await pdsClient.call(com.atproto.repo.createRecord, {
-        repo: did as DidString,
-        collection: write.collection,
-        rkey: write.rkey,
-        record: write.record,
-      })
+      await pdsClient.call(
+        com.atproto.repo.createRecord,
+        {
+          repo: did as DidString,
+          collection: write.collection,
+          rkey: write.rkey,
+          record: write.record,
+        },
+        {signal: signal?.()},
+      )
     } catch (error) {
-      const remaining = await deleteGates(pdsClient, created)
+      const remaining = deleteOnFailure
+        ? await deleteGates(pdsClient, created)
+        : created
       throw new PrivateGateWriteError(error, remaining)
     }
     created.push(`at://${did}/${write.collection}/${write.rkey}`)

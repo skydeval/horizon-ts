@@ -25,14 +25,22 @@ import {
  */
 export const MAX_DRAFT_SPOILER_ENTRIES = 200
 
-type DraftPostSpoilers = {
+/**
+ * One thread post's flags and CW by position: its image count, the indexes
+ * of its flagged images, whether its video is flagged, and its CW line. Also
+ * the outbox's serial form (2K design PA-28 step 1).
+ */
+export type DraftPostSpoilers = {
   imageCount: number
   images: number[]
   video: boolean
   cw?: {line: string}
 }
 
-type DraftSpoilerEntry = {
+/**
+ * One draft's entry: its flags and CW per thread post, in order.
+ */
+export type DraftSpoilerEntry = {
   id: string
   posts: DraftPostSpoilers[]
 }
@@ -182,6 +190,43 @@ export function draftSpoilerSnapshot(
     cw,
     pendingVideoPosts,
   }
+}
+
+/**
+ * The outbox job's inverse of the serial form (2K design PA-28 step 1, the
+ * inverse mappings): a snapshot for `posts` (the job's own copies of the
+ * captured posts) by position, never by a live id. A post's CW line is keyed
+ * by its id; its flagged image indexes map to its images' `source.id`s when
+ * the image count is the saved one, else every image of the post is flagged
+ * if any was (fail closed); a flagged video's own controller goes straight
+ * into `videos`. `pendingVideoPosts` stays empty: the job restores no video.
+ */
+export function jobSpoilerSnapshot(
+  serial: readonly DraftPostSpoilers[],
+  posts: readonly PostDraft[],
+): ComposeSpoilers {
+  const images = new Set<string>()
+  const videos = new Set<AbortController>()
+  const cw = new Map<string, {line: string}>()
+  posts.forEach((post, i) => {
+    const saved = serial[i]
+    if (!saved) return
+    if (saved.cw) cw.set(post.id, {line: saved.cw.line})
+    const current = postImages(post)
+    if (current.length === saved.imageCount) {
+      for (const index of saved.images) {
+        const image = current[index]
+        if (image) images.add(image.source.id)
+      }
+    } else if (saved.images.length > 0) {
+      for (const image of current) images.add(image.source.id)
+    }
+    const media = post.embed.media
+    if (saved.video && media?.type === 'video') {
+      videos.add(media.video.abortController)
+    }
+  })
+  return {images, videos, cw, pendingVideoPosts: new Set<string>()}
 }
 
 /**

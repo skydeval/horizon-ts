@@ -73,6 +73,7 @@ import {
 } from '#/horizon/private/settings/post-settings'
 import {
   PrivateGateConflictError,
+  PrivatePostPendingError,
   savePrivatePostGates,
 } from '#/horizon/private/settings/save-gates'
 import {usePrivatePostFacts} from '#/horizon/private/store'
@@ -198,6 +199,8 @@ function PrivatePostSettingsInner({
   const [isSaving, setIsSaving] = useState(false)
   const [conflict, setConflict] = useState(false)
   const [changedElsewhere, setChangedElsewhere] = useState(false)
+  // The outbox still holds the post's compose (2K design K10-L3).
+  const [pendingText, setPendingText] = useState<string | undefined>()
 
   const isLoading =
     isLoadingPostgate ||
@@ -263,6 +266,7 @@ function PrivatePostSettingsInner({
     if (!currentAccount || !isDirty) return
     setIsSaving(true)
     setConflict(false)
+    setPendingText(undefined)
     setChangedElsewhere(false)
     try {
       let caughtUp = true
@@ -322,6 +326,8 @@ function PrivatePostSettingsInner({
       void ownRecord.refetch()
       if (error instanceof PrivateGateConflictError) {
         setConflict(true)
+      } else if (error instanceof PrivatePostPendingError) {
+        setPendingText(error.message)
       } else if (error instanceof PrivatePostChangedError) {
         setChangedElsewhere(true)
       } else {
@@ -427,6 +433,17 @@ function PrivatePostSettingsInner({
                 {color: t.palette.negative_500},
               ]}>
               <Trans>These settings can’t be saved for this post.</Trans>
+            </Text>
+          ) : null}
+          {pendingText ? (
+            <Text
+              testID="privatePostPendingText"
+              style={[
+                a.text_sm,
+                a.leading_snug,
+                {color: t.palette.negative_500},
+              ]}>
+              {pendingText}
             </Text>
           ) : null}
           {changedElsewhere ? (

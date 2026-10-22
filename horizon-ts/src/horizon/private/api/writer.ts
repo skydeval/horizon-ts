@@ -85,8 +85,15 @@ export type PostProcedure =
  */
 export type RepoWriter = {
   route: RepoRoute
-  /** Delete a private post. `swapCid` is for Delete them (8.2). */
-  deletePost(uri: string, swapCid?: string): Promise<void>
+  /**
+   * Delete a private post. `swapCid` is for Delete them (8.2); `signal`
+   * gives the call its timeout (the outbox's deletes, PA-28).
+   */
+  deletePost(
+    uri: string,
+    swapCid?: string,
+    options?: {signal?: AbortSignal},
+  ): Promise<void>
   /** Replace an audience record, always with a swap (PA-24). */
   updateAudienceRecord(
     uri: string,
@@ -107,12 +114,14 @@ export type PostingWriter = {
    * `procedure`, and `cid` is `undefined` (the procedure answers the commit's
    * CID, so the caller reads the stored one back). On the encode route
    * `record` is the encoded one, `procedure` is not used, and `cid` is the
-   * record CID `createRecord` answered.
+   * record CID `createRecord` answered. `signal` gives the call its timeout
+   * (the outbox's job, PA-28 step 2).
    */
   createPost(post: {
     procedure: PostProcedure
     rkey: string
     record: PostPrivate | PostPrivateEncoded
+    signal?: AbortSignal
   }): Promise<{cid: string | undefined}>
   /** Point a post at another audience; answers the new record CID. */
   changeAudience(
@@ -143,12 +152,13 @@ async function rawWrite<T>(did: string, write: () => Promise<T>): Promise<T> {
 export function locusRepoWriter(pdsClient: Client): RepoWriter {
   return {
     route: 'locus',
-    async deletePost(uri) {
+    async deletePost(uri, _swapCid, options) {
       const {host, rkey} = new AtUri(uri)
-      await pdsClient.call(kryphocron.deletePostPrivate, {
-        repo: host as DidString,
-        rkey,
-      })
+      await pdsClient.call(
+        kryphocron.deletePostPrivate,
+        {repo: host as DidString, rkey},
+        {signal: options?.signal},
+      )
     },
     updateAudienceRecord() {
       return Promise.reject(new AudienceEditUnavailableError())
@@ -165,15 +175,19 @@ export function locusRepoWriter(pdsClient: Client): RepoWriter {
 export function stockRepoWriter(pdsClient: Client): RepoWriter {
   return {
     route: 'stock',
-    async deletePost(uri, swapCid) {
+    async deletePost(uri, swapCid, options) {
       const {host, rkey} = new AtUri(uri)
       await rawWrite(host, () =>
-        pdsClient.call(com.atproto.repo.deleteRecord, {
-          repo: host,
-          collection: PP_COLLECTION,
-          rkey,
-          ...(swapCid ? {swapRecord: swapCid} : {}),
-        }),
+        pdsClient.call(
+          com.atproto.repo.deleteRecord,
+          {
+            repo: host,
+            collection: PP_COLLECTION,
+            rkey,
+            ...(swapCid ? {swapRecord: swapCid} : {}),
+          },
+          {signal: options?.signal},
+        ),
       )
     },
     async updateAudienceRecord(uri, record, swapCid) {
@@ -260,14 +274,18 @@ export function encodePostingWriter(
 ): PostingWriter {
   return {
     route: 'encode',
-    async createPost({rkey, record}) {
+    async createPost({rkey, record, signal}) {
       const res = await rawWrite(did, () =>
-        pdsClient.call(com.atproto.repo.createRecord, {
-          repo: did as DidString,
-          collection: PP_COLLECTION,
-          rkey,
-          record,
-        }),
+        pdsClient.call(
+          com.atproto.repo.createRecord,
+          {
+            repo: did as DidString,
+            collection: PP_COLLECTION,
+            rkey,
+            record,
+          },
+          {signal},
+        ),
       )
       return {cid: res.cid}
     },

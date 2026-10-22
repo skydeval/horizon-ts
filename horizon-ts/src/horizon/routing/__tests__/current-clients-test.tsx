@@ -11,6 +11,7 @@ let mockAccount: {did: string; handle: string; service: string} | undefined
 jest.mock('#/state/session', () => ({
   useSession: () => ({currentAccount: mockAccount}),
   useMaybePdsClient: () => (mockAccount ? mockPds : null),
+  useMaybeChatClient: () => null,
   useAppviewClient: () => mockAppview,
 }))
 jest.mock('#/horizon/routing/prism', () => ({

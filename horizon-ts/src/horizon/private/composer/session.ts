@@ -8,10 +8,12 @@
 
 import {useLayoutEffect} from 'react'
 
+import {type ComposerOptsPostRef} from '#/state/shell/composer'
 import {
   applyLateComposeDefaults,
   initialComposeVisibility,
   PUBLIC_COMPOSE,
+  setComposeReplyRef,
   setComposeVisibility,
   startComposeVisibility,
   useIsPrivateCompose,
@@ -32,7 +34,7 @@ import {PRIVATE_POSTING} from '#/horizon/switches'
  * quoting: a member's quote starts as that post is (`state.ts`).
  */
 export function usePrivateComposeSession(
-  replyTo: {uri: string} | undefined,
+  replyTo: ComposerOptsPostRef | {uri: string} | undefined,
   quote?: {uri: string},
 ): {isPrivate: boolean; postingRoute: WriteRoutes} {
   const replyToUri = replyTo?.uri
@@ -43,6 +45,12 @@ export function usePrivateComposeSession(
     startComposeVisibility(initialComposeVisibility(replyToUri))
     return () => setComposeVisibility(PUBLIC_COMPOSE)
   }, [replyToUri, quoteUri])
+  useLayoutEffect(() => {
+    setComposeReplyRef(
+      replyTo && 'cid' in replyTo && 'author' in replyTo ? replyTo : undefined,
+    )
+    return () => setComposeReplyRef(undefined)
+  }, [replyTo])
   useLayoutEffect(() => {
     if (!PRIVATE_POSTING) return
     applyLateComposeDefaults(replyToUri, defaults, quoteUri)

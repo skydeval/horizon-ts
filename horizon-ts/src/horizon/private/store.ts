@@ -59,24 +59,56 @@ export type PrivatePostFacts = {
 export const AUDIENCE_PIN_MS = 60_000
 
 /**
- * The author's own just-written private post.
+ * Where a pending post stands (2K design PA-28 step 3): `sending` while the
+ * outbox's job has not written it, `written` once its record is on the PDS
+ * (waiting for prism), `failed` when its compose failed or is undecided.
+ */
+export type PendingPhase = 'sending' | 'written' | 'failed'
+
+/**
+ * The author's own private post, written and not yet served by prism, or
+ * (on the encode route) still being sent or failed.
  */
 export type PendingPost = {
   uri: string
-  /** The stored record's CID, from `getRecord`. */
+  /**
+   * The stored record's CID, from the write's answer or `getRecord`. Empty
+   * while `sending` or `failed` before the post was written.
+   */
   cid: string
   /** The author. Pending posts are served only to this account. */
   did: string
-  /** The record exactly as sent. */
+  /**
+   * The record exactly as sent; while `sending` or `failed`, the plaintext
+   * the compose was pressed with, for display only.
+   */
   record: PostPrivate
-  audienceUri: string
+  /**
+   * The audience the record names; absent while `sending` or `failed` when
+   * it is not known yet (a standing audience created on first use).
+   */
+  audienceUri?: string
   /** The post as the stock renderers take it. */
   postView: app.bsky.feed.defs.PostView
   /** A feed item with the reply context known at write time, if any. */
   feedItem: app.bsky.feed.defs.FeedViewPost
   createdAt: string
-  /** Epoch milliseconds after which the entry is dropped. */
+  /**
+   * Epoch milliseconds after which the entry is dropped. Set when the entry
+   * becomes `written`; `sending` and `failed` entries never expire.
+   */
   expiresAt: number
+  /** `written` when absent (the locus route writes before adding). */
+  phase?: PendingPhase
+  /** The outbox entry whose compose holds this post (encode route). */
+  outboxId?: string
+}
+
+/**
+ * The entry's phase; an entry without one was added written.
+ */
+export function pendingPhase(entry: PendingPost): PendingPhase {
+  return entry.phase ?? 'written'
 }
 
 /**
@@ -210,6 +242,7 @@ export function usePrivatePostFacts(
 }
 
 function isLive(entry: PendingPost, now: number) {
+  if (pendingPhase(entry) !== 'written') return true
   if (entry.expiresAt > now) return true
   logger.warn('private post never confirmed by prism; dropping pending entry', {
     uri: entry.uri,
@@ -245,12 +278,64 @@ export function setPendingBatch(uris: string[]) {
 }
 
 /**
- * The current account's pending post at `uri`, if it has not expired.
+ * The pending post at `uri` of the account `did` (the current account when
+ * not given), if it has not expired, in any phase. A caller that places a
+ * reply from it uses it only when it is `written` (2K design PA-28 step 3).
  */
-export function getPendingPost(uri: string): PendingPost | undefined {
+export function getPendingPost(
+  uri: string,
+  did: string | undefined = getCurrentDid(),
+): PendingPost | undefined {
   const entry = pending.get(uri)
-  if (!entry || entry.did !== getCurrentDid()) return undefined
+  if (!entry || !did || entry.did !== did) return undefined
   return isLive(entry, Date.now()) ? entry : undefined
+}
+
+/**
+ * The pending post at `uri` of the current account, kept current.
+ */
+export function usePendingPost(uri: string | undefined) {
+  return useSyncExternalStore(subscribe, () =>
+    uri ? getPendingPost(uri) : undefined,
+  )
+}
+
+/**
+ * Change a pending post in place (the outbox's phases, 2K design PA-28 step
+ * 3). Nothing happens when there is no entry at `uri`.
+ */
+export function updatePendingPost(
+  uri: string,
+  change: (entry: PendingPost) => PendingPost,
+) {
+  const entry = pending.get(uri)
+  if (!entry) return
+  const next = change(entry)
+  pending.set(uri, next)
+  facts.set(
+    uri,
+    compact({
+      ...facts.get(uri),
+      audienceUri: next.audienceUri,
+      isPending: true,
+    }),
+  )
+  notify()
+}
+
+/**
+ * Drop pending posts without their facts' history (an outbox entry
+ * discarded, removed or replaced). The posts were never served.
+ */
+export function dropPendingPosts(uris: readonly string[]) {
+  let changed = false
+  for (const uri of uris) {
+    if (pending.delete(uri)) {
+      facts.delete(uri)
+      changed = true
+    }
+  }
+  if (changed) notify()
 }
 
 /**

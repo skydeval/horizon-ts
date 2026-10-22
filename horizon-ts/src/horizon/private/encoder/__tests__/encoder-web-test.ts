@@ -175,6 +175,25 @@ describe('loading', () => {
     }
     expect(encoderAvailable()).toBe(true)
   })
+
+  it('encoderAvailable also needs Web Locks, which the outbox runs each compose under (2K-9, T-31)', () => {
+    const {encoderAvailable} = loadModule()
+    const navigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    try {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {locks: {}},
+        configurable: true,
+      })
+      expect(encoderAvailable()).toBe(true)
+      Object.defineProperty(globalThis, 'navigator', {
+        value: {},
+        configurable: true,
+      })
+      expect(encoderAvailable()).toBe(false)
+    } finally {
+      if (navigator) Object.defineProperty(globalThis, 'navigator', navigator)
+    }
+  })
 })
 
 describe('prewarm', () => {

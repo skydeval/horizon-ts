@@ -28,8 +28,14 @@ export type CurrentClients = {
   prismClient: Client
   appviewClient: Client
   /**
-   * The account's query client, for the few non-React private paths that
-   * read a cached value (the account's own pinned post).
+   * The chat client, for the outbox's embed resolution (a quoted chat invite
+   * link, 2K design PA-28 step 7). The publisher always sets it.
+   */
+  chatClient?: Client
+  /**
+   * The account's query client, for the non-React private paths that read
+   * or write a cached value (the account's own pinned post, the outbox's
+   * job). The publisher always sets it.
    */
   queryClient?: QueryClient
 }

@@ -25,6 +25,16 @@ jest.mock('#/state/session/network', () => ({
 jest.mock('#/state/session', () => ({
   useMaybePdsClient: () => null,
 }))
+// The posting route, for the prefetch (PA-29); the token tests never read it.
+let mockPostingRoute = 'encode'
+const mockRouteListeners = new Set<() => void>()
+jest.mock('#/horizon/routing/write-route', () => ({
+  getWriteRoute: () => ({postingRoute: mockPostingRoute}),
+  subscribeWriteRoutes: (listener: () => void) => {
+    mockRouteListeners.add(listener)
+    return () => mockRouteListeners.delete(listener)
+  },
+}))
 jest.mock('#/analytics/identifiers', () => ({
   getDeviceId: () => 'device-id-1',
   getSessionId: () => 'session-id-1',
@@ -42,6 +52,7 @@ import {
 } from '#/horizon/routing/current-clients'
 import {PRISM_URL} from '../prism'
 import {
+  DIRECT_PREFETCH_2K,
   DirectPrismRateLimitedError,
   dropDirectPrismTokens,
   getDirectPrismClient,
@@ -50,6 +61,7 @@ import {
   rateLimitWaitMs,
   resetDirectPrism,
   SERVICE_AUTH_LIMIT_DEFAULT_MS,
+  startDirectTokenPrefetch,
   tokenLifetimeMs,
 } from '../prism-direct'
 
@@ -393,5 +405,129 @@ describe('token claims', () => {
     expect(tokenLifetimeMs(token({secs: 1800}))).toBe(1_800_000)
     expect(tokenLifetimeMs('not-a-token')).toBe(60_000)
     expect(tokenLifetimeMs(`a.${base64url('{"exp":5}')}.c`)).toBe(60_000)
+  })
+})
+
+describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
+  let foreground = true
+  const foregroundListeners = new Set<() => void>()
+  const env = {
+    isForeground: () => foreground,
+    subscribe: (listener: () => void) => {
+      foregroundListeners.add(listener)
+      return () => {
+        foregroundListeners.delete(listener)
+      }
+    },
+  }
+  const setForeground = (next: boolean) => {
+    foreground = next
+    foregroundListeners.forEach(listener => listener())
+  }
+  // Lets a mint's whole chain settle (setImmediate is never faked here).
+  const flush = async () => {
+    for (let i = 0; i < 5; i++) await new Promise(r => setImmediate(r))
+  }
+
+  function publishAccount(pdsClient: Client) {
+    publishCurrentClients({
+      did: DID,
+      handle: 'direct.test',
+      pdsUrl: 'https://pds.example',
+      pdsClient,
+      prismClient: pdsClient,
+      appviewClient: pdsClient,
+    })
+  }
+
+  beforeEach(() => {
+    foreground = true
+    foregroundListeners.clear()
+    mockRouteListeners.clear()
+    mockPostingRoute = 'encode'
+  })
+
+  it('on posting route encode, mints exactly one getPosts token at sign-in, and none again while it lasts', async () => {
+    publishAccount(pdsClientFor())
+    const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    await flush()
+    expect(serviceAuthCalls()).toHaveLength(1)
+    expect(serviceAuthCalls()[0].params.get('lxm')).toBe(
+      'app.nearhorizon.private.getPosts',
+    )
+    setForeground(false)
+    setForeground(true)
+    mockRouteListeners.forEach(listener => listener())
+    await flush()
+    expect(serviceAuthCalls()).toHaveLength(1)
+    stop()
+  })
+
+  it.each(['locus', 'checking', 'none'])(
+    'on posting route %s, mints nothing over sign-in, a foreground return and an hour',
+    async route => {
+      mockPostingRoute = route
+      publishAccount(pdsClientFor())
+      const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+      await flush()
+      now += 3_600_000
+      setForeground(false)
+      setForeground(true)
+      await flush()
+      expect(serviceAuthCalls()).toEqual([])
+      stop()
+    },
+  )
+
+  it('mints once when the route becomes encode', async () => {
+    mockPostingRoute = 'checking'
+    publishAccount(pdsClientFor())
+    const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    await flush()
+    expect(serviceAuthCalls()).toEqual([])
+    mockPostingRoute = 'encode'
+    mockRouteListeners.forEach(listener => listener())
+    await flush()
+    expect(serviceAuthCalls()).toHaveLength(1)
+    stop()
+  })
+
+  it('mints nothing in the background or with no current account; an expired token is refreshed at once on return to the foreground', async () => {
+    const stopSignedOut = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    await flush()
+    expect(serviceAuthCalls()).toEqual([])
+    stopSignedOut()
+
+    foreground = false
+    publishAccount(pdsClientFor())
+    const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    await flush()
+    expect(serviceAuthCalls()).toEqual([])
+    setForeground(true)
+    await flush()
+    expect(serviceAuthCalls()).toHaveLength(1)
+    setForeground(false)
+    now += 3_600_000
+    setForeground(true)
+    await flush()
+    expect(serviceAuthCalls()).toHaveLength(2)
+    stop()
+  })
+
+  it('refreshes in the background when 5 minutes are left, while in the foreground', async () => {
+    jest.useFakeTimers({doNotFake: ['Date', 'setImmediate', 'nextTick']})
+    try {
+      publishAccount(pdsClientFor())
+      const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+      await flush()
+      expect(serviceAuthCalls()).toHaveLength(1)
+      now += 3_540_000 - 5 * 60_000
+      jest.advanceTimersByTime(3_540_000 - 5 * 60_000)
+      await flush()
+      expect(serviceAuthCalls()).toHaveLength(2)
+      stop()
+    } finally {
+      jest.useRealTimers()
+    }
   })
 })
