@@ -7,6 +7,11 @@
  * which shows the change at once and puts the server's answer back after.
  * Both need a private source and prism listing
  * `private.notificationPreferences`.
+ *
+ * `subscribedPost` (activity subscriptions design 2.7) is a stock
+ * `#preference`, `{list, push}` with no `include`: whether new private posts
+ * from accounts whose bell is on show. A missing key reads as on, so a toggle
+ * never snaps back on an older prism.
  */
 
 import {type Client} from '@atproto/lex'
@@ -45,14 +50,28 @@ export type PrivateNotificationPreference = {
   push: boolean
 }
 
+/** A preference with no `include` (stock `#preference`). */
+export type PrivatePlainPreference = {list: boolean; push: boolean}
+
 export type PrivateNotificationPreferences = Record<
   PrivateNotificationReason,
   PrivateNotificationPreference
->
+> & {subscribedPost: PrivatePlainPreference}
+
+/** A key `putPrivateNotificationPreference` writes, with its value. */
+export type PrivateNotificationPreferenceWrite =
+  | {reason: PrivateNotificationReason; preference: PrivateNotificationPreference}
+  | {reason: 'subscribedPost'; preference: PrivatePlainPreference}
 
 /** prism's default for every reason: shown, from everyone. */
 export const DEFAULT_PRIVATE_NOTIFICATION_PREFERENCE: PrivateNotificationPreference =
   {include: 'all', list: true, push: true}
+
+/** The default of `subscribedPost`: shown. */
+export const DEFAULT_SUBSCRIBED_POST_PREFERENCE: PrivatePlainPreference = {
+  list: true,
+  push: true,
+}
 
 /**
  * A preference as read: an unknown `include` reads as `all`, so a value a
@@ -74,7 +93,7 @@ function readPreferences(
   raw: Record<
     PrivateNotificationReason,
     {include: string; list: boolean; push: boolean}
-  >,
+  > & {subscribedPost?: {list: boolean; push: boolean}},
 ): PrivateNotificationPreferences {
   const out = {} as PrivateNotificationPreferences
   for (const reason of PRIVATE_NOTIFICATION_REASONS) {
@@ -82,6 +101,9 @@ function readPreferences(
       ? readPreference(raw[reason])
       : DEFAULT_PRIVATE_NOTIFICATION_PREFERENCE
   }
+  out.subscribedPost = raw.subscribedPost
+    ? {list: raw.subscribedPost.list, push: raw.subscribedPost.push}
+    : DEFAULT_SUBSCRIBED_POST_PREFERENCE
   return out
 }
 
@@ -96,18 +118,19 @@ export async function getPrivateNotificationPreferences(
 }
 
 /**
- * Replaces one reason's preference; returns every preference after the
- * write.
+ * Replaces one key's preference; returns every preference after the write.
  */
 export async function putPrivateNotificationPreference(
   prism: Client,
-  reason: PrivateNotificationReason,
-  preference: PrivateNotificationPreference,
+  {reason, preference}: PrivateNotificationPreferenceWrite,
 ): Promise<PrivateNotificationPreferences> {
   const res = await reportedPrismCall(() =>
-    prism.call(nearhorizon.privatePutNotificationPreferences, {
-      [reason]: preference,
-    }),
+    prism.call(
+      nearhorizon.privatePutNotificationPreferences,
+      reason === 'subscribedPost'
+        ? {subscribedPost: {list: preference.list, push: preference.push}}
+        : {[reason]: preference},
+    ),
   )
   return readPreferences(res.preferences)
 }
@@ -145,7 +168,7 @@ export function usePrivateNotificationPreferences() {
 }
 
 /**
- * Writes one reason. The change shows at once; on failure the previous
+ * Writes one key. The change shows at once; on failure the previous
  * value comes back. Afterwards the private list and counts are asked
  * again, since the preferences filter them.
  */
@@ -154,15 +177,9 @@ export function useSetPrivateNotificationPreference() {
   const queryClient = useQueryClient()
   const key = preferencesKey(source?.did ?? '')
   return useMutation({
-    mutationFn: ({
-      reason,
-      preference,
-    }: {
-      reason: PrivateNotificationReason
-      preference: PrivateNotificationPreference
-    }) => {
+    mutationFn: (write: PrivateNotificationPreferenceWrite) => {
       if (!source) throw new Error('private preferences: no source')
-      return putPrivateNotificationPreference(source.prism, reason, preference)
+      return putPrivateNotificationPreference(source.prism, write)
     },
     onMutate: async ({reason, preference}) => {
       await queryClient.cancelQueries({queryKey: key})

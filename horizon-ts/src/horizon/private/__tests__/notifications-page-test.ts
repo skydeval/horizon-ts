@@ -27,7 +27,12 @@ import {
   loadPrismFeatures,
   resetPrismFeatures,
 } from '#/horizon/routing/features'
-import {fetchPrivateNotificationsPage} from '../notifications/page'
+import {countUnmuted} from '../activity-subscriptions/mute-filter'
+import {
+  fetchPrivateNotificationsPage,
+  PRIVATE_ONLY_REASONS,
+  reasonsForTab,
+} from '../notifications/page'
 import {
   composeUnreadCount,
   countPrivateOnlyUnread,
@@ -51,6 +56,11 @@ const REPLY = privateView('3kreply222222', {
   },
 })
 const QUOTE_URI = `at://${LIKER}/app.bsky.feed.post/3kquote222222`
+const SUBSCRIBED = privateView('3ksubscribed2', {
+  did: OTHER_DID,
+  handle: 'other.test',
+  minutes: 6,
+})
 
 function author(did: string, handle: string) {
   return {did, handle}
@@ -109,7 +119,7 @@ let prismHandler: (nsid: string, params: URLSearchParams) => Reply | undefined
 
 function setup() {
   const prism = fakePrism({
-    posts: [OWN, REPLY],
+    posts: [OWN, REPLY, SUBSCRIBED],
     handler: (nsid, params) => prismHandler(nsid, params),
   })
   const appview = fakeAppview({
@@ -231,6 +241,69 @@ describe('the private notifications page (2H design 10.2, T13)', () => {
   })
 })
 
+describe('subscribed-post and the Activity pill (activity subscriptions T-16, T-17)', () => {
+  const subscribedNotification = {
+    uri: SUBSCRIBED.uri,
+    cid: RECORD_CID,
+    author: author(OTHER_DID, 'other.test'),
+    reason: 'subscribed-post',
+    record: SUBSCRIBED.record,
+    isRead: false,
+    indexedAt: at(6),
+    labels: [],
+  }
+
+  it('asks the Activity pill for subscribed-post only', async () => {
+    expect(reasonsForTab('activity')).toEqual(['subscribed-post'])
+    expect(reasonsForTab('replies')).toEqual(['reply', 'quote', 'mention'])
+    expect(reasonsForTab('all')).toBeUndefined()
+    prismHandler = nsid =>
+      nsid === 'app.nearhorizon.private.listNotifications'
+        ? listing([subscribedNotification])
+        : undefined
+    const {prism, source} = setup()
+    await fetchPrivateNotificationsPage({
+      source,
+      tab: 'activity',
+      cursor: undefined,
+      viewerDid: DID,
+      requestedAt: 1,
+    })
+    const listCall = prism.calls.find(
+      c => c.nsid === 'app.nearhorizon.private.listNotifications',
+    )
+    expect(listCall?.params.getAll('reasons')).toEqual(['subscribed-post'])
+  })
+
+  it('a subscribed-post item with a private URI passes, groups as subscribedPost and is read through prism', async () => {
+    prismHandler = nsid =>
+      nsid === 'app.nearhorizon.private.listNotifications'
+        ? listing([subscribedNotification])
+        : undefined
+    const {prism, appview, source} = setup()
+    const page = await fetchPrivateNotificationsPage({
+      source,
+      tab: 'all',
+      cursor: undefined,
+      viewerDid: DID,
+      requestedAt: 1,
+    })
+    expect(page.notifications.map(n => n.type)).toEqual(['subscribedPost'])
+    const [group] = page.notifications
+    if (group.type !== 'subscribedPost') throw new Error()
+    // The stock activity row renders `items` (aggregate.tsx).
+    expect(group.items[0].post.uri).toBe(SUBSCRIBED.uri)
+    expect(group.items[0].actor.did).toBe(OTHER_DID)
+    const prismPosts = prism.calls
+      .filter(c => c.nsid === 'app.nearhorizon.private.getPosts')
+      .flatMap(c => c.params.getAll('uris'))
+    expect(prismPosts).toEqual([SUBSCRIBED.uri])
+    expect(
+      appview.calls.filter(c => c.nsid === 'app.bsky.feed.getPosts'),
+    ).toEqual([])
+  })
+})
+
 describe('the unread counts (2H design 10.5, T13)', () => {
   it('composes the badge', () => {
     expect(composeUnreadCount('', undefined)).toBe('')
@@ -263,12 +336,41 @@ describe('the unread counts (2H design 10.5, T13)', () => {
       return listing([unread('3kd'), unread('3ke', true), unread('3kf')], 'p3')
     }
     const {prism, source} = setup()
-    expect(await countPrivateOnlyUnread(source.prism)).toBe(3)
-    expect(
-      prism.calls.filter(
-        c => c.nsid === 'app.nearhorizon.private.listNotifications',
-      ),
-    ).toHaveLength(2)
+    const items = await countPrivateOnlyUnread(source.prism)
+    // Kept as their authors (activity subscriptions T-18).
+    expect(items).toEqual([
+      {author: OTHER_DID},
+      {author: OTHER_DID},
+      {author: OTHER_DID},
+    ])
+    const calls = prism.calls.filter(
+      c => c.nsid === 'app.nearhorizon.private.listNotifications',
+    )
+    expect(calls).toHaveLength(2)
+    expect(calls[0].params.getAll('reasons')).toEqual([
+      'reply',
+      'quote',
+      'mention',
+    ])
+  })
+
+  it('asks for subscribed-post too with the feature (activity subscriptions T-18)', async () => {
+    prismHandler = nsid =>
+      nsid === 'app.nearhorizon.private.listNotifications'
+        ? listing([unread('3ka')])
+        : undefined
+    const {prism, source} = setup()
+    await countPrivateOnlyUnread(source.prism, {activity: true})
+    const call = prism.calls.find(
+      c => c.nsid === 'app.nearhorizon.private.listNotifications',
+    )
+    expect(call?.params.getAll('reasons')).toEqual(PRIVATE_ONLY_REASONS)
+    expect(PRIVATE_ONLY_REASONS).toEqual([
+      'reply',
+      'quote',
+      'mention',
+      'subscribed-post',
+    ])
   })
 
   it('stops at 30 and at three pages', async () => {
@@ -280,7 +382,13 @@ describe('the unread counts (2H design 10.5, T13)', () => {
           )
         : undefined
     const {source} = setup()
-    expect(await countPrivateOnlyUnread(source.prism)).toBe(30)
+    // Without the feature the read stops at the cap, as before.
+    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(30)
+    // With it every unread item of three pages is kept, for the mute filter;
+    // the cap of 30 is the count's (activity subscriptions T-18).
+    const all = await countPrivateOnlyUnread(source.prism, {activity: true})
+    expect(all).toHaveLength(36)
+    expect(countUnmuted(all, new Set(), 30)).toBe(30)
 
     let pages = 0
     prismHandler = nsid => {
@@ -288,7 +396,7 @@ describe('the unread counts (2H design 10.5, T13)', () => {
       pages++
       return listing([unread(`3kp${pages}`)], `c${pages}`)
     }
-    expect(await countPrivateOnlyUnread(source.prism)).toBe(3)
+    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(3)
     expect(pages).toBe(3)
   })
 
@@ -324,6 +432,8 @@ describe('the unread counts (2H design 10.5, T13)', () => {
     expect(prism.calls[0].nsid).toBe('app.nearhorizon.private.updateSeen')
     expect(prism.calls[0].body).toEqual({seenAt: at(9)})
     expect(queryClient.getQueryData([PRIVATE_UNREAD_ROOT, DID])).toBe(0)
-    expect(queryClient.getQueryData([PRIVATE_UNREAD_OWN_ROOT, DID])).toBe(0)
+    expect(queryClient.getQueryData([PRIVATE_UNREAD_OWN_ROOT, DID])).toEqual(
+      [],
+    )
   })
 })

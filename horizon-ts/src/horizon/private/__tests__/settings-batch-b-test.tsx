@@ -49,10 +49,18 @@ jest.mock('#/components/forms/SegmentedControl', () => {
     Root: (props: {
       label: string
       onChange: (mockValue: string) => void
-      children?: unknown
+      children?: React.ReactNode
     }) => {
       mockSegments.set(props.label, props.onChange)
-      return props.children ?? null
+      const {Text} = jest.requireActual<{
+        Text: React.ComponentType<{children?: React.ReactNode}>
+      }>('react-native')
+      return (
+        <>
+          <Text>segmented control</Text>
+          {props.children}
+        </>
+      )
     },
     Item: pass,
     ItemText: pass,
@@ -128,6 +136,8 @@ const mockGroupValues = new Map<string, string[]>()
 const mockItems: string[] = []
 /** Single toggles' handlers by name, to call them. */
 const mockToggles = new Map<string, (value: boolean) => void>()
+/** Single toggles' values by name, as last rendered. */
+const mockToggleValues = new Map<string, boolean>()
 jest.mock('#/components/forms/Toggle', () => {
   const pass = (props: {children?: unknown}) =>
     typeof props.children === 'function'
@@ -146,11 +156,15 @@ jest.mock('#/components/forms/Toggle', () => {
     },
     Item: (props: {
       name: string
+      value?: boolean
       onChange?: (mockValue: boolean) => void
       children?: unknown
     }) => {
       mockItems.push(props.name)
       if (props.onChange) mockToggles.set(props.name, props.onChange)
+      if (typeof props.value === 'boolean') {
+        mockToggleValues.set(props.name, props.value)
+      }
       return pass(props)
     },
     Platform: () => null,
@@ -245,6 +259,9 @@ jest.mock('#/horizon/private/tabs/FolderTabs', () => ({
 }))
 jest.mock('#/components/icons/At', () => ({
   At_Stroke2_Corner2_Rounded: () => null,
+}))
+jest.mock('#/components/icons/BellRinging', () => ({
+  BellRinging_Stroke2_Corner0_Rounded: () => null,
 }))
 jest.mock('#/components/icons/Bubble', () => ({
   Bubble_Stroke2_Corner2_Rounded: () => null,
@@ -606,5 +623,82 @@ describe('the composer reads the defaults for members only', () => {
     expect(
       renderHook(() => usePrivateComposeDefaults()).result.current,
     ).toBeUndefined()
+  })
+})
+
+describe('the subscribedPost preference (activity subscriptions T-20)', () => {
+  const all = {include: 'all', list: true, push: true}
+  const five = {like: all, reply: all, mention: all, quote: all, repost: all}
+
+  beforeEach(() => {
+    mockFeatures = new Set([
+      'private.notificationPreferences',
+      'private.activitySubscriptions',
+    ])
+    mockPrismCall.mockReset()
+    mockToggles.clear()
+    mockToggleValues.clear()
+  })
+
+  it('a missing subscribedPost reads as on', async () => {
+    mockPrismCall.mockResolvedValue({preferences: five})
+    show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockToggles.has('private_notification_subscribedPost')).toBe(
+        true,
+      ),
+    )
+    expect(mockToggleValues.get('private_notification_subscribedPost')).toBe(
+      true,
+    )
+  })
+
+  it('a toggle sends {subscribedPost: {list, push}} and does not snap back', async () => {
+    mockPrismCall.mockResolvedValue({
+      preferences: {...five, subscribedPost: {list: true, push: true}},
+    })
+    show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockToggles.has('private_notification_subscribedPost')).toBe(
+        true,
+      ),
+    )
+    mockPrismCall.mockResolvedValue({
+      preferences: {...five, subscribedPost: {list: false, push: true}},
+    })
+    act(() => mockToggles.get('private_notification_subscribedPost')!(false))
+    const put = await waitFor(() => {
+      const call = mockPrismCall.mock.calls.find(
+        ([method]) => method === nearhorizon.privatePutNotificationPreferences,
+      )
+      expect(call).toBeTruthy()
+      return call
+    })
+    expect(put?.[1]).toEqual({subscribedPost: {list: false, push: true}})
+    await waitFor(() =>
+      expect(
+        mockToggleValues.get('private_notification_subscribedPost'),
+      ).toBe(false),
+    )
+  })
+
+  it('the row has no include control, and is absent without the feature', async () => {
+    mockPrismCall.mockResolvedValue({preferences: five})
+    const screen = show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(mockToggles.has('private_notification_subscribedPost')).toBe(
+        true,
+      ),
+    )
+    expect(screen.getByText('Activity from others')).toBeTruthy()
+    // One include control per filterable reason, none for this row.
+    expect(screen.getAllByText('segmented control')).toHaveLength(5)
+
+    mockFeatures = new Set(['private.notificationPreferences'])
+    const without = show(<PrivateNotificationSettings />)
+    await waitFor(() =>
+      expect(without.getAllByText('segmented control')).toHaveLength(5),
+    )
+    expect(without.queryByText('Activity from others')).toBeNull()
   })
 })

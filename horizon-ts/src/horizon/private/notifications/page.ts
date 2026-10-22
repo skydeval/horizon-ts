@@ -31,9 +31,10 @@ import {isPrivatePostUri} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
 
 /**
- * The Private view's pills.
+ * The Private view's pills. Activity is shown only while prism lists
+ * `private.activitySubscriptions` (activity subscriptions design 2.5).
  */
-export type PrivateNotificationsTab = 'all' | 'replies'
+export type PrivateNotificationsTab = 'all' | 'replies' | 'activity'
 
 /**
  * Notifications per prism request.
@@ -44,6 +45,30 @@ export const PRIVATE_NOTIFICATIONS_PAGE_SIZE = 50
  * The reasons the Replies pill asks for.
  */
 export const REPLY_REASONS = ['reply', 'quote', 'mention']
+
+/**
+ * The reasons the Activity pill asks for: new private posts from accounts
+ * whose bell is on (activity subscriptions design 2.5).
+ */
+export const ACTIVITY_REASONS = ['subscribed-post']
+
+/**
+ * The reasons the nav badge's private-only count asks for while prism lists
+ * `private.activitySubscriptions` (2.6): Bluesky never counts a
+ * `subscribed-post` row for a private post either.
+ */
+export const PRIVATE_ONLY_REASONS = [...REPLY_REASONS, 'subscribed-post']
+
+/**
+ * The reasons asked of prism for `tab`; `undefined` asks for every reason.
+ */
+export function reasonsForTab(
+  tab: PrivateNotificationsTab,
+): string[] | undefined {
+  if (tab === 'replies') return REPLY_REASONS
+  if (tab === 'activity') return ACTIVITY_REASONS
+  return undefined
+}
 
 /**
  * A served item as a stock notification, or `undefined` (logged) when it is
@@ -110,7 +135,7 @@ export async function fetchPrivateNotificationsPage({
     const page = await listPrivateNotifications(source.prism, {
       limit: PRIVATE_NOTIFICATIONS_PAGE_SIZE,
       cursor: next,
-      reasons: tab === 'replies' ? REPLY_REASONS : undefined,
+      reasons: reasonsForTab(tab),
     })
     seenAt ??= page.seenAt
     return {

@@ -227,7 +227,9 @@ export function PrivateNotificationsList({
                       a.text_center,
                       t.atoms.text_contrast_medium,
                     ]}>
-                    {l`No activity on your private posts yet.`}
+                    {tab === 'activity'
+                      ? l`New private posts from accounts you get notified about will show here.`
+                      : l`No activity on your private posts yet.`}
                   </Text>
                 </View>
               )

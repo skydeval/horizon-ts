@@ -8,7 +8,9 @@
  * (`preferences.ts`) while prism lists `private.notificationPreferences`
  * (2026-10-21): per reason, whether it shows and whose activity counts.
  * Without the feature they are shown disabled with a note, and nothing is
- * stored.
+ * stored. While prism lists `private.activitySubscriptions` a sixth row,
+ * "Activity from others", follows Reposts (activity subscriptions design
+ * 2.7): one switch for new private posts from accounts whose bell is on.
  */
 
 import {View} from 'react-native'
@@ -22,16 +24,19 @@ import {Admonition} from '#/components/Admonition'
 import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import * as Toggle from '#/components/forms/Toggle'
 import {At_Stroke2_Corner2_Rounded as AtIcon} from '#/components/icons/At'
+import {BellRinging_Stroke2_Corner0_Rounded as BellRingingIcon} from '#/components/icons/BellRinging'
 import {Bubble_Stroke2_Corner2_Rounded as BubbleIcon} from '#/components/icons/Bubble'
 import {Heart2_Stroke2_Corner0_Rounded as HeartIcon} from '#/components/icons/Heart2'
 import {CloseQuote_Stroke2_Corner0_Rounded as CloseQuoteIcon} from '#/components/icons/Quote'
 import {Repost_Stroke2_Corner2_Rounded as RepostIcon} from '#/components/icons/Repost'
 import * as Layout from '#/components/Layout'
+import {useActivitySubscriptionsShown} from '#/horizon/private/activity-subscriptions/hooks'
 import {useIsMember} from '#/horizon/private/membership'
 import {
   type PreferenceInclude,
   type PrivateNotificationPreference,
   type PrivateNotificationReason,
+  type PrivatePlainPreference,
   usePrivateNotificationPreferences,
   usePrivateNotificationPreferencesServed,
   useSetPrivateNotificationPreference,
@@ -149,6 +154,7 @@ function useReasonRows(): {
 export function PrivateNotificationSettings() {
   const served = usePrivateNotificationPreferencesServed()
   const rows = useReasonRows()
+  const activity = useActivitySubscriptionsShown()
   const {data, isError} = usePrivateNotificationPreferences()
   if (!served || !data) {
     return (
@@ -178,6 +184,13 @@ export function PrivateNotificationSettings() {
               subtitleText={row.subtitleText}
             />
           ))}
+          {activity && (
+            <DisabledRow
+              icon={BellRingingIcon}
+              titleText={<ActivityTitle />}
+              subtitleText={<ActivitySubtitle />}
+            />
+          )}
         </View>
       </>
     )
@@ -194,7 +207,49 @@ export function PrivateNotificationSettings() {
           preference={data[row.reason]}
         />
       ))}
+      {activity && <ActivityRow preference={data.subscribedPost} />}
     </View>
+  )
+}
+
+function ActivityTitle() {
+  return <Trans>Activity from others</Trans>
+}
+
+function ActivitySubtitle() {
+  return <Trans>New private posts from accounts you get notified about</Trans>
+}
+
+/**
+ * "Activity from others": one switch for whether new private posts from
+ * accounts whose bell is on show in Private notifications. No include
+ * control; push is kept as stored.
+ */
+function ActivityRow({preference}: {preference: PrivatePlainPreference}) {
+  const {t: l} = useLingui()
+  const {mutate} = useSetPrivateNotificationPreference()
+  return (
+    <SettingsList.Item style={[a.flex_col, a.align_start, a.gap_sm]}>
+      <View style={[a.w_full, a.flex_row, a.align_start, a.gap_sm]}>
+        <SettingsList.ItemIcon icon={BellRingingIcon} />
+        <ItemTextWithSubtitle
+          titleText={<ActivityTitle />}
+          subtitleText={<ActivitySubtitle />}
+        />
+        <Toggle.Item
+          name="private_notification_subscribedPost"
+          label={l`Show in Private notifications`}
+          value={preference.list}
+          onChange={list =>
+            mutate({
+              reason: 'subscribedPost',
+              preference: {list, push: preference.push},
+            })
+          }>
+          <Toggle.Platform />
+        </Toggle.Item>
+      </View>
+    </SettingsList.Item>
   )
 }
 

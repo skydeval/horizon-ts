@@ -8,6 +8,7 @@ import {type Client} from '@atproto/lex'
 import {type QueryClient} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
+import {type UnreadItem} from '#/horizon/private/activity-subscriptions/mute-filter'
 import {
   listPrivateNotifications,
   updatePrivateSeen,
@@ -16,7 +17,10 @@ import {
   PRIVATE_UNREAD_OWN_ROOT,
   PRIVATE_UNREAD_ROOT,
 } from '#/horizon/private/cache-finders'
-import {REPLY_REASONS} from '#/horizon/private/notifications/page'
+import {
+  PRIVATE_ONLY_REASONS,
+  REPLY_REASONS,
+} from '#/horizon/private/notifications/page'
 import {privateNotificationsServed} from '#/horizon/private/server-support'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 
@@ -36,21 +40,28 @@ export const PRIVATE_ONLY_UNREAD_PAGES = 3
 /**
  * The reader's unread private notifications that the public count cannot
  * hold: those whose `uri` is a private post (replies, quotes and mentions
- * written privately). Likes and reposts of private posts, and public replies
- * and quotes, are already counted by Bluesky's AppView. Read newest first,
- * page after page, until a page holds a read item (everything after it is
- * read too), the list ends, {@link PRIVATE_ONLY_UNREAD_CAP} are counted, or
+ * written privately, and with `activity` new private posts from accounts
+ * whose bell is on, activity subscriptions design 2.6). Likes and reposts of
+ * private posts, and public replies and quotes, are already counted by
+ * Bluesky's AppView. Read newest first, page after page, until a page holds
+ * a read item (everything after it is read too), the list ends, or
  * {@link PRIVATE_ONLY_UNREAD_PAGES} pages were read (P-29 would make this one
- * count).
+ * count). Each is kept as its author, so the count's `select` can leave out
+ * muted authors and cap at {@link PRIVATE_ONLY_UNREAD_CAP}; without
+ * `activity` there is no mute filter, so the read stops at the cap, as
+ * before.
  */
-export async function countPrivateOnlyUnread(prism: Client): Promise<number> {
-  let count = 0
+export async function countPrivateOnlyUnread(
+  prism: Client,
+  {activity = false}: {activity?: boolean} = {},
+): Promise<UnreadItem[]> {
+  const items: UnreadItem[] = []
   let cursor: string | undefined
   for (let pages = 0; pages < PRIVATE_ONLY_UNREAD_PAGES; pages++) {
     const page = await listPrivateNotifications(prism, {
       limit: 50,
       cursor,
-      reasons: REPLY_REASONS,
+      reasons: activity ? PRIVATE_ONLY_REASONS : REPLY_REASONS,
     })
     let sawRead = false
     for (const item of page.notifications) {
@@ -59,15 +70,21 @@ export async function countPrivateOnlyUnread(prism: Client): Promise<number> {
         break
       }
       if (typeof item.uri === 'string' && isPrivatePostUri(item.uri)) {
-        count++
-        if (count >= PRIVATE_ONLY_UNREAD_CAP) return PRIVATE_ONLY_UNREAD_CAP
+        items.push({author: authorDid(item)})
+        // Without the mute filter nothing is dropped later: stop at the cap.
+        if (!activity && items.length >= PRIVATE_ONLY_UNREAD_CAP) return items
       }
     }
     const next = page.cursor && page.cursor !== cursor ? page.cursor : undefined
     if (sawRead || !next) break
     cursor = next
   }
-  return count
+  return items
+}
+
+function authorDid(item: Record<string, unknown>): string {
+  const author = item.author as {did?: unknown} | undefined
+  return typeof author?.did === 'string' ? author.did : ''
 }
 
 function parseCount(value: string): number {
@@ -113,6 +130,6 @@ export async function markPrivateNotificationsSeen(
     return false
   }
   queryClient.setQueryData([PRIVATE_UNREAD_ROOT, did], 0)
-  queryClient.setQueryData([PRIVATE_UNREAD_OWN_ROOT, did], 0)
+  queryClient.setQueryData([PRIVATE_UNREAD_OWN_ROOT, did], [])
   return true
 }

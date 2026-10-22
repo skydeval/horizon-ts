@@ -278,13 +278,19 @@ export const privateNotificationPreference = l.object({
   push: l.boolean(),
 })
 
-/** The reasons a private notification has (prism, 2026-10-21). */
+/**
+ * The reasons a private notification has (prism, 2026-10-21), and
+ * `subscribedPost` (stock `#preference`, no `include`), which prism adds with
+ * `private.activitySubscriptions` (activity subscriptions design 2.7): left
+ * optional so an answer without it still parses.
+ */
 const privateNotificationPreferences = l.object({
   like: privateNotificationPreference,
   mention: privateNotificationPreference,
   quote: privateNotificationPreference,
   reply: privateNotificationPreference,
   repost: privateNotificationPreference,
+  subscribedPost: l.optional(app.bsky.notification.defs.preference),
 })
 
 /**
@@ -313,9 +319,65 @@ export const privatePutNotificationPreferences = l.procedure(
     quote: l.optional(privateNotificationPreference),
     reply: l.optional(privateNotificationPreference),
     repost: l.optional(privateNotificationPreference),
+    subscribedPost: l.optional(app.bsky.notification.defs.preference),
   }),
   l.jsonPayload({preferences: privateNotificationPreferences}),
   ['InvalidRequest', ...NOT_MEMBER_ERRORS],
+)
+
+/*
+ * Activity subscriptions for private posts (activity subscriptions design
+ * 2.9; the prism handoff, section 2). The flags are stock
+ * `app.bsky.notification.defs#activitySubscription`.
+ */
+
+/**
+ * `app.nearhorizon.private.putActivitySubscription`: mirrors the stock put.
+ * Both flags false keeps an off row with a time (left out of the list).
+ * `ifNotChangedSince` is sent by the reconcile only: a row changed after it
+ * is refused with `Conflict` and left unchanged. `LimitReached`: the cap of
+ * active rows. The output has no flags after an off.
+ */
+export const privatePutActivitySubscription = l.procedure(
+  'app.nearhorizon.private.putActivitySubscription',
+  l.params(),
+  l.jsonPayload({
+    subject: l.string({format: 'did'}),
+    activitySubscription: app.bsky.notification.defs.activitySubscription,
+    ifNotChangedSince: l.optional(l.string({format: 'datetime'})),
+  }),
+  l.jsonPayload({
+    subject: l.string({format: 'did'}),
+    activitySubscription: l.optional(
+      app.bsky.notification.defs.activitySubscription,
+    ),
+  }),
+  ['InvalidRequest', 'Conflict', 'LimitReached', ...NOT_MEMBER_ERRORS],
+)
+
+/**
+ * `app.nearhorizon.private.listActivitySubscriptions`: the caller's rows with
+ * a flag on, most recently changed first. `asOf` is the database's time when
+ * the page was read, the clock `updatedAt` is stamped with.
+ */
+export const privateListActivitySubscriptions = l.query(
+  'app.nearhorizon.private.listActivitySubscriptions',
+  l.params({
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+  }),
+  l.jsonPayload({
+    asOf: l.string({format: 'datetime'}),
+    cursor: l.optional(l.string()),
+    subscriptions: l.array(
+      l.object({
+        subject: l.string({format: 'did'}),
+        activitySubscription: app.bsky.notification.defs.activitySubscription,
+        updatedAt: l.string({format: 'datetime'}),
+      }),
+    ),
+  }),
+  NOT_MEMBER_ERRORS,
 )
 
 /**

@@ -5,7 +5,8 @@
  * the password dialog, the membership probe and its notice, the write
  * routes' PDS cross-check, the private outbox and the direct `getPosts`
  * token's prefetch, the appearance
- * record's sync, the "spoilers from other apps" choice, the launch-time
+ * record's sync, the activity subscriptions' prism mirror and reconcile, the
+ * "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
  * every account change.
@@ -17,6 +18,7 @@ import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
+import {ActivitySubscriptionsSync} from '#/horizon/private/activity-subscriptions/ActivitySubscriptionsSync'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
 import {DirectPrismPrefetch} from '#/horizon/routing/DirectPrismPrefetch'
@@ -74,6 +76,7 @@ export function HorizonHost() {
       <DirectPrismPrefetch />
       <OutboxHost />
       <AppearanceSync />
+      <ActivitySubscriptionsSync />
       <OtherAppSpoilersSync />
       <InPlaceSignInWindow />
       <PasswordGateDialog />

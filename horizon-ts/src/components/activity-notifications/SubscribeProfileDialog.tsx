@@ -33,6 +33,11 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: the optimistic bell and the private-posts line (activity subscriptions design, Dlg 1 and Dlg 2)
+import {
+  ActivityDialogPrivateLine,
+  useActivitySubscriptionSave,
+} from '#/horizon/private/activity-subscriptions/dialog'
 import {app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
@@ -78,6 +83,8 @@ function DialogInner({
     profile.viewer?.activitySubscription,
   )
   const [state, setState] = useState(initialState)
+  // HORIZON: Dlg 1, the optimistic save and the prism mirror's hand-off
+  const horizonSave = useActivitySubscriptionSave(profile, initialState)
 
   const values = useMemo(() => {
     const {post, reply} = state
@@ -125,6 +132,8 @@ function DialogInner({
       })
     },
     onSuccess: (_data, activitySubscription) => {
+      // HORIZON: Dlg 1, Bluesky's accepted flags go to the prism mirror
+      horizonSave.stockAnswered(activitySubscription, true)
       control.close(() => {
         updateProfileShadow(queryClient, profile.did, {
           activitySubscription,
@@ -180,7 +189,9 @@ function DialogInner({
         }
       })
     },
-    onError: err => {
+    onError: (err, activitySubscription) => {
+      // HORIZON: Dlg 1, the prism mirror levels from Bluesky
+      horizonSave.stockAnswered(activitySubscription, false)
       ax.logger.error('Could not save activity subscription', {message: err})
     },
   })
@@ -194,7 +205,10 @@ function DialogInner({
       return {
         label: _(msg`Save changes`),
         color: hasAny ? 'primary' : 'negative',
-        onPress: () => saveChanges(state),
+        // HORIZON: Dlg 1, the optimistic save unless its switch is off
+        onPress: () => {
+          if (!horizonSave.press(state)) saveChanges(state)
+        },
         disabled: isSaving,
       }
     } else {
@@ -213,7 +227,7 @@ function DialogInner({
         }
       }
     }
-  }, [state, initialState, control, _, isSaving, saveChanges])
+  }, [state, initialState, control, _, isSaving, saveChanges, horizonSave])
 
   const name = createSanitizedDisplayName(profile, false)
 
@@ -229,6 +243,8 @@ function DialogInner({
           <Text style={[t.atoms.text_contrast_medium, a.text_md]}>
             <Trans>Get notified of this account’s activity</Trans>
           </Text>
+          {/* HORIZON: Dlg 2, the private-posts line (SQ-1) */}
+          <ActivityDialogPrivateLine />
         </View>
 
         {includeProfile && (

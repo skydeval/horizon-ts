@@ -44,6 +44,12 @@ export const PRISM_FEATURES = [
    * design 2.3): the `encode` posting route needs it.
    */
   'private.anyPds',
+  /*
+   * Activity subscriptions for private posts (activity subscriptions design
+   * 2.8): the `subscribed-post` private reason, the private subscription
+   * methods and the `subscribedPost` preference key.
+   */
+  'private.activitySubscriptions',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

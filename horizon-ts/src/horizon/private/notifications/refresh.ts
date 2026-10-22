@@ -11,6 +11,7 @@
 import {type InfiniteData, type QueryClient} from '@tanstack/react-query'
 
 import {type LoadedGroupedNotificationsPage} from '#/state/queries/notifications/grouped'
+import {activitySubscriptionsShown} from '#/horizon/private/activity-subscriptions/checks'
 import {PRIVATE_NOTIFICATIONS_ROOT} from '#/horizon/private/cache-finders'
 import {type NotificationsMode} from '#/horizon/private/notifications/mode'
 import {type PrivateNotificationsTab} from '#/horizon/private/notifications/page'
@@ -56,7 +57,8 @@ export async function refreshPrivateNotifications(
  *   reset the list listens for).
  * - Switching to Private with something unread asks again for the "All"
  *   pill the view opens on, starting before the view mounts, and marks
- *   "Replies" stale so it asks when opened. Without anything unread, a list
+ *   "Replies" (and "Activity" while prism lists
+ *   `private.activitySubscriptions`) stale so it asks when opened. Without anything unread, a list
  *   older than its stale time asks again as it mounts.
  */
 export function pressNotificationsModeTab({
@@ -88,6 +90,12 @@ export function pressNotificationsModeTab({
       queryKey: privateNotificationsQueryKey(did, 'replies'),
       refetchType: 'none',
     })
+    if (activitySubscriptionsShown(did)) {
+      void queryClient.invalidateQueries({
+        queryKey: privateNotificationsQueryKey(did, 'activity'),
+        refetchType: 'none',
+      })
+    }
     void refreshPrivateNotifications(queryClient, did, 'all')
   }
   select(next)

@@ -8,7 +8,12 @@
  * otherwise nothing is asked and the counts are `undefined`.
  */
 
-import {useInfiniteQuery, useQuery} from '@tanstack/react-query'
+import {useEffect, useEffectEvent} from 'react'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {STALE} from '#/state/queries'
@@ -16,9 +21,19 @@ import {type LoadedGroupedNotificationsPage} from '#/state/queries/notifications
 import {moderateNotification} from '#/state/queries/notifications/grouped/moderate'
 import {useSession} from '#/state/session'
 import {useThreadgateHiddenReplyUris} from '#/state/threadgate-hidden-replies'
+import {useActivitySubscriptionsShown} from '#/horizon/private/activity-subscriptions/hooks'
+import {
+  countUnmuted,
+  type UnreadItem,
+  withoutMutedAuthors,
+} from '#/horizon/private/activity-subscriptions/mute-filter'
+import {useMutedDids} from '#/horizon/private/activity-subscriptions/muted'
 import {getPrivateUnreadCount} from '#/horizon/private/api/reads'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
-import {usePrivateFeedSource} from '#/horizon/private/membership'
+import {
+  type PrivateFeedSource,
+  usePrivateFeedSource,
+} from '#/horizon/private/membership'
 import {
   fetchPrivateNotificationsPage,
   type PrivateNotificationsTab,
@@ -26,6 +41,7 @@ import {
 import {privateNotificationsQueryKey} from '#/horizon/private/notifications/refresh'
 import {
   countPrivateOnlyUnread,
+  PRIVATE_ONLY_UNREAD_CAP,
   PRIVATE_UNREAD_OWN_ROOT,
   PRIVATE_UNREAD_ROOT,
 } from '#/horizon/private/notifications/unread'
@@ -49,9 +65,35 @@ function useEnabledSource() {
 }
 
 /**
+ * The query function of `tab`'s list, shared by the list and its prefetch.
+ */
+function privateNotificationsQueryFn(
+  source: PrivateFeedSource | undefined,
+  tab: PrivateNotificationsTab,
+  viewerDid: string | undefined,
+) {
+  return ({
+    pageParam,
+  }: {
+    pageParam: string | undefined
+  }): Promise<LoadedGroupedNotificationsPage> => {
+    if (!source) throw new Error('private notifications: no source')
+    return fetchPrivateNotificationsPage({
+      source,
+      tab,
+      cursor: pageParam,
+      viewerDid,
+      requestedAt: Date.now(),
+    })
+  }
+}
+
+/**
  * The Private view's list for `tab`: stock grouped pages, moderated as the
  * stock list moderates them, a notification already shown on an earlier
- * page left out.
+ * page left out. While prism lists `private.activitySubscriptions`, authors
+ * the reader muted on Bluesky are left out too (activity subscriptions
+ * design 2.6), for pages whose author merge failed.
  */
 export function usePrivateNotificationsQuery({
   tab,
@@ -62,21 +104,13 @@ export function usePrivateNotificationsQuery({
   const {currentAccount} = useSession()
   const moderationOpts = useModerationOpts()
   const {uris: hiddenReplyUris} = useThreadgateHiddenReplyUris()
+  const muted = useMutedDids()
   const viewerDid = currentAccount?.did
   return useInfiniteQuery({
     enabled: !!source && !!moderationOpts,
     staleTime: STALE.SECONDS.FIFTEEN,
     queryKey: privateNotificationsQueryKey(source?.did ?? '', tab),
-    queryFn: ({pageParam}): Promise<LoadedGroupedNotificationsPage> => {
-      if (!source) throw new Error('private notifications: no source')
-      return fetchPrivateNotificationsPage({
-        source,
-        tab,
-        cursor: pageParam,
-        viewerDid,
-        requestedAt: Date.now(),
-      })
-    },
+    queryFn: privateNotificationsQueryFn(source, tab, viewerDid),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     select(data) {
@@ -90,14 +124,43 @@ export function usePrivateNotificationsQuery({
               moderationOpts,
               hiddenReplyUris,
             })
-            if (!moderated || seen.has(moderated.id)) return []
-            seen.add(moderated.id)
-            return [moderated]
+            const kept = moderated && withoutMutedAuthors(moderated, muted)
+            if (!kept || seen.has(kept.id)) return []
+            seen.add(kept.id)
+            return [kept]
           }),
         })),
       }
     },
   })
+}
+
+/**
+ * Prefetch `tab`'s first page when the Private view mounts, with the list's
+ * own key and fetcher, so its first switch shows cached rows (activity
+ * subscriptions design 2.5). Only while `enabled`.
+ */
+export function usePrefetchPrivateNotifications(
+  tab: PrivateNotificationsTab,
+  enabled: boolean,
+) {
+  const source = useEnabledSource()
+  const queryClient = useQueryClient()
+  const {currentAccount} = useSession()
+  const viewerDid = currentAccount?.did
+  const did = source?.did
+  const prefetch = useEffectEvent(() => {
+    if (!source) return
+    void queryClient.prefetchInfiniteQuery({
+      queryKey: privateNotificationsQueryKey(source.did, tab),
+      queryFn: privateNotificationsQueryFn(source, tab, viewerDid),
+      initialPageParam: undefined as string | undefined,
+      staleTime: STALE.SECONDS.FIFTEEN,
+    })
+  })
+  useEffect(() => {
+    if (enabled && did) prefetch()
+  }, [enabled, did, tab])
 }
 
 /**
@@ -129,17 +192,24 @@ export function usePrivateUnreadCheck():
 }
 
 /**
- * The private-only unread count the nav badge adds (Notif 5).
+ * The private-only unread count the nav badge adds (Notif 5). While prism
+ * lists `private.activitySubscriptions` it also counts new private posts from
+ * accounts whose bell is on, and leaves out authors the reader muted on
+ * Bluesky (activity subscriptions design 2.6); the cap applies after that.
  */
 export function usePrivateOnlyUnreadCount(): number | undefined {
   const source = useEnabledSource()
+  const activity = useActivitySubscriptionsShown()
+  const muted = useMutedDids()
   const {data} = useQuery({
     enabled: !!source,
     queryKey: [PRIVATE_UNREAD_OWN_ROOT, source?.did ?? ''],
-    queryFn: () => {
+    queryFn: (): Promise<UnreadItem[]> => {
       if (!source) throw new Error('private notifications: no source')
-      return countPrivateOnlyUnread(source.prism)
+      return countPrivateOnlyUnread(source.prism, {activity})
     },
+    select: (items: UnreadItem[]) =>
+      countUnmuted(items, muted, PRIVATE_ONLY_UNREAD_CAP),
     refetchInterval: PRIVATE_UNREAD_INTERVAL_MS,
   })
   return source ? data : undefined
