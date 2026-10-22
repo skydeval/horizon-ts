@@ -46,7 +46,8 @@ export type Encoder = {
  * Where an encode failed:
  * - `load`: the glue or the `.wasm` could not be fetched or instantiated, or
  *   the asset URL is not a string;
- * - `input`: building the content JSON threw before the encoder ran;
+ * - `input`: building the content JSON threw before the encoder ran, or the
+ *   content holds a number that is not an integer (atproto has no floats);
  * - `encode`: `preparePrivatePost` threw;
  * - `output`: the result did not parse or did not fit
  *   `privateEncodedFields`.

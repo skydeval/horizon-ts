@@ -189,11 +189,18 @@ export const privateGetBookmarks = l.query(
  * `indexing`, `notEligible`; others may come) and the private-tier feature
  * families prism serves, whatever the status. Enrolls an eligible caller. A
  * body that does not match (a non-string feature, say) fails as a whole.
+ * `permissions` (fast reads) is a map whose values are checked where they
+ * are read (`privateIndexed`, 2K design PA-1a), so an unknown or odd value
+ * never fails the answer; an older prism sends none.
  */
 export const getMembership = l.query(
   'app.nearhorizon.actor.getMembership',
   l.params(),
-  l.jsonPayload({status: l.string(), features: l.array(l.string())}),
+  l.jsonPayload({
+    status: l.string(),
+    features: l.array(l.string()),
+    permissions: l.optional(l.lexMap()),
+  }),
   ['RateLimitExceeded'],
 )
 

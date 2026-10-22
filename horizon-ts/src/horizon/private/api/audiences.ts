@@ -17,7 +17,10 @@ import {type QueryClient} from '@tanstack/react-query'
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {STALE} from '#/state/queries'
-import {requestRecordQuietly} from '#/horizon/private/api/request-record'
+import {
+  requestRecordCaughtUp,
+  requestRecordQuietly,
+} from '#/horizon/private/api/request-record'
 import {utf8Length} from '#/horizon/private/api/validate'
 import {
   type PostingWriter,
@@ -320,8 +323,17 @@ export async function findOrCreateStandingAudience(
     createdAt: now,
     updatedAt: now,
   })
-  requestRecordQuietly(clients.prismClient, res.uri)
   void queryClient.invalidateQueries({queryKey: audiencesQueryKey(clients.did)})
+  if (writer.route === 'encode') {
+    /*
+     * On the encode route the compose names it next (2K design 4.7): prism is
+     * asked to index it first, waiting at most three seconds, so readers are
+     * served the post at once. Never fails the write.
+     */
+    await requestRecordCaughtUp(clients.prismClient, res.uri)
+  } else {
+    requestRecordQuietly(clients.prismClient, res.uri)
+  }
   return res.uri
 }
 

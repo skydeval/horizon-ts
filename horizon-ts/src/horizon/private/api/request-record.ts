@@ -24,6 +24,20 @@ function failureFields(error: unknown): {name: string; status?: number} {
 }
 
 /**
+ * In a development build, `EXPO_PUBLIC_SKIP_REQUEST_RECORD=1` makes every
+ * `requestRecord` a no-op (2K design 9, live check L-4: whether prism finds a
+ * post from the relays alone). Read literally, so Expo inlines it; never in
+ * a production build.
+ */
+function skipsRequestRecord(uri: string): boolean {
+  if (!__DEV__ || process.env.EXPO_PUBLIC_SKIP_REQUEST_RECORD !== '1') {
+    return false
+  }
+  logger.info('request-record: skipped (dev)', {uri})
+  return true
+}
+
+/**
  * Ask prism to index one record of the caller's own repo now, after every
  * private create, private delete and audience create, edit and delete.
  * Never throws: a failure (prism's rate limit included) is logged and
@@ -31,6 +45,7 @@ function failureFields(error: unknown): {name: string; status?: number} {
  * wait on it.
  */
 export function requestRecordQuietly(prismClient: Client, uri: string): void {
+  if (skipsRequestRecord(uri)) return
   prismClient
     .call(nearhorizon.requestRecord, {uri: uri as AtUriString})
     .catch((error: unknown) => {
@@ -51,6 +66,7 @@ export async function requestRecordCaughtUp(
   uri: string,
   {deadlineMs = 3_000}: {deadlineMs?: number} = {},
 ): Promise<boolean> {
+  if (skipsRequestRecord(uri)) return false
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<false>(resolve => {
     timer = setTimeout(() => resolve(false), deadlineMs)

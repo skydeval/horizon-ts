@@ -84,6 +84,12 @@ jest.mock('#/state/queries/post-interaction-settings', () => ({
 jest.mock('#/horizon/private/defaults/compose', () => ({
   usePrivateComposeDefaults: () => undefined,
 }))
+let mockEncoderAvailable = true
+const mockPrewarm = jest.fn()
+jest.mock('#/horizon/private/encoder', () => ({
+  encoderAvailable: () => mockEncoderAvailable,
+  prewarmEncoder: () => mockPrewarm(),
+}))
 
 import {i18n} from '@lingui/core'
 import {I18nProvider} from '@lingui/react'
@@ -195,6 +201,8 @@ beforeEach(() => {
   mockItems.clear()
   mockRoot.props = undefined
   canPost = undefined
+  mockEncoderAvailable = true
+  mockPrewarm.mockReset()
   resetMembership()
   resetPrismFeatures()
   resetWriteRoutes()
@@ -300,6 +308,71 @@ describe('the route blocker (PA-26, T-13)', () => {
     expect(canPost).toBe(true)
     expect(screen.queryByText(NOTE)).toBeNull()
     expect(screen.queryByText(CHECKING)).toBeNull()
+    screen.unmount()
+  })
+})
+
+describe('Private on posting route encode (2K-3)', () => {
+  const ANY_PDS = {status: 'member', features: ['private', 'private.anyPds']}
+
+  it('is offered as on locus, and a locked reply can be posted', async () => {
+    publish(STOCK)
+    await answerMembership(ANY_PDS)
+    const top = show()
+    expect(mockItems.get('composerVisibilityPrivate')?.accessibilityHint).toBe(
+      undefined,
+    )
+    act(() => mockRoot.props?.onChange('private'))
+    expect(getComposeVisibility().visibility).toBe('private')
+    expect(top.queryByTestId('composerPrivateRouteNote')).toBeNull()
+    top.unmount()
+
+    const reply = show({uri: PRIVATE_PARENT})
+    expect(canPost).toBe(true)
+    expect(reply.queryByText(NOTE)).toBeNull()
+    reply.unmount()
+  })
+
+  it('pre-warms the encoder once when the composer opens, whatever the segment (PA-30, T-26)', async () => {
+    publish(STOCK)
+    await answerMembership(ANY_PDS)
+    const screen = show()
+    expect(getComposeVisibility().visibility).toBe('public')
+    expect(mockPrewarm).toHaveBeenCalledTimes(1)
+    act(() => mockRoot.props?.onChange('private'))
+    expect(mockPrewarm).toHaveBeenCalledTimes(1)
+    screen.unmount()
+  })
+
+  it('a composer opened while checking pre-warms when the route becomes encode, and never on locus (K6-N11)', async () => {
+    publish(STOCK)
+    const screen = show()
+    expect(mockPrewarm).not.toHaveBeenCalled()
+    await act(() => answerMembership(ANY_PDS))
+    expect(mockPrewarm).toHaveBeenCalledTimes(1)
+    screen.unmount()
+
+    mockPrewarm.mockReset()
+    resetMembership()
+    resetPrismFeatures()
+    publish(LOCUS)
+    await answerMembership(ANY_PDS)
+    const locus = show()
+    expect(mockPrewarm).not.toHaveBeenCalled()
+    locus.unmount()
+  })
+
+  it('without an encoder the segment is inert with the no-encoder note, and nothing is pre-warmed', async () => {
+    mockEncoderAvailable = false
+    publish(STOCK)
+    await answerMembership(ANY_PDS)
+    const screen = show()
+    act(() => mockRoot.props?.onChange('private'))
+    expect(getComposeVisibility().visibility).toBe('public')
+    expect(screen.getByTestId('composerPrivateRouteNote').props.children).toBe(
+      'Private posting isn’t available for your account yet. Posting privately from your server isn’t available in this app yet.',
+    )
+    expect(mockPrewarm).not.toHaveBeenCalled()
     screen.unmount()
   })
 })

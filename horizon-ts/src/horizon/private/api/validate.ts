@@ -13,12 +13,20 @@
  * content warning facet's spoiler (2J design 4.7), and the embeds
  * whose server-support constant is off, which are rejected as unknown
  * embeds.
+ *
+ * On the encode route (2K design 4.1) the record as composed is checked in
+ * that plaintext form before the encode, and the record written in an
+ * encoded form (`validateEncodedRecord`).
  */
 
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {kryphocron} from '#/horizon/lexicons'
-import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
+import {
+  type PostPrivate,
+  type PostPrivateEncoded,
+  PRIVATE_ENCODED_FIELD_KEYS,
+} from '#/horizon/lexicons/kryphocron'
 import {MEDIA_SPOILER_FIELD} from '#/horizon/media-spoilers/nsid'
 import {
   PRIVATE_GALLERY,
@@ -301,4 +309,107 @@ export function validatePrivateRecord(record: unknown): PostPrivate {
     fail(path, issue?.message ?? result.message)
   }
   return result.value
+}
+
+/**
+ * The keys a plaintext record carries that an encoded one never does in clear
+ * (2K design 4.1): they live inside `encodedContent`.
+ */
+const PAYLOAD_KEYS = ['text', 'facets', 'embed'] as const
+
+/**
+ * The three fields every encoded record carries.
+ */
+const ENCODED_REQUIRED_KEYS = [
+  'encodedContent',
+  'encodedContentCodec',
+  'encodedContentGeneration',
+] as const
+
+/**
+ * The keys an encode-route create writes: Horizon's clear fields and the
+ * encoder's seven.
+ */
+const ENCODED_CREATE_KEYS = new Set<string>([
+  '$type',
+  'createdAt',
+  'audienceList',
+  'reply',
+  ...PRIVATE_ENCODED_FIELD_KEYS,
+])
+
+/**
+ * Validate an encoded private record (2K design 4.1, PA-10) in one of two
+ * forms:
+ *
+ * - `create`: the record the encode route assembles for `createRecord`. A
+ *   closed whitelist: `$type`, `createdAt`, `audienceList`, `reply`, `langs`
+ *   and `labels` (only once `PRIVATE_LANGS_LABELS` is on) and the encoder's
+ *   seven keys; `audienceList` the URI of an audience record.
+ * - `rewrite`: the record a change of audience or rotation assembles for
+ *   `putRecord`, and the stored record before its encode (the stored-record
+ *   check). Horizon's clear fields well-formed when present; any key it does
+ *   not set is kept as stored and not checked.
+ *
+ * Both: `$type`, no clear `text`, `facets` or `embed`, the three encoded
+ * fields present (`encodedContent` as bytes) and the four derived ones
+ * well-formed when present (`mentionDids` items DIDs). Throws
+ * {@link PrivatePostInvalidError} naming the key path.
+ */
+export function validateEncodedRecord(
+  record: unknown,
+  form: 'create',
+): PostPrivateEncoded
+export function validateEncodedRecord(
+  record: unknown,
+  form: 'rewrite',
+): Record<string, unknown>
+export function validateEncodedRecord(
+  record: unknown,
+  form: 'create' | 'rewrite',
+): PostPrivateEncoded | Record<string, unknown> {
+  if (!isObject(record)) fail('record', 'not an object')
+  if (record.$type !== PP_COLLECTION) {
+    fail('$type', `must be ${PP_COLLECTION}`)
+  }
+  for (const key of PAYLOAD_KEYS) {
+    if (key in record) fail(key, 'must not be stored in clear')
+  }
+  for (const key of ENCODED_REQUIRED_KEYS) {
+    if (!(key in record)) fail(key, 'missing')
+  }
+  if (!(record.encodedContent instanceof Uint8Array)) {
+    fail('encodedContent', 'not bytes')
+  }
+
+  if (form === 'create') {
+    for (const key of Object.keys(record)) {
+      if (ENCODED_CREATE_KEYS.has(key)) continue
+      if (PRIVATE_LANGS_LABELS && LANGS_LABELS_KEYS.has(key)) continue
+      fail(key, 'not a field Horizon writes')
+    }
+    if (!isAudienceUri(record.audienceList as string | undefined)) {
+      fail('audienceList', 'not the at-uri of an audience record')
+    }
+    const result = kryphocron.postPrivateEncoded.safeValidate(record)
+    if (!result.success) {
+      const issue = result.issues[0]
+      fail(
+        issue?.path.length ? issue.path.join('.') : 'record',
+        'not well-formed',
+      )
+    }
+    return result.value
+  }
+
+  const result = kryphocron.postPrivateEncodedRewrite.safeValidate(record)
+  if (!result.success) {
+    const issue = result.issues[0]
+    fail(
+      issue?.path.length ? issue.path.join('.') : 'record',
+      'not well-formed',
+    )
+  }
+  // The record itself, so keys the schema does not name stay exactly as stored.
+  return record
 }

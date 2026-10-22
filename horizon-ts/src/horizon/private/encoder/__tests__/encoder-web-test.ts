@@ -360,4 +360,65 @@ describe('encode', () => {
     expect(mockPrepare).not.toHaveBeenCalled()
     expect(warn).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['a float', 1.5],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['an unsafe integer', 2 ** 60],
+  ])(
+    'content holding %s at any depth is class input, with no encoder call (2K-3, T-6)',
+    async (_label, number) => {
+      const {loadEncoder} = loadModule()
+      const encoder = await loadEncoder()
+      let failure: unknown
+      try {
+        encoder.encode({
+          did: DID,
+          rkey: RKEY,
+          content: {
+            text: 'hello',
+            embed: {
+              $type: 'tools.kryphocron.feed.postPublic#embedImage',
+              images: [
+                {
+                  image: blob(),
+                  alt: '',
+                  aspectRatio: {width: number, height: 100},
+                },
+              ],
+            },
+          },
+          nowSecs: NOW,
+        })
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toMatchObject({failureClass: 'input'})
+      expect((failure as Error).message).not.toContain(String(number))
+      expect((failure as Error).cause).toBeUndefined()
+      expect(mockPrepare).not.toHaveBeenCalled()
+      expect(warn).not.toHaveBeenCalled()
+    },
+  )
+
+  it('integers anywhere in the content pass', async () => {
+    const {loadEncoder} = loadModule()
+    const encoder = await loadEncoder()
+    encoder.encode({
+      did: DID,
+      rkey: RKEY,
+      content: {
+        text: 'hello',
+        facets: [
+          {
+            index: {byteStart: 0, byteEnd: 5},
+            features: [{$type: 'x.y#z'}],
+          },
+        ] as never,
+      },
+      nowSecs: NOW,
+    })
+    expect(mockPrepare).toHaveBeenCalledTimes(1)
+  })
 })

@@ -39,6 +39,11 @@ export const PRISM_FEATURES = [
   'private.threadAudience',
   'private.mediaFilters',
   'private.notificationPreferences',
+  /*
+   * Off-locus private posts are fully served and plaintext is refused (2K
+   * design 2.3): the `encode` posting route needs it.
+   */
+  'private.anyPds',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

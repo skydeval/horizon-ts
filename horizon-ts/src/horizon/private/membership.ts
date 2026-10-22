@@ -58,8 +58,8 @@ export function useIsConfirmedMember(): boolean {
 /**
  * Whether the current account is offered Private in the composer, and why
  * not (2K design 2.3). `offered` on posting route `locus` keeps today's test
- * exactly ({@link useIsConfirmedMember}); on `encode` (from 2K-3) the route
- * itself says so. `showsRouteNote` is who sees the `checking` and `none`
+ * exactly ({@link useIsConfirmedMember}); on `encode` the route itself says
+ * so. `showsRouteNote` is who sees the `checking` and `none`
  * interface instead (PA-3): on `checking` an account whose held membership is
  * `member` or `indexing`; on `none` one answered `member` or `indexing` in
  * this run. A non-member sees neither. `routes` words the note.

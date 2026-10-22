@@ -18,7 +18,17 @@
  * refuses before any work while the posting route is `checking` or `none`;
  * deletes and the rollback go through the repo writer, which every route has.
  *
- * Logs name URIs only, never private text.
+ * On posting route `encode` (2K design 4.2) the posts are encoded in the
+ * client before any gate or post is written (PA-12): each at its own rkey,
+ * chosen first (PA-21), then checked as the encoded record it becomes
+ * (PA-10). Each is written with stock `createRecord` on the account's own
+ * PDS, whose answer carries the record CID, and confirmed through prism
+ * directly (PA-7), so the post's text never passes the writer's PDS. Until
+ * the outbox (2K-9) the composer waits for the writes, and a failure rolls
+ * back what was written, as on locus.
+ *
+ * Logs name URIs, key names and failure classes only, never private text or
+ * an encoder's or server's message.
  */
 
 import {TID} from '@atproto/common-web'
@@ -35,7 +45,10 @@ import {RQKEY_ROOT as POST_FEED_RQKEY_ROOT} from '#/state/queries/post-feed'
 import {RQKEY as profileQueryKey} from '#/state/queries/profile'
 import {RQKEY_LINK} from '#/state/queries/resolve-link'
 import {kryphocron} from '#/horizon/lexicons'
-import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
+import {
+  type PostPrivate,
+  type PostPrivateEncoded,
+} from '#/horizon/lexicons/kryphocron'
 import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
 import {
   contentWarningLabelValues,
@@ -56,6 +69,10 @@ import {
   PrivateAudienceMissingError,
 } from '#/horizon/private/api/audiences'
 import {
+  assembleEncodedRecord,
+  encoderContentOf,
+} from '#/horizon/private/api/encoded-record'
+import {
   deleteGates,
   gatesForNewPost,
   PrivateGateWriteError,
@@ -72,7 +89,11 @@ import {
   requestRecordCaughtUp,
   requestRecordQuietly,
 } from '#/horizon/private/api/request-record'
-import {validatePrivateRecord} from '#/horizon/private/api/validate'
+import {
+  PrivatePostInvalidError,
+  validateEncodedRecord,
+  validatePrivateRecord,
+} from '#/horizon/private/api/validate'
 import {
   locusRepoWriter,
   type PostingWriter,
@@ -82,7 +103,17 @@ import {
   type RepoWriter,
   repoWriterFor,
 } from '#/horizon/private/api/writer'
-import {getComposeVisibility} from '#/horizon/private/composer/state'
+import {
+  type ComposeAudience,
+  getComposeVisibility,
+} from '#/horizon/private/composer/state'
+import {
+  type EncodeFailureClass,
+  type Encoder,
+  loadEncoder,
+  PrivateEncodeFailedError,
+} from '#/horizon/private/encoder'
+import {parseGenerationSecs} from '#/horizon/private/rotation/generation'
 import {PRIVATE_LANGS_LABELS} from '#/horizon/private/server-support'
 import {
   addPendingPost,
@@ -95,6 +126,7 @@ import {
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {getPrismClient} from '#/horizon/routing/prism'
+import {getDirectPrismClient} from '#/horizon/routing/prism-direct'
 import {clientDid, getWriteRoute} from '#/horizon/routing/write-route'
 import {resolveSpoilerRT, spoilerWriteMode} from '#/horizon/spoilers/write'
 import {type app, com} from '#/lexicons'
@@ -134,6 +166,19 @@ export class PrivateGatesNotSavedError extends Error {
 }
 
 /**
+ * The encode route could not prepare the compose (2K design 4.9): the encoder
+ * failed to load or to encode (its classes, PA-31), or the record it
+ * assembled did not validate (`assembly`). Nothing was written; the encoder's
+ * message is never kept.
+ */
+export class PrivateEncodeError extends Error {
+  constructor(readonly failureClass: EncodeFailureClass | 'assembly') {
+    super(t`Private posting isn’t available right now. Nothing was posted.`)
+    this.name = 'PrivateEncodeError'
+  }
+}
+
+/**
  * What the first post of a compose is written under, decided before any
  * write.
  */
@@ -157,14 +202,19 @@ function isObject(value: unknown): value is Record<string, unknown> {
  *   with `createPostPrivate` when the anchor is the writer's, else with
  *   `participatePrivate` (`reply-anchor.ts`);
  * - anything else (a top-level post, or a private reply to a public post,
- *   which starts a branch) names the composer's audience and is written with
- *   `createPostPrivate`, a branch root with the stock reply refs (the public
- *   parent and the public thread root).
+ *   which starts a branch) names the composer's `audience`, read by the
+ *   caller before its first await, and is written with `createPostPrivate`,
+ *   a branch root with the stock reply refs (the public parent and the
+ *   public thread root).
+ *
+ * On the encode route the procedure is not used; the placement read is its
+ * write-time check (PA-34).
  */
 async function planFirstPost(
   queryClient: QueryClient,
   clients: AudienceClients,
   opts: PostOpts,
+  audience: ComposeAudience,
   writer: PostingWriter,
 ): Promise<Plan> {
   const replyTo = opts.replyTo
@@ -181,7 +231,6 @@ async function planFirstPost(
     }
   }
 
-  const {audience} = getComposeVisibility()
   const audiencePromise = (async () => {
     if (audience.kind === 'mode') {
       return findOrCreateStandingAudience(
@@ -489,6 +538,111 @@ async function writeComposeGates(
 }
 
 /**
+ * One post's plaintext record, not yet validated and without its reply refs:
+ * a thread's later posts take their parent's CID only once the parent is
+ * written.
+ */
+type ComposedPost = Record<string, unknown>
+
+/**
+ * One post of an encode-route compose, prepared before any write: its
+ * plaintext record (for the author's pending view only, never written) and
+ * the encoded record written at its rkey.
+ */
+type EncodedPost = {plain: PostPrivate; record: PostPrivateEncoded}
+
+let unknownGenerationLogged = false
+
+/**
+ * An encoder failure as the compose reports it: logged by class only, with
+ * 4.9's fixed text. A failure that is not the encoder's own (none is
+ * expected) counts as `load`.
+ */
+function encodeFailure(error: unknown): PrivateEncodeError {
+  const failureClass =
+    error instanceof PrivateEncodeFailedError ? error.failureClass : 'load'
+  logger.warn('encode: failed', {failureClass})
+  return new PrivateEncodeError(failureClass)
+}
+
+/**
+ * The encoded record a create writes, checked in the create form (PA-10). A
+ * failure is a bug: logged with the key path only, and nothing is written.
+ */
+function checkEncodedRecord(record: unknown): PostPrivateEncoded {
+  try {
+    return validateEncodedRecord(record, 'create')
+  } catch (error) {
+    logger.error('encode: assembled record invalid', {
+      path: error instanceof PrivatePostInvalidError ? error.path : undefined,
+    })
+    throw new PrivateEncodeError('assembly')
+  }
+}
+
+/**
+ * Encode every post of a compose locally (4.2 steps 4 and 5, PA-11), in
+ * order, before any gate or post is written (PA-12): one encode per post at
+ * its own rkey and the writer's DID (PA-21), with the device clock's seconds
+ * (D-0.12). Each plaintext record is validated first (the first post with
+ * its reply refs; a later post's are added at the write), and each encoded
+ * record after.
+ */
+async function encodeComposePosts(
+  did: string,
+  rkeys: readonly string[],
+  composed: readonly ComposedPost[],
+  firstReply: Plan['reply'],
+): Promise<EncodedPost[]> {
+  let encoder: Encoder
+  try {
+    encoder = await loadEncoder()
+  } catch (error) {
+    throw encodeFailure(error)
+  }
+  const nowSecs = Math.floor(Date.now() / 1000)
+  return composed.map((base, index) => {
+    const reply = index === 0 ? firstReply : undefined
+    const plain = validatePrivateRecord({...base, ...(reply ? {reply} : {})})
+    let fields
+    try {
+      fields = encoder.encode({
+        did,
+        rkey: rkeys[index],
+        content: encoderContentOf(plain),
+        nowSecs,
+      })
+    } catch (error) {
+      throw encodeFailure(error)
+    }
+    /*
+     * prism decodes by the slug, not the mark, so a mark that does not parse
+     * is written anyway; it only schedules the post's rotation (3.2).
+     */
+    if (
+      !unknownGenerationLogged &&
+      parseGenerationSecs(fields.encodedContentGeneration) === undefined
+    ) {
+      unknownGenerationLogged = true
+      logger.warn('encode: unknown generation format')
+    }
+    const record = checkEncodedRecord(
+      assembleEncodedRecord(
+        {
+          createdAt: plain.createdAt,
+          audienceList: plain.audienceList,
+          reply: plain.reply,
+          langs: plain.langs,
+          labels: plain.labels,
+        },
+        fields,
+      ),
+    )
+    return {plain, record}
+  })
+}
+
+/**
  * Publish a private compose. Takes the stock `PostOpts` and returns the
  * stock `{uris}`; every client comes from `opts`.
  */
@@ -517,6 +671,9 @@ export async function postPrivate(
     did,
   )
   const repoWriter = repoWriterFor(routes.repoRoute, opts.pdsClient)
+  const encodes = postingWriter.route === 'encode'
+  // The composer's audience, read before the first await.
+  const {audience} = getComposeVisibility()
   opts.onStateChange?.(t`Processing...`)
 
   const prism = getPrismClient(opts.pdsClient)
@@ -526,7 +683,13 @@ export async function postPrivate(
     prismClient: prism,
   }
 
-  const plan = await planFirstPost(queryClient, clients, opts, postingWriter)
+  const plan = await planFirstPost(
+    queryClient,
+    clients,
+    opts,
+    audience,
+    postingWriter,
+  )
 
   /*
    * Every post's text and embed, resolved before any gate or post is
@@ -548,6 +711,44 @@ export async function postPrivate(
     return tid.toString()
   })
   const postUris = rkeys.map(rkey => `at://${did}/${PP_COLLECTION}/${rkey}`)
+
+  const now = new Date()
+  // As stock: at most three languages, from the composer's choice (K-1).
+  const langs =
+    PRIVATE_LANGS_LABELS && opts.langs?.length
+      ? opts.langs.slice(0, 3)
+      : undefined
+  const composed: ComposedPost[] = thread.posts.map((draft, index) => {
+    const {rt, embed} = resolved[index]
+    // As stock: posts of one compose are 1 ms apart, so they sort in order.
+    now.setMilliseconds(now.getMilliseconds() + 1)
+    const facets = toPrivateFacets(rt.facets)
+    const privateEmbed = toPrivateEmbed(
+      withMediaSpoilers(embed, draft, composeSpoilers),
+    )
+    const labels = toPrivateSelfLabels(
+      contentWarningLabelValues(draft, composeSpoilers),
+    )
+    return {
+      $type: PP_COLLECTION,
+      text: rt.text,
+      createdAt: toDatetimeString(now),
+      audienceList: plan.audienceUri,
+      ...(facets ? {facets} : {}),
+      ...(privateEmbed ? {embed: privateEmbed} : {}),
+      ...(langs ? {langs} : {}),
+      ...(labels ? {labels} : {}),
+    }
+  })
+
+  /*
+   * On the encode route every post is encoded before the gates (PA-12): an
+   * encoder failure or an invalid assembly writes nothing.
+   */
+  const encoded = encodes
+    ? await encodeComposePosts(did, rkeys, composed, plan.reply)
+    : undefined
+
   const gateUris = await writeComposeGates(opts, did, postUris)
 
   const uris: string[] = []
@@ -559,54 +760,45 @@ export async function postPrivate(
   let reply = plan.reply
   /** Whether prism caught up with the compose's last post (5.7). */
   let lastCaughtUp: Promise<boolean> | undefined
-  const now = new Date()
-  // As stock: at most three languages, from the composer's choice (K-1).
-  const langs =
-    PRIVATE_LANGS_LABELS && opts.langs?.length
-      ? opts.langs.slice(0, 3)
-      : undefined
 
   try {
     for (const [index, draft] of thread.posts.entries()) {
-      const {rt, embed} = resolved[index]
-
-      // As stock: posts of one compose are 1 ms apart, so they sort in order.
-      now.setMilliseconds(now.getMilliseconds() + 1)
       const rkey = rkeys[index]
       const uri = postUris[index]
+      const withReply = reply ? {reply} : {}
 
-      const facets = toPrivateFacets(rt.facets)
-      const privateEmbed = toPrivateEmbed(
-        withMediaSpoilers(embed, draft, composeSpoilers),
-      )
-      const labels = toPrivateSelfLabels(
-        contentWarningLabelValues(draft, composeSpoilers),
-      )
-      const record = validatePrivateRecord({
-        $type: PP_COLLECTION,
-        text: rt.text,
-        createdAt: toDatetimeString(now),
-        audienceList: plan.audienceUri,
-        ...(facets ? {facets} : {}),
-        ...(reply ? {reply} : {}),
-        ...(privateEmbed ? {embed: privateEmbed} : {}),
-        ...(langs ? {langs} : {}),
-        ...(labels ? {labels} : {}),
-      })
+      /*
+       * `record` is what is written; `plain` is the plaintext record, which
+       * the pending view shows. The same on the locus route.
+       */
+      let record: PostPrivate | PostPrivateEncoded
+      let plain: PostPrivate
+      if (encoded) {
+        plain = validatePrivateRecord({...encoded[index].plain, ...withReply})
+        record = checkEncodedRecord({...encoded[index].record, ...withReply})
+      } else {
+        plain = validatePrivateRecord({...composed[index], ...withReply})
+        record = plain
+      }
 
       opts.onStateChange?.(t`Posting privately...`)
       let cid: string | undefined
       try {
-        await postingWriter.createPost({
+        const res = await postingWriter.createPost({
           procedure: plan.procedure,
           rkey,
           record,
         })
-        const stored = await readRecordState(opts.pdsClient, did, rkey)
-        if (stored.state !== 'present' || !stored.cid) {
-          throw new Error('getRecord did not return the stored private post')
+        if (res.cid) {
+          // The encode route: `createRecord` answers the record CID.
+          cid = res.cid
+        } else {
+          const stored = await readRecordState(opts.pdsClient, did, rkey)
+          if (stored.state !== 'present' || !stored.cid) {
+            throw new Error('getRecord did not return the stored private post')
+          }
+          cid = stored.cid
         }
-        cid = stored.cid
       } catch (error) {
         /*
          * An error does not mean nothing was stored: aurora commits before
@@ -615,7 +807,9 @@ export async function postPrivate(
          */
         const after = await readRecordState(opts.pdsClient, did, rkey)
         if (after.state !== 'absent') written.push(uri)
-        if (isReplyRefusal(error, !!reply)) throw new PrivateReplyRefusedError()
+        if (!encodes && isReplyRefusal(error, !!reply)) {
+          throw new PrivateReplyRefusedError()
+        }
         throw error
       }
       written.push(uri)
@@ -631,13 +825,13 @@ export async function postPrivate(
           uri,
           cid,
           author: authorView(queryClient, did),
-          record,
-          indexedAt: record.createdAt,
+          record: plain,
+          indexedAt: plain.createdAt,
           labels: [],
         },
         {
           embed: pendingEmbedView(
-            record,
+            plain,
             did,
             quoteViewFromCache(queryClient, draft.embed.quote?.uri),
           ),
@@ -654,14 +848,14 @@ export async function postPrivate(
           uri,
           cid,
           did,
-          record,
+          record: plain,
           audienceUri: plan.audienceUri,
           postView,
           feedItem:
             parentRef && rootRef
               ? {post: postView, reply: {root: rootRef, parent: parentRef}}
               : {post: postView},
-          createdAt: record.createdAt,
+          createdAt: plain.createdAt,
           expiresAt: Date.now() + PENDING_TTL_MS,
         })
       }
@@ -693,10 +887,16 @@ export async function postPrivate(
   }
 
   setPendingBatch(uris)
-  confirmInBackground(prism, uris)
+  /*
+   * On the encode route the confirmation reads go to prism directly (PA-7),
+   * so the post's text never passes the writer's PDS; the token is minted
+   * here when none is cached, and a failure only fails that read.
+   */
+  const confirmer = encodes ? getDirectPrismClient(opts.pdsClient) : prism
+  confirmInBackground(confirmer, uris)
   // Never rejects; on `true` the posts read at once, before the schedule.
   void lastCaughtUp?.then(caughtUp => {
-    if (caughtUp) confirmNow(prism, uris)
+    if (caughtUp) confirmNow(confirmer, uris)
   })
   invalidateAuthorPrivateFeeds(queryClient, did)
   return {uris}

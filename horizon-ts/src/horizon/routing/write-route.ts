@@ -9,10 +9,10 @@
  * - the **posting route**, for new private writes (create, reply, thread,
  *   change of audience, audience create). It is computed, never stored
  *   (PA-1): `locus` on repo route `locus`; on repo route `stock`, `checking`
- *   until prism's membership answer may be acted on (PA-1a), then `none`.
- *   The `encode` arm (the client encoder) is defined here and computed from
- *   2K-3, behind `PRIVATE_POSTING_ANY_PDS`; until then a member on any other
- *   PDS is never offered Private.
+ *   until prism's membership answer may be acted on (PA-1a), then `encode`
+ *   (the client encoder) for an account that may post privately on a prism
+ *   listing `private.anyPds`, with `PRIVATE_POSTING_ANY_PDS` on and an
+ *   encoder on this platform; else `none`.
  *
  * A write reads its routes once, at entry (PA-20), from the persisted session
  * account of `pdsClient.assertDid`, never from the published current clients
@@ -25,16 +25,22 @@ import {type Client, XrpcResponseError} from '@atproto/lex'
 
 import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
+import {encoderAvailable} from '#/horizon/private/encoder'
 import {
   getCurrentClients,
   subscribeCurrentClients,
 } from '#/horizon/routing/current-clients'
-import {subscribePrismFeatures} from '#/horizon/routing/features'
+import {
+  servesFeatureForWrite,
+  subscribePrismFeatures,
+} from '#/horizon/routing/features'
 import {
   answerCurrent,
   getMembership,
+  getPrivateIndexed,
   subscribeMembership,
 } from '#/horizon/routing/membership'
+import {PRIVATE_POSTING_ANY_PDS} from '#/horizon/switches'
 
 /**
  * Which writer serves deletes and audience edits and deletes.
@@ -54,7 +60,7 @@ export type PrivateWriteRoute = 'checking' | 'locus' | 'encode' | 'none'
 /**
  * Why the posting route is `none`, when the note words it differently:
  * `no-encoder` when the only reason is that this platform cannot run the
- * encoder (D-0.13). Not produced before 2K-3.
+ * encoder (D-0.13; a browser without WebAssembly or a CSRNG).
  */
 export type PostingRouteReason = 'no-encoder'
 
@@ -175,8 +181,15 @@ const CHECKING: PostingAnswer = {
 
 /**
  * The posting route of `did` on `repoRoute` (2.1). On repo route `stock` it
- * is `checking` until the membership facet is answered (PA-1a), and, for a
- * member, the features facet too, which the `encode` arm needs; then `none`.
+ * is `checking` until the membership facet is answered (PA-1a), and, for an
+ * account that may post privately, the features facet too. Then `encode` when
+ * that account's answer lists `private.anyPds`, `PRIVATE_POSTING_ANY_PDS` is
+ * on and this platform can run the encoder (`none` with `no-encoder` when
+ * only the encoder is missing); else `none`.
+ *
+ * Who may post privately: `permissions.privateIndexed` when the answer
+ * carries `permissions`, else status `member`. `encoderAvailable()` is a
+ * capability test; a failed load of the encoder never moves the route.
  */
 export function resolvePostingRoute(
   did: string | undefined,
@@ -189,17 +202,19 @@ export function resolvePostingRoute(
   const answer = answerCurrent(did)
   if (!answer.membership) return CHECKING
   const state = getMembership(did)
-  if (state === 'member' && !answer.features) return CHECKING
-  /*
-   * The `encode` arm goes here from 2K-3: a member (or
-   * `permissions.privateIndexed`) whose answer lists `private.anyPds`, with
-   * `PRIVATE_POSTING_ANY_PDS` on and `encoderAvailable()`.
-   */
-  return {
-    postingRoute: 'none',
-    reason: undefined,
-    indexing: state === 'indexing',
+  const indexing = state === 'indexing'
+  const mayPost = getPrivateIndexed(did) ?? state === 'member'
+  if (mayPost && !answer.features) return CHECKING
+  if (
+    mayPost &&
+    PRIVATE_POSTING_ANY_PDS &&
+    servesFeatureForWrite('private.anyPds', did)
+  ) {
+    return encoderAvailable()
+      ? {postingRoute: 'encode', reason: undefined, indexing}
+      : {postingRoute: 'none', reason: 'no-encoder', indexing}
   }
+  return {postingRoute: 'none', reason: undefined, indexing}
 }
 
 const snapshots = new Map<string, WriteRoutes>()

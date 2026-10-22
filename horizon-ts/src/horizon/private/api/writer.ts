@@ -8,9 +8,10 @@
  *   `com.atproto.repo.deleteRecord` and `putRecord`.
  * - A **posting writer**, by the posting route: a compose's posts, a change
  *   of audience and an audience create. The locus one wraps today's
- *   procedures unchanged (D-0.10). The encode one (the client encoder, then
- *   stock writes) comes in 2K-3; until then `checking`, `none` and `encode`
- *   all refuse before any write.
+ *   procedures unchanged (D-0.10). The encode one writes records the client
+ *   encoder prepared (`writes.ts`) with stock `createRecord` on the account's
+ *   own PDS; its change of audience waits for 2K-8 (`ENCODE_AUDIENCE_CHANGE`).
+ *   `checking` and `none` refuse before any write.
  *
  * Every raw write of `tools.kryphocron.*` on repo route `stock` checks for
  * locus's refusal (PA-5): on a match the PDS is recorded as a kryphocron host
@@ -23,7 +24,10 @@ import {AtUri, type AtUriString, type DidString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
 
 import {kryphocron} from '#/horizon/lexicons'
-import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
+import {
+  type PostPrivate,
+  type PostPrivateEncoded,
+} from '#/horizon/lexicons/kryphocron'
 import {AUDIENCE_COLLECTION, PP_COLLECTION} from '#/horizon/private/uri'
 import {
   clientDid,
@@ -36,8 +40,7 @@ import {
 import {com} from '#/lexicons'
 
 /**
- * The account's posting route is `checking` or `none` (or `encode` before
- * 2K-3): nothing was written.
+ * The account's posting route is `checking` or `none`: nothing was written.
  */
 export class PrivateRouteUnavailableError extends Error {
   constructor() {
@@ -99,15 +102,18 @@ export type RepoWriter = {
 export type PostingWriter = {
   route: PrivateWriteRoute
   /**
-   * Write one post of a compose at `rkey`. The caller reads its stored CID
-   * back and handles failures (2K-3 widens this to the whole compose for the
-   * encode route).
+   * Write one post of a compose at `rkey`; the caller handles failures. On
+   * the locus route `record` is the plaintext record, written through
+   * `procedure`, and `cid` is `undefined` (the procedure answers the commit's
+   * CID, so the caller reads the stored one back). On the encode route
+   * `record` is the encoded one, `procedure` is not used, and `cid` is the
+   * record CID `createRecord` answered.
    */
   createPost(post: {
     procedure: PostProcedure
     rkey: string
-    record: PostPrivate
-  }): Promise<void>
+    record: PostPrivate | PostPrivateEncoded
+  }): Promise<{cid: string | undefined}>
   /** Point a post at another audience; answers the new record CID. */
   changeAudience(
     uri: string,
@@ -207,6 +213,7 @@ export function locusPostingWriter(
     route: 'locus',
     async createPost({procedure, rkey, record}) {
       await pdsClient.call(procedure, {repo: did as DidString, rkey, record})
+      return {cid: undefined}
     },
     async changeAudience(uri, swapCid, audienceUri) {
       const res = await pdsClient.call(kryphocron.updatePostPrivate, {
@@ -228,6 +235,59 @@ export function locusPostingWriter(
 }
 
 /**
+ * A change of audience on the encode route waits for 2K-8: nothing offers it
+ * while `ENCODE_AUDIENCE_CHANGE` is off, and nothing is written.
+ */
+export class PrivateAudienceChangeUnavailableError extends Error {
+  constructor() {
+    super(
+      t`Changing who can see this post isn’t available for your account yet. Nothing was changed.`,
+    )
+    this.name = 'PrivateAudienceChangeUnavailableError'
+  }
+}
+
+/**
+ * The encode route's writes (2K design 4.2, 4.7): stock `createRecord` on the
+ * account's own PDS, each with PA-5's check. A post is written at the rkey
+ * its encoding is bound to (PA-21), with no `validate` and no `swapCommit`;
+ * an audience at a PDS-chosen rkey. The encoding itself is done by the
+ * caller before any write (PA-12).
+ */
+export function encodePostingWriter(
+  pdsClient: Client,
+  did: string,
+): PostingWriter {
+  return {
+    route: 'encode',
+    async createPost({rkey, record}) {
+      const res = await rawWrite(did, () =>
+        pdsClient.call(com.atproto.repo.createRecord, {
+          repo: did as DidString,
+          collection: PP_COLLECTION,
+          rkey,
+          record,
+        }),
+      )
+      return {cid: res.cid}
+    },
+    changeAudience() {
+      return Promise.reject(new PrivateAudienceChangeUnavailableError())
+    },
+    async createAudience(record) {
+      const res = await rawWrite(did, () =>
+        pdsClient.call(com.atproto.repo.createRecord, {
+          repo: did as DidString,
+          collection: AUDIENCE_COLLECTION,
+          record,
+        }),
+      )
+      return {uri: res.uri}
+    },
+  }
+}
+
+/**
  * The repo writer of `route`. Always a writer: a delete never depends on
  * prism, membership or the encoder.
  */
@@ -239,8 +299,7 @@ export function repoWriterFor(route: RepoRoute, pdsClient: Client): RepoWriter {
 
 /**
  * The posting writer of `route`; throws {@link PrivateRouteUnavailableError}
- * before any write on `checking` and `none`, and on `encode` until its writer
- * lands (2K-3).
+ * before any write on `checking` and `none`.
  */
 export function postingWriterFor(
   route: PrivateWriteRoute,
@@ -248,6 +307,7 @@ export function postingWriterFor(
   did: string,
 ): PostingWriter {
   if (route === 'locus') return locusPostingWriter(pdsClient, did)
+  if (route === 'encode') return encodePostingWriter(pdsClient, did)
   throw new PrivateRouteUnavailableError()
 }
 

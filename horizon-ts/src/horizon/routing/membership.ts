@@ -77,6 +77,12 @@ export const MEMBERSHIP_RECHECK_MIN_MS = 60_000
 const states = new Map<string, MembershipState>()
 /** Accounts whose state prism answered in this run. */
 const confirmed = new Set<string>()
+/**
+ * `permissions.privateIndexed` of the last answer naming a state in this run,
+ * for accounts whose answer carried it (2K design PA-1a). Not persisted: the
+ * posting route acts only on this run's answer.
+ */
+const privateIndexed = new Map<string, boolean>()
 const listeners = new Set<() => void>()
 const enteredIndexingListeners = new Set<(did: string) => void>()
 /** One more ask, per account with a running probe. */
@@ -100,14 +106,20 @@ function stateOf(did: string): MembershipState {
  * Record an answer naming a state. `features` is the list answered with it
  * (`null` from a prism without the membership query); `undefined` when the
  * answer carried none (a private read's `NotEnrolled`), which keeps the
- * held list.
+ * held list. `indexed` is the answer's `permissions.privateIndexed`;
+ * `undefined` (an answer without it, or one from a read) forgets the held
+ * one, so the status decides again.
  */
 function setState(
   did: string,
   next: MembershipState,
   features?: PrismFeatureList,
+  indexed?: boolean,
 ) {
   const newlyConfirmed = !confirmed.has(did)
+  const indexedChanged = privateIndexed.get(did) !== indexed
+  if (indexed === undefined) privateIndexed.delete(did)
+  else privateIndexed.set(did, indexed)
   confirmed.add(did)
   const previous = stateOf(did)
   if (features !== undefined) answerPrismFeatures(did, features)
@@ -115,8 +127,10 @@ function setState(
     writeMembershipRecord(did, {state: next, features: getPrismFeatures(did)})
   }
   if (previous === next) {
-    // The same state, now answered in this run.
-    if (newlyConfirmed) listeners.forEach(listener => listener())
+    // The same state, now answered in this run (or with new permissions).
+    if (newlyConfirmed || indexedChanged) {
+      listeners.forEach(listener => listener())
+    }
     return
   }
   states.set(did, next)
@@ -166,6 +180,18 @@ export function answerCurrent(did: string | undefined): {
     membership: !!did && confirmed.has(did),
     features: featuresAnswered(did),
   }
+}
+
+/**
+ * `permissions.privateIndexed` from `did`'s answer in this run: whether the
+ * private posts it writes are indexed (prism: "when false, don't offer
+ * private posting"). `undefined` when that answer carried no `permissions`
+ * (an older prism), or nothing was answered; the status decides then.
+ */
+export function getPrivateIndexed(
+  did: string | undefined,
+): boolean | undefined {
+  return did ? privateIndexed.get(did) : undefined
 }
 
 /**
@@ -221,6 +247,7 @@ export function useConfirmedMember(did: string | undefined): boolean {
 export function resetMembership() {
   states.clear()
   confirmed.clear()
+  privateIndexed.clear()
 }
 
 /**
@@ -350,6 +377,8 @@ type ProbeOutcome =
       kind: 'state'
       state: AnsweredMembershipState
       features: PrismFeatureList
+      /** `permissions.privateIndexed`, when the answer carried it. */
+      indexed?: boolean
       retryMs?: number
     }
   | {kind: 'features'; features: PrismFeatureList; retryMs?: number}
@@ -421,14 +450,20 @@ export function startMembershipProbe(
       if (cancelled) throw error
       return askLegacy()
     }
-    const {status, features} = res.body
+    const {status, features, permissions} = res.body
     const retryMs = parseRetryAfter(res.headers.get('retry-after'))
-    if (status === 'member') return {kind: 'state', state: 'member', features}
+    const indexed =
+      typeof permissions?.privateIndexed === 'boolean'
+        ? permissions.privateIndexed
+        : undefined
+    if (status === 'member') {
+      return {kind: 'state', state: 'member', features, indexed}
+    }
     if (status === 'indexing') {
-      return {kind: 'state', state: 'indexing', features, retryMs}
+      return {kind: 'state', state: 'indexing', features, indexed, retryMs}
     }
     if (status === 'notEligible') {
-      return {kind: 'state', state: 'not-member', features}
+      return {kind: 'state', state: 'not-member', features, indexed}
     }
     return {kind: 'features', features, retryMs}
   }
@@ -470,7 +505,7 @@ export function startMembershipProbe(
           retryUnanswered(outcome.retryMs)
           return
         }
-        setState(did, outcome.state, outcome.features)
+        setState(did, outcome.state, outcome.features, outcome.indexed)
         if (outcome.state === 'indexing') {
           schedule(outcome.retryMs ?? scheduleDelay())
         }

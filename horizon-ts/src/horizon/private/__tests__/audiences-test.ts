@@ -622,7 +622,7 @@ describe('the audience cache on repo route stock (4.7, T-11)', () => {
     const double = {
       route: 'encode' as const,
       created: 0,
-      createPost: () => Promise.resolve(),
+      createPost: () => Promise.resolve({cid: undefined}),
       changeAudience: () => Promise.resolve({cid: 'c'}),
       createAudience: () => {
         double.created++

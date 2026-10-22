@@ -62,6 +62,15 @@ export const SIGN_IN_TABS: boolean = true
 export const PRIVATE_POSTING: boolean = true
 
 /**
+ * Private posting for members on a PDS other than locus (2K design 10): the
+ * `encode` posting route, where Horizon encodes the post in the browser and
+ * writes it to the member's own PDS. `false`: such a member's posting route
+ * is `none` (Private shown inert with the note), the encoder is never loaded,
+ * and deletes still work through the repo route. Guards Horizon code only.
+ */
+export const PRIVATE_POSTING_ANY_PDS: boolean = true
+
+/**
  * The composer's footer drop-down sets who can reply and who can quote for
  * every account, members or not, in place of the stock interaction pill and
  * dialog; a private compose writes its reply and quote limits as stock

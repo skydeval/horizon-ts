@@ -101,6 +101,25 @@ async function load(): Promise<Encoder> {
   return {encode: input => encodeWith(prepare, input)}
 }
 
+/**
+ * Throws on any number that is not a safe integer, at any depth of a JSON
+ * value. atproto's data model has no floats, and `lexToJson` passes one
+ * through, so a float would otherwise reach the encoder.
+ */
+function assertIntegersOnly(value: unknown): void {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) throw new TypeError('not an integer')
+    return
+  }
+  if (Array.isArray(value)) {
+    value.forEach(assertIntegersOnly)
+    return
+  }
+  if (typeof value === 'object' && value !== null) {
+    Object.values(value).forEach(assertIntegersOnly)
+  }
+}
+
 function encodeWith(
   prepare: PreparePrivatePost,
   {did, rkey, content, nowSecs}: EncodeInput,
@@ -111,7 +130,9 @@ function encodeWith(
     const value: {[key: string]: LexValue} = {text: content.text}
     if (content.facets !== undefined) value.facets = content.facets
     if (content.embed !== undefined) value.embed = content.embed
-    contentJson = JSON.stringify(lexToJson(value))
+    const json = lexToJson(value)
+    assertIntegersOnly(json)
+    contentJson = JSON.stringify(json)
   } catch {
     throw new PrivateEncodeFailedError('input')
   }

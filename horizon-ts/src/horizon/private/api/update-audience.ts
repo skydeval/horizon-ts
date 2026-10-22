@@ -34,6 +34,7 @@ import {requestRecordCaughtUp} from '#/horizon/private/api/request-record'
 import {
   type PostingWriter,
   postingWriterFor,
+  PrivateAudienceChangeUnavailableError,
 } from '#/horizon/private/api/writer'
 import {type ComposeAudience} from '#/horizon/private/composer/state'
 import {ENCODE_AUDIENCE_CHANGE} from '#/horizon/private/server-support'
@@ -144,7 +145,9 @@ async function resolveAudience(
  * {@link PrivatePostChangedError} on a swap mismatch, and on the stock repo
  * route without a swap CID (PA-24: a `putRecord` without one could re-create
  * a deleted post); `PrivateRouteUnavailableError` before any read or write
- * when the posting route offers no change; any other failure as it comes.
+ * on posting route `checking` or `none`, and
+ * `PrivateAudienceChangeUnavailableError` on `encode` while
+ * `ENCODE_AUDIENCE_CHANGE` is off; any other failure as it comes.
  */
 export async function changePrivatePostAudience({
   queryClient,
@@ -166,6 +169,13 @@ export async function changePrivatePostAudience({
     clients.pdsClient,
     clients.did,
   )
+  /*
+   * Posting route `encode` before 2K-8: refused here, before a standing
+   * audience could be created for it.
+   */
+  if (!audienceChangeOffered(routes.postingRoute)) {
+    throw new PrivateAudienceChangeUnavailableError()
+  }
   if (routes.repoRoute === 'stock' && !swapCid) {
     throw new PrivatePostChangedError()
   }

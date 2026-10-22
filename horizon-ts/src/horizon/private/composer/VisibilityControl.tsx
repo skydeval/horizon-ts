@@ -25,9 +25,9 @@
  * width.
  *
  * Private follows the account's posting route (2K design 8.1): offered on
- * `locus` once membership is confirmed (and on `encode`, from 2K-3); not
- * offered yet on `checking`; on `none` the Private segment is shown but inert,
- * and pressing or focusing it shows the route's note under the control row.
+ * `locus` once membership is confirmed and on `encode`; not offered yet on
+ * `checking`; on `none` the Private segment is shown but inert, and pressing
+ * or focusing it shows the route's note under the control row.
  */
 
 import {createContext, useContext, useEffect, useSyncExternalStore} from 'react'
@@ -60,6 +60,7 @@ import {
   useComposeVisibility,
 } from '#/horizon/private/composer/state'
 import {useReplyAnchor} from '#/horizon/private/composer/useReplyAnchor'
+import {prewarmEncoder} from '#/horizon/private/encoder'
 import {useCanPostPrivately} from '#/horizon/private/membership'
 import {usePostAudienceLabel} from '#/horizon/private/render/AudienceLabel'
 import {COMPOSER_AUDIENCE_MENU, PRIVATE_POSTING} from '#/horizon/switches'
@@ -100,7 +101,11 @@ function useInertNoteShown(): boolean {
 
 /**
  * Hands the composer's reply target, thread and dispatch to the pieces.
- * Holds no state.
+ * Holds no state. While the composer is open with Private offered on posting
+ * route `encode`, whatever the segment, it pre-warms the encoder (2K design
+ * PA-30), so the encoder is loaded before Post is pressed; keyed on the
+ * route, so a route that becomes `encode` with the composer open pre-warms
+ * then. Idempotent; a failure is logged and the compose loads again.
  */
 export function ComposerAudienceProvider({
   replyTo,
@@ -108,6 +113,11 @@ export function ComposerAudienceProvider({
   dispatch,
   children,
 }: ComposerAudienceContext & {children: React.ReactNode}) {
+  const can = useCanPostPrivately()
+  const prewarms = PRIVATE_POSTING && can.offered && can.route === 'encode'
+  useEffect(() => {
+    if (prewarms) prewarmEncoder()
+  }, [prewarms])
   return (
     <Context.Provider value={{replyTo, thread, dispatch}}>
       {children}

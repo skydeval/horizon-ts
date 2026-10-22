@@ -33,6 +33,23 @@ const mockResolvePds =
 jest.mock('#/state/queries/pds-detection', () => ({
   resolvePdsForIdentifier: (did: string) => mockResolvePds(did),
 }))
+/** Whether this platform can run the encoder (web: WebAssembly and a CSRNG). */
+let mockEncoderAvailable = true
+jest.mock('#/horizon/private/encoder', () => ({
+  encoderAvailable: () => mockEncoderAvailable,
+}))
+let mockAnyPdsSwitch = true
+/*
+ * A defined getter: a getter in an object literal beside a spread is read
+ * once, when the factory runs, by Babel's spread helper.
+ */
+jest.mock('#/horizon/switches', () =>
+  Object.defineProperty(
+    {...jest.requireActual<object>('#/horizon/switches')},
+    'PRIVATE_POSTING_ANY_PDS',
+    {get: () => mockAnyPdsSwitch, enumerable: true},
+  ),
+)
 
 import {type Client} from '@atproto/lex'
 
@@ -119,6 +136,8 @@ beforeEach(() => {
   mockLocal.clear()
   mockSessionAccount = undefined
   mockResolvePds.mockReset()
+  mockEncoderAvailable = true
+  mockAnyPdsSwitch = true
   resetMembership()
   resetPrismFeatures()
   resetWriteRoutes()
@@ -224,7 +243,7 @@ describe('the posting route (2K 2.1, PA-1a, T-1)', () => {
     expect(getWriteRoute(DID).postingRoute).toBe('checking')
   })
 
-  it('a member answered with private.anyPds is none before 2K-3, never encode', async () => {
+  it('a member answered with private.anyPds is encode (2K-3)', async () => {
     publish(DID, STOCK)
     await answerMembership({
       status: 'member',
@@ -233,10 +252,98 @@ describe('the posting route (2K 2.1, PA-1a, T-1)', () => {
     expect(answerCurrent(DID)).toEqual({membership: true, features: true})
     expect(getWriteRoute(DID)).toEqual({
       repoRoute: 'stock',
-      postingRoute: 'none',
+      postingRoute: 'encode',
       reason: undefined,
       indexing: false,
     })
+  })
+
+  it('on Bluesky’s PDS too; on locus it stays locus', async () => {
+    publish(DID, BSKY_SHARD)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+    })
+    expect(getWriteRoute(DID).postingRoute).toBe('encode')
+    publish(DID, LOCUS)
+    expect(getWriteRoute(DID).postingRoute).toBe('locus')
+  })
+
+  it('a member answered without private.anyPds is none, with no reason', async () => {
+    publish(DID, STOCK)
+    await answerMembership({status: 'member', features: ['private']})
+    expect(getWriteRoute(DID)).toMatchObject({
+      postingRoute: 'none',
+      reason: undefined,
+    })
+  })
+
+  it('without an encoder on this platform it is none with reason no-encoder (D-0.13)', async () => {
+    mockEncoderAvailable = false
+    publish(DID, STOCK)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+    })
+    expect(getWriteRoute(DID)).toMatchObject({
+      postingRoute: 'none',
+      reason: 'no-encoder',
+    })
+  })
+
+  it('with PRIVATE_POSTING_ANY_PDS off it is none, as in 2K-1 (10)', async () => {
+    mockAnyPdsSwitch = false
+    publish(DID, STOCK)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+    })
+    expect(getWriteRoute(DID)).toMatchObject({
+      repoRoute: 'stock',
+      postingRoute: 'none',
+      reason: undefined,
+    })
+  })
+
+  it('with permissions, privateIndexed decides: false is none for a member, true is encode while indexing (PA-1a)', async () => {
+    publish(DID, STOCK)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+      permissions: {privateRead: true, privateIndexed: false},
+    })
+    expect(getWriteRoute(DID).postingRoute).toBe('none')
+    await answerMembership({
+      status: 'indexing',
+      features: ['private', 'private.anyPds'],
+      permissions: {privateRead: false, privateIndexed: true},
+    })
+    expect(getWriteRoute(DID)).toMatchObject({
+      postingRoute: 'encode',
+      indexing: true,
+    })
+    // A value that is not a boolean is ignored: the status decides.
+    await answerMembership({
+      status: 'indexing',
+      features: ['private', 'private.anyPds'],
+      permissions: {privateIndexed: 'yes'},
+    })
+    expect(getWriteRoute(DID).postingRoute).toBe('none')
+  })
+
+  it('a NotEnrolled from a read after privateIndexed forgets it: not encode', async () => {
+    publish(DID, STOCK)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+      permissions: {privateIndexed: true},
+    })
+    expect(getWriteRoute(DID).postingRoute).toBe('encode')
+    reportPrismError(
+      DID,
+      await readError({status: 400, body: {error: 'NotEnrolled'}}),
+    )
+    expect(getWriteRoute(DID).postingRoute).toBe('none')
   })
 
   it('indexing in this run is none with the indexing wording', async () => {

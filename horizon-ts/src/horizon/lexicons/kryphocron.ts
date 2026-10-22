@@ -304,6 +304,54 @@ export const privateEncodedFields = l.object({
 export type PrivateEncodedFields = l.InferOutput<typeof privateEncodedFields>
 
 /**
+ * The fields of an encoded `postPrivate` (2K design 4.1), shared by the
+ * create and rewrite schemas: Horizon's clear fields and the encoder's seven.
+ * `mentionDids` items keep `format: did` here, as the lexicon has them.
+ */
+const encodedPostFields = {
+  langs: l.optional(l.array(l.string({format: 'language'}), {maxLength: 3})),
+  labels: l.optional(l.typedUnion([l.typedRef(() => selfLabels)], true)),
+  reply: l.optional(replyRef),
+  encodedContent: l.bytes({maxLength: 1_000_000}),
+  encodedContentCodec: l.string({maxLength: 128}),
+  encodedContentGeneration: l.string({maxLength: 128}),
+  embedBlobs: l.optional(l.array(l.blob())),
+  mentionDids: l.optional(l.array(l.string({format: 'did'}))),
+  quote: l.optional(strongRef),
+  mediaKinds: l.optional(l.array(l.string(), {maxLength: 2})),
+}
+
+/**
+ * `tools.kryphocron.feed.postPrivate` as the encode route writes it: the
+ * clear fields (`createdAt` and `audienceList` required) and the encoded
+ * content, with no `text`, `facets` or `embed` (`private/api/validate.ts`
+ * refuses those and, for a create, any key not listed here).
+ */
+export const postPrivateEncoded = l.record(
+  'tid',
+  'tools.kryphocron.feed.postPrivate',
+  l.object({
+    createdAt: l.string({format: 'datetime'}),
+    audienceList: l.string({format: 'at-uri'}),
+    ...encodedPostFields,
+  }),
+)
+
+export type PostPrivateEncoded = l.InferOutput<typeof postPrivateEncoded>
+
+/**
+ * An encoded `postPrivate` as a rewrite (a change of audience, rotation)
+ * checks it: Horizon's clear fields well-formed when present, the encoded
+ * fields as on a create. Keys it does not name are kept and not checked.
+ */
+export const postPrivateEncodedRewrite = l.object({
+  $type: l.literal('tools.kryphocron.feed.postPrivate'),
+  createdAt: l.optional(l.string({format: 'datetime'})),
+  audienceList: l.optional(l.string({format: 'at-uri'})),
+  ...encodedPostFields,
+})
+
+/**
  * The seven keys the encoder owns: the only keys its output may carry.
  */
 export const PRIVATE_ENCODED_FIELD_KEYS: readonly (keyof PrivateEncodedFields)[] =
