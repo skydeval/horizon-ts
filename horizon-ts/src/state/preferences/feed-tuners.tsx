@@ -1,6 +1,8 @@
 import {useMemo} from 'react'
 
 import {FeedTuner} from '#/lib/api/feed-manip'
+// HORIZON: the grids keep every post's own slice
+import {gridLeafOnly, isPostGridFeed} from '#/horizon/media-grid/grid'
 import {type FeedDescriptor} from '../queries/post-feed'
 import {usePreferencesQuery} from '../queries/preferences'
 import {useSession} from '../session'
@@ -12,6 +14,14 @@ export function useFeedTuners(feedDesc: FeedDescriptor) {
   const {currentAccount} = useSession()
 
   return useMemo(() => {
+    /*
+     * HORIZON: a grid draws one tile per post, so cut each slice to its own
+     * post before the per-post dedupe; otherwise a self-thread reply's
+     * context marks the earlier post seen and its tile is dropped.
+     */
+    if (isPostGridFeed(feedDesc)) {
+      return [gridLeafOnly]
+    }
     if (feedDesc.startsWith('author')) {
       if (feedDesc.endsWith('|posts_with_replies')) {
         // TODO: Do this on the server instead.

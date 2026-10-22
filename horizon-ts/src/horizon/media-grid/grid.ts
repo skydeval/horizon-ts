@@ -9,15 +9,46 @@
  * into the tab their tiles need nothing more (the lock is drawn by URI).
  */
 
+import {type FeedTuner, type FeedViewPostsSlice} from '#/lib/api/feed-manip'
+import {IS_NATIVE} from '#/env'
 import {MEDIA_GRID} from '#/horizon/switches'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
 const MEDIA_FEED = /^author\|[^|]+\|posts_with_media$/
+const VIDEO_FEED = /^author\|[^|]+\|posts_with_video$/
 
 /** The feed is a profile's Media tab, drawn as a grid. */
 export function isMediaGridFeed(feed: string | undefined): boolean {
   return MEDIA_GRID && !!feed && MEDIA_FEED.test(feed)
+}
+
+/**
+ * The feed is drawn one tile per post: the Media tab's grid, or the stock
+ * Videos grid (native only, as `screens/Profile/Sections/Feed.tsx` decides).
+ */
+export function isPostGridFeed(feed: string | undefined): boolean {
+  return (
+    isMediaGridFeed(feed) ||
+    (MEDIA_GRID && IS_NATIVE && !!feed && VIDEO_FEED.test(feed))
+  )
+}
+
+/**
+ * A feed tuner for the grids: cuts each slice down to its own post, so a
+ * reply's parent and root (thread context, which a grid never draws) are not
+ * marked seen by `FeedTuner.tune`'s per-post dedupe. Without it, a
+ * self-thread's earlier post loses its own slice to the later reply's
+ * context and its tile goes missing.
+ */
+export function gridLeafOnly(
+  _tuner: FeedTuner,
+  slices: FeedViewPostsSlice[],
+): FeedViewPostsSlice[] {
+  for (const slice of slices) {
+    slice.items = slice.items.filter(i => i.post.uri === slice.feedPostUri)
+  }
+  return slices
 }
 
 /** Tiles to a row: 3 on a phone-width column, 4 from 800px. */

@@ -42,12 +42,37 @@ import {type GridMedia, gridMediaOf, mediaGridColumns} from './grid'
 /** The space between tiles, in px. */
 const GAP = 2
 
-/** The marks drawn over a thumbnail, white on the image. */
-const MARK_SHADOW = {
-  shadowColor: 'black',
-  shadowOpacity: 0.6,
-  shadowRadius: 3,
-  shadowOffset: {width: 0, height: 0},
+/**
+ * The backing behind each white mark drawn over a thumbnail, so the mark
+ * reads on light images. A dark translucent rounded square, as on the stock
+ * video `TimeIndicator`. Not `shadow*` props: react-native-web turns those
+ * into a pale `box-shadow` ring around the wrapper, and Android ignores them.
+ */
+const MARK_BACKING = {
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  borderRadius: 4,
+  padding: 2,
+}
+
+/**
+ * The tile's top-right row of marks: stack or play first, the lock last so
+ * it always sits outermost.
+ */
+function CornerMarks({children}: {children: React.ReactNode}) {
+  return (
+    <View
+      testID="mediaGridCornerMarks"
+      pointerEvents="none"
+      style={[
+        a.absolute,
+        a.flex_row,
+        a.align_center,
+        a.gap_xs,
+        {top: 6, right: 6},
+      ]}>
+      {children}
+    </View>
+  )
 }
 
 function mergedModerationUi(moderation: ModerationDecision) {
@@ -95,23 +120,27 @@ function Thumbnail({
   )
 }
 
-/** A private post's lock, in the tile's top left corner. */
+/**
+ * A private post's lock, the outermost mark in the tile's top right corner.
+ * Not its own accessible element: the tile's `Link` is one element on
+ * native, so the tile label says "Private" instead.
+ */
 function PrivateCornerLock() {
-  const {t: l} = useLingui()
   return (
     <View
       testID="mediaGridPrivateLock"
-      accessible
-      accessibilityLabel={l`Private post`}
-      accessibilityHint={l`Only its audience can see this post`}
+      accessible={false}
       pointerEvents="none"
-      style={[a.absolute, {top: 6, left: 6}, MARK_SHADOW]}>
+      style={MARK_BACKING}>
       <LockIcon size="sm" fill="white" />
     </View>
   )
 }
 
-/** The marks in a tile's corners: the lock, and stack or play. */
+/**
+ * The marks in a tile's top right corner, in one row: stack or play, then
+ * the lock.
+ */
 function TileMarks({
   post,
   media,
@@ -120,24 +149,23 @@ function TileMarks({
   media: GridMedia
 }) {
   const showsPlay = media.kind === 'video' && !!media.thumb
+  const showsStack = media.count > 1
+  const showsPlayMark = !showsStack && showsPlay && !hasMediaSpoilers(post)
+  const isPrivate = isPrivateDisplay(post.uri)
+  if (!showsStack && !showsPlayMark && !isPrivate) return null
   return (
-    <>
-      {isPrivateDisplay(post.uri) ? <PrivateCornerLock /> : null}
-      {media.count > 1 ? (
-        <View
-          testID="mediaGridStack"
-          pointerEvents="none"
-          style={[a.absolute, {top: 6, right: 6}, MARK_SHADOW]}>
+    <CornerMarks>
+      {showsStack ? (
+        <View testID="mediaGridStack" style={MARK_BACKING}>
           <StackIcon size="sm" fill="white" />
         </View>
-      ) : showsPlay && !hasMediaSpoilers(post) ? (
-        <View
-          pointerEvents="none"
-          style={[a.absolute, {top: 6, right: 6}, MARK_SHADOW]}>
+      ) : showsPlayMark ? (
+        <View testID="mediaGridPlay" style={MARK_BACKING}>
           <PlayIcon size="sm" fill="white" />
         </View>
       ) : null}
-    </>
+      {isPrivate ? <PrivateCornerLock /> : null}
+    </CornerMarks>
   )
 }
 
@@ -168,8 +196,14 @@ function MediaGridTile({
     t.atoms.bg_contrast_25,
     {aspectRatio: 1},
   ]
-  const label =
-    media.kind === 'video'
+  const isPrivate = isPrivateDisplay(post.uri)
+  const label = isPrivate
+    ? media.kind === 'video'
+      ? l`Private video post from ${post.author.handle}`
+      : media.count > 1
+        ? l`Private post from ${post.author.handle} with ${media.count} images`
+        : l`Private image post from ${post.author.handle}`
+    : media.kind === 'video'
       ? l`Video post from ${post.author.handle}`
       : media.count > 1
         ? l`Post from ${post.author.handle} with ${media.count} images`
@@ -207,7 +241,11 @@ function MediaGridTile({
                 <Text style={[a.text_xs, {color: 'white'}]}>{l`Hidden`}</Text>
               </View>
             </View>
-            {isPrivateDisplay(post.uri) ? <PrivateCornerLock /> : null}
+            {isPrivate ? (
+              <CornerMarks>
+                <PrivateCornerLock />
+              </CornerMarks>
+            ) : null}
           </View>
         </Hider.Mask>
         <Hider.Content>

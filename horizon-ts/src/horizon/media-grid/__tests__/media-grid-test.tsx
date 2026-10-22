@@ -1,7 +1,9 @@
 import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {i18n} from '@lingui/core'
 import {I18nProvider} from '@lingui/react'
-import {render} from '@testing-library/react-native'
+import {render, within} from '@testing-library/react-native'
+
+type ReactTestInstance = ReturnType<ReturnType<typeof render>['getByTestId']>
 
 let mockGtMobile = false
 
@@ -54,24 +56,42 @@ jest.mock('#/horizon/video/NoThumbnailTile', () => ({
   NoThumbnailTile: () => null,
 }))
 
-// A link renders its children and exposes where it goes.
+// A link renders its children and exposes where it goes and its label.
 jest.mock('#/components/Link', () => {
   const {View} =
     jest.requireActual<typeof import('react-native')>('react-native')
   return {
-    Link: ({to, children}: {to: string; children: React.ReactNode}) => (
-      <View testID="link" nativeID={to}>
+    Link: ({
+      to,
+      label,
+      children,
+    }: {
+      to: string
+      label: string
+      children: React.ReactNode
+    }) => (
+      <View
+        testID="link"
+        nativeID={to}
+        accessibilityLabel={label}
+        accessibilityHint="">
         {children}
       </View>
     ),
   }
 })
 
-// No moderation blur: the content shows; the mask is not drawn.
+/*
+ * No moderation blur by default: the content shows; the mask is not drawn.
+ * `mockHidden` flips it to the mask only.
+ */
+let mockHidden = false
 jest.mock('#/components/moderation/Hider', () => ({
   Outer: ({children}: {children: React.ReactNode}) => <>{children}</>,
-  Mask: () => null,
-  Content: ({children}: {children: React.ReactNode}) => <>{children}</>,
+  Mask: ({children}: {children: React.ReactNode}) =>
+    mockHidden ? <>{children}</> : null,
+  Content: ({children}: {children: React.ReactNode}) =>
+    mockHidden ? null : <>{children}</>,
 }))
 
 jest.mock('expo-image', () => {
@@ -159,7 +179,32 @@ function renderRow(items: FeedPostSliceItem[]) {
 
 beforeEach(() => {
   mockGtMobile = false
+  mockHidden = false
 })
+
+const videoView = (thumbnail?: string) => ({
+  $type: 'app.bsky.embed.video#view',
+  cid: 'bafy',
+  playlist: 'https://video.test/p.m3u8',
+  ...(thumbnail ? {thumbnail} : {}),
+})
+
+function flatStyle(node: {props: {style?: unknown}}): Record<string, unknown> {
+  const {StyleSheet} =
+    jest.requireActual<typeof import('react-native')>('react-native')
+  return (StyleSheet.flatten(node.props.style as never) ?? {}) as Record<
+    string,
+    unknown
+  >
+}
+
+/** The testIDs of the corner row's marks, left to right. */
+function cornerOrder(row: ReactTestInstance) {
+  const marks = ['mediaGridStack', 'mediaGridPlay', 'mediaGridPrivateLock']
+  return row
+    .findAll(n => typeof n.type === 'string' && marks.includes(n.props.testID))
+    .map(n => n.props.testID as string)
+}
 
 describe('which feed is a grid, and its rows', () => {
   it('only a profile Media tab', () => {
@@ -267,6 +312,96 @@ describe('MediaGridRow', () => {
     expect(getAllByTestId('link')[0].props.nativeID).toBe(
       '/profile/author.test/ppost/3kprivate',
     )
+  })
+
+  it('the lock sits in the top-right row on a dark backing, no shadow', () => {
+    const {getByTestId} = renderRow([
+      item(post({uri: PRIVATE_URI, embed: imagesView(1)})),
+    ])
+    const row = getByTestId('mediaGridCornerMarks')
+    expect(flatStyle(row)).toMatchObject({top: 6, right: 6})
+    expect(flatStyle(row).left).toBeUndefined()
+    expect(row.props.pointerEvents).toBe('none')
+    const lock = within(row).getByTestId('mediaGridPrivateLock')
+    const lockStyle = flatStyle(lock)
+    expect(lockStyle.backgroundColor).toBeDefined()
+    expect(lockStyle.backgroundColor).not.toBe('transparent')
+    expect(lockStyle.borderRadius).toBe(4)
+    expect(lockStyle.shadowColor).toBeUndefined()
+    expect(lockStyle.position).toBeUndefined()
+    expect(lock.props.accessible).toBe(false)
+    expect(cornerOrder(row)).toEqual(['mediaGridPrivateLock'])
+  })
+
+  it('private with two images: stack, then the lock outermost', () => {
+    const {getByTestId} = renderRow([
+      item(post({uri: PRIVATE_URI, embed: imagesView(2)})),
+    ])
+    const row = getByTestId('mediaGridCornerMarks')
+    expect(cornerOrder(row)).toEqual(['mediaGridStack', 'mediaGridPrivateLock'])
+    expect(
+      flatStyle(within(row).getByTestId('mediaGridStack')).backgroundColor,
+    ).toBe('rgba(0, 0, 0, 0.5)')
+  })
+
+  it('private video with a thumbnail: play, then the lock', () => {
+    const {getByTestId} = renderRow([
+      item(
+        post({uri: PRIVATE_URI, embed: videoView('https://video.test/t.jpg')}),
+      ),
+    ])
+    const row = getByTestId('mediaGridCornerMarks')
+    expect(cornerOrder(row)).toEqual(['mediaGridPlay', 'mediaGridPrivateLock'])
+    expect(
+      flatStyle(within(row).getByTestId('mediaGridPlay')).backgroundColor,
+    ).toBe('rgba(0, 0, 0, 0.5)')
+  })
+
+  it('private video without a thumbnail: the lock only', () => {
+    const {getByTestId} = renderRow([
+      item(post({uri: PRIVATE_URI, embed: videoView()})),
+    ])
+    expect(cornerOrder(getByTestId('mediaGridCornerMarks'))).toEqual([
+      'mediaGridPrivateLock',
+    ])
+  })
+
+  it('a public image has no corner row', () => {
+    const {queryAllByTestId} = renderRow([item(post({embed: imagesView(1)}))])
+    expect(queryAllByTestId('mediaGridCornerMarks')).toHaveLength(0)
+  })
+
+  it('a hidden private post: the mask shows the lock top right', () => {
+    mockHidden = true
+    const {getByTestId, queryAllByTestId} = renderRow([
+      item(post({uri: PRIVATE_URI, embed: imagesView(2)})),
+    ])
+    const row = getByTestId('mediaGridCornerMarks')
+    expect(flatStyle(row)).toMatchObject({top: 6, right: 6})
+    expect(cornerOrder(row)).toEqual(['mediaGridPrivateLock'])
+    expect(queryAllByTestId('mediaGridStack')).toHaveLength(0)
+  })
+
+  it('private tile labels start with “Private”; public ones do not', () => {
+    const label = (p: ReturnType<typeof post>) =>
+      renderRow([item(p)]).getByTestId('link').props.accessibilityLabel
+    const video = videoView('https://video.test/t.jpg')
+    expect(label(post({uri: PRIVATE_URI, embed: imagesView(1)}))).toBe(
+      'Private image post from author.test',
+    )
+    expect(label(post({uri: PRIVATE_URI, embed: imagesView(3)}))).toBe(
+      'Private post from author.test with 3 images',
+    )
+    expect(label(post({uri: PRIVATE_URI, embed: video}))).toBe(
+      'Private video post from author.test',
+    )
+    expect(label(post({embed: imagesView(1)}))).toBe(
+      'Image post from author.test',
+    )
+    expect(label(post({embed: imagesView(3)}))).toBe(
+      'Post from author.test with 3 images',
+    )
+    expect(label(post({embed: video}))).toBe('Video post from author.test')
   })
 
   it('spoiler media stays blurred; other media is sharp', () => {

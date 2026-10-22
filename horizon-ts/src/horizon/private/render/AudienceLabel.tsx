@@ -104,13 +104,30 @@ export function usePostAudienceLabel(
 }
 
 /**
- * The thread anchor's private details (Mark 8), after the date: the badge
- * and its audience, "Private · <label>". While the label loads, the badge
- * alone, with no dot. Nothing for a post that is not private.
+ * The thread anchor's private details (Mark 8), after the date: a dot, the
+ * badge and its audience, "· Private · <label>". While the label loads, the
+ * dot and the badge alone. Nothing for a post that is not private.
  */
 export function PrivatePostDetails({post}: {post: {uri: string}}) {
   if (!isPrivateDisplay(post.uri)) return null
   return <PrivatePostDetailsInner uri={post.uri} />
+}
+
+/**
+ * A separating dot in the date's style, hidden from screen readers. The
+ * row's gap spaces it like a space each side, as in the date.
+ */
+function MetaDot() {
+  const t = useTheme()
+  return (
+    <Text
+      accessible={false}
+      aria-hidden
+      importantForAccessibility="no"
+      style={[a.text_sm, t.atoms.text_contrast_medium]}>
+      &middot;
+    </Text>
+  )
 }
 
 function PrivatePostDetailsInner({uri}: {uri: string}) {
@@ -118,18 +135,15 @@ function PrivatePostDetailsInner({uri}: {uri: string}) {
   const {t: l} = useLingui()
   const label = usePostAudienceLabel(uri)
   return (
-    <View style={[a.flex_row, a.align_center, a.flex_wrap, a.gap_xs]}>
+    <View
+      testID="privatePostDetails"
+      style={[a.flex_row, a.align_center, a.flex_wrap, a.gap_xs]}>
+      {/* Separates the date before this row from the lock */}
+      <MetaDot />
       <PrivateMark size="sm" />
       {label ? (
         <>
-          {/* The row's gap spaces the dot like a space each side, as in the date */}
-          <Text
-            accessible={false}
-            aria-hidden
-            importantForAccessibility="no"
-            style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            &middot;
-          </Text>
+          <MetaDot />
           <Text
             testID="privatePostAudience"
             accessibilityLabel={l`Shared with ${label}`}
