@@ -1,8 +1,8 @@
 /*
  * Audience records (`tools.kryphocron.policy.audience`) in the account's own
  * repo: listing them, finding or creating the standing audiences the composer
- * offers (Everyone, Followers, People you follow, Only me), creating, editing
- * and deleting list audiences, and their labels.
+ * offers (Horizon members, Followers, People you follow, Only me), creating,
+ * editing and deleting list audiences, and their labels.
  *
  * A create goes through the posting writer (2K design 4.7); an edit (lists
  * only) and a delete through the repo writer, so they work on any PDS
@@ -546,7 +546,7 @@ export function audienceLabel(
   if (entry.name) return entry.name
   switch (entry.mode) {
     case 'everyone':
-      return t`Everyone`
+      return t`Horizon members`
     case 'list':
       return plural(entry.members.length, {one: '# person', other: '# people'})
     case 'followers':
@@ -601,9 +601,10 @@ export function labelsFromServedAudience(
 }
 
 /**
- * The label of the audience a private post names, for "Visible to <label>",
- * or `undefined` while what it needs is loading or could not be read (the
- * badge still marks the post).
+ * The label of the audience a private post names, shown after "Private" on
+ * the anchor's meta line (separated by a middle dot), or `undefined` while
+ * what it needs is loading or could not be read (the badge still marks the
+ * post, with no dot).
  *
  * - The current account's own audience: its label from the account's list,
  *   or "a custom audience" when the list does not hold it.

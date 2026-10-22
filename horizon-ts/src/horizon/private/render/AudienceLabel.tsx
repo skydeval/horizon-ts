@@ -11,7 +11,7 @@
 
 import {View} from 'react-native'
 import {AtUri} from '@atproto/syntax'
-import {Trans} from '@lingui/react/macro'
+import {useLingui} from '@lingui/react/macro'
 import {useQuery} from '@tanstack/react-query'
 
 import {createLexClient} from '#/lib/lexClient'
@@ -105,7 +105,8 @@ export function usePostAudienceLabel(
 
 /**
  * The thread anchor's private details (Mark 8), after the date: the badge
- * and "Visible to <label>". Nothing for a post that is not private.
+ * and its audience, "Private · <label>". While the label loads, the badge
+ * alone, with no dot. Nothing for a post that is not private.
  */
 export function PrivatePostDetails({post}: {post: {uri: string}}) {
   if (!isPrivateDisplay(post.uri)) return null
@@ -114,16 +115,29 @@ export function PrivatePostDetails({post}: {post: {uri: string}}) {
 
 function PrivatePostDetailsInner({uri}: {uri: string}) {
   const t = useTheme()
+  const {t: l} = useLingui()
   const label = usePostAudienceLabel(uri)
   return (
-    <View style={[a.flex_row, a.align_center, a.flex_wrap, a.gap_sm]}>
+    <View style={[a.flex_row, a.align_center, a.flex_wrap, a.gap_xs]}>
       <PrivateMark size="sm" />
       {label ? (
-        <Text
-          testID="privatePostAudience"
-          style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          <Trans>Visible to {label}</Trans>
-        </Text>
+        <>
+          {/* The row's gap spaces the dot like a space each side, as in the date */}
+          <Text
+            accessible={false}
+            aria-hidden
+            importantForAccessibility="no"
+            style={[a.text_sm, t.atoms.text_contrast_medium]}>
+            &middot;
+          </Text>
+          <Text
+            testID="privatePostAudience"
+            accessibilityLabel={l`Shared with ${label}`}
+            accessibilityHint={l`The audience who can see this post`}
+            style={[a.text_sm, t.atoms.text_contrast_medium]}>
+            {label}
+          </Text>
+        </>
       ) : null}
     </View>
   )

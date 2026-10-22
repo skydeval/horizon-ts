@@ -313,7 +313,7 @@ function DefaultAudienceForm({
         <HintText>
           <Trans>
             Until you choose, private posts and quotes of private posts go to
-            Everyone.
+            Horizon members.
           </Trans>
         </HintText>
       )}

@@ -418,13 +418,14 @@ function LockedReplyLabel({
   return (
     <View
       accessible
-      accessibilityLabel={l`Private reply, visible to ${label}`}
+      accessibilityLabel={l`Private reply, shared with ${label}`}
       accessibilityHint={l`A reply to a private post stays private and can’t be changed to public`}
       style={[a.flex_row, a.align_center, a.gap_xs, a.flex_shrink]}>
       <LockIcon size="sm" style={[t.atoms.text_contrast_medium]} />
       <Text style={[a.text_sm, a.font_semi_bold]}>
         <Trans>Private</Trans>
       </Text>
+      <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>&middot;</Text>
       <Text
         style={[a.text_sm, a.flex_shrink, t.atoms.text_contrast_medium]}
         numberOfLines={1}>

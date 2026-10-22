@@ -272,7 +272,7 @@ describe('labels', () => {
   })
 
   it('unnamed records are worded by mode and whose audience it is', () => {
-    expect(audienceLabel(e('everyone'), own)).toBe('Everyone')
+    expect(audienceLabel(e('everyone'), own)).toBe('Horizon members')
     expect(audienceLabel(e('followers'), own)).toBe('Your followers')
     expect(audienceLabel(e('following'), own)).toBe('People you follow')
     expect(audienceLabel(e('nobody'), own)).toBe('Only you')

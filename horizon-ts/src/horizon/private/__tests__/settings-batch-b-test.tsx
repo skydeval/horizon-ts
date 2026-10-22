@@ -411,10 +411,10 @@ describe('Interaction settings (item 5)', () => {
     expect(mockGroupValues.get(label)).toEqual([''])
     expect(
       screen.getByText(
-        'Until you choose, private posts and quotes of private posts go to Everyone.',
+        'Until you choose, private posts and quotes of private posts go to Horizon members.',
       ),
     ).toBeTruthy()
-    // Everyone can be chosen as such.
+    // Horizon members (everyone) can be chosen as such.
     act(() => {
       mockGroups.get(label)?.(['everyone'])
     })

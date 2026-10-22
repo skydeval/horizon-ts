@@ -139,7 +139,7 @@ describe('postAudienceLabel order (2H design 5.6, T7)', () => {
         audienceUri: THEIRS,
         served: {uri: THEIRS, mode: 'everyone'},
       }),
-    ).toBe('Everyone')
+    ).toBe('Horizon members')
   })
 
   it('an unnamed served list, or no served audience, waits for the record', () => {

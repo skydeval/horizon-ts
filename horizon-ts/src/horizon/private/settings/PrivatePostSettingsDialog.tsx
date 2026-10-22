@@ -259,7 +259,7 @@ function PrivatePostSettingsInner({
     ? l`Quote posts are allowed`
     : l`Quote posts are off`
   const summary = audienceLabel
-    ? l`Visible to ${audienceLabel}. ${replyText}. ${quoteText}.`
+    ? l`Shared with ${audienceLabel}. ${replyText}. ${quoteText}.`
     : l`${replyText}. ${quoteText}.`
 
   const onSave = async () => {

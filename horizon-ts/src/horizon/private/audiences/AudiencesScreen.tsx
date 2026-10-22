@@ -173,9 +173,9 @@ export function AudiencesSettingsScreen({}: Props) {
                     t.atoms.text_contrast_medium,
                   ]}>
                   <Trans>
-                    Audiences decide who can see your private posts. Everyone,
-                    Followers, People you follow and Only me are made the first
-                    time you use them.
+                    Audiences decide who can see your private posts. Horizon
+                    members, Followers, People you follow and Only me are made
+                    the first time you use them.
                   </Trans>
                 </Text>
                 <Button

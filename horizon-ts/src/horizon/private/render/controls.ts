@@ -90,7 +90,7 @@ export function hidesDetachQuote(
  * for a private post.
  *
  * Since v2 round 2 (fix 4) the mark has two placements (7.1): the thread
- * anchor carries the lock, "Private" and "Visible to" after its date (Mark
+ * anchor carries the lock, "Private" and the audience after its date (Mark
  * 8); every other rendering - feed rows, thread replies, lists, Saved and
  * quotes - carries the lock alone in a small fixed slot at the right end of
  * its header row, the post meta row, which this answers for.

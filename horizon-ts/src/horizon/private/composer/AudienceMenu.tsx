@@ -96,7 +96,7 @@ export function useModeLabel() {
   return (mode: StandingMode) => {
     switch (mode) {
       case 'everyone':
-        return l`Everyone`
+        return l`Horizon members`
       case 'followers':
         return l`Followers`
       case 'following':
@@ -135,7 +135,7 @@ function useAudienceText(
 ): string {
   const {t: l} = useLingui()
   const modeLabel = useModeLabel()
-  if (!audience) return l`Everyone`
+  if (!audience) return l`Horizon members`
   if (audience.kind === 'mode') return modeLabel(audience.mode)
   if (audience.kind === 'list') {
     return (
@@ -459,12 +459,12 @@ function WhoCanSee({
         <Trans>Who can see</Trans>
       </Menu.LabelText>
       <Menu.Item
-        label={l`Everyone`}
+        label={l`Horizon members`}
         disabled={readOnly}
         onPress={e => pick(e, {kind: 'mode', mode: 'everyone'})}>
         <View style={[a.flex_1, a.gap_2xs]}>
           <Menu.ItemText>
-            <Trans>Everyone</Trans>
+            <Trans>Horizon members</Trans>
           </Menu.ItemText>
           <Text
             style={[a.text_xs, a.leading_snug, t.atoms.text_contrast_medium]}>
