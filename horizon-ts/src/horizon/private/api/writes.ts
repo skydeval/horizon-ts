@@ -63,6 +63,7 @@ import {
   writeGatesForNewPost,
 } from '#/horizon/private/api/gates'
 import {
+  PrivateParentBusyError,
   PrivateParentUnavailableError,
   PrivateReplyRefusedError,
 } from '#/horizon/private/api/reply-anchor'
@@ -95,7 +96,11 @@ import {spoilerWriteMode} from '#/horizon/spoilers/write'
 import {type app} from '#/lexicons'
 
 export {requestRecordQuietly}
-export {PrivateParentUnavailableError, PrivateReplyRefusedError}
+export {
+  PrivateParentBusyError,
+  PrivateParentUnavailableError,
+  PrivateReplyRefusedError,
+}
 export {
   CONFIRM_AT_MS,
   PrivateEncodeError,

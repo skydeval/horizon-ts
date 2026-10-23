@@ -46,6 +46,7 @@ import {
   PrivateDeadlineError,
   PrivateWaiterError,
 } from '#/horizon/private/api/transient'
+import {noteServed, servedUrisOf} from '#/horizon/private/known'
 import {getCurrentDid} from '#/horizon/routing/current-clients'
 import {
   getPrismHealth,
@@ -210,6 +211,8 @@ async function sendRead<T>(
       page,
     )
     const answer = answerOf(did, method.nsid, seq, body)
+    // Every private post view the answer hydrated is a serve (design 4).
+    noteServed(answer, servedUrisOf(body))
     reportReadOutcome(did, {
       kind: 'answered',
       method: method.nsid,
@@ -417,6 +420,17 @@ export async function getPrivatePosts(
   prism: Client,
   uris: readonly string[],
 ): Promise<PrivatePostView[]> {
+  return (await getPrivatePostsAnswered(prism, uris)).posts
+}
+
+/**
+ * {@link getPrivatePosts} with the merged answer of its batches (design 2),
+ * for a caller that judges what was left out (`noteOmissions`, design 4).
+ */
+export async function getPrivatePostsAnswered(
+  prism: Client,
+  uris: readonly string[],
+): Promise<{posts: PrivatePostView[]; answer: MergedAnswer}> {
   const unique = Array.from(new Set(uris))
   const batches: AtUriString[][] = []
   for (let i = 0; i < unique.length; i += GET_POSTS_BATCH) {
@@ -432,7 +446,13 @@ export async function getPrivatePosts(
       })
     }),
   )
-  return pages.flatMap(page => page.body.posts)
+  return {
+    posts: pages.flatMap(page => page.body.posts),
+    answer: mergeAnswers(
+      pages.map(page => page.answer),
+      pages.map(page => page.body.posts.map(post => post.uri)),
+    ),
+  }
 }
 
 /**

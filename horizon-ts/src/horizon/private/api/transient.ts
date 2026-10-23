@@ -18,9 +18,16 @@ import {
   XrpcInvalidResponseError,
   XrpcResponseError,
 } from '@atproto/lex'
-import {CancelledError} from '@tanstack/react-query'
+import {
+  CancelledError,
+  type QueryClient,
+  type QueryKey,
+} from '@tanstack/react-query'
 
 import {isNetworkError} from '#/lib/network-error'
+import {hold, suspectRetryAt} from '#/horizon/private/known'
+import {getCurrentDid} from '#/horizon/routing/current-clients'
+import {getPrismHealth, healthEnvironment} from '#/horizon/routing/health'
 
 export type PrismErrorClass = 'transient' | 'permanent' | 'cancelled'
 
@@ -47,9 +54,19 @@ export class PrivateDeadlineError extends Error {
  * nothing to show yet and retries on the suspect clock. Transient.
  */
 export class PrivateSuspectMissError extends Error {
-  constructor(message = 'The private post could not be read yet') {
+  /**
+   * The suspect, when known: its retry waits for the suspect clock
+   * (`privateRetryDelay`, design 5).
+   */
+  readonly suspect: {did: string; uri: string} | undefined
+
+  constructor(
+    message = 'The private post could not be read yet',
+    suspect?: {did: string; uri: string},
+  ) {
     super(message)
     this.name = 'PrivateSuspectMissError'
+    this.suspect = suspect
   }
 }
 
@@ -214,6 +231,146 @@ export function secondsToMs(value: unknown): number | undefined {
     return undefined
   }
   return value * 1000
+}
+
+/** A private query's tries before it settles in error (design 5). */
+export const PRIVATE_RETRY_TRIES = 5
+
+/** Retries are spread over this much on top of health's throttle (5). */
+export const PRIVATE_RETRY_JITTER_MS = 500
+
+/**
+ * Errors a `queryFn` rethrew over data it keeps (design 5, BR-4): never
+ * retried. Each is the query's own object (BR11-L2), so a waiter of the same
+ * lead without data still retries.
+ */
+const keptErrors = new WeakSet<object>()
+
+/** Mark `error` as rethrown over kept data: it is not retried. */
+export function keepError(error: unknown): void {
+  if (typeof error === 'object' && error !== null) keptErrors.add(error)
+}
+
+/** Whether `error` was rethrown over kept data. */
+export function isKeptError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && keptErrors.has(error)
+}
+
+/**
+ * A private query's `retry` (design 5): a transient error, not rethrown over
+ * kept data, fewer than {@link PRIVATE_RETRY_TRIES} times.
+ */
+export function privateRetry(failureCount: number, error: unknown): boolean {
+  return (
+    failureCount < PRIVATE_RETRY_TRIES &&
+    isTransientPrismError(error) &&
+    !isKeptError(error)
+  )
+}
+
+/**
+ * A private query's `retryDelay` (design 5): until health's `retryAt`, plus 0
+ * to 500 ms; a suspect's miss waits for its suspect clock instead.
+ */
+export function privateRetryDelay(
+  _failureCount: number,
+  error: unknown,
+): number {
+  const env = healthEnvironment()
+  const now = env.now()
+  const lead = leadErrorOf(error)
+  if (lead instanceof PrivateSuspectMissError && lead.suspect) {
+    return Math.max(
+      0,
+      suspectRetryAt(lead.suspect.did, lead.suspect.uri) - now,
+    )
+  }
+  const retryAt = getPrismHealth(getCurrentDid()).retryAt
+  return Math.max(0, retryAt - now) + env.random() * PRIVATE_RETRY_JITTER_MS
+}
+
+/** The retry options of a private query (design 5's table). */
+export const PRIVATE_RETRY = {
+  retry: privateRetry,
+  retryDelay: privateRetryDelay,
+} as const
+
+/**
+ * {@link PRIVATE_RETRY} for a query that reads prism, nothing (the stock
+ * default) for one that does not: a stock query serving both spreads it.
+ */
+export function privateRetryFor(
+  isPrivate: boolean,
+): typeof PRIVATE_RETRY | Record<string, never> {
+  return isPrivate ? PRIVATE_RETRY : {}
+}
+
+/**
+ * {@link keepOverData} for a query that reads prism; `run` as it is for one
+ * that does not.
+ */
+export function privateQueryFn<T>(
+  isPrivate: boolean,
+  context: {client: QueryClient; queryKey: QueryKey; pageParam?: unknown},
+  run: () => Promise<T>,
+): Promise<T> {
+  return isPrivate ? keepOverData(context, run) : run()
+}
+
+/**
+ * Whether the query already has data for the page being fetched (design 5,
+ * BR11-N2): a non-infinite query with data; an infinite one whose `pageParam`
+ * is among its cached `pageParams` (a refetch of a page it shows), never
+ * judged by `direction`. A `fetchNextPage` asks for a page it does not have.
+ */
+export function hasDataForPage(
+  qc: QueryClient,
+  context: {queryKey: QueryKey; pageParam?: unknown},
+): boolean {
+  const data = qc.getQueryData<unknown>(context.queryKey)
+  if (data === undefined) return false
+  if (!('pageParam' in context)) return true
+  const pageParams = (data as {pageParams?: unknown[]}).pageParams
+  return Array.isArray(pageParams) && pageParams.includes(context.pageParam)
+}
+
+/**
+ * Run a private `queryFn` (design 5, BR-4): it never returns a kept value
+ * for a failure. A transient failure over data the query has for this page
+ * is rethrown as kept (no retry) and the query is held for the catch-up; any
+ * other failure is rethrown as it came, for {@link privateRetry} to judge.
+ */
+export async function keepOverData<T>(
+  context: {client: QueryClient; queryKey: QueryKey; pageParam?: unknown},
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    if (
+      isTransientPrismError(error) &&
+      hasDataForPage(context.client, context)
+    ) {
+      keepError(error)
+      hold(context.queryKey, undefined, context.client)
+    }
+    throw error
+  }
+}
+
+/**
+ * Fetch a private query again now (design 2.4, BR12-L2): Try again, the
+ * lift and the catch-up. A refetch of a query with no data would join its
+ * sleeping retryer; cancelling first restores its pre-fetch state, so a new
+ * fetch starts at once (a cancelled lead runs on, and the new fetch takes its
+ * answer, 2.2).
+ */
+export async function restartPrivateQuery(
+  qc: QueryClient,
+  queryKey: QueryKey,
+): Promise<void> {
+  await qc.cancelQueries({queryKey, exact: true})
+  await qc.refetchQueries({queryKey, exact: true})
 }
 
 /**

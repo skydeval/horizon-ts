@@ -87,6 +87,7 @@ import {
   writeGatesForNewPost,
 } from '#/horizon/private/api/gates'
 import {
+  PrivateParentBusyError,
   PrivateParentUnavailableError,
   PrivateReplyRefusedError,
 } from '#/horizon/private/api/reply-anchor'
@@ -94,6 +95,7 @@ import {
   requestRecordCaughtUp,
   requestRecordQuietly,
 } from '#/horizon/private/api/request-record'
+import {isTransientPrismError} from '#/horizon/private/api/transient'
 import {
   PrivatePostInvalidError,
   validatePrivateRecord,
@@ -1212,6 +1214,7 @@ function failureOf(error: unknown, entry: Entry): OutboxFailure {
   if (error instanceof PrivateParentUnavailableError) {
     return 'parent-unavailable'
   }
+  if (error instanceof PrivateParentBusyError) return 'parent-busy'
   if (error instanceof PrivateReplyRefusedError) return 'reply-refused'
   if (error instanceof PrivateAudienceMissingError) return 'audience-missing'
   if (error instanceof PrivateEncodeError) return 'encoder'
@@ -1434,6 +1437,27 @@ async function readPosts(
 }
 
 /**
+ * A reply to a private post whose planning failed, classified before any
+ * remap (prism busy design 9, BR17-N3): a miss prism left out
+ * (`PrivateParentBusyError`) or any transient failure (a 503, `Reindexing`,
+ * a network error, a call timeout, a waiter's error) is `parent-busy`; an own
+ * post the PDS says is gone, prism's or the walk's refusal and a stop pass
+ * through. `undefined` for anything else, which keeps each site's own path.
+ */
+function replyPlanningFailure(error: unknown): Error | undefined {
+  if (error instanceof OutboxStoppedError) return error
+  if (
+    error instanceof PrivateParentUnavailableError ||
+    error instanceof PrivateReplyRefusedError ||
+    error instanceof PrivateParentBusyError
+  ) {
+    return error
+  }
+  if (isTransientPrismError(error)) return new PrivateParentBusyError()
+  return undefined
+}
+
+/**
  * The plan of a Finish posting (K11-L2, K12-L1): the root ref and, when
  * post 1 is its own anchor, the audience from post 1's stored record; a
  * reply to a private post still runs placement for its audience.
@@ -1470,15 +1494,21 @@ async function finishPlan(
     if (typeof value.audienceList !== 'string') return 'changed'
     audienceUri = value.audienceList
   } else {
-    const placed = await timed(OUTBOX_TIMING.callMs, () =>
-      planFirstPost(
-        clients.queryClient,
-        clients,
-        {replyTo: replyToUri, appviewClient: clients.appviewClient},
-        entry.record.audience,
-        encodePostingWriter(clients.pdsClient, entry.did),
-      ),
-    )
+    let placed: Plan
+    try {
+      placed = await timed(OUTBOX_TIMING.callMs, () =>
+        planFirstPost(
+          clients.queryClient,
+          clients,
+          {replyTo: replyToUri, appviewClient: clients.appviewClient},
+          entry.record.audience,
+          encodePostingWriter(clients.pdsClient, entry.did),
+        ),
+      )
+    } catch (error) {
+      // Anything not classed here keeps today's path (`failureOf`).
+      throw replyPlanningFailure(error) ?? error
+    }
     audienceUri = placed.audienceUri
   }
   return {
@@ -1570,13 +1600,11 @@ async function runCompose(entry: Entry) {
             ),
           )
         } catch (error) {
-          if (
-            replyToUri &&
-            isPrivatePostUri(replyToUri) &&
-            !(error instanceof PrivateReplyRefusedError) &&
-            !(error instanceof OutboxStoppedError)
-          ) {
-            throw new PrivateParentUnavailableError()
+          if (replyToUri && isPrivatePostUri(replyToUri)) {
+            // Classified first (design 9); anything else keeps today's remap.
+            throw (
+              replyPlanningFailure(error) ?? new PrivateParentUnavailableError()
+            )
           }
           throw error
         }

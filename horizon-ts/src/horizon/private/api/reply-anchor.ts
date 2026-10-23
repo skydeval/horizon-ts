@@ -27,6 +27,7 @@
 import {type Client, XrpcResponseError} from '@atproto/lex'
 import {AtUri, type DidString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
+import {type QueryClient} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
 import {privatePostView} from '#/horizon/lexicons/nearhorizon'
@@ -35,6 +36,7 @@ import {
   getPrivatePosts,
   getPrivatePostThread,
 } from '#/horizon/private/api/reads'
+import {findCachedPrivatePostView} from '#/horizon/private/known'
 import {
   getPendingPost,
   getPrivatePostFacts,
@@ -42,6 +44,7 @@ import {
   pinPrivatePostAudience,
 } from '#/horizon/private/store'
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {type app, com} from '#/lexicons'
 
 /**
@@ -74,6 +77,24 @@ export class PrivateReplyRefusedError extends Error {
       t`You can’t reply in this conversation. You may not be among the people who can see it.`,
     )
     this.name = 'PrivateReplyRefusedError'
+  }
+}
+
+/**
+ * prism did not serve a post placing the reply needs (another author's
+ * parent, anchor or branch hop, or an own post whose PDS read failed), or a
+ * planning read failed transiently (prism busy design 9). Horizon never
+ * decides another author's post is gone (BR-5), so this says only that the
+ * post could not be reached; Retry places it once prism serves it. It carries
+ * the outbox's `parent-busy` text as its message, which the locus route's
+ * composer shows.
+ */
+export class PrivateParentBusyError extends Error {
+  constructor() {
+    super(
+      t`Couldn’t reach the post you’re replying to. Try again in a moment.`,
+    )
+    this.name = 'PrivateParentBusyError'
   }
 }
 
@@ -129,37 +150,107 @@ type PlacedPost = {
   ref: StrongRef
   fields: PlacementFields
   view: app.bsky.feed.defs.PostView | undefined
+  /** Read from the writer's own PDS just now. */
+  fromPds?: true
+}
+
+/**
+ * One private post read for placing a reply (prism busy design 9): found;
+ * a `miss` (prism left it out, which never says it is gone); or `absent`
+ * (the writer's own post, and their PDS says `RecordNotFound`).
+ */
+type PostRead =
+  | {kind: 'found'; post: PlacedPost}
+  | {kind: 'miss'}
+  | {kind: 'absent'}
+
+/**
+ * The writer's own record as a placed post, its view from the cache when one
+ * is there (only the pending feed item reads it, so a failed lookup never
+ * fails the placement).
+ */
+function ownPlaced(
+  uri: string,
+  own: {cid: string; fields: PlacementFields},
+  queryClient: QueryClient | undefined,
+): PlacedPost {
+  let view: PlacedPost['view']
+  try {
+    view = queryClient
+      ? findCachedPrivatePostView(queryClient, uri)
+      : undefined
+  } catch (error) {
+    logger.warn('own parent view lookup failed', {uri, safeMessage: error})
+  }
+  return {ref: {uri, cid: own.cid}, fields: own.fields, view, fromPds: true}
 }
 
 /**
  * A private post: the writer's own pending post when it is one and is
  * written (prism does not serve it yet, and its record is exactly what was
- * written, moves included), else prism's view. `undefined` when prism does
- * not return it. A pending post still being sent, or failed, is never placed
- * from (2K design PA-28 steps 2 and 3): the outbox decides on it first.
+ * written, moves included); the writer's own record from their PDS (design 9:
+ * own posts place from the PDS, a failed read falling back to prism); else
+ * prism's view. A pending post still being sent, or failed, is never placed
+ * from (2K design PA-28 steps 2 and 3): the outbox decides on it first. A
+ * miss adds nothing to the suspect registry (design 9).
  */
 async function readPrivatePost(
-  prism: Client,
+  clients: PlacementClients,
   uri: string,
-  did: string,
-): Promise<PlacedPost | undefined> {
-  const pending = getPendingPost(uri, did)
+  {skipPds = false}: {skipPds?: boolean} = {},
+): Promise<PostRead> {
+  const pending = getPendingPost(uri, clients.did)
   if (pending && pendingPhase(pending) === 'written') {
     return {
-      ref: {uri: pending.uri, cid: pending.cid},
-      fields: placementFields(pending.record),
-      view: pending.postView,
+      kind: 'found',
+      post: {
+        ref: {uri: pending.uri, cid: pending.cid},
+        fields: placementFields(pending.record),
+        view: pending.postView,
+      },
     }
   }
-  const found = (await getPrivatePosts(prism, [uri])).find(
+  if (!skipPds && authorOf(uri) === clients.did) {
+    const own = await readOwnPrivateRecord(
+      clients.pdsClient,
+      clients.did,
+      new AtUri(uri).rkey,
+    )
+    if (own === 'absent') return {kind: 'absent'}
+    if (own) {
+      return {
+        kind: 'found',
+        post: ownPlaced(
+          uri,
+          own,
+          clients.queryClient ?? getCurrentClients()?.queryClient,
+        ),
+      }
+    }
+  }
+  const found = (await getPrivatePosts(clients.prismClient, [uri])).find(
     post => post.uri === uri,
   )
-  if (!found || !isObject(found.record)) return undefined
+  if (!found || !isObject(found.record)) return {kind: 'miss'}
   return {
-    ref: {uri: found.uri, cid: found.cid},
-    fields: placementFields(found.record),
-    view: toPostView(found),
+    kind: 'found',
+    post: {
+      ref: {uri: found.uri, cid: found.cid},
+      fields: placementFields(found.record),
+      view: toPostView(found),
+    },
   }
+}
+
+/**
+ * The placed post of a read, or the failure it stands for: a miss is
+ * `PrivateParentBusyError`, an own `absent` `PrivateParentUnavailableError`
+ * (BQ-9).
+ */
+function placedOrThrow(read: PostRead): PlacedPost {
+  if (read.kind === 'found') return read.post
+  if (read.kind === 'absent') throw new PrivateParentUnavailableError()
+  throw new PrivateParentBusyError()
 }
 
 /**
@@ -206,6 +297,8 @@ export type PlacementClients = {
   did: string
   pdsClient: Client
   prismClient: Client
+  /** For an own parent's cached view; default the published account's. */
+  queryClient?: QueryClient
 }
 
 /**
@@ -234,8 +327,11 @@ export type PrivateReplyPlace = {
  * The anchor's current audience. The writer's own anchor is read from the
  * writer's PDS (falling back to `known`, then prism, when that read fails);
  * another account's is `known` (already read in this placement) or prism's.
- * Throws {@link PrivateReplyRefusedError} when it cannot be read or names no
- * audience (a reply must name one, and must name the anchor's).
+ * Throws {@link PrivateParentUnavailableError} when the writer's own PDS says
+ * their anchor is gone (BQ-9, BR17-N2), {@link PrivateParentBusyError} when
+ * prism leaves the anchor out (design 9), and
+ * {@link PrivateReplyRefusedError} when it names no audience (a reply must
+ * name one, and must name the anchor's).
  */
 async function anchorAudience(
   clients: PlacementClients,
@@ -245,12 +341,14 @@ async function anchorAudience(
   let audienceUri: string | undefined
   let read = false
   if (authorOf(uri) === clients.did) {
-    const own = await readOwnPrivateRecord(
-      clients.pdsClient,
-      clients.did,
-      new AtUri(uri).rkey,
-    )
-    if (own === 'absent') throw new PrivateReplyRefusedError()
+    const own = known?.fromPds
+      ? {cid: known.ref.cid, fields: known.fields}
+      : await readOwnPrivateRecord(
+          clients.pdsClient,
+          clients.did,
+          new AtUri(uri).rkey,
+        )
+    if (own === 'absent') throw new PrivateParentUnavailableError()
     if (own) {
       read = true
       audienceUri = own.fields.audienceList
@@ -272,9 +370,10 @@ async function anchorAudience(
     }
   }
   if (!read) {
+    // An own anchor's PDS read just failed: prism's view is the fallback.
     const post =
-      known ?? (await readPrivatePost(clients.prismClient, uri, clients.did))
-    if (!post) throw new PrivateReplyRefusedError()
+      known ??
+      placedOrThrow(await readPrivatePost(clients, uri, {skipPds: true}))
     audienceUri = post.fields.audienceList
   }
   if (!audienceUri) throw new PrivateReplyRefusedError()
@@ -357,17 +456,24 @@ async function findBranchRootByThread(
  * private post. Each post walked must agree on the public root. At most
  * {@link MAX_ANCHOR_WALK} posts are read, `start` included. The thread view
  * is asked first (`findBranchRootByThread`); the post-by-post walk is the
- * fallback.
+ * fallback, which reads the writer's own hops from their PDS (BR15-N8). A
+ * hop prism leaves out is {@link PrivateParentBusyError}, an own hop the PDS
+ * says is gone {@link PrivateParentUnavailableError} (BR18-N3); the walk's
+ * own refusals (no parent, the bound, a cycle, a hop on another root) stay
+ * {@link PrivateReplyRefusedError}.
  */
 async function findBranchRoot(
-  prism: Client,
+  clients: PlacementClients,
   start: PlacedPost,
   rootUri: string,
-  did: string,
 ): Promise<PlacedPost> {
   const firstUp = start.fields.parent?.uri
   if (firstUp && !isPrivatePostUri(firstUp)) return start
-  const byThread = await findBranchRootByThread(prism, start, rootUri)
+  const byThread = await findBranchRootByThread(
+    clients.prismClient,
+    start,
+    rootUri,
+  )
   if (byThread) return byThread
   let current = start
   const seen = new Set<string>([start.ref.uri])
@@ -379,8 +485,8 @@ async function findBranchRoot(
       throw new PrivateReplyRefusedError()
     }
     seen.add(up)
-    const next = await readPrivatePost(prism, up, did)
-    if (!next || next.fields.root?.uri !== rootUri) {
+    const next = placedOrThrow(await readPrivatePost(clients, up))
+    if (next.fields.root?.uri !== rootUri) {
       throw new PrivateReplyRefusedError()
     }
     current = next
@@ -390,20 +496,19 @@ async function findBranchRoot(
 /**
  * Place a reply to the private post `parentUri`: its reply refs (the root
  * copied from the parent, as stock), the parent's view and the anchor with
- * its current audience. Throws {@link PrivateParentUnavailableError} when the
- * parent cannot be read, and {@link PrivateReplyRefusedError} when the anchor
- * cannot be found or read.
+ * its current audience. Throws {@link PrivateParentBusyError} when prism
+ * leaves out the parent, the anchor or a branch hop (prism busy design 9),
+ * {@link PrivateParentUnavailableError} when the writer's own PDS says their
+ * own parent, anchor or hop is gone (BQ-9), and
+ * {@link PrivateReplyRefusedError} for prism's and the walk's refusals. A
+ * planning read's own failure is rethrown as it came (the outbox classes
+ * it).
  */
 export async function placePrivateReply(
   clients: PlacementClients,
   parentUri: string,
 ): Promise<PrivateReplyPlace> {
-  const parent = await readPrivatePost(
-    clients.prismClient,
-    parentUri,
-    clients.did,
-  )
-  if (!parent) throw new PrivateParentUnavailableError()
+  const parent = placedOrThrow(await readPrivatePost(clients, parentUri))
   const {fields} = parent
   if (fields.isReply && !fields.root) throw new PrivateReplyRefusedError()
   const root = fields.root ?? parent.ref
@@ -418,12 +523,7 @@ export async function placePrivateReply(
     anchor = root.uri === parent.ref.uri ? parent : undefined
   } else {
     kind = 'branch'
-    anchor = await findBranchRoot(
-      clients.prismClient,
-      parent,
-      root.uri,
-      clients.did,
-    )
+    anchor = await findBranchRoot(clients, parent, root.uri)
     anchorUri = anchor.ref.uri
   }
   const authorDid = authorOf(anchorUri)

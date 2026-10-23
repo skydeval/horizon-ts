@@ -165,7 +165,7 @@ describe('pressNotificationsModeTab', () => {
     expect(select).not.toHaveBeenCalled()
   })
 
-  it('re-pressing Public does nothing', () => {
+  it('re-pressing Public soft resets, without selecting', () => {
     const softReset = jest.fn()
     const select = jest.fn()
     pressNotificationsModeTab({
@@ -177,7 +177,7 @@ describe('pressNotificationsModeTab', () => {
       select,
       softReset,
     })
-    expect(softReset).not.toHaveBeenCalled()
+    expect(softReset).toHaveBeenCalledTimes(1)
     expect(select).not.toHaveBeenCalled()
   })
 

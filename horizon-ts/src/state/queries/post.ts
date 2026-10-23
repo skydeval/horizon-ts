@@ -21,6 +21,11 @@ import {
   mirrorThreadMute,
   muteThreadOnPrism,
 } from '#/horizon/private/api/thread-mute'
+// HORIZON: a private post is retried while prism is busy
+import {
+  privateQueryFn,
+  privateRetryFor,
+} from '#/horizon/private/api/transient'
 // HORIZON: a private post is deleted through its own procedure
 import {deletePrivatePost} from '#/horizon/private/api/writes'
 // HORIZON: a private post is read through prism
@@ -38,16 +43,21 @@ export function usePostQuery(uri: string | undefined) {
   const client = useAppviewClient()
   return useQuery<app.bsky.feed.defs.PostView>({
     queryKey: RQKEY(uri || ''),
-    queryFn: async () => {
+    queryFn: async context => {
       if (!uri) throw new Error('[unreachable] No URI provided')
 
-      const post = await fetchPost(client, uri)
+      // HORIZON: a private post's transient failure over data is kept, not retried
+      const post = await privateQueryFn(isPrivateRead(uri), context, () =>
+        fetchPost(client, uri),
+      )
       if (post) {
         return post
       }
 
       throw new Error('No data')
     },
+    // HORIZON: a private post is retried while prism is busy
+    ...privateRetryFor(isPrivateRead(uri)),
     enabled: !!uri,
   })
 }

@@ -52,9 +52,9 @@ export async function refreshPrivateNotifications(
 /**
  * Pressing a tab of the Public | Private switch.
  *
- * - Pressing Private while it's shown scrolls the list to the top and asks
- *   again, as re-pressing a stock tab does (`softReset`, the stock soft
- *   reset the list listens for).
+ * - Pressing the tab that's already shown, Public or Private, scrolls its
+ *   list to the top and asks again, as re-pressing a stock tab does
+ *   (`softReset`, the stock soft reset both lists listen for).
  * - Switching to Private with something unread asks again for the "All"
  *   pill the view opens on, starting before the view mounts, and marks
  *   "Replies" (and "Activity" while prism lists
@@ -82,7 +82,7 @@ export function pressNotificationsModeTab({
   softReset: () => void
 }) {
   if (next === current) {
-    if (next === 'private') softReset()
+    softReset()
     return
   }
   if (next === 'private' && unread) {

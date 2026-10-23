@@ -11,6 +11,7 @@ import {t} from '@lingui/core/macro'
 export type OutboxFailure =
   | 'route'
   | 'parent-unavailable'
+  | 'parent-busy'
   | 'reply-refused'
   | 'parent-not-posted'
   | 'parent-partly'
@@ -33,6 +34,7 @@ export type OutboxFailure =
 const FAILURES: readonly OutboxFailure[] = [
   'route',
   'parent-unavailable',
+  'parent-busy',
   'reply-refused',
   'parent-not-posted',
   'parent-partly',
@@ -84,6 +86,8 @@ export function outboxFailureText(
       return t`Private posting isn’t available for your account right now. Nothing was posted.`
     case 'parent-unavailable':
       return t`You can’t reply to this post. It may have been deleted, or it is no longer visible to you.`
+    case 'parent-busy':
+      return t`Couldn’t reach the post you’re replying to. Try again in a moment.`
     case 'reply-refused':
       return t`You can’t reply in this conversation. You may not be among the people who can see it.`
     case 'parent-not-posted':

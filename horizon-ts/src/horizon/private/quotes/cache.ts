@@ -16,6 +16,7 @@ import {type QueryClient, useQuery} from '@tanstack/react-query'
 import {logger} from '#/logger'
 import {STALE} from '#/state/queries'
 import {createQueryKey} from '#/state/queries/util'
+import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {readPrivatePost} from '#/horizon/private/links'
 import {type app} from '#/lexicons'
 
@@ -97,6 +98,9 @@ export function privateQuoteQueryOptions(uri: string) {
 export function usePrivateQuoteQuery(uri: string, enabled: boolean) {
   return useQuery({
     ...privateQuoteQueryOptions(uri),
+    // Retried while prism is busy, never over a kept copy (busy design 5).
+    queryFn: context => keepOverData(context, () => fetchQuote(uri)),
+    ...PRIVATE_RETRY,
     enabled,
     select: fromQuoteData,
   })

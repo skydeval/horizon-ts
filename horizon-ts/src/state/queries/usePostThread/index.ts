@@ -32,6 +32,11 @@ import {useAppviewClient, useSession} from '#/state/session'
 import {useMergeThreadgateHiddenReplies} from '#/state/threadgate-hidden-replies'
 import {useBreakpoints} from '#/alf'
 import {IS_WEB} from '#/env'
+// HORIZON: a private thread is retried while prism is busy, never over kept data
+import {
+  keepOverData,
+  privateRetryFor,
+} from '#/horizon/private/api/transient'
 // HORIZON: the private posts a thread quotes arrive with it
 import {resolveThreadQuotes} from '#/horizon/private/quotes/resolve'
 // HORIZON: a private thread is read through prism
@@ -88,11 +93,14 @@ export function usePostThread({anchor}: {anchor?: string}) {
       const placeholder = getThreadPlaceholder(qc, anchor!)
       // HORIZON: a private thread is read through prism; a public one with its private branches (start)
       const data = isPrivateRead(anchor)
-        ? await fetchPrivateThreadV2(anchor!, {
-            below,
-            branchingFactor: view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
-            sort,
-          })
+        ? await keepOverData(ctx, () =>
+            fetchPrivateThreadV2(anchor!, {
+              below,
+              branchingFactor:
+                view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+              sort,
+            }),
+          )
         : await withPrivateBranches(
             anchor!,
             {
@@ -170,6 +178,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
 
       return result
     },
+    // HORIZON: a private thread is retried while prism is busy
+    ...privateRetryFor(isPrivateRead(anchor)),
     placeholderData() {
       if (!anchor) return
       const placeholder = getThreadPlaceholder(qc, anchor)

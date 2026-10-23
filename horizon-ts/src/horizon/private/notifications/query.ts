@@ -29,6 +29,7 @@ import {
 } from '#/horizon/private/activity-subscriptions/mute-filter'
 import {useMutedDids} from '#/horizon/private/activity-subscriptions/muted'
 import {getPrivateUnreadCount} from '#/horizon/private/api/reads'
+import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {
   type PrivateFeedSource,
@@ -106,11 +107,14 @@ export function usePrivateNotificationsQuery({
   const {uris: hiddenReplyUris} = useThreadgateHiddenReplyUris()
   const muted = useMutedDids()
   const viewerDid = currentAccount?.did
+  const fetchPage = privateNotificationsQueryFn(source, tab, viewerDid)
   return useInfiniteQuery({
     enabled: !!source && !!moderationOpts,
     staleTime: STALE.SECONDS.FIFTEEN,
     queryKey: privateNotificationsQueryKey(source?.did ?? '', tab),
-    queryFn: privateNotificationsQueryFn(source, tab, viewerDid),
+    // Retried while prism is busy, never over a page it shows (busy design 5).
+    queryFn: context => keepOverData(context, () => fetchPage(context)),
+    ...PRIVATE_RETRY,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     select(data) {

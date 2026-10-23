@@ -26,6 +26,7 @@ import {
   privateBookmarksQueryKey,
   type PrivateBookmarkView,
 } from '#/horizon/private/api/bookmarks'
+import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 
@@ -56,10 +57,14 @@ export function PrivateSavedList() {
   } = useInfiniteQuery({
     enabled,
     queryKey: privateBookmarksQueryKey(source?.did ?? ''),
-    queryFn: ({pageParam}): Promise<PrivateBookmarksPage> => {
+    // Retried while prism is busy, never over a page it shows (busy design 5).
+    queryFn: (context): Promise<PrivateBookmarksPage> => {
       if (!source) return Promise.resolve({bookmarks: []})
-      return fetchPrivateBookmarksPage(source, pageParam)
+      return keepOverData(context, () =>
+        fetchPrivateBookmarksPage(source, context.pageParam),
+      )
     },
+    ...PRIVATE_RETRY,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.cursor,
   })

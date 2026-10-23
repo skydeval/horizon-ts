@@ -39,8 +39,13 @@ import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
 import {useAppviewClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+// HORIZON: the Private tab is retried while prism is busy
+import {
+  privateQueryFn,
+  privateRetryFor,
+} from '#/horizon/private/api/transient'
 // HORIZON: private posts on profile feeds
-import {withPrivateKey} from '#/horizon/private/feed/keys'
+import {privateTabDid, withPrivateKey} from '#/horizon/private/feed/keys'
 // HORIZON: private posts on profile feeds
 import {horizonFeedApi} from '#/horizon/private/feed/legacy'
 // HORIZON: private posts on profile feeds
@@ -201,7 +206,8 @@ export function usePostFeedQuery(
     enabled,
     staleTime: STALE.INFINITY,
     queryKey: RQKEY(feedDesc, params),
-    async queryFn({pageParam}: {pageParam: RQPageParam}) {
+    async queryFn(context) {
+      const {pageParam} = context
       logger.debug('usePostFeedQuery', {feedDesc, cursor: pageParam?.cursor})
       const {api, cursor} = pageParam
         ? pageParam
@@ -225,7 +231,10 @@ export function usePostFeedQuery(
             cursor: undefined,
           }
 
-      const res = await api.fetch({cursor, limit: fetchLimit})
+      // HORIZON: the Private tab's transient failure over a page it shows is kept, not retried
+      const res = await privateQueryFn(!!privateTabDid(feedDesc), context, () =>
+        api.fetch({cursor, limit: fetchLimit}),
+      )
 
       /*
        * If this is a public view, we need to check if posts fail moderation.
@@ -248,6 +257,8 @@ export function usePostFeedQuery(
         fetchedAt: Date.now(),
       }
     },
+    // HORIZON: the Private tab is retried while prism is busy
+    ...privateRetryFor(!!privateTabDid(feedDesc)),
     initialPageParam: undefined,
     getNextPageParam: lastPage =>
       lastPage.cursor

@@ -9,6 +9,7 @@ import {useQuery} from '@tanstack/react-query'
 
 import {STALE} from '#/state/queries'
 import {placePrivateReply} from '#/horizon/private/api/reply-anchor'
+import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 
@@ -24,20 +25,22 @@ export function useReplyAnchor(
     queryKey: ['horizon-private-reply-anchor', replyToUri],
     enabled,
     staleTime: STALE.SECONDS.THIRTY,
-    retry: false,
-    queryFn: async () => {
-      const clients = getCurrentClients()
-      if (!clients || !replyToUri) return null
-      const place = await placePrivateReply(
-        {
-          did: clients.did,
-          pdsClient: clients.pdsClient,
-          prismClient: clients.prismClient,
-        },
-        replyToUri,
-      )
-      return {uri: place.anchor.uri, audienceUri: place.anchor.audienceUri}
-    },
+    // Retried while prism is busy, never over a kept label (busy design 5).
+    ...PRIVATE_RETRY,
+    queryFn: context =>
+      keepOverData(context, async () => {
+        const clients = getCurrentClients()
+        if (!clients || !replyToUri) return null
+        const place = await placePrivateReply(
+          {
+            did: clients.did,
+            pdsClient: clients.pdsClient,
+            prismClient: clients.prismClient,
+          },
+          replyToUri,
+        )
+        return {uri: place.anchor.uri, audienceUri: place.anchor.audienceUri}
+      }),
   })
   return enabled ? (data ?? undefined) : undefined
 }

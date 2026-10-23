@@ -9,6 +9,11 @@ import {
 import {useAppviewClient} from '#/state/session'
 // HORIZON: a private post's quotes are listed by prism
 import {fetchPrivateQuotesPage} from '#/horizon/private/api/interactions'
+// HORIZON: a private post's quotes are retried while prism is busy
+import {
+  keepOverData,
+  privateRetryFor,
+} from '#/horizon/private/api/transient'
 // HORIZON: a private post's quotes are listed by prism
 import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
@@ -63,10 +68,13 @@ export function usePostQuotesQuery(
     RQPageParam
   >({
     queryKey: RQKEY(resolvedUri || '', quoteSort),
-    async queryFn({pageParam}: {pageParam: RQPageParam}) {
+    async queryFn(context) {
+      const {pageParam} = context
       // HORIZON: a private post's quotes are listed by prism
       if (isPrivateRead(resolvedUri))
-        return fetchPrivateQuotesPage(resolvedUri!, pageParam, PAGE_SIZE)
+        return keepOverData(context, () =>
+          fetchPrivateQuotesPage(resolvedUri!, pageParam, PAGE_SIZE),
+        )
       return await client.call(app.bsky.feed.getQuotes, {
         // the enabled flag prevents this from running until resolvedUri is set
         uri: (resolvedUri || '') as AtUriString,
@@ -75,6 +83,8 @@ export function usePostQuotesQuery(
         sort: quoteSort,
       })
     },
+    // HORIZON: a private post's quotes are retried while prism is busy
+    ...privateRetryFor(isPrivateRead(resolvedUri)),
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     enabled: !!resolvedUri && enabled,

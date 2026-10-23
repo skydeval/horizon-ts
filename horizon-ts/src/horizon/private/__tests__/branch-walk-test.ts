@@ -12,7 +12,11 @@ jest.mock('#/horizon/routing/membership', () => ({
 
 import {i18n} from '@lingui/core'
 
-import {placePrivateReply, PrivateReplyRefusedError} from '../api/reply-anchor'
+import {
+  placePrivateReply,
+  PrivateParentBusyError,
+  PrivateReplyRefusedError,
+} from '../api/reply-anchor'
 import {clearPrivateStores} from '../store'
 import {DID, OTHER_DID, RECORD_CID, type Reply} from './fixtures'
 import {
@@ -162,7 +166,7 @@ describe('the branch walk through the thread view (2H design 12.2, T16)', () => 
     expect(counts(prism)).toEqual({threads: 1, posts: 4})
   })
 
-  it('falls back on NotFound, and still refuses a branch that cannot be read', async () => {
+  it('falls back on NotFound; a hop prism then leaves out is parent-busy, never a refusal (busy design 9)', async () => {
     const posts = chain(3)
     const prism = serve([posts[2], posts[1]], () => ({
       status: 400,
@@ -170,8 +174,29 @@ describe('the branch walk through the thread view (2H design 12.2, T16)', () => 
     }))
     await expect(
       placePrivateReply(clientsFor(prism), posts[2].uri),
-    ).rejects.toBeInstanceOf(PrivateReplyRefusedError)
+    ).rejects.toBeInstanceOf(PrivateParentBusyError)
     expect(counts(prism).threads).toBe(1)
+  })
+
+  it('a hop on another root is still refused', async () => {
+    const posts = chain(3)
+    posts[1] = {
+      ...posts[1],
+      record: {
+        ...posts[1].record,
+        reply: {
+          root: {uri: `${ROOT}x`, cid: RECORD_CID},
+          parent: {uri: posts[0].uri, cid: RECORD_CID},
+        },
+      },
+    }
+    const prism = serve(posts, () => ({
+      status: 400,
+      body: {error: 'NotFound', message: 'not found'},
+    }))
+    await expect(
+      placePrivateReply(clientsFor(prism), posts[2].uri),
+    ).rejects.toBeInstanceOf(PrivateReplyRefusedError)
   })
 
   it('asks nothing more for a reply directly under the public post', async () => {

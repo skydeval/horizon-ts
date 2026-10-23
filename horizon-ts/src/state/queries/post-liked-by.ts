@@ -9,6 +9,11 @@ import {
 import {useAppviewClient} from '#/state/session'
 // HORIZON: a private post's likes are listed by prism
 import {fetchPrivateLikesPage} from '#/horizon/private/api/interactions'
+// HORIZON: a private post's likes are retried while prism is busy
+import {
+  keepOverData,
+  privateRetryFor,
+} from '#/horizon/private/api/transient'
 // HORIZON: a private post's likes are listed by prism
 import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
@@ -30,10 +35,13 @@ export function useLikedByQuery(resolvedUri: string | undefined) {
     RQPageParam
   >({
     queryKey: RQKEY(resolvedUri || ''),
-    async queryFn({pageParam}: {pageParam: RQPageParam}) {
+    async queryFn(context) {
+      const {pageParam} = context
       // HORIZON: a private post's likes are listed by prism
       if (isPrivateRead(resolvedUri))
-        return fetchPrivateLikesPage(resolvedUri!, pageParam, PAGE_SIZE)
+        return keepOverData(context, () =>
+          fetchPrivateLikesPage(resolvedUri!, pageParam, PAGE_SIZE),
+        )
       return await client.call(app.bsky.feed.getLikes, {
         // the enabled flag prevents this from running until resolvedUri is set
         uri: (resolvedUri || '') as AtUriString,
@@ -41,6 +49,8 @@ export function useLikedByQuery(resolvedUri: string | undefined) {
         cursor: pageParam,
       })
     },
+    // HORIZON: a private post's likes are retried while prism is busy
+    ...privateRetryFor(isPrivateRead(resolvedUri)),
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     enabled: !!resolvedUri,

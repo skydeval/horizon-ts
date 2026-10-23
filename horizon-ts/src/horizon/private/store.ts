@@ -116,6 +116,13 @@ export function pendingPhase(entry: PendingPost): PendingPhase {
  */
 export const PENDING_TTL_MS = 10 * 60 * 1000
 
+/**
+ * When prism is asked whether it serves a just-written post, in milliseconds
+ * after the write. A written post prism has not served by the last of these
+ * is labelled "Syncing" (prism busy design 4, 6.6).
+ */
+export const CONFIRM_AT_MS = [1_000, 2_000, 4_000, 8_000, 16_000]
+
 const facts = new Map<string, PrivatePostFacts>()
 const pending = new Map<string, PendingPost>()
 const batches = new Map<string, string[]>()
@@ -150,6 +157,15 @@ function subscribe(listener: () => void) {
   return () => {
     listeners.delete(listener)
   }
+}
+
+/**
+ * Called on every change to the facts or the pending posts (the suspect
+ * registry's "Syncing" label follows the pending store, prism busy design 4).
+ * Returns the unsubscribe function.
+ */
+export function subscribePrivateStores(listener: () => void) {
+  return subscribe(listener)
 }
 
 function sameFacts(a: PrivatePostFacts, b: PrivatePostFacts) {

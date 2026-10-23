@@ -58,6 +58,7 @@ import {
   answerPrismFeatures,
   resetPrismFeatures,
 } from '#/horizon/routing/features'
+import {resetPrismHealth} from '#/horizon/routing/health'
 import {repoRouteForDid, resetWriteRoutes} from '#/horizon/routing/write-route'
 import {PrivateAudienceMissingError} from '../api/audiences'
 import {PrivateRouteUnavailableError} from '../api/writer'
@@ -65,6 +66,8 @@ import {
   deletePrivatePost,
   postPrivate,
   PrivateGatesNotSavedError,
+  PrivateParentBusyError,
+  PrivateParentUnavailableError,
   PrivateReplyRefusedError,
   PrivateThreadPartlyPostedError,
   stopPrivateConfirmations,
@@ -338,6 +341,7 @@ beforeEach(() => {
   mockResolveReply.mockReset()
   mockResolveSpoilerRT.mockClear()
   resetPrismFeatures()
+  resetPrismHealth()
 })
 
 afterEach(() => {
@@ -801,11 +805,50 @@ describe('postPrivate: where a reply goes (A-12, A-13)', () => {
         },
       }),
     ])
+    // The writer's own hop is read from their PDS (busy design 9, BR15-N8).
+    storeOwn('3kfirst22222', recordCids[3], {
+      audienceList: OTHER_AUDIENCE,
+      reply: {
+        root: publicRef(PUBLIC_ROOT, recordCids[4]),
+        parent: {uri: branchUri, cid: recordCids[2]},
+      },
+    })
     await postPrivate(new QueryClient(), opts(['reply'], secondUri))
     const {nsid, record} = written()
     expect(nsid).toBe('tools.kryphocron.actor.participatePrivate')
     expect(record?.audienceList).toBe(NEW_OTHER)
     expect(record?.reply.root).toEqual({uri: PUBLIC_ROOT, cid: recordCids[4]})
+    // Only the writer's own record was read from a PDS.
+    const reads = pds.calls.filter(c => c.nsid === 'com.atproto.repo.getRecord')
+    expect(reads.map(c => c.params.get('repo'))).toEqual(
+      reads.map(() => DID),
+    )
+  })
+
+  it('the writer’s own branch hop gone from their PDS is parent-unavailable, never reply-refused (BR18-N3)', async () => {
+    const branchUri = privateUri('3kbranch3333', OTHER_DID)
+    const firstUri = privateUri('3kfirst33333')
+    const secondUri = privateUri('3ksecond3333', OTHER_DID)
+    servePrism([
+      served(branchUri, OTHER_DID, recordCids[2], {
+        audienceList: NEW_OTHER,
+        reply: {
+          root: publicRef(PUBLIC_ROOT, recordCids[4]),
+          parent: publicRef(PUBLIC_PARENT, recordCids[4]),
+        },
+      }),
+      served(secondUri, OTHER_DID, recordCids[5], {
+        audienceList: OTHER_AUDIENCE,
+        reply: {
+          root: publicRef(PUBLIC_ROOT, recordCids[4]),
+          parent: {uri: firstUri, cid: recordCids[3]},
+        },
+      }),
+    ])
+    await expect(
+      postPrivate(new QueryClient(), opts(['reply'], secondUri)),
+    ).rejects.toBeInstanceOf(PrivateParentUnavailableError)
+    expect(postWrites()).toEqual([])
   })
 
   it('a reply to the writer’s own Only me post names that audience, with nothing found or created', async () => {
@@ -832,7 +875,7 @@ describe('postPrivate: where a reply goes (A-12, A-13)', () => {
     expect(postWrites()).toEqual([])
   })
 
-  it('a branch whose root cannot be read is refused before any write', async () => {
+  it('a branch whose root prism leaves out fails before any write with parent-busy’s text, which the composer shows (busy design 9, BR18-L1)', async () => {
     const middleUri = privateUri('3kmiddle2222', OTHER_DID)
     servePrism([
       served(middleUri, OTHER_DID, recordCids[3], {
@@ -846,9 +889,83 @@ describe('postPrivate: where a reply goes (A-12, A-13)', () => {
         },
       }),
     ])
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], middleUri),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateParentBusyError)
+    expect((error as Error).message).toBe(
+      'Couldn’t reach the post you’re replying to. Try again in a moment.',
+    )
+    expect(postWrites()).toEqual([])
+    // No read of another author's records on any PDS.
+    expect(nsids(pds.calls)).not.toContain('com.atproto.repo.getRecord')
+  })
+
+  it('another author’s parent left out of a healthy answer shows parent-busy’s text; a transient planning error stays raw (BR18-L1)', async () => {
+    const parentUri = privateUri('3kleftout222', OTHER_DID)
+    servePrism([])
+    const missed = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], parentUri),
+    ).catch((e: unknown) => e)
+    expect(missed).toBeInstanceOf(PrivateParentBusyError)
+    expect((missed as Error).message).toBe(
+      'Couldn’t reach the post you’re replying to. Try again in a moment.',
+    )
+
+    prism = fakeClient(DID, () => ({
+      status: 503,
+      body: {error: 'Reindexing', retryAfter: 30},
+    }))
+    mockPrismClient = prism.client
+    publishPds('https://pds.example')
+    const raw = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], parentUri),
+    ).catch((e: unknown) => e)
+    expect(raw).not.toBeInstanceOf(PrivateParentBusyError)
+    expect((raw as {error?: string}).error).toBe('Reindexing')
+    expect(postWrites()).toEqual([])
+  })
+
+  it('the writer’s own anchor gone from their PDS is parent-unavailable, never reply-refused (BQ-9, BR17-N2)', async () => {
+    const rootUri = privateUri('3kownroot333')
+    const parentUri = privateUri('3kparent3333', OTHER_DID)
+    servePrism([
+      served(rootUri, DID, recordCids[4], {audienceList: AUDIENCE}),
+      served(parentUri, OTHER_DID, recordCids[3], {
+        audienceList: AUDIENCE,
+        reply: {
+          root: {uri: rootUri, cid: recordCids[4]},
+          parent: {uri: rootUri, cid: recordCids[4]},
+        },
+      }),
+    ])
     await expect(
-      postPrivate(new QueryClient(), opts(['reply'], middleUri)),
-    ).rejects.toBeInstanceOf(PrivateReplyRefusedError)
+      postPrivate(new QueryClient(), opts(['reply'], parentUri)),
+    ).rejects.toBeInstanceOf(PrivateParentUnavailableError)
+    expect(postWrites()).toEqual([])
+  })
+
+  it('the writer’s own parent is placed from their PDS; gone there, it is parent-unavailable (busy design 9)', async () => {
+    const ownUri = privateUri('3kownpar2222')
+    servePrism([])
+    storeOwn('3kownpar2222', recordCids[4], {audienceList: AUDIENCE})
+    await postPrivate(new QueryClient(), opts(['reply'], ownUri))
+    expect(written().record?.reply.parent).toEqual({
+      uri: ownUri,
+      cid: recordCids[4],
+    })
+    expect(nsids(prism.calls)).not.toContain('app.nearhorizon.private.getPosts')
+
+    pds.calls.length = 0
+    await expect(
+      postPrivate(
+        new QueryClient(),
+        opts(['reply'], privateUri('3kowngone222')),
+      ),
+    ).rejects.toBeInstanceOf(PrivateParentUnavailableError)
     expect(postWrites()).toEqual([])
   })
 

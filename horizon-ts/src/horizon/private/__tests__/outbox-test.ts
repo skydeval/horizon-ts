@@ -86,6 +86,7 @@ import {
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
 import {resetPrismFeatures} from '#/horizon/routing/features'
+import {resetPrismHealth} from '#/horizon/routing/health'
 import {
   type ProbeEnvironment,
   resetMembership,
@@ -101,6 +102,7 @@ import {PrivateRouteUnavailableError} from '../api/writer'
 import {postPrivate, stopPrivateConfirmations} from '../api/writes'
 import {PUBLIC_COMPOSE, setComposeVisibility} from '../composer/state'
 import {PrivateEncodeFailedError} from '../encoder/types'
+import {missVerdict, resetKnown} from '../known'
 import {
   beginOutboxEdit,
   checkOutboxEntry,
@@ -1159,6 +1161,195 @@ describe('a reply behind a failed parent (PA-28 step 2)', () => {
       reply: {parent: {uri: string}}
     }
     expect(replyRecord.reply.parent.uri).toBe(parent.uris[0])
+  })
+})
+
+describe('a reply prism cannot place (busy design 9, T-11)', () => {
+  const PARENT = `at://${OTHER_DID}/${PP}/3kotherpar22`
+  const OTHER_AUDIENCE = `at://${OTHER_DID}/${AUD}/3kotheraud22`
+  const BUSY =
+    'Couldn’t reach the post you’re replying to. Try again in a moment.'
+
+  function parentView() {
+    return {
+      uri: PARENT,
+      cid: cids[38],
+      author: {did: OTHER_DID, handle: 'bob.test'},
+      record: {
+        $type: PP,
+        text: 'parent',
+        createdAt: '2026-10-15T12:00:00.000Z',
+        audienceList: OTHER_AUDIENCE,
+      },
+      indexedAt: '2026-10-15T12:00:00.000Z',
+      labels: [],
+    }
+  }
+
+  /** prism answers `getPosts` with `reply` (a promise holds it). */
+  function prismAnswers(reply: () => Reply | Promise<Reply>) {
+    prism = fakeClient(DID, call =>
+      call.nsid === 'app.nearhorizon.private.getPosts'
+        ? reply()
+        : {status: 200, body: {status: 'indexed'}},
+    )
+    mockPrismClient = prism.client
+    publish()
+  }
+
+  const serving = () => ({status: 200, body: {posts: [parentView()]}})
+
+  function actionsOf(record: OutboxRecord) {
+    return outboxEntryActions(
+      {
+        record,
+        holdsCapture: true,
+        runningHere: false,
+        runningElsewhere: false,
+      },
+      getWriteRoute(DID),
+      {inUnsent: true},
+    )
+  }
+
+  function replyAsParent() {
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'parent'},
+      locked: true,
+    })
+  }
+
+  beforeEach(() => {
+    resetPrismHealth()
+    resetKnown()
+  })
+
+  it.each([
+    ['503 Reindexing', {status: 503, body: {error: 'Reindexing', retryAfter: 30}}],
+    ['a 500', {status: 500, body: {error: 'InternalServerError'}}],
+    ['a network failure', new TypeError('Network request failed')],
+  ] as [string, Reply][])(
+    'a planning read failing with %s fails at once as parent-busy: nothing written, the lock released, Retry, Edit and Discard',
+    async (_name, reply) => {
+      prismAnswers(() => reply)
+      replyAsParent()
+      await press(opts(['reply'], {replyTo: PARENT}))
+      const record = only()
+      expect(record).toMatchObject({
+        state: 'failed',
+        failure: 'parent-busy',
+        present: [],
+      })
+      expect(postWrites()).toEqual([])
+      expect(Array.from(await heldLockNames())).not.toContain(
+        runLockName(record.id),
+      )
+      const actions = actionsOf(record)
+      expect(actions.detail).toBe(BUSY)
+      expect(actions.retry).toEqual({finish: false, disabled: false})
+      expect(actions.edit).toBe(true)
+      expect(actions.discard).toBe(true)
+    },
+  )
+
+  it('a planning read that outlasts the call timeout is parent-busy', async () => {
+    OUTBOX_TIMING.callMs = 50
+    let release: (reply: Reply) => void = () => {}
+    prismAnswers(() => new Promise<Reply>(resolve => (release = resolve)))
+    replyAsParent()
+    await press(opts(['reply'], {replyTo: PARENT}))
+    expect(only()).toMatchObject({state: 'failed', failure: 'parent-busy'})
+    // Answer the read the timeout gave up on, so its deadline timer ends.
+    release({status: 200, body: {posts: []}})
+    await settle()
+  })
+
+  it('another author’s parent left out of a healthy answer is parent-busy, never "may have been deleted", and adds no suspect; Retry posts once prism serves it', async () => {
+    prismAnswers(() => ({status: 200, body: {posts: []}}))
+    replyAsParent()
+    await press(opts(['reply'], {replyTo: PARENT}))
+    const record = only()
+    expect(record.failure).toBe('parent-busy')
+    expect(actionsOf(record).detail).not.toMatch(/deleted/)
+    expect(missVerdict(DID, PARENT)).toBe('unknown')
+    // No PDS read of another author.
+    expect(nsids(pds.calls)).not.toContain('com.atproto.repo.getRecord')
+
+    prismAnswers(serving)
+    await retryOutboxEntry(seen(record))
+    await whenOutboxIdle()
+    await settle()
+    expect(records()).toEqual([])
+    const written = postWrites()[0].body?.record as {
+      audienceList: string
+      reply: {parent: {uri: string}}
+    }
+    expect(written.reply.parent.uri).toBe(PARENT)
+    expect(written.audienceList).toBe(OTHER_AUDIENCE)
+  })
+
+  it('a reply to the failed reply ends parent-not-posted at once; a top-level post pressed after both posts at once', async () => {
+    prismAnswers(() => ({status: 503, body: {error: 'Reindexing'}}))
+    replyAsParent()
+    const first = await press(opts(['reply'], {replyTo: PARENT}))
+    await press(opts(['reply to reply'], {replyTo: first.uris[0]}))
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'everyone'},
+      locked: false,
+    })
+    const top = await press(opts(['top level']))
+    const failures = records().map(r => r.failure)
+    expect(failures).toEqual(['parent-busy', 'parent-not-posted'])
+    expect(getPendingPost(top.uris[0])?.phase).toBe('written')
+  })
+
+  it('a Finish posting whose placement read fails transiently is parent-busy, never post, and keeps its posts (BR17-N3)', async () => {
+    prismAnswers(serving)
+    replyAsParent()
+    let posts = 0
+    pds.state.fail = call =>
+      call.nsid === 'com.atproto.repo.createRecord' &&
+      call.body?.collection === PP &&
+      posts++ === 1
+        ? {status: 500, body: {error: 'InternalServerError'}}
+        : undefined
+    const {uris} = await press(opts(['one', 'two'], {replyTo: PARENT}))
+    pds.state.fail = undefined
+    const partly = only()
+    expect(partly).toMatchObject({failure: 'post', present: [uris[0]]})
+    prismAnswers(() => ({status: 503, body: {error: 'Reindexing'}}))
+    await retryOutboxEntry(seen(partly))
+    await whenOutboxIdle()
+    await settle()
+    const after = only()
+    expect(after).toMatchObject({
+      state: 'failed',
+      failure: 'parent-busy',
+      present: [uris[0]],
+    })
+    expect(actionsOf(after).detail).toBe(BUSY)
+  })
+
+  it('the writer’s own parent gone from their PDS fails at once as parent-unavailable', async () => {
+    prismAnswers(() => ({status: 200, body: {posts: []}}))
+    replyAsParent()
+    await press(opts(['reply'], {replyTo: uriOf('3kowngone222')}))
+    expect(only()).toMatchObject({
+      state: 'failed',
+      failure: 'parent-unavailable',
+    })
+  })
+
+  it('a top-level post whose planning fails transiently keeps today’s failure, never parent-busy (BR18-N1)', async () => {
+    pds.audiences.splice(0, pds.audiences.length)
+    pds.state.fail = call =>
+      call.nsid === 'com.atproto.repo.listRecords'
+        ? {status: 503, body: {error: 'NotEnoughResources'}}
+        : undefined
+    await press(opts(['top level']))
+    expect(only().failure).not.toBe('parent-busy')
   })
 })
 

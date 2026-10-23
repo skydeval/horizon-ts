@@ -75,17 +75,21 @@ import {
   PrivateEncodeFailedError,
 } from '#/horizon/private/encoder'
 import {parseGenerationSecs} from '#/horizon/private/rotation/generation'
-import {confirmPendingPost, getPendingPost} from '#/horizon/private/store'
+import {
+  CONFIRM_AT_MS,
+  confirmPendingPost,
+  getPendingPost,
+} from '#/horizon/private/store'
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {resolveSpoilerRT, type SpoilerWriteMode} from '#/horizon/spoilers/write'
 import {type app, com} from '#/lexicons'
 
-/**
- * When prism is asked whether it serves a just-written post, in milliseconds
- * after the write.
+/*
+ * When prism is asked whether it serves a just-written post. Kept with the
+ * pending store, which the suspect registry reads without the compose path.
  */
-export const CONFIRM_AT_MS = [1_000, 2_000, 4_000, 8_000, 16_000]
+export {CONFIRM_AT_MS}
 
 /**
  * The reply and quote limits of a private compose could not be written, so

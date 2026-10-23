@@ -24,6 +24,7 @@ import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {useResolveDidQuery} from '#/state/queries/resolve-uri'
 import {useSession} from '#/state/session'
 import {type SearchFilters} from '#/screens/Search/searchParams'
+import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {PRIVATE_SEARCH_ROOT} from '#/horizon/private/cache-finders'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
@@ -119,10 +120,14 @@ export function usePrivateSearchResults({
   >({
     enabled: offered && active && !!q,
     queryKey: [PRIVATE_SEARCH_ROOT, source?.did, q],
-    queryFn: ({pageParam}) => {
+    // Retried while prism is busy, never over a page it shows (busy design 5).
+    queryFn: context => {
       if (!source || !q) return Promise.resolve({posts: []})
-      return fetchPrivateSearchLoad(source, q, pageParam)
+      return keepOverData(context, () =>
+        fetchPrivateSearchLoad(source, q, context.pageParam),
+      )
     },
+    ...PRIVATE_RETRY,
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     select(data) {
