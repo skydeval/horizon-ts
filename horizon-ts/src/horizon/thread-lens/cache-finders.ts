@@ -22,10 +22,17 @@ import {
   embedViewRecordToPostView,
   getEmbeddedPost,
 } from '#/state/queries/util'
+import {THREAD_LENS} from '#/horizon/switches'
 import {viewOf} from '#/horizon/thread-lens/nodes'
 import {LENS_ROOT, snapshotOf} from '#/horizon/thread-lens/snapshot'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
+
+/*
+ * The stock threadgate updater's lens writer (TH-16), so `queryCache.ts` has
+ * one Thread Lens import, of light modules only.
+ */
+export {writeLensThreadgate} from '#/horizon/thread-lens/threadgate'
 
 type PostView = app.bsky.feed.defs.PostView
 type ProfileViewBasic = app.bsky.actor.defs.ProfileViewBasic
@@ -51,6 +58,8 @@ function* heldViews(data: unknown): Generator<PostView, void> {
 }
 
 function* lensEntries(queryClient: QueryClient) {
+  // With the switch off the stock finders are stock (12.1).
+  if (!THREAD_LENS) return
   for (const [, data] of queryClient.getQueriesData({queryKey: [LENS_ROOT]})) {
     if (data !== undefined) yield data
   }

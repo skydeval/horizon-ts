@@ -124,6 +124,12 @@ export type LensSnapshot = {
   failure?: LensNote
   /** The note of a gap-only or unverified answer (11.3). */
   note?: LensNote
+  /**
+   * When the run's read completed, for the private load gate (prism busy
+   * design 4.1): the private nodes were fetched then. Kept with the
+   * snapshot through continuations and a kept failure.
+   */
+  fetchedAt?: number
 }
 
 /** The tag on a stock answer stored under a lens key (TL-27). */

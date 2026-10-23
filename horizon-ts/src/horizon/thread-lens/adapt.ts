@@ -133,7 +133,10 @@ export const PLACEHOLDER_LENS_STATE: LensState = {
 }
 
 /** A `select` output under a lens key. */
-export type LensSelected = UsePostThreadQueryResult & {lensState: LensState}
+export type LensSelected = UsePostThreadQueryResult & {
+  lensState: LensState
+  horizonFetchedAt?: number
+}
 
 function didOf(uri: string | undefined): string | undefined {
   if (!uri) return undefined
@@ -484,6 +487,10 @@ function buildFromSnapshot(
     thread,
     ...(threadgate ? {threadgate} : {}),
     hasOtherReplies: !!snapshot.privateCursor,
+    // The private load gate reads the run's completion (prism busy 4.1).
+    ...(snapshot.fetchedAt !== undefined
+      ? {horizonFetchedAt: snapshot.fetchedAt}
+      : {}),
     lensState: {
       kind: form,
       ...(snapshot.failure
@@ -585,4 +592,60 @@ export function threadLensState(
       ? (data as {lensState?: LensState}).lensState
       : undefined
   return state ?? STOCK_LENS_STATE
+}
+
+/** The flag on the anchor's own "Load more replies" row (risk 2 of 4A). */
+export const LENS_ANCHOR_ROW = 'horizonLensAnchorRow'
+
+/** Whether a `readMore` item is the anchor's own row, drawn here. */
+export function isLensAnchorRow(item: object): boolean {
+  return (item as Record<string, unknown>)[LENS_ANCHOR_ROW] === true
+}
+
+/**
+ * The built thread with the anchor's own "Load more replies" row (9.2).
+ * `select` puts a `moreReplies` marker on the anchor into its count and
+ * `markers`, but the stock traversal draws a read-more row only after the
+ * last child of a reply (and in tree view at the end of the last branch),
+ * so the anchor's row is missing in linear view. It goes after the
+ * anchor's replies, before the stock "show more" row. A stock row the
+ * traversal made for the anchor carries depth 0, which the screen's slicing
+ * would take for the anchor; it is moved to depth 1 (indent 0, as at 0), so
+ * there is one row, flagged for the marker row's request depth.
+ */
+export function withLensAnchorRow<
+  T extends {type: string; key: string; uri?: string},
+>(items: T[], lens: LensState): T[] {
+  if (!THREAD_LENS || lens.kind !== 'snapshot') return items
+  const anchor = items.find(
+    item =>
+      item.type === 'threadPost' && (item as {depth?: number}).depth === 0,
+  )
+  const uri = anchor?.uri
+  if (!uri || lens.markers.get(uri)?.kind !== 'replies') return items
+  const key = `readMore:${uri}`
+  const row = (base?: T): T => {
+    let href = ''
+    try {
+      const parsed = new AtUri(uri)
+      href = `/profile/${parsed.host}/post/${parsed.rkey}`
+    } catch {}
+    return {
+      ...(base ?? {skippedIndentIndices: new Set<number>(), moreReplies: 1}),
+      type: 'readMore',
+      key,
+      href: (base as {href?: string} | undefined)?.href ?? href,
+      depth: 1,
+      [LENS_ANCHOR_ROW]: true,
+    } as unknown as T
+  }
+  const held = items.findIndex(item => item.key === key)
+  if (held >= 0) {
+    const out = [...items]
+    out[held] = row(items[held])
+    return out
+  }
+  const other = items.findIndex(item => item.type === 'showOtherReplies')
+  const at = other >= 0 ? other : items.length
+  return [...items.slice(0, at), row(), ...items.slice(at)]
 }

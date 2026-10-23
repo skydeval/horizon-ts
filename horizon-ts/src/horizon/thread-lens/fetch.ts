@@ -21,6 +21,7 @@
 import {type QueryClient, type QueryKey} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
+import {fetchStamp} from '#/horizon/private/load-gate'
 import {resolvePrivateQuotes} from '#/horizon/private/quotes/resolve'
 import {resolveAnchor} from '#/horizon/private/thread/fetch'
 import {isPrivatePostUri} from '#/horizon/private/uri'
@@ -327,7 +328,7 @@ export async function runLens(
   try {
     const {snapshot, gaps} = await readLens(params, runId, options)
     registerLensGaps(params.did, gaps)
-    return {...PASS, data: {lens: snapshot}}
+    return {...PASS, data: {lens: {...snapshot, fetchedAt: fetchStamp()}}}
   } catch (error) {
     const failure = failureFor(params.did, error)
     if (failure.kind === 'unavailable' || failure.kind === 'invalid-request') {

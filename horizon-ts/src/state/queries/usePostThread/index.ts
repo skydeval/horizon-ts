@@ -33,10 +33,7 @@ import {useMergeThreadgateHiddenReplies} from '#/state/threadgate-hidden-replies
 import {useBreakpoints} from '#/alf'
 import {IS_WEB} from '#/env'
 // HORIZON: a private thread is retried while prism is busy, never over kept data
-import {
-  keepOverData,
-  privateRetryFor,
-} from '#/horizon/private/api/transient'
+import {keepOverData, privateRetryFor} from '#/horizon/private/api/transient'
 // HORIZON: a held private anchor is read again on the suspect clock
 import {heldPostRefetchInterval} from '#/horizon/private/known'
 // HORIZON: the private posts a thread quotes arrive with it
@@ -65,6 +62,13 @@ import {
 import {isPrivateRead} from '#/horizon/private/uri'
 // HORIZON: an anchor Bluesky withholds may be a restored post prism serves
 import {withRestoredAnchor} from '#/horizon/refract/thread/anchor'
+// HORIZON: Thread Lens import
+import {
+  threadLensState,
+  useThreadLensRead,
+  withLensAnchorRow,
+  withLensCacheMutator,
+} from '#/horizon/thread-lens/query'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -96,20 +100,33 @@ export function usePostThread({anchor}: {anchor?: string}) {
         : TREE_VIEW_BELOW
   }, [view, gtPhone])
 
-  const postThreadQueryKey = createPostThreadQueryKey({
-    anchor,
-    sort,
-    view,
-  })
-  const postThreadOtherQueryKey = createPostThreadOtherQueryKey({
-    anchor,
-  })
+  // HORIZON: Thread Lens TH-1: the lens keys stand in for the stock ones while the lens is involved (start)
+  const lens = useThreadLensRead({did: currentDid, anchor, sort, view, below})
+  const postThreadQueryKey = lens.queryKey(
+    createPostThreadQueryKey({
+      anchor,
+      sort,
+      view,
+    }),
+  )
+  const postThreadOtherQueryKey = lens.otherQueryKey(
+    createPostThreadOtherQueryKey({
+      anchor,
+    }),
+  )
+  // HORIZON: Thread Lens TH-1: the lens keys stand in for the stock ones while the lens is involved (end)
 
   const query = useQuery<UsePostThreadQueryResult>({
     enabled: isThreadPreferencesLoaded && !!anchor && !!moderationOpts,
     queryKey: postThreadQueryKey,
+    // HORIZON: Thread Lens TH-18: a reconnect is the screen hook's, not every lens screen's at once
+    refetchOnReconnect: lens.refetchOnReconnect,
     async queryFn(ctx) {
       const placeholder = getThreadPlaceholder(qc, anchor!)
+      // HORIZON: Thread Lens TH-2: the lens read, or its fallback below tagged at the end (start)
+      const lensRun = await lens.run(ctx, placeholder)
+      if (lensRun.data)
+        return lensRun.data as unknown as UsePostThreadQueryResult
       // HORIZON: a private thread is read through prism; a public one with its private branches (start)
       const data = isPrivateRead(anchor)
         ? await keepOverData(ctx, () =>
@@ -215,7 +232,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
         result.threadgate.record = record
       }
 
-      return result
+      // HORIZON: Thread Lens TH-2: the lens read, or its fallback below tagged at the end (end)
+      return lensRun.tag(result)
     },
     // HORIZON: a private thread is retried while prism is busy
     ...privateRetryFor(isPrivateRead(anchor)),
@@ -233,6 +251,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
       return {thread, threadgate: undefined, hasOtherReplies: false}
     },
     select(data) {
+      // HORIZON: Thread Lens TH-14: a lens snapshot becomes the stock answer for the current sort, view and depth
+      data = lens.select(data)
       const record = getThreadgateRecord(data.threadgate)
       if (data.threadgate && record) {
         data.threadgate.record = record
@@ -261,12 +281,21 @@ export function usePostThread({anchor}: {anchor?: string}) {
    */
   const mutator = useMemo(
     () =>
-      createCacheMutator({
-        params: {view, below},
-        postThreadQueryKey,
-        postThreadOtherQueryKey,
-        queryClient: qc,
-      }),
+      // HORIZON: Thread Lens TH-15: on a lens snapshot, replies join the snapshot
+      withLensCacheMutator(
+        createCacheMutator({
+          params: {view, below},
+          postThreadQueryKey,
+          postThreadOtherQueryKey,
+          queryClient: qc,
+        }),
+        {
+          queryClient: qc,
+          postThreadQueryKey,
+          postThreadOtherQueryKey,
+          params: {view, below},
+        },
+      ),
     [qc, view, below, postThreadQueryKey, postThreadOtherQueryKey],
   )
 
@@ -280,12 +309,17 @@ export function usePostThread({anchor}: {anchor?: string}) {
     queryKey: postThreadOtherQueryKey,
     async queryFn(ctx) {
       // HORIZON: private replies past the first read continue here (start)
-      return await fetchOtherReplies(
-        anchor!,
+      // HORIZON: Thread Lens TH-17: the lens other replies on a snapshot, stock for a fallback, nothing for a lens-only anchor
+      return await lens.otherReplies(
         () =>
-          client.call(app.bsky.unspecced.getPostThreadOtherV2, {
-            anchor: anchor! as AtUriString,
-          }),
+          fetchOtherReplies(
+            anchor!,
+            () =>
+              client.call(app.bsky.unspecced.getPostThreadOtherV2, {
+                anchor: anchor! as AtUriString,
+              }),
+            ctx,
+          ),
         ctx,
       )
       // HORIZON: private replies past the first read continue here (end)
@@ -304,7 +338,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     }
   }
   const showOtherItems = useCallback(() => {
-    const otherKey = createPostThreadOtherQueryKey({anchor})
+    // HORIZON: Thread Lens: the further replies' key in use, the lens one while the lens is involved
+    const otherKey = postThreadOtherQueryKey
     const other = qc.getQueryData(otherKey)
     if (
       other !== undefined &&
@@ -313,7 +348,7 @@ export function usePostThread({anchor}: {anchor?: string}) {
       void qc.resetQueries({queryKey: otherKey, exact: true})
     }
     setOtherItemsVisible(true)
-  }, [qc, anchor, threadContinuation])
+  }, [qc, postThreadOtherQueryKey, threadContinuation])
   // HORIZON: a thread read that changes the continuation closes the open row; the tap reads the new one (end)
   const serverOtherThreadItems: ThreadItem[] = useMemo(() => {
     if (!additionalQueryEnabled) return []
@@ -405,23 +440,33 @@ export function usePostThread({anchor}: {anchor?: string}) {
    * along with any other thread items required for rendering e.g. "Show more
    * replies" or the reply composer.
    */
+  // HORIZON: Thread Lens: the lens state, read once for the items and the answer (TH-22)
+  const lensState = threadLensState(
+    query.data,
+    query.isPlaceholderData,
+    postThreadQueryKey,
+  )
   const items = useMemo(() => {
     // HORIZON: the quiet row below a kept placeholder anchor (busy design 6.1)
-    return withQuietRow(
-      buildThread({
-        threadItems,
-        otherThreadItems,
-        serverOtherThreadItems,
-        // HORIZON: no skeletons past the wait cap (busy design 5)
-        isLoading: busy.isLoading,
-        hasSession,
-        hasOtherThreadItems,
-        otherItemsVisible,
-        // HORIZON: the tap resets further replies read under another continuation
-        showOtherItems,
-      }),
-      anchor,
-      busy.quietRow,
+    // HORIZON: Thread Lens: the anchor's own "Load more replies" row
+    return withLensAnchorRow(
+      withQuietRow(
+        buildThread({
+          threadItems,
+          otherThreadItems,
+          serverOtherThreadItems,
+          // HORIZON: no skeletons past the wait cap (busy design 5)
+          isLoading: busy.isLoading,
+          hasSession,
+          hasOtherThreadItems,
+          otherItemsVisible,
+          // HORIZON: the tap resets further replies read under another continuation
+          showOtherItems,
+        }),
+        anchor,
+        busy.quietRow,
+      ),
+      lensState,
     )
   }, [
     threadItems,
@@ -436,6 +481,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     otherItemsVisible,
     // HORIZON: the tap resets further replies read under another continuation
     showOtherItems,
+    // HORIZON: Thread Lens: the anchor's own "Load more replies" row
+    lensState,
   ])
 
   return useMemo(() => {
@@ -455,6 +502,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
         error: busy.error as typeof query.error,
         // HORIZON: items the load gate hid, for the catching-up note
         horizonHidden: busy.hidden,
+        // HORIZON: Thread Lens TH-22: the data kind and the lens notes, for the screen
+        lens: lensState,
         /*
          * Other state
          */
@@ -494,5 +543,7 @@ export function usePostThread({anchor}: {anchor?: string}) {
     // HORIZON: the thread while prism is busy
     busy.error,
     busy.hidden,
+    // HORIZON: Thread Lens: the lens state (TH-22)
+    lensState,
   ])
 }

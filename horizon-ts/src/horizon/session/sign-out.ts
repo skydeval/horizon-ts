@@ -18,6 +18,9 @@ import {
   createOAuthTransport,
   restoreOAuthSession,
 } from '#/horizon/session/oauth-transport'
+import {THREAD_LENS} from '#/horizon/switches'
+import {clearLensRefusals, clearLensWaits} from '#/horizon/thread-lens/api'
+import {clearLensRegistry} from '#/horizon/thread-lens/registry'
 
 /**
  * Signing out a password account also ends its session on the server
@@ -110,6 +113,18 @@ async function signOutPasswordAccount(account: SessionAccount) {
  * end the server session (password). Never throws.
  */
 export async function horizonSignOut(accounts: SessionAccount[]) {
+  /*
+   * Thread Lens's per-account stores (Phase 4 design 8.4, 11.5, 12.1): the
+   * gap registry, the refusal record and the 429 wait with its timer.
+   * Cleared before the first await, so a quick sign-in again as the same
+   * account never has its new session's entries wiped (v9: R7-N5).
+   */
+  if (THREAD_LENS) {
+    const dids = accounts.map(account => account.did)
+    clearLensRegistry(dids)
+    clearLensRefusals(dids)
+    clearLensWaits(dids)
+  }
   await Promise.all(
     accounts.map(async account => {
       try {

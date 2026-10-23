@@ -18,6 +18,8 @@ import {Bubbles_Stroke2_Corner2_Rounded as BubblesIcon} from '#/components/icons
 import {Tree_Stroke2_Corner0_Rounded as TreeIcon} from '#/components/icons/Tree'
 import * as Layout from '#/components/Layout'
 import {Text} from '#/components/Typography'
+// HORIZON: Thread Lens import
+import {ThreadLensSettingsGroup} from '#/horizon/thread-lens/SettingsGroup'
 import * as SettingsList from './components/SettingsList'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PreferencesThreads'>
@@ -101,6 +103,8 @@ export function ThreadPreferencesScreen({}: Props) {
               <Toggle.Platform />
             </Toggle.Item>
           </SettingsList.Group>
+          {/* HORIZON: Thread Lens TH-9: the Thread Lens group, after Tree view */}
+          <ThreadLensSettingsGroup />
         </SettingsList.Container>
       </Layout.Content>
     </Layout.Screen>

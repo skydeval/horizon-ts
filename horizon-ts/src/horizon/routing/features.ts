@@ -14,11 +14,14 @@
  * `null`). This module reads no session module and runs nothing at import.
  */
 
+import {type QueryClient} from '@tanstack/react-query'
+
 import {
   getCurrentClients,
   getCurrentDid,
 } from '#/horizon/routing/current-clients'
 import {readMembershipRecord} from '#/horizon/routing/membership-record'
+import {THREAD_LENS} from '#/horizon/switches'
 
 /**
  * Every feature family Horizon reads. prism may list others; they are kept
@@ -74,6 +77,14 @@ export const PRISM_FEATURES = [
    * while the `REFRACT` switch is on.
    */
   'refract',
+  /*
+   * Thread Lens (Phase 4 design 3.2, TL-1; prism P-1): `threadLens` whenever
+   * prism serves the lens, plus `threadLens.signedIn` when it serves every
+   * signed-in account. With any `threadLens*` value listed, the list decides
+   * who is served; read only while the `THREAD_LENS` switch is on.
+   */
+  'threadLens',
+  'threadLens.signedIn',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]
@@ -135,8 +146,35 @@ export function answerPrismFeatures(did: string, value: PrismFeatureList) {
   if (changed) held.set(did, value)
   if (changed || newlyAnswered) notify()
   if (changed && did === getCurrentDid()) {
-    void getCurrentClients()?.queryClient?.invalidateQueries()
+    invalidateForFeatures(getCurrentClients()?.queryClient)
   }
+}
+
+/** The Thread Lens query root (`thread-lens/snapshot.ts`, `LENS_ROOT`). */
+const THREAD_LENS_ROOT = 'horizon-thread-lens'
+
+/**
+ * Invalidate every query of the account's client once (4.6). With Thread
+ * Lens on, lens entries are only marked stale (Phase 4 design 11.6): each
+ * lens screen refetches when it is focused, so a list change does not send
+ * every screen in the stack to prism at once, past its burst.
+ */
+function invalidateForFeatures(
+  queryClient:
+    {invalidateQueries: QueryClient['invalidateQueries']} | undefined,
+) {
+  if (!queryClient) return
+  if (!THREAD_LENS) {
+    void queryClient.invalidateQueries()
+    return
+  }
+  void queryClient.invalidateQueries({
+    predicate: query => query.queryKey[0] !== THREAD_LENS_ROOT,
+  })
+  void queryClient.invalidateQueries({
+    queryKey: [THREAD_LENS_ROOT],
+    refetchType: 'none',
+  })
 }
 
 /**

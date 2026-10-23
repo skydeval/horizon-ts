@@ -289,11 +289,10 @@ export const REPLY_BLOCK_CHECK: boolean = true
  * group, no rows, no notice, no emitted threadgate, no composer note, no
  * gap-only screens, and the lens gap mark ignored (design 12.1).
  *
- * Off while the hooks are being built (sub-steps 4A to 4C): 4A adds the
- * client, the tree and the adapter, which nothing calls yet. 4C turns it on
- * with the hooks, as the design's `true`.
+ * On since sub-step 4C wired every hook (2026-10-23), as the design's
+ * `true`. Live checks (design 14, sub-step 4D) are skydeval's.
  */
-export const THREAD_LENS: boolean = false
+export const THREAD_LENS: boolean = true
 
 /**
  * Restored accounts (refract client design RF-1, RF-12; code under

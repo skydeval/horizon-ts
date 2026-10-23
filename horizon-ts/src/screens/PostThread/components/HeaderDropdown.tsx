@@ -8,6 +8,8 @@ import {Button, ButtonIcon} from '#/components/Button'
 import {SettingsSliderVertical_Stroke2_Corner0_Rounded as SettingsSlider} from '#/components/icons/SettingsSlider'
 import * as Menu from '#/components/Menu'
 import {useAnalytics} from '#/analytics'
+// HORIZON: Thread Lens import
+import {useThreadLensMenuItem} from '#/horizon/thread-lens/MenuItem'
 
 export function HeaderDropdown({
   sort,
@@ -20,6 +22,8 @@ export function HeaderDropdown({
 >): React.ReactNode {
   const ax = useAnalytics()
   const {_} = useLingui()
+  // HORIZON: Thread Lens TH-3: the toggle at the bottom of the menu, read here, outside the menu's portal (start)
+  const threadLensItem = useThreadLensMenuItem()
   return (
     <Menu.Root>
       <Menu.Trigger label={_(msg`Thread options`)}>
@@ -102,6 +106,8 @@ export function HeaderDropdown({
             <Menu.ItemRadio selected={sort === 'newest'} />
           </Menu.Item>
         </Menu.Group>
+        {/* HORIZON: Thread Lens TH-3: the toggle at the bottom of the menu, read here, outside the menu's portal (end) */}
+        {threadLensItem}
       </Menu.Outer>
     </Menu.Root>
   )

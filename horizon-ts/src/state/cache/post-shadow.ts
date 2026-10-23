@@ -18,6 +18,8 @@ import {findPrivateBookmarkPosts} from '#/horizon/private/api/bookmarks'
 import {findHorizonPrivatePosts} from '#/horizon/private/cache-finders'
 // HORIZON: restored posts outside stock queries carry shadows too
 import {findRestoredPosts} from '#/horizon/refract/finders'
+// HORIZON: Thread Lens import
+import {findLensPosts} from '#/horizon/thread-lens/cache-finders'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {castAsShadow, type Shadow} from './types'
@@ -229,4 +231,6 @@ function* findPostsInCache(
   }
   // HORIZON: restored posts outside stock queries carry shadows too
   yield* findRestoredPosts(queryClient, uri)
+  // HORIZON: Thread Lens TH-12: the views a lens snapshot holds carry shadows too
+  yield* findLensPosts(queryClient, uri)
 }

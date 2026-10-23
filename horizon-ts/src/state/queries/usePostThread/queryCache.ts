@@ -39,6 +39,11 @@ import {
 } from '#/state/queries/util'
 // HORIZON: a tapped restored reply or quote renders at once from the placeholder
 import {findRestoredPosts} from '#/horizon/refract/finders'
+// HORIZON: Thread Lens import
+import {
+  findLensPlaceholderCandidates,
+  writeLensThreadgate,
+} from '#/horizon/thread-lens/cache-finders'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -263,6 +268,8 @@ export function* getThreadPlaceholderCandidates(
   for (const post of findAllPostsInQueryData(queryClient, uri)) {
     yield postViewToThreadPlaceholder(post, postNumbering)
   }
+  // HORIZON: Thread Lens TH-21: a reply opened from a lens screen shows at once, from the snapshot
+  yield* findLensPlaceholderCandidates(queryClient, uri, postNumbering)
 
   /*
    * Check notifications first. If you have a post in notifications, it's
@@ -397,6 +404,9 @@ export function useUpdatePostThreadThreadgateQueryCache() {
         return thread as T[]
       }
 
+      // HORIZON: Thread Lens TH-16: on a lens snapshot, the anchor's held view takes the threadgate
+      if (writeLensThreadgate(qc, context.postThreadQueryKey, threadgate))
+        return
       qc.setQueryData<app.bsky.unspecced.getPostThreadV2.$OutputBody>(
         context.postThreadQueryKey,
         data => {

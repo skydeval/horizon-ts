@@ -75,6 +75,13 @@ import {PrivateThreadNotFound} from '#/horizon/private/thread/PrivateThreadNotFo
 import {isPrivateRead} from '#/horizon/private/uri'
 // HORIZON: Try again on a restored anchor starts a new ask first
 import {refractThreadRetry} from '#/horizon/refract/thread/anchor'
+// HORIZON: Thread Lens import
+import {
+  renderThreadLensRow,
+  threadLensKeyPart,
+  ThreadLensNotice,
+  useThreadLensScreen,
+} from '#/horizon/thread-lens/thread-screen'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -327,6 +334,8 @@ export function PostThread({uri}: {uri: string}) {
     // set flag
     shouldHandleScroll.current = true
   }, [setDeferParents, setMaxChildrenCount])
+  // HORIZON: Thread Lens TH-6: the params reset on a change of data kind, the focus and 429 refetches
+  useThreadLensScreen({prepareForParamsUpdate, thread, anchor: uri})
 
   const setSortWrapped = useCallback(
     (sort: string) => {
@@ -448,6 +457,11 @@ export function PostThread({uri}: {uri: string}) {
 
   const renderItem = useCallback(
     ({item, index}: {item: ThreadItem; index: number}) => {
+      // HORIZON: Thread Lens TH-4: gap rows, marker rows and the marked read-more row on a gap
+      const lensRow = renderThreadLensRow(item, thread)
+      if (lensRow && !(item.type === 'threadPost' && item.depth === 0)) {
+        return lensRow
+      }
       if (item.type === 'threadPost') {
         if (item.depth < 0) {
           return (
@@ -478,15 +492,29 @@ export function PostThread({uri}: {uri: string}) {
                  * If we ever add additional thread params to this screen, they
                  * will need to be added here.
                  */
-                key={item.uri + thread.state.view + thread.state.sort}
+                key={
+                  item.uri +
+                  thread.state.view +
+                  thread.state.sort +
+                  // HORIZON: Thread Lens TH-7: a change of data kind remounts this, so parents show again
+                  threadLensKeyPart(thread)
+                }
                 ref={anchorRef}
                 onLayout={() => setDeferParents(false)}
               />
-              <ThreadItemAnchor
-                item={item}
-                threadgateRecord={thread.data.threadgate?.record ?? undefined}
-                onPostSuccess={optimisticOnPostReply}
-                postSource={anchorPostSource}
+              {/* HORIZON: Thread Lens TH-5: a gap anchor in the stock anchor wrapper */}
+              {lensRow ?? (
+                <ThreadItemAnchor
+                  item={item}
+                  threadgateRecord={thread.data.threadgate?.record ?? undefined}
+                  onPostSuccess={optimisticOnPostReply}
+                  postSource={anchorPostSource}
+                />
+              )}
+              {/* HORIZON: Thread Lens TH-8: the notice under the anchor */}
+              <ThreadLensNotice
+                lens={thread.state.lens}
+                onRetry={thread.actions.refetch}
               />
             </View>
           )

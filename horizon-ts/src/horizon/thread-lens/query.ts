@@ -3,10 +3,10 @@
  * the `lens` object the hooks use, the reply mutator and the threadgate
  * writer.
  *
- * `createThreadLens` is pure: 4C's `useThreadLensRead` gives it the
- * availability (4B: `useThreadLensActive`, `useIsLensOnlyAnchor`), the
- * route's gap mark and the main entry's `runId`, read through
- * subscriptions (TL-34; `useLensRunId` here). With neither the lens active
+ * `createThreadLens` is pure: `useThreadLensRead` gives it the
+ * availability (`useThreadLensActive`, `useIsLensOnlyAnchor`), the route's
+ * gap mark and the main entry's `runId`, read through subscriptions (TL-34;
+ * `useLensRunId` here). With neither the lens active
  * nor the anchor lens-only, every member returns the stock value, so the
  * stock query runs as today.
  *
@@ -22,6 +22,7 @@ import {
   type QueryClient,
   type QueryFunctionContext,
   type QueryKey,
+  useQueryClient,
 } from '@tanstack/react-query'
 
 import {
@@ -30,6 +31,7 @@ import {
 } from '#/state/cache/post-shadow'
 import {
   LINEAR_VIEW_BELOW,
+  TREE_VIEW_BELOW,
   TREE_VIEW_BELOW_DESKTOP,
 } from '#/state/queries/usePostThread/const'
 import {createCacheMutator} from '#/state/queries/usePostThread/queryCache'
@@ -38,10 +40,17 @@ import {
   createPostThreadQueryKey,
   type PostThreadParams,
 } from '#/state/queries/usePostThread/types'
+import {IS_WEB} from '#/env'
+import {fetchStamp} from '#/horizon/private/load-gate'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {THREAD_LENS} from '#/horizon/switches'
 import {selectLensAnswer} from '#/horizon/thread-lens/adapt'
+import {
+  useIsLensOnlyAnchor,
+  useThreadLensActive,
+} from '#/horizon/thread-lens/availability'
 import {runLens} from '#/horizon/thread-lens/fetch'
+import {useLensGapMark} from '#/horizon/thread-lens/mark'
 import {type LensNode} from '#/horizon/thread-lens/nodes'
 import {fetchLensOtherReplies} from '#/horizon/thread-lens/private-part'
 import {hasLensGap} from '#/horizon/thread-lens/registry'
@@ -67,6 +76,18 @@ type StockOtherKey = ReturnType<typeof createPostThreadOtherQueryKey>
  */
 export function lensRequestDepth(view: 'tree' | 'linear'): number {
   return view === 'linear' ? LINEAR_VIEW_BELOW : TREE_VIEW_BELOW_DESKTOP
+}
+
+/**
+ * The rendered depth bound (7.4), as the thread query computes it: 10 in
+ * linear view, 6 in tree view on a web window wider than a phone, else 4.
+ */
+export function renderedBelow(
+  view: 'tree' | 'linear',
+  gtPhone: boolean,
+): number {
+  if (view === 'linear') return LINEAR_VIEW_BELOW
+  return IS_WEB && gtPhone ? TREE_VIEW_BELOW_DESKTOP : TREE_VIEW_BELOW
 }
 
 /** What decides a screen's lens keys (5.1, 7.1). */
@@ -141,10 +162,10 @@ export type ThreadLens = {
     placeholder: unknown,
   ) => ReturnType<typeof runLens>
   select: <T>(data: T) => T
-  otherReplies: (
-    fetchStock: () => Promise<OtherOutput>,
+  otherReplies: <T extends OtherOutput>(
+    fetchStock: () => Promise<T>,
     ctx?: Pick<QueryFunctionContext, 'signal'>,
-  ) => Promise<OtherOutput>
+  ) => Promise<T>
   refetchOnReconnect: false | undefined
 }
 
@@ -177,16 +198,21 @@ export function createThreadLens(
       }),
     select: data =>
       key ? selectLensAnswer(data, {sort, view, below, queueId}) : data,
-    otherReplies: async (fetchStock, ctx) => {
+    otherReplies: async <T extends OtherOutput>(
+      fetchStock: () => Promise<T>,
+      ctx?: Pick<QueryFunctionContext, 'signal'>,
+    ): Promise<T> => {
       if (!key) return fetchStock()
       const data = qc.getQueryData(key)
       const snapshot = heldSnapshotOf(data)
       if (snapshot) {
-        return fetchLensOtherReplies(snapshot, {
+        const replies = await fetchLensOtherReplies(snapshot, {
           did: key[1].did,
           sort,
           signal: ctx?.signal,
         })
+        // Stamped as stock's further replies are, for the load gate.
+        return {...replies, horizonFetchedAt: fetchStamp()} as unknown as T
       }
       // A fallback is a post anchor's stock thread, unless it became lens-only.
       const anchor = key[1].anchor
@@ -194,7 +220,7 @@ export function createThreadLens(
         !isPrivatePostUri(anchor) &&
         (key[1].marked || hasLensGap(key[1].did, anchor))
       if (fallbackOf(data) && !lensOnly) return fetchStock()
-      return {thread: []}
+      return {thread: []} as unknown as T
     },
     refetchOnReconnect: key ? false : undefined,
   }
@@ -276,26 +302,53 @@ export function withLensCacheMutator(
   }
 }
 
-/**
- * The threadgate writer in lens mode (TH-16). On a snapshot it replaces
- * the anchor's held view once by `{...view, threadgate}`, a new object, and
- * carries the old object's shadow to it (v5: R3-N3); returns `true`, so the
- * stock `setQueryData` does not run. Otherwise `false`.
+/** The threadgate writer in lens mode (TH-16), in its own light module. */
+export {writeLensThreadgate} from '#/horizon/thread-lens/threadgate'
+
+/*
+ * The pure helpers the thread query's other hooks call (TH-22, the anchor's
+ * own row), so the stock file has one Thread Lens import.
  */
-export function writeLensThreadgate(
-  qc: QueryClient,
-  key: QueryKey,
-  threadgate: app.bsky.feed.defs.ThreadgateView,
-): boolean {
-  if (!THREAD_LENS) return false
-  const snapshot = heldSnapshotOf(qc.getQueryData(key))
-  if (!snapshot) return false
-  const anchor = snapshot.nodes.get(snapshot.anchor.prismAnchor)
-  if (!anchor || anchor.kind === 'gap') return true
-  const old = anchor.view
-  const nodes = new Map(snapshot.nodes)
-  nodes.set(anchor.uri, {...anchor, view: {...old, threadgate}})
-  qc.setQueryData(key, {lens: {...snapshot, nodes}})
-  updatePostShadow(qc, old.uri, dangerousGetPostShadow(old) ?? {})
-  return true
+export {threadLensState, withLensAnchorRow} from '#/horizon/thread-lens/adapt'
+
+/**
+ * The `lens` object for the thread query (TH-1, 7.1): the availability
+ * (5.1), the route's gap mark (honoured only with the switch on, signed in
+ * and a public anchor, TL-33) and the main entry's `runId`, each read
+ * through a subscription (TL-34), composed by the pure `createThreadLens`.
+ * `did` is the session's account, which the thread query already reads.
+ */
+export function useThreadLensRead({
+  did,
+  anchor,
+  sort,
+  view,
+  below,
+}: {
+  did: string | undefined
+  anchor: string | undefined
+  sort: string | undefined
+  view: PostThreadParams['view']
+  below: number
+}): ThreadLens {
+  const qc = useQueryClient()
+  // Every read runs on every render (rules of hooks; 5.1's hook order).
+  const routeMarked = useLensGapMark()
+  const {active, reason} = useThreadLensActive(did, anchor)
+  const marked =
+    THREAD_LENS && !!did && !!anchor && !isPrivatePostUri(anchor) && routeMarked
+  const lensOnly = useIsLensOnlyAnchor(did, anchor, marked)
+  const inputs: ThreadLensInputs = {
+    did,
+    anchor,
+    sort,
+    view,
+    below,
+    active,
+    lensOnly,
+    marked,
+    ...(reason ? {inactiveReason: reason} : {}),
+  }
+  const runId = useLensRunId(qc, lensKeyFor(inputs))
+  return createThreadLens(qc, inputs, runId)
 }

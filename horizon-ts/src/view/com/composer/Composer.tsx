@@ -199,6 +199,8 @@ import {noteOwnRestoredReply} from '#/horizon/refract/own-replies'
 import {SpoilerButton} from '#/horizon/spoilers/SpoilerButton'
 // HORIZON: spoiler tags
 import {composeGraphemeLength} from '#/horizon/spoilers/write'
+// HORIZON: Thread Lens import
+import {ThreadLensReplyNote} from '#/horizon/thread-lens/ReplyNote'
 // HORIZON: an upload refused for a rate limit or load reads as such
 import {uploadErrorMessage} from '#/horizon/uploads/messages'
 import {app, chat} from '#/lexicons'
@@ -1577,6 +1579,8 @@ export const ComposePost = ({
             onContentSizeChange={onScrollViewContentSizeChange}
             onLayout={onScrollViewLayout}>
             {replyTo ? <ComposerReplyTo replyTo={replyTo} /> : undefined}
+            {/* HORIZON: Thread Lens TH-10: the note under a reply to someone below a block of the reader */}
+            <ThreadLensReplyNote replyTo={replyTo} />
             {thread.posts.map((post, index) => (
               <Fragment key={post.id + (composerState.draftId ?? '')}>
                 <ComposerPost

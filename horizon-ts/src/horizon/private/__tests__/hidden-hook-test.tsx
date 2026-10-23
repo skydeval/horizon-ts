@@ -11,6 +11,20 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 jest.unmock('multiformats/cid')
 jest.unmock('multiformats/hashes/hasher')
 
+/*
+ * Thread Lens off: these tests are the stock and private thread's hidden
+ * replies; a member's public thread with the lens on is the lens suites'
+ * (`thread-lens/__tests__/thread-hook-test.tsx`). The lens modules still
+ * load, so the post shadow is stubbed as `queryCache` is below.
+ */
+jest.mock('#/horizon/switches', () => ({
+  ...jest.requireActual<object>('#/horizon/switches'),
+  THREAD_LENS: false,
+}))
+jest.mock('#/state/cache/post-shadow', () => ({
+  dangerousGetPostShadow: () => undefined,
+  updatePostShadow: () => {},
+}))
 jest.mock('#/horizon/routing/membership', () => ({
   getMembership: () => 'member',
   useMembership: () => 'member',
@@ -465,16 +479,14 @@ describe('the close (4.2, HR5-L1; tests 22, 23)', () => {
     const {result} = await openRow()
     const other = otherQuery()
     const data = other.state.data as {thread: {uri: string}[]}
-    const thread = queryClient
-      .getQueryCache()
-      .find({
-        queryKey: createPostThreadQueryKey({
-          anchor: ANCHOR,
-          sort: 'oldest',
-          view: 'tree',
-        }),
-        exact: true,
-      })!
+    const thread = queryClient.getQueryCache().find({
+      queryKey: createPostThreadQueryKey({
+        anchor: ANCHOR,
+        sort: 'oldest',
+        view: 'tree',
+      }),
+      exact: true,
+    })!
     const inline = (thread.state.data as {thread: {uri: string}[]}).thread.find(
       item => item.uri === X.uri,
     )
