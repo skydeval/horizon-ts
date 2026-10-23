@@ -38,6 +38,8 @@ import {SubtleHover} from '#/components/SubtleHover'
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
@@ -78,7 +80,11 @@ export function Post({
     [record],
   )
   const moderation = useMemo(
-    () => (moderationOpts ? moderatePost(post, moderationOpts) : undefined),
+    () =>
+      moderationOpts
+        ? // HORIZON: C-8, a restored view's community labeler for members
+          moderatePost(post, restoredModerationOpts(moderationOpts, post))
+        : undefined,
     [moderationOpts, post],
   )
   if (postShadowed === POST_TOMBSTONE) {

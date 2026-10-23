@@ -45,6 +45,8 @@ import {Text} from '#/components/Typography'
 import {IS_WEB_TOUCH_DEVICE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
 import {LiveStatus} from '#/features/liveNow/components/LiveStatusDialog'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
@@ -436,7 +438,9 @@ function Inner({
   const {_, i18n} = useLingui()
   const {currentAccount} = useSession()
   const moderation = useMemo(
-    () => moderateProfile(profile, moderationOpts),
+    // HORIZON: C-8, a restored view's community labeler for members
+    () =>
+      moderateProfile(profile, restoredModerationOpts(moderationOpts, profile)),
     [profile, moderationOpts],
   )
   const [descriptionRT] = useRichText(profile.description ?? '')

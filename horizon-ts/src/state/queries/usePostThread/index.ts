@@ -62,6 +62,11 @@ import {
 import {isPrivateRead} from '#/horizon/private/uri'
 // HORIZON: an anchor Bluesky withholds may be a restored post prism serves
 import {withRestoredAnchor} from '#/horizon/refract/thread/anchor'
+// HORIZON: RF-B5b, the replies Bluesky drops merged in on read, skipped while the lens is involved
+import {
+  refractMergeAllowed,
+  useRestoredThreadMerge,
+} from '#/horizon/refract/thread/merge'
 // HORIZON: Thread Lens import
 import {
   threadLensState,
@@ -263,8 +268,28 @@ export function usePostThread({anchor}: {anchor?: string}) {
 
   // HORIZON: the thread while prism is busy: gated items, the wait cap, kept errors
   const busy = useThreadBusy({anchor, queryKey: postThreadQueryKey, query})
+  // HORIZON: Thread Lens: the lens state, read once for the items and the answer (TH-22)
+  const lensState = threadLensState(
+    query.data,
+    query.isPlaceholderData,
+    postThreadQueryKey,
+  )
   // HORIZON: the thread while prism is busy: gated items
-  const thread = busy.thread
+  // HORIZON: RF-B5b, restored replies, own replies and hidden parents merged in on read (start)
+  const thread = useRestoredThreadMerge({
+    anchor,
+    thread: busy.thread,
+    allowed: refractMergeAllowed({
+      kind: lensState.kind,
+      lensKey: lens.key !== undefined,
+      lensOnly: lens.lensOnly,
+    }),
+    isPlaceholderData: query.isPlaceholderData,
+    below,
+    branchingFactor: view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+    sort,
+  })
+  // HORIZON: RF-B5b, restored replies, own replies and hidden parents merged in on read (end)
   const threadgate = useMemo(
     () => query.data?.threadgate,
     [query.data?.threadgate],
@@ -440,12 +465,6 @@ export function usePostThread({anchor}: {anchor?: string}) {
    * along with any other thread items required for rendering e.g. "Show more
    * replies" or the reply composer.
    */
-  // HORIZON: Thread Lens: the lens state, read once for the items and the answer (TH-22)
-  const lensState = threadLensState(
-    query.data,
-    query.isPlaceholderData,
-    postThreadQueryKey,
-  )
   const items = useMemo(() => {
     // HORIZON: the quiet row below a kept placeholder anchor (busy design 6.1)
     // HORIZON: Thread Lens: the anchor's own "Load more replies" row

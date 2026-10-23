@@ -39,6 +39,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_IOS, IS_NATIVE} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
@@ -70,7 +72,9 @@ let ProfileHeaderStandard = ({
   const {currentAccount} = useSession()
   const {_} = useLingui()
   const moderation = useMemo(
-    () => moderateProfile(profile, moderationOpts),
+    // HORIZON: C-8, a restored view's community labeler for members
+    () =>
+      moderateProfile(profile, restoredModerationOpts(moderationOpts, profile)),
     [profile, moderationOpts],
   )
   const [, queueUnblock] = useProfileBlockMutationQueue(profile)

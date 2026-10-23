@@ -155,6 +155,11 @@ export function useLensRunId(
 export type ThreadLens = {
   /** The main lens key, when the lens is involved. */
   key: LensQueryKey | undefined
+  /**
+   * 5.1: the anchor is lens-only (registry or mark), read on every render.
+   * Refract's RF-B5b skips a fallback whose anchor has become lens-only.
+   */
+  lensOnly: boolean
   queryKey: (stock: StockKey) => StockKey
   otherQueryKey: (stock: StockOtherKey) => StockOtherKey
   run: (
@@ -180,6 +185,7 @@ export function createThreadLens(
   const queueId = key ? hashKey(key) : undefined
   return {
     key,
+    lensOnly: inputs.lensOnly,
     queryKey: stock => (key ? (key as unknown as StockKey) : stock),
     otherQueryKey: stock =>
       key ? (lensOtherKey(key, runId) as unknown as StockOtherKey) : stock,

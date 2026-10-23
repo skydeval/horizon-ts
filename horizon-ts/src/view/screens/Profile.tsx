@@ -54,6 +54,8 @@ import {ProfileStarterPacks} from '#/components/StarterPack/ProfileStarterPacks'
 import {PrivateProfileSection} from '#/horizon/private/profile/PrivateProfileSection'
 // HORIZON: the Private tab
 import {useShowPrivateTab} from '#/horizon/private/profile/useShowPrivateTab'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a restored account's profile: its error, and the tabs prism doesn't serve
 import {
   isRestoredProfile,
@@ -245,7 +247,9 @@ function ProfileScreenLoaded({
   const [descriptionRT, isResolvingDescriptionRT] = useRichText(description)
   const showPlaceholder = isPlaceholderProfile || isResolvingDescriptionRT
   const moderation = useMemo(
-    () => moderateProfile(profile, moderationOpts),
+    // HORIZON: C-8, a restored view's community labeler for members
+    () =>
+      moderateProfile(profile, restoredModerationOpts(moderationOpts, profile)),
     [profile, moderationOpts],
   )
 

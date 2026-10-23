@@ -18,8 +18,8 @@
  *   stock's by time; for ranked sorts they go after stock's siblings, by like
  *   count and then time.
  *
- * Wiring this into the thread hook waits on Thread Lens 4C (same hook); the
- * function and its tests stand alone.
+ * The thread hook calls it through `useRestoredThreadMerge`
+ * (`thread/merge.ts`).
  */
 
 import {postItem} from '#/horizon/private/thread/fetch'

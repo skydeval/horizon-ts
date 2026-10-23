@@ -21,6 +21,8 @@ import {atoms as a, useTheme} from '#/alf'
 import {Header} from '#/components/Layout'
 import * as ProfileCard from '#/components/ProfileCard'
 import {IS_NATIVE} from '#/env'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 import {type app} from '#/lexicons'
 import {
   HeaderLabelerButtons,
@@ -111,7 +113,14 @@ const MinimalHeader = memo(function MinimalHeader({
   const profile = useProfileShadow(profileUnshadowed)
   const moderationOpts = useModerationOpts()
   const moderation = useMemo(
-    () => (moderationOpts ? moderateProfile(profile, moderationOpts) : null),
+    () =>
+      moderationOpts
+        ? // HORIZON: C-8, a restored view's community labeler for members
+          moderateProfile(
+            profile,
+            restoredModerationOpts(moderationOpts, profile),
+          )
+        : null,
     [moderationOpts, profile],
   )
   const [visible, setVisible] = useState(false)

@@ -28,6 +28,8 @@ jest.mock('#/state/cache/post-shadow', () => ({
 jest.mock('#/horizon/routing/membership', () => ({
   getMembership: () => 'member',
   useMembership: () => 'member',
+  // The thread hook's Refract merge (RF-B5b) subscribes to the gate.
+  subscribeMembership: () => () => {},
   reportPrismError: () => {},
   isPrivateMember: (did?: string) => !!did,
 }))

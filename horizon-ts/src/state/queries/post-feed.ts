@@ -55,6 +55,8 @@ import {horizonFeedApi} from '#/horizon/private/feed/legacy'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 // HORIZON: a restored account's tabs read prism's pages when stock fails
 import {refractAuthorFeedApi} from '#/horizon/refract/author-feed'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {useFeedTuners} from '../preferences/feed-tuners'
@@ -340,7 +342,11 @@ export function usePostFeedQuery(
                 .tune(page.feed)
                 .map(slice => {
                   const moderations = slice.items.map(item =>
-                    moderatePost(item.post, moderationOpts!),
+                    // HORIZON: C-8, a restored view's community labeler for members
+                    moderatePost(
+                      item.post,
+                      restoredModerationOpts(moderationOpts!, item.post),
+                    ),
                   )
 
                   // apply moderation filter

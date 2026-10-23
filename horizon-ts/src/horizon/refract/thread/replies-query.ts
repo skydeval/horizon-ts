@@ -13,8 +13,8 @@
  * - `fillHiddenParents(uris)`: the parent and root URIs stock shows as
  *   `threadItemNotFound`, in one `fill` (their authors in `dids`).
  *
- * Not yet called by the thread hook: the merge waits on Thread Lens 4C,
- * which owns the same hook (13, RF-B5b).
+ * The thread hook reads both through `useRestoredThreadMerge`
+ * (`thread/merge.ts`), which applies the "lens active" skip.
  */
 
 import {useQuery} from '@tanstack/react-query'

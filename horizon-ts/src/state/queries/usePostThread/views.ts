@@ -11,6 +11,8 @@ import {
 } from '#/state/queries/usePostThread/types'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 import {type app} from '#/lexicons'
 
 export function threadPostNoUnauthenticated({
@@ -70,7 +72,11 @@ export function threadPost({
   moderationOpts: ModerationOpts
   threadgateHiddenReplies: Set<string>
 }): Extract<ThreadItem, {type: 'threadPost'}> {
-  const moderation = moderatePost(value.post, moderationOpts)
+  // HORIZON: C-8, a restored view's community labeler for members
+  const moderation = moderatePost(
+    value.post,
+    restoredModerationOpts(moderationOpts, value.post),
+  )
   const modui = moderation.ui('contentList')
   const blurred = modui.blur || modui.filter
   const muted = (modui.blurs[0] || modui.filters[0])?.type === 'muted'

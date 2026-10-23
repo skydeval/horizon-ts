@@ -311,12 +311,20 @@ export const THREAD_LENS: boolean = true
 export const REFRACT: boolean = true
 
 /**
- * C-8, pending skydeval; default decided overnight, recommended (D1). `true`
- * moderates a restored view with its community's labeler added for that view
- * only (built in RF-B9, not yet). `false`: stock moderation, which honours the
- * community's labels only for readers who subscribe to that labeler.
+ * C-8, decided by skydeval on 2026-10-23: "show community labels to everyone
+ * who is a horizon member". `true` means on for members: for a Horizon member
+ * (`getMembership(did) === 'member'`), a restored view whose marker carries
+ * `labeler` is moderated with that labeler added for that view only, whether
+ * or not the reader subscribes, with its definitions from
+ * `app.bsky.labeler.getServices` cached for an hour (`refract/labeler.ts`,
+ * RF-B9). A non-member keeps stock moderation, which honours the community's
+ * labels only for readers who subscribe to that labeler. `false` is stock
+ * moderation for everyone.
+ *
+ * For later: when Horizon's own labeler is created, its labels default to
+ * warn, never hide.
  */
-export const REFRACT_COMMUNITY_LABELER: boolean = false
+export const REFRACT_COMMUNITY_LABELER: boolean = true
 
 /**
  * Development builds only, off by default (refract client design 11.3): the

@@ -45,6 +45,8 @@ import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {PrivateQuote} from '#/horizon/private/render/PrivateQuote'
 // HORIZON: private post links use the ppost segment; quoted private posts are read through prism
 import {isPrivateRead, postSegment} from '#/horizon/private/uri'
+// HORIZON: C-8, a restored view's community labeler for members
+import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a quote Bluesky withholds may be a restored post prism serves
 import {
   RestoredQuoteSlot,
@@ -403,7 +405,10 @@ export function QuoteEmbed({
     [embed],
   )
   const moderation = useMemo(() => {
-    return moderationOpts ? moderatePost(quote, moderationOpts) : undefined
+    return moderationOpts
+      ? // HORIZON: C-8, a restored view's community labeler for members
+        moderatePost(quote, restoredModerationOpts(moderationOpts, quote))
+      : undefined
   }, [quote, moderationOpts])
 
   const t = useTheme()
