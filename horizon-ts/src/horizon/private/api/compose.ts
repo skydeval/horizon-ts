@@ -55,6 +55,7 @@ import {
 } from '#/horizon/private/api/encoded-record'
 import {getPrivatePosts} from '#/horizon/private/api/reads'
 import {
+  placementFields,
   placePrivateReply,
   type StrongRef,
 } from '#/horizon/private/api/reply-anchor'
@@ -66,8 +67,10 @@ import {
   parentAuthorOf,
   PrivateReplyBlockedError,
   readAppviewBlocks,
-  readPrivateBlocks,
+  readAppviewRelationships,
+  REPLY_BLOCK_CHECK,
   type ReplyBlockCheck,
+  type ReplyBlockPair,
 } from '#/horizon/private/api/reply-block'
 import {
   PrivatePostInvalidError,
@@ -85,6 +88,7 @@ import {
   loadEncoder,
   PrivateEncodeFailedError,
 } from '#/horizon/private/encoder'
+import {findCachedPrivatePostView} from '#/horizon/private/known'
 import {
   resetPendingLoop,
   startPendingLoop,
@@ -144,9 +148,10 @@ export type Plan = {
   /** The parent's view, when the parent is a private post. */
   parentView: app.bsky.feed.defs.PostView | undefined
   /**
-   * The reply block check this plan passed, taken again before the first
-   * write when it is no longer fresh (`recheckReplyBlock`). `undefined`
-   * when there was no pair to check.
+   * The reply block check this plan passed: its pairs (the parent's author,
+   * then the thread's owner, each when it is neither the member nor already
+   * a pair), taken again before the first write when it is no longer fresh
+   * (`recheckReplyBlock`). `undefined` when there was no pair to check.
    */
   blockCheck?: ReplyBlockCheck
 }
@@ -176,16 +181,25 @@ function settledValue<T>(result: PromiseSettledResult<T>): T {
  * On the encode route the procedure is not used; the placement read is its
  * write-time check (PA-34).
  *
- * A reply to another author's post is also block-checked here (`reply-block.ts`),
- * the one plan every first post of a private reply goes through on both
- * routes, before anything is uploaded or written. A plan comes out only when
- * the check is `clear`; otherwise this throws `PrivateReplyBlockedError`
- * (which wins over every other outcome, a placement miss included) or, when
- * the check could not be made and nothing else failed,
- * `PrivateReplyCheckError`. The AppView read starts with the placement
- * reads, so it adds no round trip; the private-block source is decided once
- * placement settles. `skipBlockCheck` is for a Finish posting, whose posts
- * all reply to the member's own post 1.
+ * A reply is also block-checked here (`reply-block.ts`), the one plan every
+ * first post of a private reply goes through on both routes, before anything
+ * is uploaded or written. The check's pairs are the member and the parent's
+ * author, when that is not the member, and the member and the thread's owner
+ * (the anchor's author), when that is neither (model (c)). A plan comes out
+ * only when the check is `clear`; otherwise this throws
+ * `PrivateReplyBlockedError` or, when the check could not be made and
+ * nothing else failed, `PrivateReplyCheckError`.
+ *
+ * The AppView read starts with the placement reads, so it adds no round
+ * trip. It asks about the parent's author and a guess at the owner, read
+ * synchronously from the cached parent record (`guessThreadOwner`). The
+ * parent's author being blocked throws at once, whatever placement did (R3).
+ * Placement failing with the guess blocked throws `PrivateReplyBlockedError`,
+ * else the placement's error (R4). Once placement names the owner, the
+ * guess's answer is the owner's when they match; otherwise one more AppView
+ * call asks about the owner, and a guess that is not the owner is never
+ * judged. `skipBlockCheck` is for a Finish posting, whose posts all reply to
+ * the member's own post 1.
  */
 export async function planFirstPost(
   queryClient: QueryClient,
@@ -196,46 +210,73 @@ export async function planFirstPost(
 ): Promise<Plan> {
   const replyTo = compose.replyTo
   const checkedAt = Date.now()
+  const checking = REPLY_BLOCK_CHECK && !compose.skipBlockCheck && !!replyTo
   const authorDid =
-    !compose.skipBlockCheck && needsReplyBlockCheck(clients.did, replyTo)
-      ? parentAuthorOf(replyTo as string)
+    checking && needsReplyBlockCheck(clients.did, replyTo)
+      ? parentAuthorOf(replyTo)
       : undefined
-  const blockClients = {
-    did: clients.did,
-    pdsClient: clients.pdsClient,
-    appviewClient: compose.appviewClient,
-  }
-  // No pair (no reply, the member's own parent, or the switch off): clear.
-  const appviewPart: Promise<BlockVerdict> = authorDid
-    ? readAppviewBlocks(compose.appviewClient, clients.did, authorDid)
-    : Promise.resolve('clear')
+  const privateParent = !!replyTo && isPrivatePostUri(replyTo)
+  // Read before the first await: the cache may change once placement runs.
+  let guess =
+    checking && privateParent
+      ? guessThreadOwner(queryClient, replyTo)
+      : undefined
+  if (guess === clients.did || guess === authorDid) guess = undefined
+  const asked = [authorDid, guess].filter(
+    (did): did is string => did !== undefined,
+  )
+  // Nothing asked (no pair yet): an empty map, no call.
+  const appviewPart = readAppviewRelationships(
+    compose.appviewClient,
+    clients.did,
+    asked,
+  )
 
-  if (replyTo && isPrivatePostUri(replyTo)) {
+  if (replyTo && privateParent) {
     const [placed, appview] = await Promise.allSettled([
       placePrivateReply(clients, replyTo),
       appviewPart,
     ])
-    const appviewVerdict =
-      appview.status === 'fulfilled' ? appview.value : 'unknown'
-    if (appviewVerdict === 'blocked') throw new PrivateReplyBlockedError()
-    const place = settledValue(placed)
-    let blockCheck: ReplyBlockCheck | undefined
-    if (authorDid) {
-      /*
-       * prism's serve of the parent is the private-block check (its read
-       * rule relates the pair); without one, the two listings are.
-       */
-      const privateBlocks = place.parentServedByPrism ? 'prism' : 'listings'
-      const verdict =
-        privateBlocks === 'prism'
-          ? appviewVerdict
-          : combineVerdicts([
-              appviewVerdict,
-              await readPrivateBlocks(blockClients, authorDid),
-            ])
-      assertClear(verdict)
-      blockCheck = {authorDid, privateBlocks, checkedAt}
+    const relations: Map<string, BlockVerdict> =
+      appview.status === 'fulfilled' ? appview.value : new Map()
+    const verdictOf = (did: string): BlockVerdict =>
+      relations.get(did) ?? 'unknown'
+    // R3: only the parent's author may refuse before placement is read.
+    if (authorDid && verdictOf(authorDid) === 'blocked') {
+      throw new PrivateReplyBlockedError()
     }
+    if (placed.status === 'rejected') {
+      /*
+       * R4: the guess came from a record of the parent, so a block with it
+       * wins over any placement error.
+       */
+      if (guess && verdictOf(guess) === 'blocked') {
+        throw new PrivateReplyBlockedError()
+      }
+      throw placed.reason
+    }
+    const place = placed.value
+    const owner = place.anchor.authorDid
+    const ownerDid =
+      checking && owner !== clients.did && owner !== authorDid
+        ? owner
+        : undefined
+    const pairs: ReplyBlockPair[] = []
+    const parts: Promise<BlockVerdict>[] = []
+    // An own parent in another author's thread has no parent's author pair.
+    if (authorDid) {
+      pairs.push({did: authorDid})
+      parts.push(Promise.resolve(verdictOf(authorDid)))
+    }
+    if (ownerDid) {
+      pairs.push({did: ownerDid})
+      parts.push(
+        ownerDid === guess
+          ? Promise.resolve(verdictOf(guess))
+          : readAppviewBlocks(compose.appviewClient, clients.did, ownerDid),
+      )
+    }
+    assertClear(combineVerdicts(await Promise.all(parts)))
     return {
       audienceUri: place.anchor.audienceUri,
       procedure:
@@ -244,17 +285,13 @@ export async function planFirstPost(
           : kryphocron.participatePrivate,
       reply: place.reply,
       parentView: place.parentView,
-      blockCheck,
+      blockCheck: pairs.length > 0 ? {pairs, checkedAt} : undefined,
     }
   }
 
-  // A public parent is never read through prism: the listings always run.
   const checkPromise: Promise<BlockVerdict> = authorDid
-    ? Promise.all([
-        appviewPart,
-        readPrivateBlocks(blockClients, authorDid),
-      ]).then(combineVerdicts)
-    : appviewPart
+    ? appviewPart.then(relations => relations.get(authorDid) ?? 'unknown')
+    : Promise.resolve('clear')
   /*
    * A standing audience the reply needs is created only once the check is
    * clear: a blocked reply writes nothing, not even its audience.
@@ -309,10 +346,41 @@ export async function planFirstPost(
         }
       : undefined,
     parentView: undefined,
+    /*
+     * No guess and no owner pair: the reply is itself a branch root, owned
+     * by the member.
+     */
     blockCheck: authorDid
-      ? {authorDid, privateBlocks: 'listings', checkedAt}
+      ? {pairs: [{did: authorDid}], checkedAt}
       : undefined,
   }
+}
+
+/**
+ * A guess at the thread's owner, read synchronously from the cached record
+ * of the parent (`findCachedPrivatePostView`: the member's own pending post,
+ * else a cached view, never one tagged `horizonFromCache`): the host of its
+ * `reply.root` when that is a private post. `undefined` for a top-level
+ * parent (its author is the owner), a public root (a branch, whose owner is
+ * the branch root's author), or nothing cached. A failed lookup is no guess.
+ */
+export function guessThreadOwner(
+  queryClient: QueryClient,
+  replyTo: string,
+): string | undefined {
+  let view: app.bsky.feed.defs.PostView | undefined
+  try {
+    view = findCachedPrivatePostView(queryClient, replyTo)
+  } catch (error) {
+    logger.warn('reply block check: owner guess lookup failed', {
+      safeMessage: error,
+    })
+    return undefined
+  }
+  const root = placementFields(view?.record).root
+  return root && isPrivatePostUri(root.uri)
+    ? parentAuthorOf(root.uri)
+    : undefined
 }
 
 export type RecordState = 'present' | 'absent' | 'unknown'

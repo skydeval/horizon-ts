@@ -59,6 +59,7 @@ import {
 import {
   deleteGates,
   gatesForNewPost,
+  type GateWrite,
   PrivateGateWriteError,
   writeGatesForNewPost,
 } from '#/horizon/private/api/gates'
@@ -67,7 +68,13 @@ import {
   PrivateParentUnavailableError,
   PrivateReplyRefusedError,
 } from '#/horizon/private/api/reply-anchor'
-import {recheckReplyBlock} from '#/horizon/private/api/reply-block'
+import {
+  PrivateReplyBlockedError,
+  PrivateReplyCheckError,
+  recheckReplyBlock,
+  REPLY_BLOCK_TIMING,
+  type ReplyBlockCheck,
+} from '#/horizon/private/api/reply-block'
 import {
   requestRecordCaughtUp,
   requestRecordQuietly,
@@ -171,21 +178,17 @@ async function rollBack(
 
 /**
  * Write the compose's reply and quote limits before its posts (4.5 step 0,
- * after the media uploads: D2-151).
+ * after the media uploads: D2-151). `writes` is the compose's
+ * `gatesForNewPost`, taken once by the caller, which needs to know whether
+ * any gate is written.
  * A failure has written no post; the gates already created are deleted, and
  * any that cannot be are logged by URI.
  */
 async function writeComposeGates(
   opts: PostOpts,
   did: string,
-  postUris: string[],
+  writes: GateWrite[],
 ): Promise<string[]> {
-  const writes = gatesForNewPost({
-    threadgate: opts.thread.threadgate,
-    postgate: opts.thread.postgate,
-    postUris,
-    isReply: !!opts.replyTo,
-  })
   if (writes.length === 0) return []
   opts.onStateChange?.(t`Saving reply and quote settings...`)
   try {
@@ -296,10 +299,8 @@ async function postThroughLocus(
    * (PR2-L1): a refusal leaves the composer open with its text, nothing
    * written. A fresh verdict reads nothing, so a text reply waits no longer.
    */
-  await recheckReplyBlock(
-    {did, pdsClient: opts.pdsClient, appviewClient: opts.appviewClient},
-    plan.blockCheck,
-  )
+  const blockClients = {did, appviewClient: opts.appviewClient}
+  const firstCheck = await recheckReplyBlock(blockClients, plan.blockCheck)
 
   /*
    * The rkeys are chosen client-side, so the whole compose's URIs are known
@@ -327,7 +328,59 @@ async function postThroughLocus(
     composeSpoilers,
   })
 
-  const gateUris = await writeComposeGates(opts, did, postUris)
+  const gateWrites = gatesForNewPost({
+    threadgate: thread.threadgate,
+    postgate: thread.postgate,
+    postUris,
+    isReply: !!opts.replyTo,
+  })
+  /*
+   * The block check once more before the first post write (RB-13, PR6-L1,
+   * PR7-L1). A forced read starts beside the gate writes only when the
+   * verdict turns older than `prePostFreshMs` while they are in flight (at
+   * once when it already is), so a fast reply adds no round trip. Its
+   * refusal is taken inside the `try` below,
+   * whose `catch` deletes the gates.
+   */
+  const gatesDone = writeComposeGates(opts, did, gateWrites)
+  const forcedRead: {
+    result?: Promise<PromiseSettledResult<ReplyBlockCheck | undefined>>
+  } = {}
+  let forcedTimer: ReturnType<typeof setTimeout> | undefined
+  if (gateWrites.length > 0 && firstCheck) {
+    const startForced = () => {
+      // Settled at once, so a refusal is never an unhandled rejection.
+      forcedRead.result = recheckReplyBlock(blockClients, firstCheck, {
+        force: true,
+      }).then(
+        value => ({status: 'fulfilled' as const, value}),
+        (reason: unknown) => ({status: 'rejected' as const, reason}),
+      )
+    }
+    const delay =
+      firstCheck.checkedAt + REPLY_BLOCK_TIMING.prePostFreshMs - Date.now()
+    if (delay <= 0) startForced()
+    else forcedTimer = setTimeout(startForced, delay)
+  }
+  const [gatesResult] = await Promise.allSettled([gatesDone])
+  // The gates finished first: no forced read.
+  clearTimeout(forcedTimer)
+  const forcedResult = forcedRead.result ? await forcedRead.result : undefined
+  if (gatesResult.status === 'rejected') {
+    /*
+     * Nothing to delete: the gate write's own failure path removed what it
+     * created. A block refusal wins (PR7-N5); a check that could not be made
+     * does not replace the gates' own error.
+     */
+    if (
+      forcedResult?.status === 'rejected' &&
+      forcedResult.reason instanceof PrivateReplyBlockedError
+    ) {
+      throw forcedResult.reason
+    }
+    throw gatesResult.reason
+  }
+  const gateUris = gatesResult.value
 
   const uris: string[] = []
   /** Posts known or possibly written, for rollback. */
@@ -340,6 +393,16 @@ async function postThroughLocus(
   let lastCaughtUp: Promise<boolean> | undefined
 
   try {
+    if (forcedResult?.status === 'rejected') throw forcedResult.reason
+    /*
+     * Measured from the forced read's start when one ran (PR8-L1): the gate
+     * writes have no deadline, so a slow gate can outlast even that verdict.
+     */
+    await recheckReplyBlock(
+      blockClients,
+      forcedResult ? forcedResult.value : firstCheck,
+      {freshMs: REPLY_BLOCK_TIMING.prePostFreshMs},
+    )
     for (const [index, draft] of thread.posts.entries()) {
       const rkey = rkeys[index]
       const uri = postUris[index]
@@ -439,6 +502,13 @@ async function postThroughLocus(
       logger.error('private thread could not be fully removed', {
         uris: remaining,
       })
+      // A refusal comes before any post is written: only gates remain.
+      if (
+        error instanceof PrivateReplyBlockedError ||
+        error instanceof PrivateReplyCheckError
+      ) {
+        throw error
+      }
       throw new PrivateThreadPartlyPostedError(remaining)
     }
     if (isNetworkError(error)) {

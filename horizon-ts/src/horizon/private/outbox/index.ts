@@ -95,6 +95,7 @@ import {
   PrivateReplyBlockedError,
   PrivateReplyCheckError,
   recheckReplyBlock,
+  REPLY_BLOCK_TIMING,
 } from '#/horizon/private/api/reply-block'
 import {
   requestRecordCaughtUp,
@@ -1684,6 +1685,7 @@ async function runCompose(entry: Entry) {
       if (recheck.status === 'rejected') throw recheck.reason
       if (encodedResult.status === 'rejected') throw encodedResult.reason
       const encoded = encodedResult.value
+      const lastCheck = recheck.value
 
       // 4.2 step 7: the gates, before any post; nothing is deleted on failure.
       clients = requireClients(did)
@@ -1717,6 +1719,17 @@ async function runCompose(entry: Entry) {
           new Set(present.map(post => new AtUri(post.uri).rkey)),
         )
       }
+
+      /*
+       * The block check once more before the first post write (RB-13), when
+       * the encode and the gate writes made the last verdict older than
+       * `prePostFreshMs`. A refusal here is classified at the top of the
+       * `catch`, never as a write in doubt: the gate writes were answered.
+       */
+      clients = requireClients(did)
+      await recheckReplyBlock(clients, lastCheck, {
+        freshMs: REPLY_BLOCK_TIMING.prePostFreshMs,
+      })
 
       // 4.2 step 8: each post, in order, with the previous post's CID.
       let reply = plan.reply
@@ -1791,6 +1804,13 @@ async function runCompose(entry: Entry) {
       const current = getCurrentClients()
       if (error instanceof OutboxStoppedError || current?.did !== did) {
         return {kind: 'stop'}
+      }
+      // The block check's refusals are never write outcomes (PR4-L4).
+      if (
+        error instanceof PrivateReplyBlockedError ||
+        error instanceof PrivateReplyCheckError
+      ) {
+        return {kind: 'failed', failure: failureOf(error, entry)}
       }
       if (error instanceof OutboxReadError) return {kind: 'undecided'}
       if (lastCall && current.pdsClient !== lastCall.client) {

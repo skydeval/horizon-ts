@@ -89,12 +89,15 @@ export function fakeClient(
 
 /**
  * An AppView's `getRelationships` answer for `call`: one relationship per
- * DID asked, with `fields` (block fields, say) on each. `undefined` for any
- * other call, so a fake AppView can answer the rest itself.
+ * DID asked, with `fields` (block fields, say) on each, or, as a function,
+ * the fields for each DID. `undefined` for any other call, so a fake AppView
+ * can answer the rest itself.
  */
 export function relationshipsReply(
   call: Call,
-  fields: Record<string, unknown> = {},
+  fields:
+    | Record<string, unknown>
+    | ((did: string) => Record<string, unknown>) = {},
 ): Reply | undefined {
   if (call.nsid !== 'app.bsky.graph.getRelationships') return undefined
   return {
@@ -104,7 +107,7 @@ export function relationshipsReply(
       relationships: call.params.getAll('others').map(did => ({
         $type: 'app.bsky.graph.defs#relationship',
         did,
-        ...fields,
+        ...(typeof fields === 'function' ? fields(did) : fields),
       })),
     },
   }

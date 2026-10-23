@@ -1,22 +1,19 @@
 /*
  * The reply block check (private reply design 2; skydeval, 2026-10-23): a
- * private reply is never written when the member and the author of the post
- * being replied to have a block either way. Only the immediate parent's
- * author counts, never the thread root or anyone further up. A reply to the
- * member's own post has no pair and is not checked.
+ * private reply is never written when the member and a pair author have a
+ * block either way. The pairs are the immediate parent's author and the
+ * thread's owner (the anchor's author: the original poster, or a branch
+ * root's author), model (c): the original poster controls their own thread.
+ * A block with anyone else further up is soft and is not checked. A reply
+ * with no pair (the member's own parent in the member's own thread) is not
+ * checked.
  *
  * The verdict is `clear`, `blocked` or `unknown`, and only `clear` lets a
- * plan out (`planFirstPost`). It covers:
- *
- * - **public and list blocks**, from one `app.bsky.graph.getRelationships`
- *   on the member's chosen public AppView, sent with the member's session so
- *   `blockedBy` and the list fields are filled in;
- * - **private blocks** (`tools.kryphocron.graph.block`): when prism served
- *   the parent in this run, prism's read rule already related the pair
- *   (`prism:private_tier/schema.rs:549`), so the plan reads nothing more;
- *   otherwise the two public listings of that collection, the member's for
- *   the author and the author's for the member. The re-check after uploads
- *   reads the listings either way (RB-2).
+ * plan out (`planFirstPost`). It covers public and list blocks, from one
+ * `app.bsky.graph.getRelationships` for every pair on the member's chosen
+ * public AppView, sent with the member's session so `blockedBy` and the list
+ * fields are filled in. Kryphocron blocks (`tools.kryphocron.graph.block`)
+ * are halted (skydeval, 2026-10-23), so no private block is read.
  *
  * prism's `blocked` does not read list blocks, so prism's serve alone lets a
  * list-blocked reply through; this check closes that without depending on
@@ -34,17 +31,11 @@ import {type AtIdentifierString, AtUri, type DidString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
 
 import {logger} from '#/logger'
-import {gatePdsClient} from '#/horizon/private/api/gates'
 import {REPLY_BLOCK_CHECK} from '#/horizon/switches'
-import {app, com} from '#/lexicons'
+import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
 export {REPLY_BLOCK_CHECK}
-
-/**
- * The collection of private blocks, as prism ingests it.
- */
-export const PRIVATE_BLOCK_COLLECTION = 'tools.kryphocron.graph.block'
 
 /**
  * The check's timing. Mutable for tests.
@@ -58,13 +49,14 @@ export const REPLY_BLOCK_TIMING = {
    * the plan and the writes.
    */
   freshMs: 2_000,
+  /**
+   * The check just before the first post write (RB-13, both routes) takes
+   * the verdict again only when it is older than this (PR7-L1): counted from
+   * the plan's start, 2 s would send every ordinary reply with a gate
+   * through another read.
+   */
+  prePostFreshMs: 10_000,
 }
-
-/**
- * Pages of 100 read from one private block listing before giving up as
- * `unknown`.
- */
-export const PRIVATE_BLOCK_PAGES_MAX = 5
 
 export type BlockVerdict = 'clear' | 'blocked' | 'unknown'
 
@@ -80,9 +72,9 @@ export class PrivateReplyBlockedError extends Error {
 }
 
 /**
- * The block check could not be made (the AppView or a PDS unreachable or
- * erroring), so nothing was written. It carries the outbox's neutral
- * `parent-busy` text, which the locus route's composer shows.
+ * The block check could not be made (the AppView unreachable or erroring),
+ * so nothing was written. It carries the outbox's neutral `parent-busy`
+ * text, which the locus route's composer shows.
  */
 export class PrivateReplyCheckError extends Error {
   constructor() {
@@ -92,19 +84,18 @@ export class PrivateReplyCheckError extends Error {
 }
 
 /**
- * Where a plan's private-block verdict came from: prism's serve of the
- * parent in this run, or the two listings. The re-check reads the listings
- * for both.
+ * One pair of the check: the member and `did` (the parent's author, or the
+ * thread's owner).
  */
-export type PrivateBlockSource = 'prism' | 'listings'
+export type ReplyBlockPair = {did: string}
 
 /**
  * What a plan keeps of its check, so the run can take it again before the
- * first write.
+ * first write. Never built with an empty `pairs`: no pair is `undefined`.
  */
 export type ReplyBlockCheck = {
-  authorDid: string
-  privateBlocks: PrivateBlockSource
+  pairs: ReplyBlockPair[]
+  /** When the verdict was taken: the start of the plan or of a re-check. */
   checkedAt: number
 }
 
@@ -114,16 +105,9 @@ export type ReplyBlockCheck = {
 export type ReplyBlockClients = {
   /** The member. */
   did: string
-  /** The member's own PDS, for the member's listing. */
-  pdsClient: Client
   /** The member's signed-in public AppView client. */
   appviewClient: Client
 }
-
-/**
- * A client for reading another account's repo without a session.
- */
-export type RepoClientFor = (did: string) => Promise<Client>
 
 /**
  * The author of a post URI, or `undefined` when it does not parse.
@@ -137,8 +121,10 @@ export function parentAuthorOf(uri: string): string | undefined {
 }
 
 /**
- * Whether a reply to `parentUri` by `did` needs the check: the switch is on
- * and the parent is another author's.
+ * Whether a reply to `parentUri` by `did` needs the parent's author pair: the
+ * switch is on and the parent is another author's. The thread's owner is the
+ * check's other pair, known once placement settles (`planFirstPost`); a block
+ * with anyone else further up is soft (model (c)).
  */
 export function needsReplyBlockCheck(
   did: string,
@@ -150,117 +136,95 @@ export function needsReplyBlockCheck(
 
 /**
  * Run `read` under {@link REPLY_BLOCK_TIMING.callMs}; any failure, the
- * deadline included, is `unknown`.
+ * deadline included, is `onFail`.
  */
-async function withDeadline(
+async function withDeadline<T>(
   part: string,
-  read: (signal: AbortSignal) => Promise<BlockVerdict>,
-): Promise<BlockVerdict> {
+  onFail: T,
+  read: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<BlockVerdict>(resolve => {
+  const deadline = new Promise<T>(resolve => {
     timer = setTimeout(() => {
       controller.abort()
-      resolve('unknown')
+      resolve(onFail)
     }, REPLY_BLOCK_TIMING.callMs)
   })
   try {
     return await Promise.race([read(controller.signal), deadline])
   } catch (error) {
     logger.info('reply block check: read failed', {part, safeMessage: error})
-    return 'unknown'
+    return onFail
   } finally {
     clearTimeout(timer)
   }
 }
 
 /**
- * Public and list blocks between `did` and `authorDid`, from the AppView.
- * Any of the four block fields is `blocked`. No relationship for the author
- * (a `notFoundActor`, or none at all) is `unknown`. The list fields are
- * present only when a list block exists, so their absence reads as no list
- * block on any AppView; prism's own `blocked` covers list blocks for every
- * member too (`private.listBlocks`).
+ * Public and list blocks between `did` and each of `others`, from one
+ * AppView call. Any of the four block fields is `blocked`. No relationship
+ * for a DID (a `notFoundActor`, or none at all) is `unknown`. The list
+ * fields are present only when a list block exists, so their absence reads
+ * as no list block on any AppView; prism's own `blocked` covers list blocks
+ * for every member too (`private.listBlocks`). A failed call, or the
+ * deadline, is `unknown` for every DID; no DID asked about, no call.
  */
-export function readAppviewBlocks(
+export async function readAppviewRelationships(
+  appviewClient: Client,
+  did: string,
+  others: readonly string[],
+): Promise<Map<string, BlockVerdict>> {
+  if (others.length === 0) return new Map()
+  const allUnknown = new Map<string, BlockVerdict>(
+    others.map(other => [other, 'unknown']),
+  )
+  return withDeadline('appview', allUnknown, async signal => {
+    const res = await appviewClient.call(
+      app.bsky.graph.getRelationships,
+      {
+        actor: did as AtIdentifierString,
+        others: others as DidString[],
+      },
+      {signal},
+    )
+    const verdicts = new Map<string, BlockVerdict>()
+    for (const other of others) {
+      const found = res.relationships.find(
+        item =>
+          bsky.isType(app.bsky.graph.defs.relationship, item) &&
+          item.did === other,
+      ) as app.bsky.graph.defs.Relationship | undefined
+      if (!found) {
+        verdicts.set(other, 'unknown')
+      } else if (
+        found.blocking ||
+        found.blockedBy ||
+        found.blockingByList ||
+        found.blockedByList
+      ) {
+        verdicts.set(other, 'blocked')
+      } else {
+        verdicts.set(other, 'clear')
+      }
+    }
+    return verdicts
+  })
+}
+
+/**
+ * Public and list blocks between `did` and `authorDid`, from the AppView:
+ * {@link readAppviewRelationships} for one DID.
+ */
+export async function readAppviewBlocks(
   appviewClient: Client,
   did: string,
   authorDid: string,
 ): Promise<BlockVerdict> {
-  return withDeadline('appview', async signal => {
-    const res = await appviewClient.call(
-      app.bsky.graph.getRelationships,
-      {actor: did as AtIdentifierString, others: [authorDid as DidString]},
-      {signal},
-    )
-    const found = res.relationships.find(
-      item =>
-        bsky.isType(app.bsky.graph.defs.relationship, item) &&
-        item.did === authorDid,
-    ) as app.bsky.graph.defs.Relationship | undefined
-    if (!found) return 'unknown'
-    if (
-      found.blocking ||
-      found.blockedBy ||
-      found.blockingByList ||
-      found.blockedByList
-    ) {
-      return 'blocked'
-    }
-    return 'clear'
-  })
-}
-
-/**
- * Whether `repo`'s private blocks name `subject`, read through `client` in
- * pages of 100 up to {@link PRIVATE_BLOCK_PAGES_MAX}. Only `subject` is
- * read; past the bound is `unknown`.
- */
-export function readPrivateBlockListing(
-  client: Client | Promise<Client>,
-  repo: string,
-  subject: string,
-): Promise<BlockVerdict> {
-  return withDeadline('listing', async signal => {
-    const reader = await client
-    let cursor: string | undefined
-    for (let page = 0; page < PRIVATE_BLOCK_PAGES_MAX; page++) {
-      const res = await reader.call(
-        com.atproto.repo.listRecords,
-        {
-          repo: repo as DidString,
-          collection: PRIVATE_BLOCK_COLLECTION,
-          limit: 100,
-          cursor,
-        },
-        {signal},
-      )
-      for (const record of res.records) {
-        const value = record.value as {subject?: unknown} | undefined
-        if (value?.subject === subject) return 'blocked'
-      }
-      if (!res.cursor || res.records.length === 0) return 'clear'
-      cursor = res.cursor
-    }
-    return 'unknown'
-  })
-}
-
-/**
- * Private blocks between `did` and `authorDid` from the two listings: the
- * member's own repo through their PDS, the author's through an
- * unauthenticated client for the author's PDS.
- */
-export async function readPrivateBlocks(
-  clients: ReplyBlockClients,
-  authorDid: string,
-  clientFor: RepoClientFor = gatePdsClient,
-): Promise<BlockVerdict> {
-  const verdicts = await Promise.all([
-    readPrivateBlockListing(clients.pdsClient, clients.did, authorDid),
-    readPrivateBlockListing(clientFor(authorDid), authorDid, clients.did),
+  const verdicts = await readAppviewRelationships(appviewClient, did, [
+    authorDid,
   ])
-  return combineVerdicts(verdicts)
+  return verdicts.get(authorDid) ?? 'unknown'
 }
 
 /**
@@ -280,33 +244,46 @@ export function assertClear(verdict: BlockVerdict) {
 }
 
 /**
- * Take a plan's check again just before the first gate or post write, when
- * it is older than {@link REPLY_BLOCK_TIMING.freshMs} (PR2-L1): the AppView
- * and both private block listings, in one parallel round trip. Throws
- * {@link PrivateReplyBlockedError} or {@link PrivateReplyCheckError} when
- * the verdict is not `clear`. A recent verdict, or no check (no pair), reads
- * nothing.
+ * Take a plan's check again before a gate or post write, when it is older
+ * than `freshMs` (PR2-L1) or `force` is set: one AppView call for every
+ * pair. Throws {@link PrivateReplyBlockedError} or
+ * {@link PrivateReplyCheckError} when the verdict is not `clear`. A recent
+ * verdict, or no check (no pair), reads nothing.
  *
- * The listings are read even when the plan's private-block verdict was
- * prism's serve (RB-2): that serve cannot be taken again without a second
- * placement read, and a private block made during a slow upload would
- * otherwise be written.
+ * Returns the check it holds (PR4-N1): a new one whose `checkedAt` is this
+ * call's start when it read, the same one when it did not, so a later call
+ * measures freshness from the last verdict taken.
  */
 export async function recheckReplyBlock(
   clients: ReplyBlockClients,
   check: ReplyBlockCheck | undefined,
-  clientFor: RepoClientFor = gatePdsClient,
-): Promise<void> {
-  if (!REPLY_BLOCK_CHECK || !check) return
-  if (Date.now() - check.checkedAt < REPLY_BLOCK_TIMING.freshMs) return
+  {
+    force = false,
+    freshMs = REPLY_BLOCK_TIMING.freshMs,
+  }: {
+    force?: boolean
+    /**
+     * How old the verdict may be before it is taken again: `freshMs` after
+     * the uploads, `prePostFreshMs` just before the first post write.
+     */
+    freshMs?: number
+  } = {},
+): Promise<ReplyBlockCheck | undefined> {
+  if (!REPLY_BLOCK_CHECK || !check) return check
+  if (!force && Date.now() - check.checkedAt < freshMs) return check
+  const startedAt = Date.now()
+  const dids = check.pairs.map(pair => pair.did)
+  const relations = await readAppviewRelationships(
+    clients.appviewClient,
+    clients.did,
+    dids,
+  )
   const verdict = combineVerdicts(
-    await Promise.all([
-      readAppviewBlocks(clients.appviewClient, clients.did, check.authorDid),
-      readPrivateBlocks(clients, check.authorDid, clientFor),
-    ]),
+    dids.map(did => relations.get(did) ?? 'unknown'),
   )
   if (verdict !== 'clear') {
     logger.info('reply block check: recheck refused', {verdict})
   }
   assertClear(verdict)
+  return {pairs: check.pairs, checkedAt: startedAt}
 }

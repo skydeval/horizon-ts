@@ -49,18 +49,6 @@ let mockDirectClient: unknown
 jest.mock('#/horizon/routing/prism-direct', () => ({
   getDirectPrismClient: () => mockDirectClient,
 }))
-/** When set, another author's PDS, as the block check's listing reads it. */
-let mockOtherPds: unknown
-jest.mock('#/horizon/private/api/gates', () => {
-  const actual = jest.requireActual<{
-    gatePdsClient: (did: string) => Promise<unknown>
-  }>('#/horizon/private/api/gates')
-  return {
-    ...actual,
-    gatePdsClient: (did: string) =>
-      mockOtherPds ? Promise.resolve(mockOtherPds) : actual.gatePdsClient(did),
-  }
-})
 
 /** When set, a checked device write whose value matches fails (quota). */
 let mockFailChecked: ((value: string | undefined) => boolean) | undefined
@@ -166,7 +154,6 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const PP = 'tools.kryphocron.feed.postPrivate'
 const AUD = 'tools.kryphocron.policy.audience'
-const BLOCK = 'tools.kryphocron.graph.block'
 const TG = 'app.bsky.feed.threadgate'
 const PG = 'app.bsky.feed.postgate'
 const EVERYONE_AUDIENCE = `at://${DID}/${AUD}/3keveryone22`
@@ -207,8 +194,6 @@ function fakePds() {
     {uri: EVERYONE_AUDIENCE, value: {$type: AUD, mode: 'everyone'}},
     {uri: LIST_AUDIENCE, value: {$type: AUD, mode: 'list', name: 'Friends'}},
   ]
-  /** The member's private blocks (`tools.kryphocron.graph.block`). */
-  const blocks: Record<string, unknown>[] = []
   const handler = (call: Call): Reply => {
     const failure = state.fail?.(call)
     if (failure) return failure
@@ -271,18 +256,6 @@ function fakePds() {
         store.delete(key)
         return {status: 200, body: {}}
       case 'com.atproto.repo.listRecords':
-        if (collection === BLOCK) {
-          return {
-            status: 200,
-            body: {
-              records: blocks.map((value, n) => ({
-                uri: `at://${DID}/${BLOCK}/3kblock${n}2222`,
-                cid: cids[39],
-                value,
-              })),
-            },
-          }
-        }
         return {
           status: 200,
           body: {
@@ -298,7 +271,7 @@ function fakePds() {
     }
   }
   const {client, calls} = fakeClient(DID, handler)
-  return {client, calls, posts, gates, audiences, blocks, state}
+  return {client, calls, posts, gates, audiences, state}
 }
 
 let pds: ReturnType<typeof fakePds>
@@ -479,7 +452,7 @@ beforeEach(async () => {
     call => relationships(call) ?? {status: 200, body: {}},
   )
   REPLY_BLOCK_TIMING.freshMs = 2_000
-  mockOtherPds = undefined
+  REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
   mockPrismClient = prism.client
   mockDirectClient = direct.client
   mockFailChecked = undefined
@@ -1732,76 +1705,37 @@ describe('the reply block check (reply design 2, skydeval 2026-10-23)', () => {
     mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
   })
 
-  function blockListingsOf(calls: Call[]) {
-    return calls.filter(
-      c =>
-        c.nsid === 'com.atproto.repo.listRecords' &&
-        c.params.get('collection') === BLOCK,
-    )
-  }
-
-  function otherPds(blocks: () => Record<string, unknown>[]) {
-    const other = fakeClient(OTHER_DID, call =>
-      call.nsid === 'com.atproto.repo.listRecords'
-        ? {
-            status: 200,
-            body: {
-              records: blocks().map((value, n) => ({
-                uri: `at://${OTHER_DID}/${BLOCK}/3kblock${n}2222`,
-                cid: cids[39],
-                value,
-              })),
-            },
-          }
-        : {status: 501, body: {}},
-    )
-    mockOtherPds = other.client
-    return other
-  }
-
-  it.each([
-    ['the member privately blocks the author', 'own'],
-    ['the author privately blocks the member', 'other'],
-  ])(
-    'prism served the parent and %s during the uploads: reply-blocked, no gate or post written (RB-2)',
-    async (_name, side) => {
-      REPLY_BLOCK_TIMING.freshMs = 0
-      let uploaded = false
-      mockResolveEmbed.mockImplementation(() => {
-        uploaded = true
-        if (side === 'own') pds.blocks.push({$type: BLOCK, subject: OTHER_DID})
-        return Promise.resolve(undefined)
-      })
-      const other = otherPds(() =>
-        uploaded && side === 'other' ? [{$type: BLOCK, subject: DID}] : [],
-      )
-      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
-      expect(only()).toMatchObject({state: 'failed', failure: 'reply-blocked'})
-      expect(uploaded).toBe(true)
-      expect(blockListingsOf(pds.calls)).toHaveLength(1)
-      expect(blockListingsOf(other.calls)).toHaveLength(1)
-      expect(anyWrites()).toEqual([])
-      mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
-    },
-  )
-
-  it('prism served the parent and a listing cannot be read after the uploads: parent-busy, nothing written (RB-2)', async () => {
+  it('the AppView failing at the recheck after the uploads: parent-busy, nothing written', async () => {
     REPLY_BLOCK_TIMING.freshMs = 0
-    mockOtherPds = fakeClient(OTHER_DID, () => ({status: 500, body: {}})).client
+    let uploaded = false
+    mockResolveEmbed.mockImplementation(() => {
+      uploaded = true
+      return Promise.resolve(undefined)
+    })
+    relationships = call =>
+      uploaded ? {status: 500, body: {}} : relationshipsReply(call)
     await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
     const record = only()
     expect(record).toMatchObject({state: 'failed', failure: 'parent-busy'})
     expect(actionsOf(record).detail).toBe(BUSY)
     expect(anyWrites()).toEqual([])
+    mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
   })
 
-  it('prism served the parent and the verdict is still fresh: no listing is read', async () => {
-    const other = otherPds(() => [])
+  it('the verdict still fresh after the uploads: the AppView is asked once, and nothing reads a PDS listing', async () => {
     await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
     expect(records()).toEqual([])
     expect(postWrites()).toHaveLength(1)
-    expect(blockListingsOf(pds.calls)).toEqual([])
-    expect(blockListingsOf(other.calls)).toEqual([])
+    expect(
+      nsids(appview.calls).filter(n => n === 'app.bsky.graph.getRelationships'),
+    ).toHaveLength(1)
+    expect(
+      pds.calls.filter(
+        c =>
+          c.nsid === 'com.atproto.repo.listRecords' &&
+          c.params.get('collection') !== AUD,
+      ),
+    ).toEqual([])
   })
 
   it('a reply to the member’s own post asks the AppView nothing', async () => {
@@ -1822,5 +1756,97 @@ describe('the reply block check (reply design 2, skydeval 2026-10-23)', () => {
     expect(nsids(appview.calls)).not.toContain(
       'app.bsky.graph.getRelationships',
     )
+  })
+
+  describe('again before the first post write (RB-13, R10)', () => {
+    function relationshipCalls() {
+      return appview.calls.filter(
+        c => c.nsid === 'app.bsky.graph.getRelationships',
+      )
+    }
+
+    /** Clear for the plan and the re-check after uploads, then `third`. */
+    function answerFromThird(third: (call: Call) => Reply) {
+      let n = 0
+      relationships = call => {
+        if (call.nsid !== 'app.bsky.graph.getRelationships') return undefined
+        n++
+        return n >= 3 ? third(call) : relationshipsReply(call)
+      }
+    }
+
+    beforeEach(() => {
+      // Every check reads: the plan, after the uploads, before the post.
+      REPLY_BLOCK_TIMING.freshMs = 0
+      REPLY_BLOCK_TIMING.prePostFreshMs = 0
+    })
+
+    it('a block appearing after the gates: failed reply-blocked at once, the gates written, no post, never undecided', async () => {
+      answerFromThird(
+        call => relationshipsReply(call, {blockedBy: BLOCK_URI}) as Reply,
+      )
+      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+      const record = only()
+      expect(record).toMatchObject({
+        state: 'failed',
+        failure: 'reply-blocked',
+        present: [],
+      })
+      expect(record.lastWriteAt).toBeUndefined()
+      expect(relationshipCalls()).toHaveLength(3)
+      expect(pds.gates.size).toBe(1)
+      expect(postWrites()).toEqual([])
+    })
+
+    it('the same with no gates to write: reply-blocked at once, no post', async () => {
+      answerFromThird(
+        call => relationshipsReply(call, {blockedBy: BLOCK_URI}) as Reply,
+      )
+      await press(opts(['reply'], {replyTo: PARENT}))
+      expect(only()).toMatchObject({state: 'failed', failure: 'reply-blocked'})
+      expect(relationshipCalls()).toHaveLength(3)
+      expect(anyWrites()).toEqual([])
+    })
+
+    it('the check cannot be made before the post: failed parent-busy at once', async () => {
+      answerFromThird(() => ({status: 500, body: {error: 'InternalServerError'}}))
+      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+      const record = only()
+      expect(record).toMatchObject({state: 'failed', failure: 'parent-busy'})
+      expect(record.lastWriteAt).toBeUndefined()
+      expect(postWrites()).toEqual([])
+    })
+
+    it('fast gates, within prePostFreshMs: no third read, and the reply posts', async () => {
+      REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
+      answerFromThird(
+        call => relationshipsReply(call, {blockedBy: BLOCK_URI}) as Reply,
+      )
+      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+      expect(records()).toEqual([])
+      expect(relationshipCalls()).toHaveLength(2)
+      expect(postWrites()).toHaveLength(1)
+    })
+
+    it('the member’s own parent in the owner’s thread, the owner blocking the member: reply-blocked, nothing uploaded or written', async () => {
+      REPLY_BLOCK_TIMING.freshMs = 2_000
+      REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
+      storedPost('3kownreply22', {
+        reply: {
+          root: {uri: PARENT, cid: cids[38]},
+          parent: {uri: PARENT, cid: cids[38]},
+        },
+      })
+      relationships = call => relationshipsReply(call, {blockedBy: BLOCK_URI})
+      await press(
+        opts(['reply'], {replyTo: uriOf('3kownreply22'), limits: LIMITS}),
+      )
+      expect(only()).toMatchObject({state: 'failed', failure: 'reply-blocked'})
+      expect(relationshipCalls().map(c => c.params.getAll('others'))).toEqual([
+        [OTHER_DID],
+      ])
+      expect(mockResolveEmbed).not.toHaveBeenCalled()
+      expect(anyWrites()).toEqual([])
+    })
   })
 })

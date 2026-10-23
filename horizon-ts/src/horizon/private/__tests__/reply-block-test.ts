@@ -7,8 +7,10 @@ jest.unmock('multiformats/hashes/hasher')
 /*
  * The reply block check (private reply design 2; skydeval, 2026-10-23),
  * through `planFirstPost`, the plan both routes share: a private reply to
- * another author's post comes out of planning only with a `clear` verdict
- * between the member and the immediate parent's author.
+ * another author's post comes out of planning only with a `clear` AppView
+ * verdict between the member and each pair author (the immediate parent's
+ * author and the thread's owner). Kryphocron blocks are halted, so no PDS
+ * listing is read.
  */
 const mockResolveReply = jest.fn()
 jest.mock('#/lib/api/index', () => ({
@@ -21,11 +23,6 @@ jest.mock('#/state/queries/profile', () => ({
 }))
 jest.mock('#/state/queries/resolve-link', () => ({
   RQKEY_LINK: (url: string) => ['resolve-link', url],
-}))
-let mockOtherPds: unknown
-jest.mock('#/horizon/private/api/gates', () => ({
-  ...jest.requireActual<object>('#/horizon/private/api/gates'),
-  gatePdsClient: () => Promise.resolve(mockOtherPds),
 }))
 let mockBlueskyAppview = true
 jest.mock('#/horizon/routing/public-appview', () => ({
@@ -46,8 +43,10 @@ import {PrivateParentBusyError} from '../api/reply-anchor'
 import {
   PrivateReplyBlockedError,
   PrivateReplyCheckError,
+  readAppviewRelationships,
   recheckReplyBlock,
   REPLY_BLOCK_TIMING,
+  type ReplyBlockCheck,
 } from '../api/reply-block'
 import {type PostingWriter} from '../api/writer'
 import {type ComposeAudience} from '../composer/state'
@@ -68,11 +67,12 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const PP = 'tools.kryphocron.feed.postPrivate'
 const AUD = 'tools.kryphocron.policy.audience'
-const BLOCK = 'tools.kryphocron.graph.block'
 const THIRD_DID = 'did:plc:thirdcccccccccccccccccccc'
 const EVERYONE_AUDIENCE = `at://${DID}/${AUD}/3keveryone22`
 const PUBLIC_ROOT = `at://${THIRD_DID}/app.bsky.feed.post/3kpubroot222`
 const PUBLIC_PARENT = `at://${OTHER_DID}/app.bsky.feed.post/3kpubpar2222`
+const FOURTH_DID = 'did:plc:fourthddddddddddddddddddd'
+const THIRD_BLOCK = `at://${THIRD_DID}/app.bsky.graph.block/3kblock22222`
 const BLOCKED_TEXT = 'You can’t reply to this post.'
 const BUSY_TEXT =
   'Couldn’t reach the post you’re replying to. Try again in a moment.'
@@ -82,11 +82,8 @@ let appviewAnswer: (call: Call) => Reply | Promise<Reply>
 let prism: ReturnType<typeof fakeClient>
 let served: Record<string, unknown>[]
 let pds: ReturnType<typeof fakeClient>
-let ownBlocks: Record<string, unknown>[]
 let ownRecords: Record<string, Record<string, unknown>>
 let audiences: {uri: string; value: Record<string, unknown>}[]
-let other: ReturnType<typeof fakeClient>
-let otherBlocks: Record<string, unknown>[]
 let writer: PostingWriter & {createAudience: jest.Mock}
 
 function listing(call: Call, values: Record<string, unknown>[]): Reply {
@@ -94,7 +91,7 @@ function listing(call: Call, values: Record<string, unknown>[]): Reply {
     status: 200,
     body: {
       records: values.map((value, n) => ({
-        uri: `at://${call.params.get('repo')}/${call.params.get('collection')}/3kblock${n}2222`,
+        uri: `at://${call.params.get('repo')}/${call.params.get('collection')}/3krecord${n}222`,
         cid: RECORD_CID,
         value,
       })),
@@ -123,12 +120,28 @@ function servedPost(
   }
 }
 
+/**
+ * A full view of a post (with counts) in some query's data, as a thread
+ * screen holds the post being replied to.
+ */
+function cacheView(
+  queryClient: QueryClient,
+  uri: string,
+  did: string,
+  fields: Record<string, unknown> = {},
+) {
+  queryClient.setQueryData(['test-thread', uri], {
+    post: {...servedPost(uri, did, fields), likeCount: 0},
+  })
+}
+
 beforeEach(() => {
   resetPrismHealth()
   clearPrivateStores()
   mockBlueskyAppview = true
   REPLY_BLOCK_TIMING.callMs = 10_000
   REPLY_BLOCK_TIMING.freshMs = 2_000
+  REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
   appviewAnswer = call => relationshipsReply(call) ?? {status: 501}
   appview = fakeClient(DID, call => appviewAnswer(call))
   served = []
@@ -144,17 +157,14 @@ beforeEach(() => {
         }
       : {status: 200, body: {status: 'indexed'}},
   )
-  ownBlocks = []
   ownRecords = {}
   audiences = [{uri: EVERYONE_AUDIENCE, value: {$type: AUD, mode: 'everyone'}}]
   pds = fakeClient(DID, call => {
     if (call.nsid === 'com.atproto.repo.listRecords') {
-      return call.params.get('collection') === BLOCK
-        ? listing(call, ownBlocks)
-        : listing(
-            call,
-            audiences.map(a => a.value),
-          )
+      return listing(
+        call,
+        audiences.map(a => a.value),
+      )
     }
     if (call.nsid === 'com.atproto.repo.getRecord') {
       const rkey = call.params.get('rkey') ?? ''
@@ -168,13 +178,6 @@ beforeEach(() => {
     }
     return {status: 501}
   })
-  otherBlocks = []
-  other = fakeClient(OTHER_DID, call =>
-    call.nsid === 'com.atproto.repo.listRecords'
-      ? listing(call, otherBlocks)
-      : {status: 501},
-  )
-  mockOtherPds = other.client
   writer = {
     route: 'encode',
     createPost: jest.fn(() => Promise.resolve({cid: RECORD_CID})),
@@ -206,10 +209,15 @@ function plan(
   {
     audience = {kind: 'mode', mode: 'everyone'},
     skipBlockCheck,
-  }: {audience?: ComposeAudience; skipBlockCheck?: boolean} = {},
+    queryClient = new QueryClient(),
+  }: {
+    audience?: ComposeAudience
+    skipBlockCheck?: boolean
+    queryClient?: QueryClient
+  } = {},
 ): Promise<Plan> {
   return planFirstPost(
-    new QueryClient(),
+    queryClient,
     {did: DID, pdsClient: pds.client, prismClient: prism.client},
     {replyTo, appviewClient: appview.client, skipBlockCheck},
     audience,
@@ -220,14 +228,6 @@ function plan(
 function relationshipCalls() {
   return appview.calls.filter(
     call => call.nsid === 'app.bsky.graph.getRelationships',
-  )
-}
-
-function blockListings(calls: Call[]) {
-  return calls.filter(
-    call =>
-      call.nsid === 'com.atproto.repo.listRecords' &&
-      call.params.get('collection') === BLOCK,
   )
 }
 
@@ -274,18 +274,10 @@ describe('a reply to another author’s private post', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].params.get('actor')).toBe(DID)
     expect(calls[0].params.getAll('others')).toEqual([OTHER_DID])
-    expect(placed.blockCheck).toMatchObject({
-      authorDid: OTHER_DID,
-      privateBlocks: 'prism',
-    })
+    expect(placed.blockCheck).toMatchObject({pairs: [{did: OTHER_DID}]})
   })
 
-  it('a private block: prism’s serve is the check, so no listing is read; prism leaving the parent out fails before any write', async () => {
-    await plan(PARENT)
-    expect(blockListings(pds.calls)).toEqual([])
-    expect(blockListings(other.calls)).toEqual([])
-
-    // prism's read rule refuses a privately blocked pair: the parent is left out.
+  it('prism leaving the parent out, the AppView clear: fails before any write with the placement’s error', async () => {
     served = []
     await expect(plan(PARENT)).rejects.toBeInstanceOf(PrivateParentBusyError)
   })
@@ -301,33 +293,43 @@ describe('a reply to another author’s private post', () => {
     await expect(plan(PARENT)).rejects.toBeInstanceOf(PrivateReplyBlockedError)
   })
 
-  it('the thread’s root author blocked but not the parent’s: the reply is planned', async () => {
+  it('the thread’s owner (the root’s author) blocked, the parent’s author not: reply-blocked (model (c))', async () => {
     const root = privateUri('3kroot222222', THIRD_DID)
     const reply = privateUri('3kreply22222', OTHER_DID)
+    const replyFields = {
+      reply: {
+        root: {uri: root, cid: RECORD_CID},
+        parent: {uri: root, cid: RECORD_CID},
+      },
+    }
     served = [
       servedPost(root, THIRD_DID),
-      servedPost(reply, OTHER_DID, {
-        reply: {
-          root: {uri: root, cid: RECORD_CID},
-          parent: {uri: root, cid: RECORD_CID},
-        },
-      }),
+      servedPost(reply, OTHER_DID, replyFields),
     ]
-    appviewAnswer = call => {
-      if (call.nsid !== 'app.bsky.graph.getRelationships') return {status: 501}
-      const others = call.params.getAll('others')
-      return relationshipsReply(
-        call,
-        others.includes(THIRD_DID)
-          ? {blockedBy: `at://${THIRD_DID}/app.bsky.graph.block/3kblock22222`}
-          : {},
-      ) as Reply
-    }
-    const placed = await plan(reply)
-    expect(placed.reply?.parent.uri).toBe(reply)
+    appviewAnswer = call =>
+      relationshipsReply(call, did =>
+        did === THIRD_DID ? {blockedBy: THIRD_BLOCK} : {},
+      ) ?? {status: 501}
+
+    // Nothing cached: no guess, so the owner is asked once placement names it.
+    await expect(plan(reply)).rejects.toBeInstanceOf(PrivateReplyBlockedError)
     expect(relationshipCalls().map(c => c.params.getAll('others'))).toEqual([
       [OTHER_DID],
+      [THIRD_DID],
     ])
+    expect(writer.createAudience).not.toHaveBeenCalled()
+
+    // The parent's full view cached: the guess rides in the one call.
+    appview.calls.length = 0
+    const queryClient = new QueryClient()
+    cacheView(queryClient, reply, OTHER_DID, replyFields)
+    await expect(plan(reply, {queryClient})).rejects.toBeInstanceOf(
+      PrivateReplyBlockedError,
+    )
+    expect(relationshipCalls().map(c => c.params.getAll('others'))).toEqual([
+      [OTHER_DID, THIRD_DID],
+    ])
+    expect(writer.createAudience).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -397,7 +399,6 @@ describe('a reply to the member’s own post', () => {
     const branch = await plan(ownPublic)
     expect(branch.blockCheck).toBeUndefined()
     expect(relationshipCalls()).toEqual([])
-    expect(blockListings(pds.calls)).toEqual([])
   })
 
   it('a Finish posting skips the check', async () => {
@@ -411,37 +412,36 @@ describe('a reply to the member’s own post', () => {
 })
 
 describe('a private reply to a public post', () => {
-  it('reads the AppView and both private block listings, and plans when all are clear', async () => {
+  it('asks the AppView once, reads no PDS listing, and plans when clear', async () => {
     const placed = await plan(PUBLIC_PARENT)
-    expect(relationshipCalls()).toHaveLength(1)
-    expect(blockListings(pds.calls).map(c => c.params.get('repo'))).toEqual([
-      DID,
+    expect(relationshipCalls().map(c => c.params.getAll('others'))).toEqual([
+      [OTHER_DID],
     ])
-    expect(blockListings(other.calls).map(c => c.params.get('repo'))).toEqual([
-      OTHER_DID,
-    ])
-    expect(placed.blockCheck).toMatchObject({privateBlocks: 'listings'})
+    expect(
+      pds.calls.filter(c => c.nsid === 'com.atproto.repo.listRecords' && c.params.get('collection') !== AUD),
+    ).toEqual([])
+    expect(placed.blockCheck).toMatchObject({pairs: [{did: OTHER_DID}]})
   })
 
-  it.each([
-    ['the member privately blocks the author', 'own'],
-    ['the author privately blocks the member', 'other'],
-  ])('%s: refused, and no audience is created', async (_name, side) => {
+  it('the AppView failing is cannot check, never "Your server couldn’t save this post", and no audience is created', async () => {
     audiences = []
-    if (side === 'own') ownBlocks = [{$type: BLOCK, subject: OTHER_DID}]
-    else otherBlocks = [{$type: BLOCK, subject: DID}]
+    appviewAnswer = () => ({status: 500, body: {error: 'InternalServerError'}})
     await expect(plan(PUBLIC_PARENT)).rejects.toBeInstanceOf(
-      PrivateReplyBlockedError,
+      PrivateReplyCheckError,
     )
     expect(writer.createAudience).not.toHaveBeenCalled()
   })
 
-  it('a listing that fails is cannot check, never "Your server couldn’t save this post"', async () => {
-    other = fakeClient(OTHER_DID, () => ({status: 500, body: {}}))
-    mockOtherPds = other.client
+  it('a block refuses, and no audience is created', async () => {
+    audiences = []
+    appviewAnswer = call =>
+      relationshipsReply(call, {
+        blockedBy: `at://${OTHER_DID}/app.bsky.graph.block/3kblock22222`,
+      }) ?? {status: 501}
     await expect(plan(PUBLIC_PARENT)).rejects.toBeInstanceOf(
-      PrivateReplyCheckError,
+      PrivateReplyBlockedError,
     )
+    expect(writer.createAudience).not.toHaveBeenCalled()
   })
 
   it('a list block via the AppView is refused', async () => {
@@ -457,11 +457,7 @@ describe('a private reply to a public post', () => {
 
 describe('the check before the first write (PR2-L1)', () => {
   const PARENT = privateUri('3kparent2222', OTHER_DID)
-  const clients = () => ({
-    did: DID,
-    pdsClient: pds.client,
-    appviewClient: appview.client,
-  })
+  const clients = () => ({did: DID, appviewClient: appview.client})
 
   it('a fresh verdict reads nothing; a stale one is taken again, and a block made since refuses', async () => {
     served = [servedPost(PARENT, OTHER_DID)]
@@ -483,59 +479,373 @@ describe('the check before the first write (PR2-L1)', () => {
   })
 
   it.each([
-    ['the member privately blocks the author', 'own'],
-    ['the author privately blocks the member', 'other'],
-  ])(
-    'prism served the parent and %s since the plan: the recheck reads the listings and refuses (RB-2)',
-    async (_name, side) => {
-      served = [servedPost(PARENT, OTHER_DID)]
-      const placed = await plan(PARENT)
-      expect(placed.blockCheck).toMatchObject({privateBlocks: 'prism'})
-      expect(blockListings(pds.calls)).toEqual([])
-      expect(blockListings(other.calls)).toEqual([])
-
-      REPLY_BLOCK_TIMING.freshMs = 0
-      if (side === 'own') ownBlocks = [{$type: BLOCK, subject: OTHER_DID}]
-      else otherBlocks = [{$type: BLOCK, subject: DID}]
-      await expect(
-        recheckReplyBlock(clients(), placed.blockCheck),
-      ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
-      expect(blockListings(pds.calls).map(c => c.params.get('repo'))).toEqual([
-        DID,
-      ])
-      expect(blockListings(other.calls).map(c => c.params.get('repo'))).toEqual(
-        [OTHER_DID],
-      )
-    },
-  )
-
-  it('prism served the parent and a listing cannot be read at the recheck: cannot check (RB-2)', async () => {
+    [
+      'a list block made during the uploads',
+      {blockedByList: `at://${OTHER_DID}/app.bsky.graph.listblock/3kblock22222`},
+    ],
+    [
+      'a block by the member made during the uploads',
+      {blocking: `at://${DID}/app.bsky.graph.block/3kblock22222`},
+    ],
+  ])('%s: the stale recheck refuses', async (_name, fields) => {
     served = [servedPost(PARENT, OTHER_DID)]
     const placed = await plan(PARENT)
     REPLY_BLOCK_TIMING.freshMs = 0
-    other = fakeClient(OTHER_DID, () => ({status: 500, body: {}}))
-    mockOtherPds = other.client
+    appviewAnswer = call => relationshipsReply(call, fields) ?? {status: 501}
+    await expect(
+      recheckReplyBlock(clients(), placed.blockCheck),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+  })
+
+  it('the AppView failing at the recheck: cannot check', async () => {
+    served = [servedPost(PARENT, OTHER_DID)]
+    const placed = await plan(PARENT)
+    REPLY_BLOCK_TIMING.freshMs = 0
+    appviewAnswer = () => ({status: 500, body: {error: 'InternalServerError'}})
     await expect(
       recheckReplyBlock(clients(), placed.blockCheck),
     ).rejects.toBeInstanceOf(PrivateReplyCheckError)
   })
 
-  it('prism served the parent and the verdict is fresh: the recheck reads no listing', async () => {
-    served = [servedPost(PARENT, OTHER_DID)]
-    const placed = await plan(PARENT)
-    ownBlocks = [{$type: BLOCK, subject: OTHER_DID}]
-    await recheckReplyBlock(clients(), placed.blockCheck)
-    expect(relationshipCalls()).toHaveLength(1)
-    expect(blockListings(pds.calls)).toEqual([])
-    expect(blockListings(other.calls)).toEqual([])
-  })
-
-  it('the recheck repeats the listings when the plan used them', async () => {
+  it('a public parent’s plan is taken again the same way', async () => {
     const placed = await plan(PUBLIC_PARENT)
     REPLY_BLOCK_TIMING.freshMs = 0
-    otherBlocks = [{$type: BLOCK, subject: DID}]
+    appviewAnswer = call =>
+      relationshipsReply(call, {
+        blockedBy: `at://${OTHER_DID}/app.bsky.graph.block/3kblock22222`,
+      }) ?? {status: 501}
     await expect(
       recheckReplyBlock(clients(), placed.blockCheck),
     ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+  })
+})
+
+describe('the thread’s owner (RB-1, model (c))', () => {
+  /** The thread: O's root, A's reply to it (the parent). */
+  const ROOT = privateUri('3kroot222222', THIRD_DID)
+  const PARENT = privateUri('3kreply22222', OTHER_DID)
+  const PARENT_FIELDS = {
+    reply: {
+      root: {uri: ROOT, cid: RECORD_CID},
+      parent: {uri: ROOT, cid: RECORD_CID},
+    },
+  }
+
+  beforeEach(() => {
+    served = [
+      servedPost(ROOT, THIRD_DID),
+      servedPost(PARENT, OTHER_DID, PARENT_FIELDS),
+    ]
+  })
+
+  function othersAsked() {
+    return relationshipCalls().map(c => c.params.getAll('others'))
+  }
+
+  function blockOnly(did: string) {
+    appviewAnswer = call =>
+      relationshipsReply(call, asked =>
+        asked === did
+          ? {blockedBy: `at://${did}/app.bsky.graph.block/3kblock22222`}
+          : {},
+      ) ?? {status: 501}
+  }
+
+  /** The parent's full view cached, its root as `rootUri`. */
+  function cachedParent(rootUri = ROOT) {
+    const queryClient = new QueryClient()
+    cacheView(queryClient, PARENT, OTHER_DID, {
+      reply: {
+        root: {uri: rootUri, cid: RECORD_CID},
+        parent: {uri: rootUri, cid: RECORD_CID},
+      },
+    })
+    return queryClient
+  }
+
+  it('guess right: one call about the parent’s author and the owner; the owner blocking is reply-blocked, clear plans both pairs', async () => {
+    blockOnly(THIRD_DID)
+    await expect(
+      plan(PARENT, {queryClient: cachedParent()}),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+    expect(othersAsked()).toEqual([[OTHER_DID, THIRD_DID]])
+    expect(writer.createAudience).not.toHaveBeenCalled()
+
+    appview.calls.length = 0
+    appviewAnswer = call => relationshipsReply(call) ?? {status: 501}
+    const placed = await plan(PARENT, {queryClient: cachedParent()})
+    expect(othersAsked()).toEqual([[OTHER_DID, THIRD_DID]])
+    expect(placed.blockCheck?.pairs).toEqual([
+      {did: OTHER_DID},
+      {did: THIRD_DID},
+    ])
+  })
+
+  it('guess wrong: the guess is asked but never judged, the owner is asked once placement names it', async () => {
+    const wrongRoot = privateUri('3kwrongroot2', FOURTH_DID)
+    blockOnly(FOURTH_DID)
+    const placed = await plan(PARENT, {queryClient: cachedParent(wrongRoot)})
+    expect(othersAsked()).toEqual([[OTHER_DID, FOURTH_DID], [THIRD_DID]])
+    // A block with someone neither the parent's author nor the owner is soft.
+    expect(placed.blockCheck?.pairs).toEqual([
+      {did: OTHER_DID},
+      {did: THIRD_DID},
+    ])
+  })
+
+  it('R3: the parent’s author blocked refuses whatever placement did, the guess clear', async () => {
+    served = []
+    blockOnly(OTHER_DID)
+    await expect(
+      plan(PARENT, {queryClient: cachedParent()}),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+    expect(othersAsked()).toEqual([[OTHER_DID, THIRD_DID]])
+    expect(writer.createAudience).not.toHaveBeenCalled()
+  })
+
+  it('R4 (PR5-L2): placement failing with the guessed owner blocked is reply-blocked; with no guess, the placement’s outcome', async () => {
+    blockOnly(THIRD_DID)
+
+    // A healthy omission of the parent.
+    served = []
+    await expect(
+      plan(PARENT, {queryClient: cachedParent()}),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+
+    // A transient error from prism.
+    prism = fakeClient(DID, () => ({status: 503, body: {error: 'NotReady'}}))
+    await expect(
+      plan(PARENT, {queryClient: cachedParent()}),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+
+    // Nothing cached: no guess, so nothing names the owner.
+    served = []
+    prism = fakeClient(DID, call =>
+      call.nsid === 'app.nearhorizon.private.getPosts'
+        ? {status: 200, body: {posts: []}}
+        : {status: 200, body: {status: 'indexed'}},
+    )
+    appview.calls.length = 0
+    await expect(plan(PARENT)).rejects.toBeInstanceOf(PrivateParentBusyError)
+    expect(othersAsked()).toEqual([[OTHER_DID]])
+    expect(writer.createAudience).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['clear', (call: Call) => relationshipsReply(call) as Reply],
+    [
+      'unknown',
+      (call: Call) => ({
+        status: 200,
+        body: {
+          actor: call.params.get('actor'),
+          relationships: [
+            {$type: 'app.bsky.graph.defs#relationship', did: OTHER_DID},
+            {
+              $type: 'app.bsky.graph.defs#notFoundActor',
+              actor: THIRD_DID,
+              notFound: true,
+            },
+          ],
+        },
+      }),
+    ],
+  ] as [string, (call: Call) => Reply][])(
+    'R4 inverse: placement failing with the guess %s is the placement’s error',
+    async (_name, answer) => {
+      served = []
+      appviewAnswer = answer
+      await expect(
+        plan(PARENT, {queryClient: cachedParent()}),
+      ).rejects.toBeInstanceOf(PrivateParentBusyError)
+    },
+  )
+
+  it('the member’s own parent in the owner’s thread: only the owner pair', async () => {
+    const own = privateUri('3kownreply22')
+    ownRecords['3kownreply22'] = {
+      $type: PP,
+      text: 'own',
+      createdAt: '2026-10-15T12:00:00.000Z',
+      audienceList: OTHER_AUDIENCE,
+      ...PARENT_FIELDS,
+    }
+    served = [servedPost(ROOT, THIRD_DID)]
+
+    blockOnly(THIRD_DID)
+    await expect(plan(own)).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+    expect(othersAsked()).toEqual([[THIRD_DID]])
+
+    appview.calls.length = 0
+    appviewAnswer = call => relationshipsReply(call) ?? {status: 501}
+    const placed = await plan(own)
+    expect(othersAsked()).toEqual([[THIRD_DID]])
+    expect(placed.blockCheck?.pairs).toEqual([
+      {did: THIRD_DID},
+    ])
+  })
+
+  it('PR6-N5: the member’s own parent gone from their PDS, the guessed owner blocked: reply-blocked, not parent-unavailable', async () => {
+    const own = privateUri('3kownreply22')
+    const queryClient = new QueryClient()
+    cacheView(queryClient, own, DID, PARENT_FIELDS)
+    blockOnly(THIRD_DID)
+    await expect(plan(own, {queryClient})).rejects.toBeInstanceOf(
+      PrivateReplyBlockedError,
+    )
+    expect(othersAsked()).toEqual([[THIRD_DID]])
+    expect(writer.createAudience).not.toHaveBeenCalled()
+  })
+
+  it('the member’s own thread: no pair, no AppView call', async () => {
+    const ownRoot = privateUri('3kownroot222')
+    const ownReply = privateUri('3kownreply22')
+    ownRecords['3kownroot222'] = {
+      $type: PP,
+      text: 'root',
+      createdAt: '2026-10-15T12:00:00.000Z',
+      audienceList: EVERYONE_AUDIENCE,
+    }
+    ownRecords['3kownreply22'] = {
+      $type: PP,
+      text: 'reply',
+      createdAt: '2026-10-15T12:00:00.000Z',
+      audienceList: EVERYONE_AUDIENCE,
+      reply: {
+        root: {uri: ownRoot, cid: RECORD_CID},
+        parent: {uri: ownRoot, cid: RECORD_CID},
+      },
+    }
+    appviewAnswer = () => ({status: 500})
+    const placed = await plan(ownReply)
+    expect(placed.audienceUri).toBe(EVERYONE_AUDIENCE)
+    expect(placed.blockCheck).toBeUndefined()
+    expect(relationshipCalls()).toEqual([])
+  })
+
+  it('a Finish posting: no owner call either', async () => {
+    blockOnly(THIRD_DID)
+    const skipped = await plan(PARENT, {
+      skipBlockCheck: true,
+      queryClient: cachedParent(),
+    })
+    expect(skipped.blockCheck).toBeUndefined()
+    expect(relationshipCalls()).toEqual([])
+  })
+})
+
+describe('readAppviewRelationships', () => {
+  it('judges each DID: a notFoundActor is unknown, a relationship judged; a 500 is unknown for all; no DID, no call', async () => {
+    appviewAnswer = call => ({
+      status: 200,
+      body: {
+        actor: call.params.get('actor'),
+        relationships: [
+          {
+            $type: 'app.bsky.graph.defs#relationship',
+            did: OTHER_DID,
+            blocking: `at://${DID}/app.bsky.graph.block/3kblock22222`,
+          },
+          {
+            $type: 'app.bsky.graph.defs#notFoundActor',
+            actor: THIRD_DID,
+            notFound: true,
+          },
+        ],
+      },
+    })
+    const judged = await readAppviewRelationships(appview.client, DID, [
+      OTHER_DID,
+      THIRD_DID,
+    ])
+    expect(Object.fromEntries(judged)).toEqual({
+      [OTHER_DID]: 'blocked',
+      [THIRD_DID]: 'unknown',
+    })
+
+    appviewAnswer = () => ({status: 500, body: {error: 'InternalServerError'}})
+    const failed = await readAppviewRelationships(appview.client, DID, [
+      OTHER_DID,
+      THIRD_DID,
+    ])
+    expect(Object.fromEntries(failed)).toEqual({
+      [OTHER_DID]: 'unknown',
+      [THIRD_DID]: 'unknown',
+    })
+
+    const before = relationshipCalls().length
+    expect(await readAppviewRelationships(appview.client, DID, [])).toEqual(
+      new Map(),
+    )
+    expect(relationshipCalls()).toHaveLength(before)
+  })
+})
+
+describe('the re-check reads every pair (R8, R9)', () => {
+  const clients = () => ({did: DID, appviewClient: appview.client})
+  const pairs: ReplyBlockCheck['pairs'] = [
+    {did: OTHER_DID},
+    {did: THIRD_DID},
+  ]
+
+  it('one AppView call with every pair', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    await recheckReplyBlock(clients(), {pairs, checkedAt: 0})
+    expect(relationshipCalls().map(c => c.params.getAll('others'))).toEqual([
+      [OTHER_DID, THIRD_DID],
+    ])
+  })
+
+  it.each([
+    ['the owner blocks the member', {blockedBy: THIRD_BLOCK}],
+    [
+      'the owner list-blocks the member',
+      {
+        blockedByList: `at://${THIRD_DID}/app.bsky.graph.listblock/3kblock22222`,
+      },
+    ],
+  ])('%s since the plan: the owner pair is read, reply-blocked', async (_name, fields) => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    appviewAnswer = call =>
+      relationshipsReply(call, did => (did === THIRD_DID ? fields : {})) ?? {
+        status: 501,
+      }
+    await expect(
+      recheckReplyBlock(clients(), {pairs, checkedAt: 0}),
+    ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+  })
+
+  it('no relationship for the owner at the re-check: cannot check', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    appviewAnswer = call => ({
+      status: 200,
+      body: {
+        actor: call.params.get('actor'),
+        relationships: [
+          {$type: 'app.bsky.graph.defs#relationship', did: OTHER_DID},
+        ],
+      },
+    })
+    await expect(
+      recheckReplyBlock(clients(), {pairs, checkedAt: 0}),
+    ).rejects.toBeInstanceOf(PrivateReplyCheckError)
+  })
+
+  it('returns the check it holds: the same one when fresh, a new one when it read, and force reads although fresh', async () => {
+    const fresh: ReplyBlockCheck = {pairs, checkedAt: Date.now()}
+    expect(await recheckReplyBlock(clients(), fresh)).toBe(fresh)
+    expect(relationshipCalls()).toEqual([])
+
+    const stale: ReplyBlockCheck = {pairs, checkedAt: 0}
+    const start = Date.now()
+    const taken = await recheckReplyBlock(clients(), stale)
+    expect(taken).not.toBe(stale)
+    expect(taken?.pairs).toBe(pairs)
+    expect(taken?.checkedAt).toBeGreaterThanOrEqual(start)
+    expect(relationshipCalls()).toHaveLength(1)
+
+    const forced = await recheckReplyBlock(clients(), fresh, {force: true})
+    expect(forced).not.toBe(fresh)
+    expect(relationshipCalls()).toHaveLength(2)
   })
 })

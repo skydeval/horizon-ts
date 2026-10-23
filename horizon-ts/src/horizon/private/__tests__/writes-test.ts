@@ -38,20 +38,6 @@ let mockPrismClient: unknown
 jest.mock('#/horizon/routing/prism', () => ({
   getPrismClient: () => mockPrismClient,
 }))
-// Another author's PDS, for the reply block check's private block listing.
-let mockOtherPdsClient: unknown
-jest.mock('#/horizon/private/api/gates', () => {
-  const actual = jest.requireActual<{
-    gatePdsClient: (did: string) => Promise<unknown>
-  }>('#/horizon/private/api/gates')
-  return {
-    ...actual,
-    gatePdsClient: (did: string) =>
-      mockOtherPdsClient
-        ? Promise.resolve(mockOtherPdsClient)
-        : actual.gatePdsClient(did),
-  }
-})
 
 import {type Client} from '@atproto/lex'
 import {i18n} from '@lingui/core'
@@ -59,6 +45,7 @@ import {QueryClient} from '@tanstack/react-query'
 
 import {computeCid} from '#/lib/api/computeCid'
 import {type PostOpts} from '#/lib/api/index'
+import {logger} from '#/logger'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
 import {
   EMPTY_COMPOSE_SPOILERS,
@@ -110,7 +97,6 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const PP = 'tools.kryphocron.feed.postPrivate'
 const AUD = 'tools.kryphocron.policy.audience'
-const BLOCK = 'tools.kryphocron.graph.block'
 const EVERYONE_AUDIENCE = `at://${DID}/${AUD}/3keveryone22`
 const COMMIT_CID = 'commit-cid-is-not-the-record-cid'
 
@@ -134,8 +120,6 @@ function fakePds() {
   const audiences: {uri: string; value: Record<string, unknown>}[] = [
     {uri: EVERYONE_AUDIENCE, value: {$type: AUD, mode: 'everyone'}},
   ]
-  /** The member's private blocks (`tools.kryphocron.graph.block`). */
-  const blocks: Record<string, unknown>[] = []
   const failures: {
     create?: (
       call: Call,
@@ -146,6 +130,8 @@ function fakePds() {
     manageAudience?: Reply
     gateCreate?: (index: number) => Reply | undefined
     gateDelete?: (key: string) => Reply | undefined
+    /** Holds each gate `createRecord` until it resolves. */
+    gateHold?: () => Promise<void>
   } = {}
   /** Gate records by `<collection>/<rkey>`. */
   const gates = new Map<string, Record<string, unknown>>()
@@ -213,18 +199,6 @@ function fakePds() {
         return {status: 200, body: {}}
       }
       case 'com.atproto.repo.listRecords':
-        if (call.params.get('collection') === BLOCK) {
-          return {
-            status: 200,
-            body: {
-              records: blocks.map((value, n) => ({
-                uri: `at://${DID}/${BLOCK}/3kblock${n}2222`,
-                cid: recordCids[5],
-                value,
-              })),
-            },
-          }
-        }
         return {
           status: 200,
           body: {
@@ -245,8 +219,12 @@ function fakePds() {
         return {status: 501, body: {error: 'MethodNotImplemented'}}
     }
   }
-  const {client, calls} = fakeClient(DID, handler)
-  return {client, calls, repo, audiences, blocks, failures, gates}
+  const {client, calls} = fakeClient(DID, call =>
+    call.nsid === 'com.atproto.repo.createRecord' && failures.gateHold
+      ? failures.gateHold().then(() => handler(call))
+      : handler(call),
+  )
+  return {client, calls, repo, audiences, failures, gates}
 }
 
 let prismHandler: (call: Call) => Reply
@@ -367,11 +345,8 @@ beforeEach(() => {
   mockPrismClient = prism.client
   appviewHandler = call => relationshipsReply(call) ?? {status: 500, body: {}}
   appview = fakeClient(DID, call => appviewHandler(call)).client
-  mockOtherPdsClient = fakeClient(OTHER_DID, () => ({
-    status: 200,
-    body: {records: []},
-  })).client
   REPLY_BLOCK_TIMING.freshMs = 2_000
+  REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
   // The jest setup's locus origin: the locus writers (2K T-12).
   publishPds('https://pds.example')
   resetWriteRoutes()
@@ -1586,95 +1561,47 @@ describe('postPrivate: the reply block check on the locus route', () => {
     mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
   })
 
-  function blockListingsOf(calls: Call[]) {
-    return calls.filter(
-      c =>
-        c.nsid === 'com.atproto.repo.listRecords' &&
-        c.params.get('collection') === BLOCK,
-    )
-  }
-
-  it.each([
-    ['the member privately blocks the author', 'own'],
-    ['the author privately blocks the member', 'other'],
-  ])(
-    'prism served the parent and %s during the uploads: refused before the first gate or post (RB-2)',
-    async (_name, side) => {
-      REPLY_BLOCK_TIMING.freshMs = 0
-      let uploaded = false
-      mockResolveEmbed.mockImplementation(() => {
-        uploaded = true
-        if (side === 'own') pds.blocks.push({$type: BLOCK, subject: OTHER_DID})
-        return Promise.resolve(undefined)
-      })
-      const other = fakeClient(OTHER_DID, call =>
-        call.nsid === 'com.atproto.repo.listRecords'
-          ? {
-              status: 200,
-              body: {
-                records:
-                  uploaded && side === 'other'
-                    ? [
-                        {
-                          uri: `at://${OTHER_DID}/${BLOCK}/3kblock02222`,
-                          cid: recordCids[5],
-                          value: {$type: BLOCK, subject: DID},
-                        },
-                      ]
-                    : [],
-              },
-            }
-          : {status: 501, body: {}},
-      )
-      mockOtherPdsClient = other.client
-      const error = await postPrivate(
-        new QueryClient(),
-        opts(['reply'], PARENT, LIMITS),
-      ).catch((e: unknown) => e)
-      expect(error).toBeInstanceOf(PrivateReplyBlockedError)
-      expect(uploaded).toBe(true)
-      expect(blockListingsOf(other.calls)).toHaveLength(1)
-      expect(writesAny()).toEqual([])
-      mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
-    },
-  )
-
-  it('prism served the parent and a listing cannot be read after the uploads: the neutral text, nothing written (RB-2)', async () => {
+  it('the AppView failing at the recheck after the uploads: the neutral text, nothing written', async () => {
     REPLY_BLOCK_TIMING.freshMs = 0
-    mockOtherPdsClient = fakeClient(OTHER_DID, () => ({
-      status: 500,
-      body: {},
-    })).client
+    let uploaded = false
+    mockResolveEmbed.mockImplementation(() => {
+      uploaded = true
+      return Promise.resolve(undefined)
+    })
+    appview = fakeClient(DID, call =>
+      uploaded && call.nsid === 'app.bsky.graph.getRelationships'
+        ? {status: 500, body: {}}
+        : (relationshipsReply(call) ?? appviewHandler(call)),
+    ).client
     const error = await postPrivate(
       new QueryClient(),
       opts(['reply'], PARENT, LIMITS),
     ).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(PrivateReplyCheckError)
     expect(writesAny()).toEqual([])
+    mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
   })
 
-  it('prism served the parent and the verdict is still fresh: no listing is read', async () => {
-    const other = fakeClient(OTHER_DID, () => ({
-      status: 200,
-      body: {records: []},
-    }))
-    mockOtherPdsClient = other.client
+  it('the verdict still fresh after the uploads: the AppView is asked once, and nothing reads a PDS listing', async () => {
     await postPrivate(new QueryClient(), opts(['reply'], PARENT, LIMITS))
     expect(nsids(pds.calls)).toContain(
       'tools.kryphocron.actor.participatePrivate',
     )
-    expect(blockListingsOf(pds.calls)).toEqual([])
-    expect(blockListingsOf(other.calls)).toEqual([])
+    expect(
+      pds.calls.filter(
+        c =>
+          c.nsid === 'com.atproto.repo.listRecords' &&
+          c.params.get('collection') !== AUD,
+      ),
+    ).toEqual([])
   })
 
-  it('the thread root’s author blocked, the parent’s not: the reply is written', async () => {
-    const rootUri = privateUri(
-      '3krootblk222',
-      'did:plc:thirdcccccccccccccccccccc',
-    )
+  it('the thread’s owner (the root’s author) blocked, the parent’s author not: refused on the locus route (model (c))', async () => {
+    const thirdDid = 'did:plc:thirdcccccccccccccccccccc'
+    const rootUri = privateUri('3krootblk222', thirdDid)
     const replyUri = privateUri('3kreplyok222', OTHER_DID)
     servePrism([
-      served(rootUri, 'did:plc:thirdcccccccccccccccccccc', recordCids[4], {
+      served(rootUri, thirdDid, recordCids[4], {
         audienceList: OTHER_AUDIENCE,
       }),
       served(replyUri, OTHER_DID, recordCids[3], {
@@ -1685,14 +1612,275 @@ describe('postPrivate: the reply block check on the locus route', () => {
         },
       }),
     ])
-    appview = fakeClient(DID, call =>
-      call.params.getAll('others').includes('did:plc:thirdcccccccccccccccccccc')
-        ? (relationshipsReply(call, {blockedBy: BLOCK_URI}) as Reply)
-        : (relationshipsReply(call) ?? appviewHandler(call)),
+    appview = fakeClient(
+      DID,
+      call =>
+        relationshipsReply(call, did =>
+          did === thirdDid ? {blockedBy: BLOCK_URI} : {},
+        ) ?? appviewHandler(call),
     ).client
-    await postPrivate(new QueryClient(), opts(['reply'], replyUri))
-    expect(nsids(pds.calls)).toContain(
-      'tools.kryphocron.actor.participatePrivate',
-    )
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], replyUri, {
+        postgate: {
+          embeddingRules: [{$type: 'app.bsky.feed.postgate#disableRule'}],
+        },
+      }),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect((error as Error).message).toBe('You can’t reply to this post.')
+    expect(writesAny()).toEqual([])
+    expect(pds.gates.size).toBe(0)
+    expect(mockResolveEmbed).not.toHaveBeenCalled()
   })
+
+  it('a reply inside another account’s branch whose branch root’s author blocks the member: the owner asked after placement, refused, nothing written', async () => {
+    const thirdDid = 'did:plc:thirdcccccccccccccccccccc'
+    const publicRoot = `at://${thirdDid}/app.bsky.feed.post/3kpubroot222`
+    const publicParent = `at://${thirdDid}/app.bsky.feed.post/3kpubpar2222`
+    const branchUri = privateUri('3kbranch2222', thirdDid)
+    const secondUri = privateUri('3ksecond2222', OTHER_DID)
+    const publicRef = {uri: publicRoot, cid: recordCids[4]}
+    servePrism([
+      served(branchUri, thirdDid, recordCids[2], {
+        audienceList: OTHER_AUDIENCE,
+        reply: {root: publicRef, parent: {uri: publicParent, cid: recordCids[4]}},
+      }),
+      served(secondUri, OTHER_DID, recordCids[5], {
+        audienceList: OTHER_AUDIENCE,
+        reply: {root: publicRef, parent: {uri: branchUri, cid: recordCids[2]}},
+      }),
+    ])
+    const relationshipCalls: string[][] = []
+    appview = fakeClient(DID, call => {
+      if (call.nsid === 'app.bsky.graph.getRelationships') {
+        relationshipCalls.push(call.params.getAll('others'))
+      }
+      return (
+        relationshipsReply(call, did =>
+          did === thirdDid ? {blockedBy: BLOCK_URI} : {},
+        ) ?? appviewHandler(call)
+      )
+    }).client
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], secondUri),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect(relationshipCalls).toEqual([[OTHER_DID], [thirdDid]])
+    expect(writesAny()).toEqual([])
+  })
+})
+
+describe('postPrivate: the check before the post write on the locus route (RB-13, R11)', () => {
+  const PARENT = privateUri('3kblocked222', OTHER_DID)
+  const BLOCK_URI = `at://${OTHER_DID}/app.bsky.graph.block/3kblock22222`
+  const POSTGATE = {
+    postgate: {embeddingRules: [{$type: 'app.bsky.feed.postgate#disableRule'}]},
+  }
+
+  /** Whether the gate write has answered, as each AppView call saw it. */
+  let gateAnswered: boolean
+  let seenAtCall: boolean[]
+  let answer: (call: Call, n: number) => Reply
+
+  function postWrites() {
+    return nsids(pds.calls).filter(
+      n => n === 'tools.kryphocron.actor.participatePrivate',
+    )
+  }
+
+  /** Hold every gate write for `ms`. */
+  function slowGates(ms: number) {
+    pds.failures.gateHold = async () => {
+      await new Promise(r => setTimeout(r, ms))
+      gateAnswered = true
+    }
+  }
+
+  /** Clear at the plan; the forced read (the second call) answers `second`. */
+  function blockAtSecond(second: Record<string, unknown> | Reply) {
+    answer = (call, n) =>
+      n >= 2
+        ? 'status' in second || second instanceof Error
+          ? (second as Reply)
+          : (relationshipsReply(call, second) as Reply)
+        : (relationshipsReply(call) as Reply)
+  }
+
+  beforeEach(() => {
+    servePrism([
+      served(PARENT, OTHER_DID, recordCids[3], {audienceList: OTHER_AUDIENCE}),
+    ])
+    mockResolveEmbed.mockClear()
+    gateAnswered = false
+    seenAtCall = []
+    answer = call => relationshipsReply(call) as Reply
+    let n = 0
+    appview = fakeClient(DID, call => {
+      if (call.nsid !== 'app.bsky.graph.getRelationships') {
+        return appviewHandler(call)
+      }
+      seenAtCall.push(gateAnswered)
+      return answer(call, ++n)
+    }).client
+  })
+
+  it('slow gates: the forced read is sent while the gate write is pending; a block there deletes the gates and writes no post', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 30
+    slowGates(200)
+    blockAtSecond({blockedBy: BLOCK_URI})
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, POSTGATE),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect((error as Error).message).toBe('You can’t reply to this post.')
+    expect(seenAtCall).toEqual([false, false])
+    expect(nsids(pds.calls)).toContain('com.atproto.repo.createRecord')
+    expect(nsids(pds.calls)).toContain('com.atproto.repo.deleteRecord')
+    expect(pds.gates.size).toBe(0)
+    expect(postWrites()).toEqual([])
+  })
+
+  it('a verdict already stale when the gates start: the forced read starts at once, beside the gates', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 0
+    slowGates(100)
+    await postPrivate(new QueryClient(), opts(['reply'], PARENT, POSTGATE))
+    /*
+     * The plan, then the forced read beside the gates; with a zero
+     * threshold the guarded call after the gates reads once more.
+     */
+    expect(seenAtCall).toEqual([false, false, true])
+    expect(postWrites()).toHaveLength(1)
+  })
+
+  /*
+   * Scaled time: the threshold is hundreds of milliseconds here for the
+   * design's 10 s, with margin for the plan's own time under load.
+   */
+  it.each([
+    ['soon after the forced read', 420],
+    ['a while after it', 520],
+  ])(
+    '3b: gates done %s: the guarded call measures from the forced read and reads nothing more',
+    async (_name, gateMs) => {
+      REPLY_BLOCK_TIMING.prePostFreshMs = 400
+      slowGates(gateMs)
+      await postPrivate(new QueryClient(), opts(['reply'], PARENT, POSTGATE))
+      expect(seenAtCall).toEqual([false, false])
+      expect(postWrites()).toHaveLength(1)
+    },
+  )
+
+  it('3d (PR8-L1): a gate slower than the threshold past a clear forced read: a block made meanwhile is read before the post, and refuses', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 100
+    slowGates(450)
+    const start = Date.now()
+    answer = (call: Call) =>
+      relationshipsReply(
+        call,
+        Date.now() - start >= 250 ? {blockedBy: BLOCK_URI} : {},
+      ) as Reply
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, POSTGATE),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    // The plan, the clear forced read beside the gates, the read after them.
+    expect(seenAtCall).toEqual([false, false, true])
+    expect(pds.gates.size).toBe(0)
+    expect(postWrites()).toEqual([])
+  })
+
+  it('no gates: no timer and no forced read, one AppView call in all', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 0
+    REPLY_BLOCK_TIMING.freshMs = 60_000
+    await postPrivate(new QueryClient(), opts(['reply'], PARENT))
+    expect(seenAtCall).toHaveLength(2)
+    expect(postWrites()).toHaveLength(1)
+
+    // Fresh before the post, with no gates: the plan's call only.
+    seenAtCall = []
+    REPLY_BLOCK_TIMING.prePostFreshMs = 10_000
+    await postPrivate(new QueryClient(), opts(['reply'], PARENT))
+    expect(seenAtCall).toHaveLength(1)
+  })
+
+  it('slow gates with the AppView failing at the forced read: the neutral text, the gates deleted, no post', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 30
+    slowGates(200)
+    blockAtSecond({status: 500, body: {error: 'InternalServerError'}})
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, POSTGATE),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyCheckError)
+    expect(pds.gates.size).toBe(0)
+    expect(postWrites()).toEqual([])
+  })
+
+  it('fast gates (PR6-L1, PR7-L1): no forced read, and the reply posts though the AppView would fail any further call', async () => {
+    blockAtSecond({status: 500, body: {error: 'InternalServerError'}})
+    await postPrivate(new QueryClient(), opts(['reply'], PARENT, POSTGATE))
+    expect(seenAtCall).toHaveLength(1)
+    expect(pds.gates.size).toBe(1)
+    expect(postWrites()).toHaveLength(1)
+  })
+
+  it('PR5-N5: a refusal whose gate delete fails keeps the block text and logs the gate left behind', async () => {
+    REPLY_BLOCK_TIMING.prePostFreshMs = 30
+    slowGates(200)
+    blockAtSecond({blockedBy: BLOCK_URI})
+    pds.failures.gateDelete = () => ({status: 500, body: {error: 'Oops'}})
+    const logged = jest.spyOn(logger, 'error')
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, POSTGATE),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect(error).not.toBeInstanceOf(PrivateThreadPartlyPostedError)
+    const call = logged.mock.calls.find(
+      ([message]) => message === 'private thread could not be fully removed',
+    )
+    expect((call?.[1] as {uris: string[]}).uris).toEqual([
+      expect.stringMatching(/app\.bsky\.feed\.postgate/),
+    ])
+    expect(postWrites()).toEqual([])
+    logged.mockRestore()
+  })
+
+  it.each([
+    [
+      'a block refusal wins',
+      {blockedBy: BLOCK_URI},
+      PrivateReplyBlockedError,
+    ],
+    [
+      'a check that cannot be made leaves the gates’ own error',
+      {status: 500, body: {error: 'InternalServerError'}},
+      PrivateGatesNotSavedError,
+    ],
+  ] as [string, Record<string, unknown> | Reply, new () => Error][])(
+    'the gate write and the forced read both failing (PR7-N5): %s, with no unhandled rejection',
+    async (_name, second, expected) => {
+      const unhandled: unknown[] = []
+      const onUnhandled = (reason: unknown) => unhandled.push(reason)
+      process.on('unhandledRejection', onUnhandled)
+      REPLY_BLOCK_TIMING.prePostFreshMs = 30
+      slowGates(200)
+      blockAtSecond(second)
+      pds.failures.gateCreate = () => ({status: 500, body: {error: 'Oops'}})
+      const error = await postPrivate(
+        new QueryClient(),
+        opts(['reply'], PARENT, POSTGATE),
+      ).catch((e: unknown) => e)
+      await settle()
+      process.off('unhandledRejection', onUnhandled)
+      expect(error).toBeInstanceOf(expected)
+      expect(seenAtCall).toEqual([false, false])
+      expect(postWrites()).toEqual([])
+      expect(unhandled).toEqual([])
+    },
+  )
 })
