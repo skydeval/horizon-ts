@@ -51,6 +51,7 @@ jest.mock('#/horizon/appearance/prism', () => ({
 jest.mock('#/horizon/appearance/notices', () => ({
   migrationNoteText: () => 'MIGRATION NOTE',
   removalNoteText: () => 'REMOVAL NOTE',
+  takenNoteText: () => 'TAKEN NOTE',
   tooLargeNoteText: () => 'TOO LARGE NOTE',
 }))
 jest.mock('#/horizon/routing/membership', () => ({
@@ -267,6 +268,21 @@ describe('Save my appearance (section 2)', () => {
       </I18nProvider>,
     )
     expect(view.getByText('REMOVAL NOTE')).toBeTruthy()
+
+    // A device that copied prism's retained appearance says so.
+    mockCopy = {
+      ...emptyAccountCopy(),
+      store: 'device',
+      removalLine: true,
+      removalTaken: true,
+    }
+    view.rerender(
+      <I18nProvider i18n={i18n}>
+        <SaveAppearanceGroup />
+      </I18nProvider>,
+    )
+    expect(view.getByText('TAKEN NOTE')).toBeTruthy()
+    expect(view.queryByText('REMOVAL NOTE')).toBeNull()
   })
 
   it('the too-large note leaves a line until dismissed', () => {

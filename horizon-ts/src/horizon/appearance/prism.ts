@@ -40,9 +40,30 @@ export type PrismAppearanceValue = {
   raw: Record<string, unknown>
 } | null
 
-/** One prism answer, from a get or a put (section 4). */
+/**
+ * prism's feature for the 7-day retention (prism's reply): `includeRetained`,
+ * `retainedUntil` and `releaseAppearance`.
+ */
+export const APPEARANCE_RETENTION_FEATURE = 'private.appearanceRetention'
+
+/**
+ * A row prism kept after a removal (removed members design, section 5):
+ * never the live choice. `value` is null with `device`, or when it doesn't
+ * parse.
+ */
+export type RetainedAppearance = {
+  store: AppearanceStore
+  rev: string
+  value: PrismAppearanceValue
+}
+
+/**
+ * One prism answer, from a get or a put (section 4). A retained row is
+ * `row: false` with `retained`, so every site that tests `row` treats it as
+ * no row.
+ */
 export type PrismAppearanceAnswer =
-  | {row: false}
+  | {row: false; retained?: RetainedAppearance}
   | {
       row: true
       store: AppearanceStore
@@ -51,20 +72,22 @@ export type PrismAppearanceAnswer =
       value: PrismAppearanceValue
     }
 
-type AnswerBody = {
+export type AnswerBody = {
   store?: string
   appearance?: unknown
   rev?: string
+  retainedUntil?: string
 }
 
 /**
  * An answer body as Horizon reads it. Undefined for a `store` Horizon
  * doesn't know (a newer prism): read as unanswered, so nothing is written
- * under a choice this build can't follow.
+ * under a choice this build can't follow. The same for a retained row.
  */
 export function readPrismAnswer(
   body: AnswerBody,
 ): PrismAppearanceAnswer | undefined {
+  const retained = body.retainedUntil !== undefined
   if (body.store === undefined) return {row: false}
   const store = parseStore(body.store)
   if (!store) {
@@ -75,26 +98,43 @@ export function readPrismAnswer(
   }
   const parsed =
     store === 'device' ? null : parseAppearanceRecord(body.appearance)
-  return {
-    row: true,
-    store,
-    rev: body.rev ?? '',
-    value: parsed ? {appearance: parsed.appearance, raw: parsed.raw} : null,
-  }
+  const value = parsed ? {appearance: parsed.appearance, raw: parsed.raw} : null
+  const rev = body.rev ?? ''
+  if (retained) return {row: false, retained: {store, rev, value}}
+  return {row: true, store, rev, value}
 }
 
-/** The reader's row (`getAppearance`); throws on any failure. */
+/**
+ * The reader's row (`getAppearance`), always with `includeRetained`;
+ * throws on any failure.
+ */
 export async function getPrismAppearance(
   prism: Client,
   did: string,
 ): Promise<AnswerBody> {
+  const params = {includeRetained: true}
   const res = await reportedPrismCall(nearhorizon.privateGetAppearance, {
     did,
-    params: {},
+    params,
     send: signal =>
-      prism.call(nearhorizon.privateGetAppearance, {}, {signal}),
+      prism.call(nearhorizon.privateGetAppearance, params, {signal}),
   })
   return res.body
+}
+
+/**
+ * Release the row prism kept after a removal, swapped on `rev`
+ * (`releaseAppearance`); throws on failure. `{}` also when nothing is kept.
+ */
+export async function releasePrismAppearance(
+  prism: Client,
+  did: string,
+  rev: string,
+): Promise<void> {
+  await reportedPrismWrite(nearhorizon.privateReleaseAppearance, {
+    did,
+    send: () => prism.call(nearhorizon.privateReleaseAppearance, {rev}),
+  })
 }
 
 /** One put (5.1): the whole value, swapped on `swapRev`; throws on failure. */

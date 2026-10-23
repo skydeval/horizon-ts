@@ -57,6 +57,7 @@ jest.mock('#/horizon/appearance/notices', () => ({
   showRecordBlocked: () => mockNotices.showRecordBlocked(),
   showDeleteWarning: () => mockNotices.showDeleteWarning(),
   showTooLarge: () => mockNotices.showTooLarge(),
+  showTakenNote: () => {},
 }))
 const mockLogger = {
   warn: jest.fn(),

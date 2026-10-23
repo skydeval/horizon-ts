@@ -138,6 +138,27 @@ export function updateAccountCopy(
   })
 }
 
+/**
+ * A check-and-set on the stored copy (removed members design, 6.7): the
+ * stored value is read again first (another tab may have written since this
+ * one last heard it), and `change` is computed from it. `change` returns
+ * null to write nothing. Returns whether it wrote.
+ */
+export function updateStoredCopy(
+  did: string,
+  change: (copy: AccountCopy) => AccountCopy | null,
+): boolean {
+  load()
+  onDeviceChange()
+  const device = load().device
+  const copy = device.accounts[did]
+  if (!copy) return false
+  const next = change(copy)
+  if (!next) return false
+  setDeviceValue({...device, accounts: {...device.accounts, [did]: next}})
+  return true
+}
+
 /** Delete one account's copy, pending edit included. */
 export function deleteAccountCopy(did: string) {
   const device = load().device
@@ -221,10 +242,14 @@ export function editAppearance(
       appearance: next,
       seq: (old?.seq ?? 0) + 1,
     }
+    // Since a removal, every edit is named for the rejoin too.
+    const fallback = copy.fallback
+      ? {...copy.fallback, fields: union(copy.fallback.fields, fields)}
+      : null
     setDeviceValue({
       ...device,
       device: withoutThemePrefs(next),
-      accounts: {...device.accounts, [did]: {...copy, pending}},
+      accounts: {...device.accounts, [did]: {...copy, pending, fallback}},
     })
     syncHooks?.scheduleFlush(did)
   } else {
@@ -355,6 +380,7 @@ export function dismissAppearanceNote(did: string) {
     ...c,
     noted: false,
     removalLine: false,
+    removalTaken: false,
     tooLargeLine: false,
   }))
 }

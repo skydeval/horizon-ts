@@ -50,6 +50,7 @@ jest.mock('#/horizon/appearance/notices', () => ({
   showChoiceRefused: () => mockNotices.showChoiceRefused(),
   showRecordBlocked: () => mockNotices.showRecordBlocked(),
   showDeleteWarning: () => mockNotices.showDeleteWarning(),
+  showTakenNote: () => {},
 }))
 jest.mock('#/logger', () => ({
   logger: {

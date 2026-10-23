@@ -12,7 +12,12 @@ import {
   type AccountCopy,
   type PendingAppearance,
 } from '#/horizon/appearance/device-value'
-import {type Appearance, isThemePrefField} from '#/horizon/appearance/model'
+import {
+  type Appearance,
+  type AppearanceField,
+  DEFAULT_APPEARANCE,
+  isThemePrefField,
+} from '#/horizon/appearance/model'
 import {type PrismAppearanceAnswer} from '#/horizon/appearance/prism'
 
 /** A record read: the record with its CID, or none. */
@@ -84,23 +89,74 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
+export function unionFields(
+  a: readonly AppearanceField[],
+  b: readonly AppearanceField[],
+): AppearanceField[] {
+  return [...new Set([...a, ...b])]
+}
+
+/**
+ * Fold `fallback` into `pending` (removed members design, section 5): the
+ * fields edited on this device since a removal join `pending.fields`, with
+ * this device's value, so whatever row the copy meets next keeps them. With
+ * no field named, `pending` is left as it is, so prism's own value is never
+ * put back. `fallback` is dropped; `pending` is durable, so nothing is lost.
+ */
+export function mergeFallback(
+  copy: AccountCopy,
+  device: Appearance,
+): AccountCopy {
+  const fallback = copy.fallback
+  if (!fallback) return copy
+  const pending = copy.pending
+  const fields = unionFields(pending?.fields ?? [], fallback.fields)
+  if (fields.length === 0) return {...copy, fallback: null}
+  return {
+    ...copy,
+    fallback: null,
+    pending: {
+      ...pending,
+      fields,
+      appearance: pending?.appearance ?? copy.record ?? device,
+      seq: (pending?.seq ?? 0) + 1,
+    },
+  }
+}
+
 /**
  * Apply one prism answer (section 4): `store`, `storeKnown`, `rev` and the
  * value are stored, and `pending` is rebased onto the row's value, or onto
  * this device's own copy when the row says `device`. With no row only `rev`
- * changes (`''`); the member table decides the rest.
+ * changes (`''`); the member table decides the rest. A retained row is never
+ * applied as the live copy: only its `rev` is stored, so a put swaps on it.
+ *
+ * A live row ends anything left from a removal (removed members design,
+ * section 5): the edits made since are merged first with `private` (and
+ * rebased onto prism's value with the rest of `pending`), and dropped with
+ * `public` (they were made under "This device only", so they aren't
+ * published) and `device` (the copy already holds them). `device` is this
+ * device's own appearance, for a copy with no value.
  */
 export function applyPrismAnswer(
   copy: AccountCopy,
   answer: PrismAppearanceAnswer,
   now: number = Date.now(),
+  device: Appearance = DEFAULT_APPEARANCE,
 ): AccountCopy {
-  if (!answer.row) return {...copy, rev: '', syncedAt: now}
+  if (!answer.row) {
+    if (answer.retained) return {...copy, rev: answer.retained.rev}
+    return {...copy, rev: '', syncedAt: now}
+  }
+  const merged =
+    answer.store === 'private'
+      ? mergeFallback(copy, device)
+      : {...copy, fallback: null}
   const value = answer.store === 'device' ? null : answer.value
-  const record = value ? value.appearance : copy.record
-  const raw = value ? value.raw : copy.raw
+  const record = value ? value.appearance : merged.record
+  const raw = value ? value.raw : merged.raw
   return {
-    ...copy,
+    ...merged,
     store: answer.store,
     storeKnown: true,
     rev: answer.rev,
@@ -108,14 +164,32 @@ export function applyPrismAnswer(
     raw: record ? (raw ?? {}) : null,
     cid: null,
     syncedAt: now,
-    pending: rebased(copy.pending, record),
+    pending: rebased(merged.pending, record),
     memberDevice: answer.store === 'device',
-    // The next member row answered clears it (8.4).
+    // The next member row answered clears the removal's notes (8.4).
     removalNoted: false,
+    removalLine: false,
+    removalTaken: false,
+    // A member replaces or follows the row; no release is sent.
+    take: null,
+    fallback: null,
     // A row exists: the migration is no longer blocked by size.
     tooLarge: false,
     tooLargeLine: false,
   }
+}
+
+/**
+ * Whether a copy meeting a retained row `rev` takes its value rather than
+ * putting its own (removed members design, section 5, step 1): a copy with
+ * no `fallback` never learned of the removal, so its copy is its last member
+ * read; a take still at `fetch` never imported; and a `fallback.rev` that is
+ * set (`''` counts) and not `rev` means the copy holds another row.
+ */
+function importsRetained(copy: AccountCopy, rev: string): boolean {
+  if (!copy.fallback) return true
+  if (copy.take?.step === 'fetch') return true
+  return copy.fallback.rev !== undefined && copy.fallback.rev !== rev
 }
 
 function nextSeq(copy: AccountCopy): number {
@@ -136,7 +210,7 @@ export function memberTable(
   device: Appearance,
 ): {copy: AccountCopy; resolved: boolean} {
   if (answer.row) {
-    const next = applyPrismAnswer(copy, answer)
+    const next = applyPrismAnswer(copy, answer, Date.now(), device)
     if (record && checkRecord) {
       const disagrees =
         answer.store === 'public'
@@ -146,12 +220,30 @@ export function memberTable(
     }
     return {copy: next, resolved: true}
   }
-  // No row: nothing is created before `getRecord` answers (AS8-N2).
+  /*
+   * No live row (none, or a retained one): nothing is created before
+   * `getRecord` answers (AS8-N2). Every put below swaps on the retained
+   * row's `rev`, which replaces it and makes it live.
+   */
+  const retained = answer.retained
+  const rowRev = retained?.rev ?? ''
   if (!record) {
-    return {copy: {...copy, rev: '', storeKnown: false}, resolved: false}
+    return {copy: {...copy, rev: rowRev, storeKnown: false}, resolved: false}
   }
-  const base: AccountCopy = {...copy, rev: '', storeKnown: true}
-  const pending = copy.pending
+  /*
+   * Resolved: the copy is classified as it is, then anything left from a
+   * removal is merged into `pending` and cleared in the same write
+   * (removed members design, section 5).
+   */
+  const imports = retained ? importsRetained(copy, retained.rev) : false
+  const base: AccountCopy = {
+    ...mergeFallback(copy, device),
+    rev: rowRev,
+    storeKnown: true,
+    take: null,
+    fallback: null,
+  }
+  const pending = base.pending
   // A row creation already pending: nothing more to decide.
   if (pending?.auto) return {copy: base, resolved: true}
   const user = pending?.store
@@ -185,7 +277,7 @@ export function memberTable(
       appearance: pending
         ? rebase(record.appearance, pending.appearance, pending.fields)
         : record.appearance,
-      seq: nextSeq(copy),
+      seq: nextSeq(base),
       store: target,
     }
     if (!user) migrated.auto = true
@@ -202,17 +294,83 @@ export function memberTable(
       resolved: true,
     }
   }
-  if (copy.store === 'device') {
+  if (retained?.store === 'device') {
+    /*
+     * A retained `device` row and no record: the account chose "This
+     * device only" as a member. The copy stays, `pending` folds, and a put
+     * `{store: device}` replaces the retained row.
+     */
+    const folded = foldPending(base)
+    if (user) return {copy: folded, resolved: true}
+    return {
+      copy: {
+        ...folded,
+        store: 'device',
+        pending: {
+          fields: [],
+          appearance: folded.record ?? device,
+          seq: nextSeq(folded),
+          store: 'device',
+          auto: true,
+        },
+      },
+      resolved: true,
+    }
+  }
+  const value = retained?.value
+  if (value && imports) {
+    /*
+     * A copy that doesn't hold the retained row (or anything newer) takes
+     * its value, with this device's edits since the removal laid over it,
+     * and puts it back as `private`. A `public` value is imported as a
+     * value, never followed as a store (AS4-L1).
+     */
+    const fields = pending?.fields ?? []
+    const current = pending?.appearance ?? base.record ?? device
+    const next: PendingAppearance = {
+      fields,
+      appearance: rebase(value.appearance, current, fields),
+      seq: nextSeq(base),
+      store: user ?? 'private',
+    }
+    if (!user) next.auto = true
+    return {
+      copy: {...base, record: value.appearance, raw: value.raw, pending: next},
+      resolved: true,
+    }
+  }
+  if (value && base.record && base.store !== 'device') {
+    /*
+     * A copy that holds the retained row or newer: its own copy replaces
+     * the row, so no retained row outlives a resolved run (RM2R2-N5). A
+     * copy on `device` moves up below, as it would with no row.
+     */
     if (user) return {copy: base, resolved: true}
-    // 8.1, 8.5: keep `device` only on positive evidence.
-    const target = copy.memberDevice ? 'device' : 'private'
     return {
       copy: {
         ...base,
         pending: {
           fields: pending?.fields ?? [],
-          appearance: pending?.appearance ?? copy.record ?? device,
-          seq: nextSeq(copy),
+          appearance: pending?.appearance ?? base.record,
+          seq: nextSeq(base),
+          store: 'private',
+          auto: true,
+        },
+      },
+      resolved: true,
+    }
+  }
+  if (base.store === 'device') {
+    if (user) return {copy: base, resolved: true}
+    // 8.1, 8.5: keep `device` only on positive evidence.
+    const target = base.memberDevice ? 'device' : 'private'
+    return {
+      copy: {
+        ...base,
+        pending: {
+          fields: pending?.fields ?? [],
+          appearance: pending?.appearance ?? base.record ?? device,
+          seq: nextSeq(base),
           store: target,
           auto: true,
         },

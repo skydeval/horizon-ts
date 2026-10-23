@@ -39,6 +39,7 @@ import {
   prismCallsOf,
   type PrismRow,
   recordValue,
+  removeFromPrism,
   type Stored,
 } from './harness'
 
@@ -55,10 +56,12 @@ const mockNotices = {
   showChoiceRefused: jest.fn(),
   showRecordBlocked: jest.fn(),
   showDeleteWarning: jest.fn(),
+  showTakenNote: jest.fn(),
 }
 jest.mock('#/horizon/appearance/notices', () => ({
   showMigrationNote: () => mockNotices.showMigrationNote(),
   showRemovalNote: () => mockNotices.showRemovalNote(),
+  showTakenNote: () => mockNotices.showTakenNote(),
   showChoiceRefused: () => mockNotices.showChoiceRefused(),
   showRecordBlocked: () => mockNotices.showRecordBlocked(),
   showDeleteWarning: () => mockNotices.showDeleteWarning(),
@@ -158,23 +161,30 @@ beforeEach(() => {
 })
 
 describe('removal detection (8.2)', () => {
-  it('`notEligible` starts the removal flow', async () => {
+  it('`notEligible` starts the removal flow; the take only reads prism', async () => {
     const {prism} = await member({prismRow: row('private')})
     const sent = prism.server.calls.length
+    removeFromPrism(prism.server)
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(copy()).toMatchObject({store: 'device', rev: null})
-    expect(appearanceCalls(prism, sent)).toHaveLength(0)
-    expect(mockNotices.showRemovalNote).toHaveBeenCalledTimes(1)
+    const calls = appearanceCalls(prism, sent)
+    expect(calls.map(call => call.nsid)).toEqual([
+      'app.nearhorizon.private.getAppearance',
+    ])
+    expect(calls[0].params.get('includeRetained')).toBe('true')
+    expect(mockNotices.showTakenNote).toHaveBeenCalledTimes(1)
+    expect(mockNotices.showRemovalNote).not.toHaveBeenCalled()
   })
 
   it('a private call’s `NotEnrolled` starts it', async () => {
-    await member({prismRow: row('private')})
+    const {prism} = await member({prismRow: row('private')})
+    removeFromPrism(prism.server)
     reportPrismError(DID, xrpcError(400, 'NotEnrolled'))
     await drain()
     expect(getMembership(DID)).toBe('not-member')
     expect(copy()).toMatchObject({store: 'device', rev: null})
-    expect(mockNotices.showRemovalNote).toHaveBeenCalledTimes(1)
+    expect(mockNotices.showTakenNote).toHaveBeenCalledTimes(1)
   })
 
   const notRemoval: [string, () => Promise<void> | void][] = [
@@ -212,21 +222,23 @@ describe('removal detection (8.2)', () => {
 })
 
 describe('the removal flow (8.3)', () => {
-  it('signed in at removal: the copy and a pending edit are kept, nothing sent to prism', async () => {
+  it('signed in at removal: a pending edit is kept over the copy, nothing written to prism', async () => {
     const {pds, prism} = await member({prismRow: row('private')})
     const held = prism.server.calls.length
-    prism.server.next.put = [
-      {status: 400, body: {error: 'NotEnrolled', message: 'Not enrolled'}},
-    ]
+    removeFromPrism(prism.server)
     store.selectBackdrop(DID, 'pride.gay')
     await sync.flush(DID)
     await drain()
-    // The put itself got `NotEnrolled`; nothing after it reached prism.
-    expect(appearanceCalls(prism, held)).toHaveLength(1)
+    // The put itself got `NotEnrolled`; after it, only the take's read.
+    expect(appearanceCalls(prism, held).map(call => call.nsid)).toEqual([
+      'app.nearhorizon.private.putAppearance',
+      'app.nearhorizon.private.getAppearance',
+    ])
     expect(copy().store).toBe('device')
     expect(copy().record?.backdrop).toBe('pride.gay')
+    expect(copy().fallback?.fields).toEqual(['backdrop'])
     expect(callsOf(pds.server, 'putRecord')).toHaveLength(0)
-    expect(mockNotices.showRemovalNote).toHaveBeenCalledTimes(1)
+    expect(mockNotices.showTakenNote).toHaveBeenCalledTimes(1)
   })
 
   it('nothing folds or flushes before getRecord answers', async () => {
@@ -257,14 +269,19 @@ describe('the removal flow (8.3)', () => {
     expect(mockNotices.showRemovalNote).not.toHaveBeenCalled()
   })
 
-  it('no record: `device`, the note when it was `private`, once per removal', async () => {
-    await member({prismRow: row('private')})
+  it('no record and nothing retained: `device`, the note when it was `private`, once per removal', async () => {
+    const {prism} = await member({prismRow: row('private')})
+    // prism kept nothing (a purge, or another device released it).
+    prism.server.member = false
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(copy()).toMatchObject({
       store: 'device',
       removalNoted: true,
       removalLine: true,
+      removalTaken: false,
+      take: null,
+      fallback: {fields: [], rev: 'rev-0'},
     })
     await sync.refresh(DID)
     await drain()
@@ -272,11 +289,14 @@ describe('the removal flow (8.3)', () => {
   })
 
   it('no note when it was `device` already', async () => {
-    await member({prismRow: row('device')})
+    const {prism} = await member({prismRow: row('device')})
+    removeFromPrism(prism.server)
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(copy().store).toBe('device')
+    expect(copy().take).toBeNull()
     expect(mockNotices.showRemovalNote).not.toHaveBeenCalled()
+    expect(mockNotices.showTakenNote).not.toHaveBeenCalled()
   })
 
   it('a due delete becomes `cleanup`, and the derivation gives `device`', async () => {
@@ -341,7 +361,9 @@ describe('the removal flow (8.3)', () => {
       pending: {fields: [], appearance: DEFAULT_APPEARANCE, seq: 1, store: 'private'},
     })
     const pds = fakePds(DID, {value, cid: CIDS[5]})
-    sync.registerAppearanceClient(DID, pds.client, fakePrism(DID).client)
+    const empty = fakePrism(DID)
+    empty.server.member = false
+    sync.registerAppearanceClient(DID, pds.client, empty.client)
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(copy().store).toBe('device')
@@ -388,15 +410,16 @@ describe('the removal flow (8.3)', () => {
     expect(mockNotices.showRemovalNote).not.toHaveBeenCalled()
   })
 
-  it('a fresh device after the removal: `device`, its own look, no note', async () => {
+  it('a fresh device with nothing retained: `device`, its own look, no note', async () => {
     const pds = fakePds(DID)
     const prism = fakePrism(DID)
+    prism.server.member = false
     sync.registerAppearanceClient(DID, pds.client, prism.client)
     await answerMembership(DID, 'notEligible')
     await sync.refresh(DID)
     await drain()
-    expect(copy().store).toBe('device')
-    expect(prism.server.calls).toHaveLength(0)
+    expect(copy()).toMatchObject({store: 'device', take: null, fallback: null})
+    expect(prismCallsOf(prism.server, 'getAppearance')).toHaveLength(1)
     expect(mockNotices.showRemovalNote).not.toHaveBeenCalled()
   })
 })
@@ -456,14 +479,21 @@ describe('rejoining (8.5)', () => {
   })
 
   it('`removalNoted` is cleared by the next member row, and a second removal notes again', async () => {
-    await member({prismRow: row('private')})
+    const {prism} = await member({prismRow: row('private')})
+    prism.server.member = false
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(mockNotices.showRemovalNote).toHaveBeenCalledTimes(1)
+    prism.server.member = true
     await answerMembership(DID, 'member')
     await drain()
-    expect(copy().removalNoted).toBe(false)
-    expect(copy().store).toBe('private')
+    expect(copy()).toMatchObject({
+      removalNoted: false,
+      removalLine: false,
+      store: 'private',
+      fallback: null,
+    })
+    prism.server.member = false
     await answerMembership(DID, 'notEligible')
     await drain()
     expect(mockNotices.showRemovalNote).toHaveBeenCalledTimes(2)

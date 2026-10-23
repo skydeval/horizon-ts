@@ -49,6 +49,12 @@ export const PRISM_FEATURES = [
    */
   'private.appearance',
   /*
+   * A removed member's appearance kept for 7 days (removed members design;
+   * prism's reply): `getAppearance`'s `includeRetained` and `retainedUntil`,
+   * and `releaseAppearance`. Unlisted, a removed device keeps its own copy.
+   */
+  'private.appearanceRetention',
+  /*
    * Off-locus private posts are fully served and plaintext is refused (2K
    * design 2.3): the `encode` posting route needs it.
    */

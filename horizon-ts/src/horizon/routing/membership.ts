@@ -21,7 +21,7 @@ import {
 
 import {logger} from '#/logger'
 import {nearhorizon} from '#/horizon/lexicons'
-import {devPrismFault} from '#/horizon/private/api/dev-fault'
+import {devPrismFault, isRemovalFault} from '#/horizon/private/api/dev-fault'
 import {
   parseRetryAfter,
   PRISM_HINT_FALLBACK_MS,
@@ -508,7 +508,7 @@ export function startMembershipProbe(
      * The development fault switch: a removed member after the purge, or a
      * non-member (appearance storage choice design 11.1).
      */
-    if (fault === 'not-enrolled') {
+    if (isRemovalFault(fault)) {
       return {kind: 'state', state: 'not-member', features, indexed}
     }
     if (status === 'reindexing' || faulted) {

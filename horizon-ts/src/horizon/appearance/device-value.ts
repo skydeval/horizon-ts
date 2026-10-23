@@ -66,6 +66,47 @@ export type PendingAppearance = {
   auto?: boolean
 }
 
+/**
+ * A copy of a removed member's retained appearance in flight (removed
+ * members design, section 6). Durable: resumed after a restart, never
+ * restarted.
+ * - `fetch`: ask prism for the retained row, and copy it here;
+ * - `release`: copied from the row `rev` at `copiedAt`; on a later launch,
+ *   once the wait has passed, prism's copy is released.
+ */
+export type AppearanceTake = {
+  step: 'fetch' | 'release'
+  /**
+   * Started by a device that never resolved the account (no copy, or a
+   * copy a sign-out deleted), not by the removal flow. Nothing retained
+   * then clears `fallback` too, so a never-member's first join is as
+   * before.
+   */
+  fresh?: boolean
+  /** The row copied, at `release`. */
+  rev?: string
+  /** Epoch ms of the copy, at `release` (device time). */
+  copiedAt?: number
+  /**
+   * The core's removal note is owed if this device ends up keeping its own
+   * copy: the member's store was `private` (or the user had just chosen
+   * it) and the note wasn't shown for this removal yet.
+   */
+  keptNote: boolean
+}
+
+/**
+ * What a rejoin needs from the time this device was removed (removed
+ * members design, section 4): the fields edited on this device since the
+ * removal, which a rejoin lays over prism's value, and the prism row this
+ * copy holds or comes from (`''`: the member had no row; undefined: none
+ * known).
+ */
+export type AppearanceFallback = {
+  fields: AppearanceField[]
+  rev?: string
+}
+
 export type AccountCopy = {
   /**
    * The account's value as this device last had it. A non-member: the
@@ -121,6 +162,15 @@ export type AccountCopy = {
   tooLarge: boolean
   /** The too-large note's line under the setting shows, until dismissed. */
   tooLargeLine: boolean
+  /** A copy of the retained appearance in flight (removed members design). */
+  take: AppearanceTake | null
+  /** Edits made since a removal, for the rejoin (removed members design). */
+  fallback: AppearanceFallback | null
+  /**
+   * The removal line shows the "moved it here" text: this device copied
+   * prism's retained appearance. Cleared with `removalLine`.
+   */
+  removalTaken: boolean
 }
 
 export type DeviceAppearanceV1 = {
@@ -173,6 +223,9 @@ export function emptyAccountCopy(): AccountCopy {
     removalLine: false,
     tooLarge: false,
     tooLargeLine: false,
+    take: null,
+    fallback: null,
+    removalTaken: false,
   }
 }
 
@@ -220,14 +273,18 @@ export function parseStoredAppearance(value: unknown): Appearance | null {
   })
 }
 
+function parseFields(value: unknown[]): AppearanceField[] {
+  return value.filter(
+    (field): field is AppearanceField =>
+      typeof field === 'string' && FIELDS.has(field),
+  )
+}
+
 function parsePending(value: unknown): AccountCopy['pending'] {
   if (!isObject(value)) return null
   const appearance = parseStoredAppearance(value.appearance)
   if (!appearance || !Array.isArray(value.fields)) return null
-  const fields = value.fields.filter(
-    (field): field is AppearanceField =>
-      typeof field === 'string' && FIELDS.has(field),
-  )
+  const fields = parseFields(value.fields)
   const seq =
     typeof value.seq === 'number' && Number.isInteger(value.seq) ? value.seq : 0
   const store = parseStore(value.store)
@@ -249,6 +306,32 @@ function parseCleanup(value: unknown): AccountCopy['cleanup'] {
     return null
   }
   return {cid: value.cid}
+}
+
+/** A stored take; null for anything else (a take at `release` needs its row). */
+function parseTake(value: unknown): AppearanceTake | null {
+  if (!isObject(value)) return null
+  const keptNote = value.keptNote === true
+  if (value.step === 'fetch') {
+    return value.fresh === true
+      ? {step: 'fetch', fresh: true, keptNote}
+      : {step: 'fetch', keptNote}
+  }
+  if (
+    value.step === 'release' &&
+    typeof value.rev === 'string' &&
+    typeof value.copiedAt === 'number' &&
+    Number.isFinite(value.copiedAt)
+  ) {
+    return {step: 'release', rev: value.rev, copiedAt: value.copiedAt, keptNote}
+  }
+  return null
+}
+
+function parseFallback(value: unknown): AppearanceFallback | null {
+  if (!isObject(value)) return null
+  const fields = Array.isArray(value.fields) ? parseFields(value.fields) : []
+  return typeof value.rev === 'string' ? {fields, rev: value.rev} : {fields}
 }
 
 function parseCopy(value: unknown): AccountCopy | null {
@@ -279,6 +362,9 @@ function parseCopy(value: unknown): AccountCopy | null {
     removalLine: value.removalLine === true,
     tooLarge: value.tooLarge === true,
     tooLargeLine: value.tooLargeLine === true,
+    take: parseTake(value.take),
+    fallback: parseFallback(value.fallback),
+    removalTaken: value.removalTaken === true,
   }
 }
 

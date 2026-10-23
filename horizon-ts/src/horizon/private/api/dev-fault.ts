@@ -28,6 +28,12 @@
  *   after the purge, or a non-member. Every private call answers 400
  *   `NotEnrolled`, the appearance methods included, and the probe answers
  *   `notEligible` with the features prism answered.
+ * - `not-enrolled-retained` (removed members design 10.1): a removed member
+ *   within prism's 7 days. As `not-enrolled`, except that `getAppearance` is
+ *   sent and a row in its answer is marked retained (`retainedUntil` now
+ *   plus 7 days; an answer with no row is 400 `NotEnrolled`), and
+ *   `releaseAppearance` answers `{}` without being sent, so a live check
+ *   never deletes a real row.
  */
 
 import {XrpcResponseError} from '@atproto/lex'
@@ -51,7 +57,19 @@ export const DEV_PRISM_FAULTS = [
   'thread-500',
   'hang',
   'not-enrolled',
+  'not-enrolled-retained',
 ] as const
+
+const GET_APPEARANCE = 'app.nearhorizon.private.getAppearance'
+const RELEASE_APPEARANCE = 'app.nearhorizon.private.releaseAppearance'
+
+/** prism's retention after a removal (prism's reply). */
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
+/** Whether `fault` answers as a removed member (the probe's `notEligible`). */
+export function isRemovalFault(fault: DevPrismFault | undefined): boolean {
+  return fault === 'not-enrolled' || fault === 'not-enrolled-retained'
+}
 
 export type DevPrismFault = (typeof DEV_PRISM_FAULTS)[number]
 
@@ -187,10 +205,28 @@ export async function withDevFault<T>(
       return omitted(nsid, await send(), fault === 'degraded') as T
     case 'hang':
       return hang(signal)
+    case 'not-enrolled-retained':
+      if (nsid === RELEASE_APPEARANCE) return {} as T
+      if (nsid === GET_APPEARANCE) {
+        const body = (await send()) as unknown
+        if (
+          typeof body === 'object' &&
+          body !== null &&
+          (body as {store?: unknown}).store !== undefined
+        ) {
+          const retainedUntil = new Date(Date.now() + RETENTION_MS).toISOString()
+          return {...body, retainedUntil} as T
+        }
+      }
+      throw notEnrolled(method)
     case 'not-enrolled':
-      throw answered(method, 400, {
-        error: 'NotEnrolled',
-        message: 'Not enrolled in this AppView',
-      })
+      throw notEnrolled(method)
   }
+}
+
+function notEnrolled(method: Method): XrpcResponseError {
+  return answered(method, 400, {
+    error: 'NotEnrolled',
+    message: 'Not enrolled in this AppView',
+  })
 }

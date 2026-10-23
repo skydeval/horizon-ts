@@ -125,20 +125,47 @@ export type PrismRow = {
   rev: string
 }
 
+/** prism's retention after a removal (prism's reply). */
+export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
+const NOT_ENROLLED: Reply = {
+  status: 400,
+  body: {error: 'NotEnrolled', message: 'Not enrolled in this AppView'},
+}
+
 /**
  * A fake prism: `getAppearance` answers the row (`{}` with none);
  * `putAppearance` checks the store, the value's 16 KiB cap (prism's reply;
  * other fields are kept as sent), swaps on
  * `swapRev` (`''`: only if there is no row) and gives every write a new
  * `rev`.
+ *
+ * The retention (prism's reply, `b14247b`): `removeFromPrism` makes the
+ * account a non-member and keeps its row until `retainedUntil` (the removal
+ * plus 7 days, by `server.now`). A retained row is answered only with
+ * `includeRetained`, marked `retainedUntil`; without it a member gets `{}`
+ * and a non-member `NotEnrolled`. Any put replaces it (`swapRev` `''` or its
+ * `rev`). `releaseAppearance` deletes it on its `rev`, answers `{}` with
+ * none, and `InvalidRequest` to a member. Past `retainedUntil` it is gone.
  */
 export function fakePrism(did: string, initial: PrismRow | null = null) {
   const server = {
     row: initial,
+    /** Whether the account is a member. */
+    member: true,
+    /** Epoch ms the row is kept until, while retained. */
+    retainedUntil: null as number | null,
+    now: () => Date.now(),
     calls: [] as Call[],
-    next: {get: [] as Reply[], put: [] as Reply[]},
+    next: {get: [] as Reply[], put: [] as Reply[], release: [] as Reply[]},
     holds: {get: [] as Gate[], put: [] as Gate[]},
     revs: 0,
+  }
+  const sweep = () => {
+    if (server.retainedUntil !== null && server.now() >= server.retainedUntil) {
+      server.row = null
+      server.retainedUntil = null
+    }
   }
   const body = () =>
     server.row
@@ -156,13 +183,38 @@ export function fakePrism(did: string, initial: PrismRow | null = null) {
       if (hold) await hold.promise
       const forced = server.next.get.shift()
       if (forced) return forced
-      return {status: 200, body: body()}
+      sweep()
+      if (server.retainedUntil !== null) {
+        if (call.params.get('includeRetained') === 'true') {
+          const retainedUntil = new Date(server.retainedUntil).toISOString()
+          return {status: 200, body: {...body(), retainedUntil}}
+        }
+        return server.member ? {status: 200, body: {}} : NOT_ENROLLED
+      }
+      return server.member ? {status: 200, body: body()} : NOT_ENROLLED
+    }
+    if (call.nsid === 'app.nearhorizon.private.releaseAppearance') {
+      const forced = server.next.release.shift()
+      if (forced) return forced
+      sweep()
+      if (server.member) {
+        return {status: 400, body: {error: 'InvalidRequest', message: 'member'}}
+      }
+      if (server.retainedUntil === null) return {status: 200, body: {}}
+      if (call.body?.rev !== server.row?.rev) {
+        return {status: 400, body: {error: 'InvalidSwap', message: 'rev'}}
+      }
+      server.row = null
+      server.retainedUntil = null
+      return {status: 200, body: {}}
     }
     if (call.nsid === 'app.nearhorizon.private.putAppearance') {
       const hold = server.holds.put.shift()
       if (hold) await hold.promise
       const forced = server.next.put.shift()
       if (forced) return forced
+      sweep()
+      if (!server.member) return NOT_ENROLLED
       const input = call.body ?? {}
       const store = input.store as PrismRow['store']
       const hasValue = input.appearance !== undefined
@@ -184,10 +236,13 @@ export function fakePrism(did: string, initial: PrismRow | null = null) {
       }
       if ('swapRev' in input) {
         const current = server.row?.rev ?? ''
-        if (input.swapRev !== current) {
+        // A create-only put also replaces a retained row.
+        const retained = server.retainedUntil !== null && input.swapRev === ''
+        if (input.swapRev !== current && !retained) {
           return {status: 400, body: {error: 'InvalidSwap', message: 'rev'}}
         }
       }
+      server.retainedUntil = null
       server.row = {
         store,
         rev: `rev-${++server.revs}`,
@@ -200,6 +255,19 @@ export function fakePrism(did: string, initial: PrismRow | null = null) {
     return {status: 501, body: {error: 'MethodNotImplemented'}}
   })
   return {server, client}
+}
+
+type FakePrismServer = ReturnType<typeof fakePrism>['server']
+
+/** The account is removed: its row (if any) is kept for 7 days. */
+export function removeFromPrism(server: FakePrismServer) {
+  server.member = false
+  server.retainedUntil = server.row ? server.now() + RETENTION_MS : null
+}
+
+/** The account is a member again; a retained row stays until a put. */
+export function rejoinPrism(server: FakePrismServer) {
+  server.member = true
 }
 
 const quietEnv: ProbeEnvironment = {
@@ -218,14 +286,19 @@ export async function drain(rounds = 30) {
 
 /**
  * Answer `did`'s membership as prism's `getMembership` would, through the
- * real probe: `member` with `private.appearance` listed (`feature`), or not.
+ * real probe: `member` with `private.appearance` listed (`feature`), or not,
+ * and `private.appearanceRetention` listed (`retention`), or not.
  */
 export async function answerMembership(
   did: string,
   status: 'member' | 'notEligible' | 'indexing',
-  {feature = true}: {feature?: boolean} = {},
+  {feature = true, retention = true}: {feature?: boolean; retention?: boolean} = {},
 ) {
-  const features = ['private', ...(feature ? ['private.appearance'] : [])]
+  const features = [
+    'private',
+    ...(feature ? ['private.appearance'] : []),
+    ...(retention ? ['private.appearanceRetention'] : []),
+  ]
   const probe = fakeClient(did, () => ({
     status: 200,
     body: {status, features, validForSecs: 3600},

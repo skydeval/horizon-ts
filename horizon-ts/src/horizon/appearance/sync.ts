@@ -71,6 +71,11 @@ import {
   registerAppearanceSync,
   updateAccountCopy,
 } from '#/horizon/appearance/store'
+import {
+  kickTake,
+  resetTakeForTests,
+  withFreshTake,
+} from '#/horizon/appearance/take'
 import {subscribePrismFeatures} from '#/horizon/routing/features'
 import {subscribeMembership} from '#/horizon/routing/membership'
 import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
@@ -223,7 +228,10 @@ function applyPrism(
   if (seq <= (prismApplied.get(did) ?? 0)) return false
   prismApplied.set(did, seq)
   runPrism.set(did, answer)
-  updateAccountCopy(did, copy => applyPrismAnswer(copy, answer))
+  const device = getAppearanceState().device.device
+  updateAccountCopy(did, copy =>
+    applyPrismAnswer(copy, answer, Date.now(), device),
+  )
   return true
 }
 
@@ -273,7 +281,7 @@ async function readRecordInto(
  * queue runs whatever it decides.
  */
 function settle(did: string) {
-  const {mode} = appearanceMode(did)
+  const {mode, removed} = appearanceMode(did)
   const read = runRecord.get(did)
   if (mode === 'member') {
     const answer = runPrism.get(did)
@@ -290,8 +298,21 @@ function settle(did: string) {
   if (mode === 'non-member') {
     // A copy last resolved as a member goes through the removal flow first.
     if ((copyOf(did)?.rev ?? null) !== null) return
-    updateAccountCopy(did, copy => nonMemberTable(copy, read?.answer).copy)
+    updateAccountCopy(did, copy =>
+      withFreshTake(copy, nonMemberTable(copy, read?.answer).copy, removed),
+    )
   }
+}
+
+/** The take, after a queue pass and outside it (removed members design, 6.4). */
+function kick(did: string) {
+  const client = clientFor(did)
+  if (!client || appearanceMode(did).mode === 'unresolved') return
+  void kickTake(did, {
+    prism: prismFor(did),
+    stillCurrent: () => clientFor(did) === client,
+    nonMember: () => appearanceMode(did).mode === 'non-member',
+  })
 }
 
 function contextFor(
@@ -545,6 +566,12 @@ function refusedTooLarge(did: string, sent: PendingAppearance) {
   if (warn) showBlockedOnce()
 }
 
+/** Whether prism's last answer applied in this run was a retained row. */
+function lastAnswerRetained(did: string): boolean {
+  const answer = runPrism.get(did)
+  return !!answer && !answer.row && !!answer.retained
+}
+
 /** The member flush (5.1): one put, swapped on `rev`. */
 async function memberFlush(
   did: string,
@@ -557,7 +584,16 @@ async function memberFlush(
   if (!sent) return 'done'
   const target = sent.store ?? copy.store
   if (!target) return 'done'
-  if (target === 'device' && copy.store === 'device' && copy.rev !== '') {
+  /*
+   * `device` on both sides folds and sends nothing, except over a retained
+   * row: the put `{store: device}` has to reach prism, or the row expires.
+   */
+  if (
+    target === 'device' &&
+    copy.store === 'device' &&
+    copy.rev !== '' &&
+    !lastAnswerRetained(did)
+  ) {
     updateAccountCopy(did, c => foldOnDevice(c, sent.store))
     return 'done'
   }
@@ -741,6 +777,8 @@ export async function flush(did: string, retries = 0): Promise<void> {
     await flush(did, retries + 1)
   } else if (again.delete(did)) {
     await flush(did)
+  } else {
+    kick(did)
   }
 }
 
@@ -763,6 +801,7 @@ export function resetAppearanceSyncForTests() {
   prismApplied.clear()
   skipRecordStep.clear()
   modeSeen.clear()
+  resetTakeForTests()
   unsubscribeAnswers?.()
   unsubscribeAnswers = null
   registerAppearanceSync({scheduleFlush, flushNow})

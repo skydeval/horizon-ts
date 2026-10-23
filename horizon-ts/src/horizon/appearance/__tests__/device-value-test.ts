@@ -146,3 +146,61 @@ describe('storage choice fields (AP-B1)', () => {
     expect(parseDeviceValue(serializeDeviceValue(value))).toEqual(value)
   })
 })
+
+describe('removed members fields (RM-B1)', () => {
+  it('a copy without them reads as none', () => {
+    expect(parseCopy({store: 'device'})).toMatchObject({
+      take: null,
+      fallback: null,
+      removalTaken: false,
+    })
+  })
+
+  it('parses `take`, `fallback` and `removalTaken` leniently', () => {
+    expect(
+      parseCopy({
+        take: {step: 'fetch', fresh: true, keptNote: true},
+        fallback: {fields: ['backdrop', 'nonsense', 3], rev: ''},
+        removalTaken: true,
+      }),
+    ).toMatchObject({
+      take: {step: 'fetch', fresh: true, keptNote: true},
+      // `''` is a rev (a member with no row); unknown fields are dropped.
+      fallback: {fields: ['backdrop'], rev: ''},
+      removalTaken: true,
+    })
+    expect(
+      parseCopy({take: {step: 'release', rev: 'r1', copiedAt: 5}}).take,
+    ).toEqual({step: 'release', rev: 'r1', copiedAt: 5, keptNote: false})
+    // A take at `release` needs its row and its time.
+    expect(parseCopy({take: {step: 'release', rev: 'r1'}}).take).toBeNull()
+    expect(parseCopy({take: {step: 'check'}}).take).toBeNull()
+    expect(parseCopy({fallback: {fields: 'x'}}).fallback).toEqual({fields: []})
+    expect(parseCopy({fallback: {fields: [], rev: 4}}).fallback).toEqual({
+      fields: [],
+    })
+  })
+
+  it('a stored `optOut` from the removed opt-out is dropped', () => {
+    const copy = parseCopy({store: 'device', optOut: true})
+    expect('optOut' in copy).toBe(false)
+  })
+
+  it('round trips', () => {
+    const copy: AccountCopy = {
+      ...emptyAccountCopy(),
+      take: {step: 'release', rev: 'r1', copiedAt: 9, keptNote: true},
+      fallback: {fields: ['custom', 'preset:2'], rev: 'r1'},
+      removalTaken: true,
+    }
+    const value = {...defaultDeviceValue(), accounts: {'did:plc:a': copy}}
+    expect(parseDeviceValue(serializeDeviceValue(value))).toEqual(value)
+    const fresh: AccountCopy = {
+      ...emptyAccountCopy(),
+      take: {step: 'fetch', fresh: true, keptNote: false},
+      fallback: {fields: []},
+    }
+    const other = {...defaultDeviceValue(), accounts: {'did:plc:a': fresh}}
+    expect(parseDeviceValue(serializeDeviceValue(other))).toEqual(other)
+  })
+})

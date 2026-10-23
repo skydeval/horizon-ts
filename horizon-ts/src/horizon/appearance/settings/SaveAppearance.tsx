@@ -26,6 +26,7 @@ import {
 import {
   migrationNoteText,
   removalNoteText,
+  takenNoteText,
   tooLargeNoteText,
 } from '#/horizon/appearance/notices'
 import {offersPrivateAppearance} from '#/horizon/appearance/prism'
@@ -95,7 +96,9 @@ export function SaveAppearanceGroup() {
   const line = copy?.noted
     ? migrationNoteText()
     : copy?.removalLine
-      ? removalNoteText()
+      ? copy.removalTaken
+        ? takenNoteText()
+        : removalNoteText()
       : copy?.tooLargeLine
         ? tooLargeNoteText()
         : null

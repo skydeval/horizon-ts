@@ -17,7 +17,7 @@
  */
 
 import {type AppearanceQueueContext} from '#/horizon/appearance/context'
-import {showRemovalNote} from '#/horizon/appearance/notices'
+import {type AppearanceFallback} from '#/horizon/appearance/device-value'
 import {
   isTransientPdsError,
   mirrorValue,
@@ -26,13 +26,15 @@ import {
 import {
   foldPending,
   nonMemberTable,
+  unionFields,
   withoutPendingStore,
 } from '#/horizon/appearance/resolve'
 
 /**
- * Run the removal flow (8.3). `removed`: a removal answer, which may show
- * the note (8.4). Resolves to whether it finished; if not (a read
- * unanswered), it runs again on the next trigger.
+ * Run the removal flow (8.3). `removed`: a removal answer, which starts the
+ * take (`take.ts`, removed members design 6.2); the take shows the note at
+ * its end. Resolves to whether it finished; if not (a read unanswered), it
+ * runs again on the next trigger.
  */
 export async function runRemovalFlow(
   ctx: AppearanceQueueContext,
@@ -40,6 +42,15 @@ export async function runRemovalFlow(
 ): Promise<boolean> {
   const start = ctx.getCopy()
   if (!start || start.rev === null) return true
+  if (start.take) {
+    /*
+     * A take already started is resumed, never re-run (removed members
+     * design, 6.1). Its `rev` came from a retained row read as a member;
+     * reset, the non-member table derives the store again in this run.
+     */
+    ctx.update(c => ({...c, rev: null, storeKnown: false}))
+    return true
+  }
   const lastStore = start.store
   const userStore =
     start.pending && !start.pending.auto ? start.pending.store : undefined
@@ -76,8 +87,16 @@ export async function runRemovalFlow(
   // 3. Derive, waiting for the read.
   const record = await ctx.readRecord()
   if (!record || !ctx.stillCurrent()) return false
-  let note = false
   ctx.update(c => {
+    /*
+     * What a rejoin needs (removed members design, 6.2): the fields of an
+     * edit not yet synced join `fallback.fields` (a union), and the member
+     * row this copy holds is remembered, on the feature-unlisted exit too.
+     */
+    const fallback: AppearanceFallback = {
+      fields: unionFields(c.fallback?.fields ?? [], c.pending?.fields ?? []),
+      rev: c.rev ?? '',
+    }
     let next = nonMemberTable({...c, rev: null}, record).copy
     if (next.store === 'device') next = foldPending(next)
     // 4. A choice not yet landed: the user's applies as a non-member's.
@@ -90,22 +109,25 @@ export async function runRemovalFlow(
         next = {...next, pending: {...pending, store: 'device'}}
       }
     }
-    const ends = next.pending?.store ?? next.store
-    // 5. The note (8.4).
-    note =
-      removed &&
-      !c.removalNoted &&
-      ends === 'device' &&
-      (lastStore === 'private' || userStore === 'private')
+    // The feature-unlisted exit: no take and no note, as built.
+    if (!removed) return {...next, rev: null, noteDue: false, fallback}
+    /*
+     * 5. A removal starts the take: prism keeps the appearance for 7 days,
+     * and this device copies it (removed members design, 6.2). The note
+     * moves to the take's end: the core's note (8.4) when this device keeps
+     * its own copy and the store was `private`, the "moved it here" note
+     * when it copies.
+     */
+    const keptNote =
+      !c.removalNoted && (lastStore === 'private' || userStore === 'private')
     return {
       ...next,
       rev: null,
       noteDue: false,
-      removalNoted: note ? true : next.removalNoted,
-      removalLine: note ? true : next.removalLine,
+      fallback,
+      take: {step: 'fetch', keptNote},
     }
   })
   ctx.setRecordRead(record)
-  if (note) showRemovalNote()
   return true
 }

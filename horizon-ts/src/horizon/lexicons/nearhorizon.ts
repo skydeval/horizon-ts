@@ -405,14 +405,40 @@ const privateAppearanceAnswer = {
   appearance: l.optional(l.lexMap()),
   rev: l.optional(l.string()),
   migratedAt: l.optional(l.string()),
+  /*
+   * Present when the row was kept after a removal (removed members design,
+   * section 3; prism `private.appearanceRetention`): answered only with
+   * `includeRetained`, never the live choice. Horizon reads only its
+   * presence.
+   */
+  retainedUntil: l.optional(l.string()),
 }
 
-/** `app.nearhorizon.private.getAppearance`: the reader's own row. */
+/**
+ * `app.nearhorizon.private.getAppearance`: the reader's own row. With
+ * `includeRetained`, a row kept after a removal is answered to its owner,
+ * member or not, marked `retainedUntil`; without it, never.
+ */
 export const privateGetAppearance = l.query(
   'app.nearhorizon.private.getAppearance',
-  l.params(),
+  l.params({includeRetained: l.optional(l.boolean())}),
   l.jsonPayload(privateAppearanceAnswer),
   APPEARANCE_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.private.releaseAppearance`: delete the row kept after a
+ * removal, if `rev` is its `rev`. `{}` also with no kept row (released,
+ * expired or never kept). `InvalidSwap` only for a kept row with another
+ * `rev`; `InvalidRequest` to a current member. No `NotEnrolled`: prism
+ * serves it to non-members.
+ */
+export const privateReleaseAppearance = l.procedure(
+  'app.nearhorizon.private.releaseAppearance',
+  l.params(),
+  l.jsonPayload({rev: l.string()}),
+  l.jsonPayload({}),
+  ['InvalidRequest', 'InvalidSwap'],
 )
 
 /**

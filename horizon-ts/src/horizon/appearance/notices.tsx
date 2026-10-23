@@ -22,6 +22,18 @@ export function removalNoteText() {
   return t`Your ${PRODUCT_NAME} membership has ended, so your appearance is now saved on this device only. You can change this in Appearance, under “Save my appearance”.`
 }
 
+/**
+ * The note to a removed member whose device copied prism's retained
+ * appearance (removed members design, section 8).
+ */
+export function takenNoteText() {
+  return t`Your ${PRODUCT_NAME} membership has ended, so your appearance is now saved on this device only. ${PRODUCT_NAME} moved it here from its servers and deletes its own copy within 7 days. You can change this in Appearance, under “Save my appearance”.`
+}
+
+export function showTakenNote() {
+  Toast.show(takenNoteText(), {type: 'info'})
+}
+
 /** prism refused the appearance for its size (over 16 KiB). */
 export function tooLargeNoteText() {
   return t`Your appearance is too large to save privately, so it stays public. You can choose “This device only” instead.`
