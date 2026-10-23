@@ -140,6 +140,38 @@ describe('the profile query', () => {
     expect(again()?.value).toBe(view)
   })
 
+  it('a transient stock error on a refetch over a restored view keeps it', async () => {
+    h.respond(() => rfFillAnswer({profiles: [rfProfile()], withheld: []}))
+    const first = run(() => Promise.reject(takedown()))
+    await jest.advanceTimersByTimeAsync(100)
+    const view = first()?.value
+    h.queryClient.setQueryData(['profile', RF_DID], view)
+    h.respond(() => rfFillAnswer({pending: [RF_DID], withheld: []}))
+    const again = run(() => Promise.reject(xrpcError(503, 'Unavailable')))
+    await jest.advanceTimersByTimeAsync(200)
+    expect(again()?.value).toBe(view)
+  })
+
+  it('the hover prefetch over a restored view never puts the stock error on the query', async () => {
+    h.respond(() => rfFillAnswer({profiles: [rfProfile()], withheld: []}))
+    const first = run(() => Promise.reject(takedown()))
+    await jest.advanceTimersByTimeAsync(100)
+    const view = first()?.value
+    h.queryClient.setQueryData(['profile', RF_DID], view)
+    h.respond(() => rfFillAnswer({pending: [RF_DID], withheld: []}))
+    // `usePrefetchProfileQuery`'s fetch: the same key, data stale.
+    void h.queryClient.prefetchQuery({
+      queryKey: ['profile', RF_DID],
+      staleTime: 0,
+      queryFn: () =>
+        refractProfileQuery(RF_DID, () => Promise.reject(takedown())),
+    })
+    await jest.advanceTimersByTimeAsync(200)
+    const state = h.queryClient.getQueryState(['profile', RF_DID])
+    expect(state?.error).toBeNull()
+    expect(state?.data).toBe(view)
+  })
+
   it('a stock 429 is rethrown and asks nothing', async () => {
     const error = xrpcError(429, 'RateLimitExceeded')
     const result = run(() => Promise.reject(error))

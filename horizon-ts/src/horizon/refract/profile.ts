@@ -214,7 +214,11 @@ export async function refractProfileQuery(
     } catch (error) {
       stockError = error
     }
-    if (!isRefractableProfileError(stockError)) throw stockError
+    if (!isRefractableProfileError(stockError)) {
+      // A transient stock failure never replaces a restored view on screen.
+      if (cached) return cached
+      throw stockError
+    }
     const result =
       first.side === 'fill'
         ? first.result
@@ -228,11 +232,35 @@ export async function refractProfileQuery(
   } catch (error) {
     stockError = error
   }
-  if (!isRefractableProfileError(stockError)) throw stockError
+  if (!isRefractableProfileError(stockError)) {
+    if (cached) return cached
+    throw stockError
+  }
   if (isDefinitelyNotRestored(did)) throw stockError
   markStockFailed(did)
   const result = await waitForProfile(did, !cached, qc)
   return settle(did, result, stockError, cached, qc)
+}
+
+/**
+ * The profile query's error as the profile screen should treat it. While a
+ * restored view is the query's data and its DID is still noted restored, an
+ * error is dropped: the screen keeps the restored profile mounted (its tab
+ * and scroll included) instead of swapping in an error screen. This covers
+ * any writer of the profile key whose fetch fails, the stock prefetch
+ * included. A restore that ended drops the DID from the noted set first, so
+ * its definitive error still shows.
+ */
+export function shownProfileError(profile: unknown, error: unknown): unknown {
+  if (!error) return error
+  if (
+    profile &&
+    isRestoredProfile(profile) &&
+    isNotedRestored((profile as {did?: string}).did)
+  ) {
+    return null
+  }
+  return error
 }
 
 /**

@@ -70,6 +70,8 @@ import {
 } from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
+// HORIZON: a restored view's indexedAt is prism's backfill time, so it gets no badge
+import {showsArchivedBadge} from '#/horizon/refract/archived'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
@@ -621,8 +623,8 @@ function BackdatedPostIndicator({post}: {post: app.bsky.feed.defs.PostView}) {
     : new Date(post.indexedAt)
 
   // backdated if createdAt is 24 hours or more before indexedAt
-  const isBackdated =
-    indexedAt.getTime() - createdAt.getTime() > 24 * 60 * 60 * 1000
+  // HORIZON: a restored view's indexedAt is prism's backfill time, so it gets no badge
+  const isBackdated = showsArchivedBadge(post)
 
   if (!isBackdated) return null
 

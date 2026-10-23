@@ -138,9 +138,12 @@ export function usePrefetchProfileQuery() {
         staleTime: STALE.SECONDS.THIRTY,
         queryKey: RQKEY(did),
         queryFn: async () => {
-          return await client.call(app.bsky.actor.getProfile, {
-            actor: (did || '') as AtIdentifierString,
-          })
+          // HORIZON: the hover prefetch shares the profile query's key, so it takes the same fallback; a stock error here replaced the restored profile on screen
+          return await refractProfileQuery(did, () =>
+            client.call(app.bsky.actor.getProfile, {
+              actor: (did || '') as AtIdentifierString,
+            }),
+          )
         },
       })
     },

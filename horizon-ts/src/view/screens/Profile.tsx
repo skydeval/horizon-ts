@@ -59,6 +59,7 @@ import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a restored account's profile: its error, and the tabs prism doesn't serve
 import {
   isRestoredProfile,
+  shownProfileError,
   useRefractProfileError,
 } from '#/horizon/refract/profile'
 import {type app} from '#/lexicons'
@@ -92,7 +93,7 @@ function ProfileScreenInner({route}: Props) {
   } = useResolveDidQuery(name)
   const {
     data: profile,
-    error: profileError,
+    error: profileQueryError,
     refetch: refetchProfile,
     isPlaceholderData: isPlaceholderProfile,
     isPending: isProfilePending,
@@ -101,6 +102,8 @@ function ProfileScreenInner({route}: Props) {
   } = useProfileQuery({
     did: resolvedDid,
   })
+  // HORIZON: a refetch's error never replaces a restored profile on screen
+  const profileError = shownProfileError(profile, profileQueryError)
   // HORIZON: a restored account's profile error: its title, text and Try again
   const refractError = useRefractProfileError({
     did: resolvedDid,
