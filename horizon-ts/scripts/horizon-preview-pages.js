@@ -108,7 +108,7 @@ const PAGES_REDIRECTS = '/* /index.html 200\n'
  */
 const PAGES_HEADERS = `/*
   X-Content-Type-Options: nosniff
-  Content-Security-Policy: frame-ancestors 'none'
+  Content-Security-Policy: frame-ancestors 'self'
   Referrer-Policy: strict-origin-when-cross-origin
   X-Robots-Tag: noindex
 

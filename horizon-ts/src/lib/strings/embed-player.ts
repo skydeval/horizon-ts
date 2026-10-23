@@ -4,10 +4,13 @@ import {IS_WEB} from '#/env'
 
 const {height: SCREEN_HEIGHT} = Dimensions.get('window')
 
+/*
+ * HORIZON: on web the YouTube wrapper is served from Horizon's own origin
+ * (public/iframe/youtube.html), because bsky.app refuses to be framed by
+ * other sites. Native WebViews load it top-level, so bsky.app still works.
+ */
 const IFRAME_HOST = IS_WEB
-  ? window.location.host === 'localhost:8100'
-    ? 'http://localhost:8100'
-    : 'https://bsky.app'
+  ? window.location.origin
   : __DEV__ && !process.env.JEST_WORKER_ID
     ? 'http://localhost:8100'
     : 'https://bsky.app'
