@@ -46,3 +46,35 @@ export async function fetchUntilItems<T>(
   }
   return {items, cursor: next, pages}
 }
+
+/**
+ * Request pages from `cursor` while every item of the last page is above the
+ * boundary (`isAboveFloor`) and a cursor comes back, up to `maxPages` (item 7
+ * 3.3's walk). `reached` is true when the walk got to the boundary or the end
+ * of the list, so it covered everything above the boundary; false when it
+ * stopped at `maxPages` with more above it. A page that answers the cursor it
+ * was asked with is treated as the end.
+ */
+export async function fetchUntilBoundary<T>(
+  fetchPage: (
+    cursor: string | undefined,
+  ) => Promise<{items: T[]; cursor?: string}>,
+  isAboveFloor: (item: T) => boolean,
+  maxPages: number,
+  cursor: string | undefined,
+): Promise<{items: T[]; cursor: string | undefined; reached: boolean}> {
+  const items: T[] = []
+  let next = cursor
+  let pages = 0
+  while (pages < maxPages) {
+    const asked = next
+    const page = await fetchPage(asked)
+    pages++
+    items.push(...page.items)
+    next = page.cursor && page.cursor !== asked ? page.cursor : undefined
+    if (!next || !page.items.every(isAboveFloor)) {
+      return {items, cursor: next, reached: true}
+    }
+  }
+  return {items, cursor: next, reached: false}
+}

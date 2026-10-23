@@ -323,6 +323,10 @@ describe('other replies (2H design 9.3, T12)', () => {
       seen: new Set([branch('3kpriv000000', 1).uri]),
       cids: new Map([[ANCHOR, RECORD_CID]]),
       stockHasOther,
+      key: 'public|pages|',
+      hidden: [],
+      pages: true,
+      readAt: 0,
     })
   }
 

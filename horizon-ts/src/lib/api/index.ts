@@ -41,6 +41,8 @@ import {
 import {postPrivate} from '#/horizon/private/api/writes'
 // HORIZON: a private compose takes the private write path
 import {routesPrivate} from '#/horizon/private/composer/state'
+// HORIZON: a parent Bluesky withholds may be a restored post prism serves
+import {refractReplyFallbackHook} from '#/horizon/refract/write-hooks'
 // HORIZON: a post with `||` spoilers is written with spoiler facets
 import {resolveSpoilerRT, resolvesSpoilers} from '#/horizon/spoilers/write'
 import {app, chat, com} from '#/lexicons'
@@ -259,6 +261,10 @@ export async function resolveReply(appviewClient: Client, replyTo: string) {
   })
   const parentPost = data.posts[0]
   if (!parentPost) {
+    // HORIZON: a parent Bluesky withholds may be a restored post prism serves
+    const restored =
+      await refractReplyFallbackHook<app.bsky.feed.post.Main['reply']>(replyTo)
+    if (restored) return restored
     throw new ReplyDeletedError()
   }
 

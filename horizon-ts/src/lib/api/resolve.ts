@@ -29,6 +29,8 @@ import {
   isPrivatePostLink,
   resolvePrivatePostLink,
 } from '#/horizon/private/links'
+// HORIZON: a post Bluesky withholds may be a restored post prism serves
+import {refractLinkFallbackHook} from '#/horizon/refract/write-hooks'
 import {app, chat, com} from '#/lexicons'
 import {createGIFDescription} from '../gif-alt-text'
 
@@ -224,6 +226,11 @@ export async function resolveLink(
     if (data.posts[0]) {
       return data.posts[0]
     }
+    // HORIZON: a post Bluesky withholds may be a restored post prism serves
+    const restored = await refractLinkFallbackHook<app.bsky.feed.defs.PostView>(
+      urip.toString(),
+    )
+    if (restored) return restored
     throw new Error('getPost: post not found')
   }
 

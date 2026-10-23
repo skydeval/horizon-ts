@@ -504,6 +504,13 @@ export function startMembershipProbe(
       typeof permissions?.privateIndexed === 'boolean'
         ? permissions.privateIndexed
         : undefined
+    /*
+     * The development fault switch: a removed member after the purge, or a
+     * non-member (appearance storage choice design 11.1).
+     */
+    if (fault === 'not-enrolled') {
+      return {kind: 'state', state: 'not-member', features, indexed}
+    }
     if (status === 'reindexing' || faulted) {
       /*
        * A member being re-indexed (prism busy design 2.3): an answered

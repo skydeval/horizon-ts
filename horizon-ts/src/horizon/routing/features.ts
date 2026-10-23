@@ -40,6 +40,12 @@ export const PRISM_FEATURES = [
   'private.mediaFilters',
   'private.notificationPreferences',
   /*
+   * Private appearance (appearance storage choice design, section 3):
+   * `getAppearance` and `putAppearance`, and the "Private, synced" choice.
+   * Until listed, members save their appearance as non-members do.
+   */
+  'private.appearance',
+  /*
    * Off-locus private posts are fully served and plaintext is refused (2K
    * design 2.3): the `encode` posting route needs it.
    */
@@ -62,6 +68,12 @@ export const PRISM_FEATURES = [
    * and `getMembership`'s `reindexing`, read by name; it gates nothing.
    */
   'private.reindexing',
+  /*
+   * Restored accounts (refract client design RF-1): the seven
+   * `app.nearhorizon.refract.*` methods, listed for non-members too. Read only
+   * while the `REFRACT` switch is on.
+   */
+  'refract',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]
@@ -116,6 +128,7 @@ function normalized(value: PrismFeatureList | undefined): string | null {
  */
 export function answerPrismFeatures(did: string, value: PrismFeatureList) {
   ensureLoaded(did)
+  answerListeners.forEach(listener => listener(did))
   const newlyAnswered = !answered.has(did)
   answered.add(did)
   const changed = normalized(held.get(did)) !== normalized(value)
@@ -178,6 +191,20 @@ export function subscribePrismFeatures(listener: () => void) {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
+  }
+}
+
+const answerListeners = new Set<(did: string) => void>()
+
+/**
+ * Called with the DID on every answer prism gives, changed or not, before
+ * it is recorded (refract client design RF-1: a `NotEnabled` lasts until the
+ * next answer). Returns the unsubscribe function.
+ */
+export function onPrismFeaturesAnswer(listener: (did: string) => void) {
+  answerListeners.add(listener)
+  return () => {
+    answerListeners.delete(listener)
   }
 }
 

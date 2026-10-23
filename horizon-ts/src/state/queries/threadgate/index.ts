@@ -16,6 +16,8 @@ import {
 import {useUpdatePostThreadThreadgateQueryCache} from '#/state/queries/usePostThread'
 import {usePdsClient} from '#/state/session'
 import {useThreadgateHiddenReplyUrisAPI} from '#/state/threadgate-hidden-replies'
+// HORIZON: a hide or unhide refreshes the root's gate as Horizon caches it
+import {privateGatesQueryKey} from '#/horizon/private/api/gates'
 import {app, com} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -327,9 +329,13 @@ export function useToggleReplyVisibilityMutation() {
         }
       })
     },
-    onSuccess() {
+    onSuccess(_, {postUri}) {
       queryClient.invalidateQueries({
         queryKey: [threadgateRecordQueryKeyRoot],
+      })
+      // HORIZON: the root's gate record and gate evaluations Horizon caches
+      void queryClient.invalidateQueries({
+        queryKey: privateGatesQueryKey(postUri),
       })
     },
     onError(_, {replyUri, action}) {

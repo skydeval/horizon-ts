@@ -1,8 +1,10 @@
 /*
- * Drives the appearance record's reads and writes (Phase 3 design, 6.4):
- * registers the signed-in account's PDS client with `sync.ts`, reads the
- * record at mount and on every account change, and again when the page or
- * app comes back after five minutes; deletes the copy of an account that has
+ * Drives the appearance's reads and writes (Phase 3 design, 6.4; storage
+ * choice design, section 4): registers the signed-in account's PDS and prism
+ * clients with `sync.ts`, reads at mount and on every account change, and
+ * again when the page or app comes back after five minutes (membership and
+ * feature answers, the removal flow included, run `sync.ts`'s queue from
+ * there); deletes the copy of an account that has
  * left the session's list; and applies the account's saved theme settings
  * (`ThemePrefsSync`, change list 2). Rendered by `HorizonHost` on web and
  * by `App.tsx` on native.
@@ -21,6 +23,7 @@ import {
   unregisterAppearanceClient,
 } from '#/horizon/appearance/sync'
 import {ThemePrefsSync} from '#/horizon/appearance/ThemePrefsSync'
+import {getPrismClient} from '#/horizon/routing/prism'
 import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
 
 /** The sync host. Renders only the theme settings' host. */
@@ -31,7 +34,8 @@ export function AppearanceSync() {
 
   useEffect(() => {
     if (!APPEARANCE_SYNC || !BACKDROPS || !did || !client) return
-    registerAppearanceClient(did, client)
+    // prism's client for the member table (storage choice design, section 4).
+    registerAppearanceClient(did, client, getPrismClient(client))
     void refresh(did)
     const onReturn = () => {
       if (isStale(did)) void refresh(did)

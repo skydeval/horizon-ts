@@ -24,7 +24,6 @@ import {useQuery, useQueryClient} from '@tanstack/react-query'
 import deepEqual from 'fast-deep-equal'
 
 import {logger} from '#/logger'
-import {STALE} from '#/state/queries'
 import {RQKEY as postQueryKey} from '#/state/queries/post'
 import {
   createPostgateQueryKey,
@@ -46,7 +45,7 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {
   privateGatesQueryKey,
-  readRootThreadgate,
+  rootThreadgateQueryOptions,
 } from '#/horizon/private/api/gates'
 import {
   audienceChangeOffered,
@@ -183,11 +182,10 @@ function PrivatePostSettingsInner({
   const {data: storedPostgate, isLoading: isLoadingPostgate} = usePostgateQuery(
     {postUri},
   )
+  // One cached read shared with the gate evaluation and the thread (hidden replies 5.4).
   const rootThreadgate = useQuery({
-    queryKey: [...privateGatesQueryKey(rootPostUri), 'root-threadgate'],
-    staleTime: STALE.SECONDS.THIRTY,
+    ...rootThreadgateQueryOptions(rootPostUri),
     retry: 1,
-    queryFn: async () => (await readRootThreadgate(rootPostUri)) ?? null,
   })
   const audienceLabel = usePostAudienceLabel(postUri)
 

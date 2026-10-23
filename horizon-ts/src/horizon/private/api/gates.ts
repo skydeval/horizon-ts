@@ -299,10 +299,96 @@ export function readRootThreadgate(
 }
 
 /**
- * The gates of the private post `postUri` in the thread rooted at `rootUri`:
- * the root's threadgate from the root author's repo and the post's postgate
- * from the post author's, each read without a session. Throws when a read
+ * The query key of the root's threadgate record as read from the root
+ * author's PDS: under {@link privateGatesQueryKey}, so a threadgate change
+ * invalidates it with the thread's evaluations.
+ */
+export function rootThreadgateQueryKey(rootUri: string) {
+  return [...privateGatesQueryKey(rootUri), 'root-threadgate']
+}
+
+/**
+ * The shared options of the root threadgate query (hidden replies design
+ * 5.4, HR2-N2): one cached read, 30 s fresh, for the gate evaluation, the
+ * post settings dialog and the thread read. `null` is no gate.
+ */
+export function rootThreadgateQueryOptions(rootUri: string) {
+  return {
+    queryKey: rootThreadgateQueryKey(rootUri),
+    staleTime: STALE.SECONDS.THIRTY,
+    queryFn: async (): Promise<app.bsky.feed.threadgate.Main | null> =>
+      (await readRootThreadgate(rootUri)) ?? null,
+  }
+}
+
+/**
+ * The root's threadgate record through the shared query (5.4). Read directly
+ * when there is no query client, or when the caller injects `clientFor` (a
+ * test client never fills the shared cache, HR3-N6). Throws when the read
  * fails.
+ */
+export async function rootThreadgateQuery(
+  queryClient: QueryClient | undefined,
+  rootUri: string,
+  clientFor: GateClientFor = gatePdsClient,
+): Promise<app.bsky.feed.threadgate.Main | undefined> {
+  if (!queryClient || clientFor !== gatePdsClient) {
+    return readRootThreadgate(rootUri, clientFor)
+  }
+  return (
+    (await queryClient.fetchQuery(rootThreadgateQueryOptions(rootUri))) ??
+    undefined
+  )
+}
+
+/**
+ * The root's threadgate record the shared query last held, if any (5.4,
+ * HR4-N2): a failed read leaves it in place.
+ */
+export function cachedRootThreadgate(
+  queryClient: QueryClient | undefined,
+  rootUri: string,
+): app.bsky.feed.threadgate.Main | undefined {
+  return (
+    queryClient?.getQueryData<app.bsky.feed.threadgate.Main | null>(
+      rootThreadgateQueryKey(rootUri),
+    ) ?? undefined
+  )
+}
+
+/**
+ * The root's threadgate for a private thread under a public root (5.4):
+ * the shared query under {@link GATE_DEADLINE_MS}; on a failure or after the
+ * deadline, the record the query last held, else none. As a thread's
+ * `threadgate` view: `cid` is left out (the record read carries none), and
+ * every consumer reads `record`.
+ */
+export async function rootThreadgateView(
+  queryClient: QueryClient | undefined,
+  rootUri: string,
+): Promise<app.bsky.feed.defs.ThreadgateView | undefined> {
+  let record: app.bsky.feed.threadgate.Main | undefined
+  try {
+    record = await withGateDeadline(
+      rootThreadgateQuery(queryClient, rootUri),
+      GATE_DEADLINE_MS,
+    )
+  } catch (error) {
+    logger.warn('private thread: root threadgate unavailable', {
+      safeMessage: error,
+    })
+    record = cachedRootThreadgate(queryClient, rootUri)
+  }
+  if (!record) return undefined
+  const {host, rkey} = new AtUri(rootUri)
+  return {uri: `at://${host}/${THREADGATE_COLLECTION}/${rkey}`, record}
+}
+
+/**
+ * The gates of the private post `postUri` in the thread rooted at `rootUri`:
+ * the root's threadgate from the root author's repo (through the shared root
+ * threadgate query, 5.4) and the post's postgate from the post author's,
+ * each read without a session. Throws when a read fails.
  */
 export async function readPrivateGates(
   rootUri: string,
@@ -310,11 +396,7 @@ export async function readPrivateGates(
   clientFor: GateClientFor = gatePdsClient,
 ): Promise<PrivateGates> {
   const [threadgate, postgate] = await Promise.all([
-    readGate<app.bsky.feed.threadgate.Main>(
-      clientFor,
-      THREADGATE_COLLECTION,
-      rootUri,
-    ),
+    rootThreadgateQuery(getCurrentClients()?.queryClient, rootUri, clientFor),
     readGate<app.bsky.feed.postgate.Main>(
       clientFor,
       POSTGATE_COLLECTION,

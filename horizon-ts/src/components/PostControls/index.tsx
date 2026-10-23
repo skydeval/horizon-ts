@@ -30,6 +30,8 @@ import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 import {usePendingPostControls} from '#/horizon/private/composer/PendingPostStatus'
 // HORIZON: a private post shows counts only when prism served them
 import {privateControlsFor} from '#/horizon/private/render/controls'
+// HORIZON: a visitor-form restored view hides like, repost and quote
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {BookmarkButton} from './BookmarkButton'
 import {
@@ -101,6 +103,8 @@ let PostControls = ({
   )
   // HORIZON: a private post shows counts only when prism served them
   const privateControls = privateControlsFor(post.uri)
+  // HORIZON: a visitor-form restored view hides like, repost and quote
+  const restoredActionsHidden = useRestoredActionsHidden(post)
   const replyDisabled = post.viewer?.replyDisabled
   const {gtPhone} = useBreakpoints()
   const formatPostStatCount = useFormatPostStatCount()
@@ -269,67 +273,73 @@ let PostControls = ({
           </PostControlButton>
         </View>
         <View style={[a.flex_1, a.align_start]}>
-          <RepostButton
-            isReposted={!!post.viewer?.repost}
-            // HORIZON: no repost count on a private post without served counts
-            repostCount={
-              privateControls.hideCounts
-                ? undefined
-                : (post.repostCount ?? 0) + (post.quoteCount ?? 0)
-            }
-            onRepost={() => void onRepost()}
-            // HORIZON: a private post's quote limit is checked before the composer opens
-            onQuote={() => guardPrivateInteraction(post, 'quote', onQuote)}
-            big={big}
-            embeddingDisabled={Boolean(post.viewer?.embeddingDisabled)}
-          />
+          {/* HORIZON: a visitor-form restored view hides like, repost and quote */}
+          {!restoredActionsHidden && (
+            <RepostButton
+              isReposted={!!post.viewer?.repost}
+              // HORIZON: no repost count on a private post without served counts
+              repostCount={
+                privateControls.hideCounts
+                  ? undefined
+                  : (post.repostCount ?? 0) + (post.quoteCount ?? 0)
+              }
+              onRepost={() => void onRepost()}
+              // HORIZON: a private post's quote limit is checked before the composer opens
+              onQuote={() => guardPrivateInteraction(post, 'quote', onQuote)}
+              big={big}
+              embeddingDisabled={Boolean(post.viewer?.embeddingDisabled)}
+            />
+          )}
         </View>
         <View style={[a.flex_1, a.align_start]}>
-          <PostControlButton
-            testID="likeBtn"
-            big={big}
-            active={Boolean(post.viewer?.like)}
-            activeColor={t.palette.pink}
-            onPress={() => requireAuth(() => onPressToggleLike())}
-            label={
-              post.viewer?.like
-                ? l({
-                    message: `Unlike (${plural(post.likeCount || 0, {
-                      one: '# like',
-                      other: '# likes',
-                    })})`,
-                    comment:
-                      'Accessibility label for the like button when the post has been liked, verb followed by number of likes and noun',
-                  })
-                : l({
-                    message: `Like (${plural(post.likeCount || 0, {
-                      one: '# like',
-                      other: '# likes',
-                    })})`,
-                    comment:
-                      'Accessibility label for the like button when the post has not been liked, verb form followed by number of likes and noun form',
-                  })
-            }>
-            <AnimatedLikeIcon
-              isLiked={Boolean(post.viewer?.like)}
+          {/* HORIZON: a visitor-form restored view hides like, repost and quote */}
+          {!restoredActionsHidden && (
+            <PostControlButton
+              testID="likeBtn"
               big={big}
-              hasBeenToggled={hasLikeIconBeenToggled}
-            />
-            {/* HORIZON: no like count on a private post without served counts; the heart stays (start) */}
-            {!privateControls.hideCounts && (
-              <CountWheel
-                count={post.likeCount ?? 0}
-                isToggled={Boolean(post.viewer?.like)}
+              active={Boolean(post.viewer?.like)}
+              activeColor={t.palette.pink}
+              onPress={() => requireAuth(() => onPressToggleLike())}
+              label={
+                post.viewer?.like
+                  ? l({
+                      message: `Unlike (${plural(post.likeCount || 0, {
+                        one: '# like',
+                        other: '# likes',
+                      })})`,
+                      comment:
+                        'Accessibility label for the like button when the post has been liked, verb followed by number of likes and noun',
+                    })
+                  : l({
+                      message: `Like (${plural(post.likeCount || 0, {
+                        one: '# like',
+                        other: '# likes',
+                      })})`,
+                      comment:
+                        'Accessibility label for the like button when the post has not been liked, verb form followed by number of likes and noun form',
+                    })
+              }>
+              <AnimatedLikeIcon
+                isLiked={Boolean(post.viewer?.like)}
+                big={big}
                 hasBeenToggled={hasLikeIconBeenToggled}
-                renderCount={({count}) => (
-                  <PostControlButtonText testID="likeCount">
-                    {formatPostStatCount(count)}
-                  </PostControlButtonText>
-                )}
               />
-            )}
-            {/* HORIZON: no like count on a private post without served counts; the heart stays (end) */}
-          </PostControlButton>
+              {/* HORIZON: no like count on a private post without served counts; the heart stays (start) */}
+              {!privateControls.hideCounts && (
+                <CountWheel
+                  count={post.likeCount ?? 0}
+                  isToggled={Boolean(post.viewer?.like)}
+                  hasBeenToggled={hasLikeIconBeenToggled}
+                  renderCount={({count}) => (
+                    <PostControlButtonText testID="likeCount">
+                      {formatPostStatCount(count)}
+                    </PostControlButtonText>
+                  )}
+                />
+              )}
+              {/* HORIZON: no like count on a private post without served counts; the heart stays (end) */}
+            </PostControlButton>
+          )}
         </View>
         {/* Spacer! */}
         <View />

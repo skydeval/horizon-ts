@@ -38,6 +38,36 @@ import {
   useSettleAtTop,
 } from '#/features/followingV2/home/useSettleAtTop'
 import {useSettleScrollHandlers} from '#/features/followingV2/home/useSettleScrollHandlers'
+import {
+  DID,
+  fakeClient,
+  OTHER_DID,
+  privateUri,
+  RECORD_CID,
+  type Reply,
+} from '#/horizon/private/__tests__/fixtures'
+import {
+  at,
+  fakeAppview,
+  type PrivateView,
+  privateView,
+} from '#/horizon/private/__tests__/read-fixtures'
+import {type PrivateSource} from '#/horizon/private/adapt/feed-view'
+import {
+  decodeMergeStart,
+  encodeMergeCursor,
+  encodeMergeStart,
+  initialMergeState,
+  isHeldMarker,
+} from '#/horizon/private/feed/cursor'
+import {resetPrivateHead} from '#/horizon/private/feed/timeline-merge'
+import {resetKnown} from '#/horizon/private/known'
+import {clearPrivateStores} from '#/horizon/private/store'
+import {
+  clearCurrentClients,
+  publishCurrentClients,
+} from '#/horizon/routing/current-clients'
+import {resetPrismHealth} from '#/horizon/routing/health'
 import {app} from '#/lexicons'
 import {
   FOLLOWING_SNAPSHOT_VERSION,
@@ -72,6 +102,13 @@ import {
 
 // The app-wide mock of `multiformats/cid` can't tell a CID from anything else.
 jest.unmock('multiformats/cid')
+// The fake prism's lex client validates CIDs too.
+jest.unmock('multiformats/hashes/hasher')
+// A member's private source, for the tests of the merge in the fork (item 7).
+jest.mock('#/horizon/private/membership', () => ({
+  ...jest.requireActual('#/horizon/private/membership'),
+  usePrivateFeedSource: () => mockPrivateSource,
+}))
 jest.mock('#/state/preferences/languages', () => ({
   getAppLanguageAsContentLanguage: () => '',
   getContentLanguages: () => [],
@@ -130,6 +167,7 @@ jest.mocked(AppState.addEventListener).mockImplementation((_type, listener) => {
   return {remove: () => appStateListeners.delete(listener)}
 })
 
+let mockPrivateSource: PrivateSource | undefined
 const mockFeedTuners: never[] = []
 const MODERATION_OPTS = {
   userDid: 'did:plc:viewer',
@@ -1754,9 +1792,12 @@ describe('staging new posts on Home Following', () => {
    * first render made, as a list keeps them, so they must act on the latest
    * state. `onHasNew` is the Home dot.
    */
-  function renderHome({isActive = true}: {isActive?: boolean} = {}) {
+  function renderHome({
+    isActive = true,
+    data = homeData(),
+  }: {isActive?: boolean; data?: PostFeedData} = {}) {
     const queryClient = createQueryClient()
-    queryClient.setQueryData(KEY, homeData())
+    queryClient.setQueryData(KEY, data)
     const onHasNew = jest.fn()
     const scrollToTop = jest.fn()
     const latest = {} as {
@@ -1785,6 +1826,8 @@ describe('staging new posts on Home Following', () => {
         topFetchedAt,
         listAtRest: listRest.atRest,
         isRefreshing: isPending,
+        // As PostFeed's, with no lift owing a refresh.
+        onWithdrawn: () => onHasNew(false),
       })
       const settleAtTop = useSettleAtTop('following', undefined, {
         enabled: true,
@@ -1929,6 +1972,236 @@ describe('staging new posts on Home Following', () => {
   afterEach(() => {
     jest.useRealTimers()
     mockClient.call.mockImplementation(serveDefault)
+  })
+
+  describe('with private posts merged in (item 7)', () => {
+    const T = (minutes: number) => Date.parse(at(minutes))
+    /** prism's private head, newest first, or a failure. */
+    let privateHead: PrivateView[] | 'fail'
+
+    /** Following as loaded, its top page's start a private marker. */
+    function privateData(): PostFeedData {
+      const data = homeData()
+      data.pages[0].startCursor = encodeMergeStart({
+        pub: 't:12',
+        priv: {time: T(50), uri: ''},
+        floor: T(40),
+        seen: [],
+      })
+      return data
+    }
+
+    function other(rkey: string, minutes: number) {
+      return privateView(rkey, {did: OTHER_DID, handle: 'other.test', minutes})
+    }
+
+    function own(rkey: string, minutes: number) {
+      return privateView(rkey, {minutes})
+    }
+
+    beforeEach(() => {
+      privateHead = []
+      resetPrismHealth()
+      resetKnown()
+      resetPrivateHead()
+      clearPrivateStores()
+      const pds = fakeClient(DID, () => ({
+        status: 200,
+        body: {uri: privateUri('x'), cid: RECORD_CID, value: {}},
+      }))
+      publishCurrentClients({
+        did: DID,
+        handle: 'author.test',
+        pdsUrl: undefined,
+        pdsClient: pds.client,
+        prismClient: {} as never,
+        appviewClient: {} as never,
+      })
+      const prism = fakeClient(DID, (call): Reply => {
+        if (call.nsid !== 'app.nearhorizon.private.getTimeline') {
+          return {status: 501, body: {error: 'MethodNotImplemented'}}
+        }
+        if (privateHead === 'fail') {
+          return {status: 500, body: {error: 'InternalServerError'}}
+        }
+        return {status: 200, body: {feed: privateHead}}
+      })
+      mockPrivateSource = {
+        did: DID,
+        prism: prism.client,
+        appview: fakeAppview().client,
+      }
+    })
+
+    afterEach(() => {
+      mockPrivateSource = undefined
+      clearCurrentClients()
+      resetPrismHealth()
+    })
+
+    it('stages a private post above the reader, keeps it through a replacement, and offers it with the pill (F-11)', async () => {
+      const {latest, cached, onHasNew} = renderHome({data: privateData()})
+
+      privateHead = [other('3k55', 55)]
+      await anInterval()
+      expect(requested()).toEqual([PEEK, since(12)])
+      expect(postsOf(cached())).toEqual([['3k55'], ['p12', 'p11'], ['p10']])
+      // Both sides were exhausted: the page joins the one below.
+      expect(cached().pages[0].cursor).toBe(cached().pages[0].since)
+      expect(onHasNew).toHaveBeenLastCalledWith(true)
+
+      // A new public post replaces the staged page, which keeps the private one.
+      newest = 13
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3k55', 'p13'])
+
+      await warmOpen()
+      expect(latest.pill.visible).toBe(true)
+    })
+
+    it('reads a merge cursor below a full page as an open gap (F-11)', async () => {
+      const {cached} = renderHome({data: privateData()})
+      privateHead = [other('3k55', 55)]
+      newest = 12 + 150
+      await anInterval()
+      expect(cached().pages[0].feed).toHaveLength(101)
+      expect(cached().pages[0].cursor?.startsWith('hz1.')).toBe(true)
+      expect(gapBelow(cached().pages, 0)).toBe('open')
+    })
+
+    it('only peeks over a private top while public posts are unchanged (F-9, FP3-N3)', async () => {
+      const {cached} = renderHome({data: privateData()})
+      privateHead = [other('3k55', 55)]
+      await anInterval()
+      const staged = cached()
+      for (let i = 0; i < 10; i++) await anInterval()
+      expect(requested()).toEqual([
+        PEEK,
+        since(12),
+        ...Array.from({length: 10}, () => PEEK),
+      ])
+      expect(cached()).toBe(staged)
+    })
+
+    it('waits for the head when no public post is loaded (F-9, FP3-N3)', async () => {
+      const data = privateData()
+      const row = {
+        post: {...post(1).post, uri: privateUri('3k55', OTHER_DID)},
+      } as unknown as app.bsky.feed.defs.FeedViewPost
+      data.pages = [{...data.pages[0], feed: [row]}]
+      data.pageParams = [undefined]
+      renderHome({data})
+      privateHead = [other('3k55', 55)]
+      await anInterval()
+      // The stock peek (p12) is not taken alone: the head's newest is on top.
+      expect(requested()).toEqual([PEEK])
+    })
+
+    it('removes a staged page whose only post prism no longer serves, withdraws the pill, puts the Home dot out, and then only peeks (F-18, N-6)', async () => {
+      const {latest, cached, onHasNew} = renderHome({data: privateData()})
+      privateHead = [other('3k55', 55)]
+      await anInterval()
+      expect(onHasNew).toHaveBeenLastCalledWith(true)
+      await warmOpen()
+      expect(latest.pill.visible).toBe(true)
+      onHasNew.mockClear()
+
+      // Deleted before the reader reaches it, with nothing else new.
+      privateHead = []
+      await anInterval()
+      expect(postsOf(cached())).toEqual([['p12', 'p11'], ['p10']])
+      expect(cached().pageParams).toEqual([undefined, {cursor: 't:11'}])
+      expect(latest.staged).toBeUndefined()
+      expect(latest.pill.visible).toBe(false)
+      // The dot goes out (N-6), and no later check lights it again.
+      expect(onHasNew.mock.calls).toEqual([[false]])
+
+      const before = requested().length
+      for (let i = 0; i < 10; i++) await anInterval()
+      expect(requested().slice(before)).toEqual(
+        Array.from({length: 10}, () => PEEK),
+      )
+      expect(onHasNew.mock.calls).toEqual([[false]])
+    })
+
+    it('leaves the Home dot lit when only another author’s row leaves and the own one stays (F-18)', async () => {
+      const {onHasNew} = renderHome({data: privateData()})
+      privateHead = [other('3k56', 56), own('3kown', 55)]
+      await anInterval()
+      onHasNew.mockClear()
+      privateHead = []
+      await anInterval()
+      expect(onHasNew).not.toHaveBeenCalledWith(false)
+    })
+
+    it('writes the staged page with only the reader’s own row when another author’s leaves (F-18)', async () => {
+      const {cached} = renderHome({data: privateData()})
+      privateHead = [other('3k56', 56), own('3kown', 55)]
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3k56', '3kown'])
+
+      privateHead = []
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3kown'])
+      const marker = decodeMergeStart(cached().pages[0].startCursor)!
+      expect(marker.seen.map(([key]) => key.split('/').pop())).toEqual([
+        '3kown',
+      ])
+      expect(marker.held).toBeUndefined()
+    })
+
+    it('keeps a staged own post prism leaves out, holds the marker, and a held top skips the peek until a clean page goes on top (F-13, F-16)', async () => {
+      const {cached, list} = renderHome({data: privateData()})
+      privateHead = [own('3kown', 55)]
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3kown'])
+
+      // A walk with no answer: the own row stays, nothing is written.
+      privateHead = 'fail'
+      const staged = cached()
+      await anInterval()
+      expect(cached()).toBe(staged)
+
+      // A clean answer that lacks it, with a new public post: carried, held at since.
+      privateHead = []
+      newest = 13
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3kown', 'p13'])
+      const held = decodeMergeStart(cached().pages[0].startCursor)!
+      expect(held.held).toBe(true)
+      expect(held.priv.time).toBe(T(50))
+      expect(held.floor).toBe(T(40))
+
+      // A held top skips the peek.
+      let mark = requested().length
+      await anInterval()
+      expect(requested().slice(mark)).toEqual([since(12)])
+
+      // Read, a held top with nothing new writes nothing and skips again.
+      list.beginDrag(400)
+      list.see(13)
+      list.endDrag(300)
+      mark = requested().length
+      const read = cached()
+      await anInterval()
+      await anInterval()
+      expect(requested().slice(mark)).toEqual([since(13), since(13)])
+      expect(cached()).toBe(read)
+
+      // prism serves it again, with a new post: a clean page on top, and the next check peeks.
+      privateHead = [other('3k59', 59), own('3kown', 55)]
+      await anInterval()
+      expect(postsOf(cached())[0]).toEqual(['3k59'])
+      expect(isHeldMarker(cached().pages[0].startCursor)).toBe(false)
+      mark = requested().length
+      await anInterval()
+      expect(requested().slice(mark)).toEqual([PEEK])
+      expect(
+        cached().pages.every(
+          page => page.since === undefined || !page.privateDegraded,
+        ),
+      ).toBe(true)
+    })
   })
 
   describe('on an interval', () => {
@@ -2565,6 +2838,52 @@ describe('gaps', () => {
     expect(writes).toHaveLength(1)
     expect(postsOf(cached())).toEqual([['new'], ['gap-1']])
     expect(hook.result.current.query.isFetchingNextPage).toBe(false)
+  })
+
+  describe('below a merged page whose public side resumes at its boundary (item 7, F-11)', () => {
+    /** The gapped page's cursor is a merge cursor that resumes from `start:1`. */
+    function boundaryData(): PostFeedData {
+      const data = gappedData()
+      const state = initialMergeState()
+      state.pub.cursor = 'start:1'
+      state.priv.done = true
+      const cursor = encodeMergeCursor({...state, resumesAtBoundary: true})
+      data.pages[0] = {...data.pages[0], cursor}
+      data.pageParams[1] = {cursor}
+      return data
+    }
+
+    beforeEach(() => {
+      mockPrivateSource = {
+        did: DID,
+        prism: fakeClient(DID, () => ({status: 501})).client,
+        appview: fakeAppview().client,
+      }
+    })
+
+    afterEach(() => {
+      mockPrivateSource = undefined
+    })
+
+    it('a gap fill keeps the boundary posts of the page it replaces', async () => {
+      const data = boundaryData()
+      const {hook, cached} = renderView(data)
+      await act(async () => {
+        await expect(
+          hook.result.current.fillGap(data.pages[0].cursor!),
+        ).resolves.toBe('filled')
+      })
+      expect(requested()).toEqual(['timeline start:1'])
+      expect(postsOf(cached())).toEqual([['new'], ['timeline-2', 'timeline-1']])
+    })
+
+    it('a settle keeps the boundary posts of the first page it drops', async () => {
+      const {hook, cached} = renderView(boundaryData())
+      await act(async () => {
+        await expect(hook.result.current.settle(cached())).resolves.toBe(true)
+      })
+      expect(postsOf(cached())).toEqual([['timeline-1', 'new']])
+    })
   })
 
   describe('settling at the true top', () => {

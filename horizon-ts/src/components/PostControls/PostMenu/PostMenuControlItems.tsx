@@ -24,6 +24,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
+// HORIZON: a visitor-form restored view hides repost and quote
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {usePostBookmark} from '../BookmarkButton'
 
@@ -56,6 +58,8 @@ export function PostMenuControlItems({
     logContext,
   )
   const {isBookmarked, toggleBookmark} = usePostBookmark({post, logContext})
+  // HORIZON: a visitor-form restored view hides repost and quote
+  const restoredActionsHidden = useRestoredActionsHidden(post)
 
   const isReposted = Boolean(post.viewer?.repost)
   const embeddingDisabled = Boolean(post.viewer?.embeddingDisabled)
@@ -177,21 +181,27 @@ export function PostMenuControlItems({
   return (
     <>
       <Menu.Group>
-        <Menu.Item
-          testID="postDropdownRepostBtn"
-          label={repostLabel}
-          onPress={() => requireAuth(() => void onRepost())}>
-          <Menu.ItemText>{repostLabel}</Menu.ItemText>
-          <Menu.ItemIcon icon={RepostIcon} position="right" />
-        </Menu.Item>
-        <Menu.Item
-          testID="postDropdownQuoteBtn"
-          label={quoteLabel}
-          disabled={embeddingDisabled}
-          onPress={() => requireAuth(onQuote)}>
-          <Menu.ItemText>{quoteLabel}</Menu.ItemText>
-          <Menu.ItemIcon icon={QuoteIcon} position="right" />
-        </Menu.Item>
+        {/* HORIZON: a visitor-form restored view hides repost and quote (start) */}
+        {!restoredActionsHidden && (
+          <>
+            <Menu.Item
+              testID="postDropdownRepostBtn"
+              label={repostLabel}
+              onPress={() => requireAuth(() => void onRepost())}>
+              <Menu.ItemText>{repostLabel}</Menu.ItemText>
+              <Menu.ItemIcon icon={RepostIcon} position="right" />
+            </Menu.Item>
+            <Menu.Item
+              testID="postDropdownQuoteBtn"
+              label={quoteLabel}
+              disabled={embeddingDisabled}
+              onPress={() => requireAuth(onQuote)}>
+              <Menu.ItemText>{quoteLabel}</Menu.ItemText>
+              <Menu.ItemIcon icon={QuoteIcon} position="right" />
+            </Menu.Item>
+          </>
+        )}
+        {/* HORIZON: a visitor-form restored view hides repost and quote (end) */}
         <Menu.Item
           testID="postDropdownSharePostBtn"
           label={shareLabel}

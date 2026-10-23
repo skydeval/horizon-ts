@@ -50,6 +50,12 @@ import {
 } from '#/horizon/private/thread/busy'
 // HORIZON: a private thread is read through prism
 import {fetchPrivateThreadV2} from '#/horizon/private/thread/fetch'
+// HORIZON: hidden replies behind the row: the continuation's key, the shown list without the thread's replies
+import {
+  continuationKeyOf,
+  continuationOf,
+  withoutThreadItems,
+} from '#/horizon/private/thread/hidden'
 // HORIZON: private branches under a public anchor, and private replies past the first read
 import {
   fetchOtherReplies,
@@ -57,6 +63,8 @@ import {
 } from '#/horizon/private/thread/replies'
 // HORIZON: a private thread is read through prism
 import {isPrivateRead} from '#/horizon/private/uri'
+// HORIZON: an anchor Bluesky withholds may be a restored post prism serves
+import {withRestoredAnchor} from '#/horizon/refract/thread/anchor'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -125,13 +133,24 @@ export function usePostThread({anchor}: {anchor?: string}) {
               sort,
             },
             () =>
-              client.call(app.bsky.unspecced.getPostThreadV2, {
-                anchor: anchor! as AtUriString,
-                branchingFactor:
-                  view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
-                below,
-                sort: sort,
-              }),
+              // HORIZON: an anchor Bluesky withholds may be a restored post prism serves
+              withRestoredAnchor(
+                anchor!,
+                {
+                  below,
+                  branchingFactor:
+                    view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+                  sort,
+                },
+                () =>
+                  client.call(app.bsky.unspecced.getPostThreadV2, {
+                    anchor: anchor! as AtUriString,
+                    branchingFactor:
+                      view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+                    below,
+                    sort: sort,
+                  }),
+              ),
             ctx,
           )
       // HORIZON: a private thread is read through prism; a public one with its private branches (end)
@@ -187,6 +206,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
         hasOtherReplies: !!ctx.meta.hasOtherReplies,
         // HORIZON: the thread's completion stamp, which the load gate reads
         ...threadStamp(),
+        // HORIZON: the key of the continuation the read wrote, which closes an open row when it changes
+        ...continuationOf(data),
       } as UsePostThreadQueryResult
 
       const record = getThreadgateRecord(result.threadgate)
@@ -270,6 +291,30 @@ export function usePostThread({anchor}: {anchor?: string}) {
       // HORIZON: private replies past the first read continue here (end)
     },
   })
+  // HORIZON: a thread read that changes the continuation closes the open row; the tap reads the new one (start)
+  const threadContinuation = continuationKeyOf(query.data)
+  const [seenContinuation, setSeenContinuation] = useState(threadContinuation)
+  if (seenContinuation !== threadContinuation) {
+    setSeenContinuation(threadContinuation)
+    if (
+      otherItemsVisible &&
+      continuationKeyOf(additionalItemsQuery.data) !== threadContinuation
+    ) {
+      setOtherItemsVisible(false)
+    }
+  }
+  const showOtherItems = useCallback(() => {
+    const otherKey = createPostThreadOtherQueryKey({anchor})
+    const other = qc.getQueryData(otherKey)
+    if (
+      other !== undefined &&
+      continuationKeyOf(other) !== threadContinuation
+    ) {
+      void qc.resetQueries({queryKey: otherKey, exact: true})
+    }
+    setOtherItemsVisible(true)
+  }, [qc, anchor, threadContinuation])
+  // HORIZON: a thread read that changes the continuation closes the open row; the tap reads the new one (end)
   const serverOtherThreadItems: ThreadItem[] = useMemo(() => {
     if (!additionalQueryEnabled) return []
     if (additionalItemsQuery.isLoading) {
@@ -282,9 +327,9 @@ export function usePostThread({anchor}: {anchor?: string}) {
       // HORIZON: a failed refetch over data renders its data, not nothing (busy design 6.1)
     } else if (additionalItemsQuery.data?.thread) {
       const {threadItems} = sortAndAnnotateThreadItems(
-        // HORIZON: the further replies are gated against the thread's load
+        // HORIZON: the further replies are gated against the thread's load, without a reply the thread holds
         gateOtherReplies(
-          additionalItemsQuery.data.thread,
+          withoutThreadItems(additionalItemsQuery.data.thread, thread),
           currentDid,
           additionalItemsQuery.data.horizonFetchedAt,
           busy.loadSince,
@@ -309,9 +354,10 @@ export function usePostThread({anchor}: {anchor?: string}) {
     mergeThreadgateHiddenReplies,
     moderationOpts,
     threadgate?.record,
-    // HORIZON: the further replies are gated against the thread's load
+    // HORIZON: the further replies are gated against the thread's load, without a reply the thread holds
     currentDid,
     busy.loadSince,
+    thread,
   ])
 
   /**
@@ -371,7 +417,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
         hasSession,
         hasOtherThreadItems,
         otherItemsVisible,
-        showOtherItems: () => setOtherItemsVisible(true),
+        // HORIZON: the tap resets further replies read under another continuation
+        showOtherItems,
       }),
       anchor,
       busy.quietRow,
@@ -387,7 +434,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     hasSession,
     hasOtherThreadItems,
     otherItemsVisible,
-    setOtherItemsVisible,
+    // HORIZON: the tap resets further replies read under another continuation
+    showOtherItems,
   ])
 
   return useMemo(() => {

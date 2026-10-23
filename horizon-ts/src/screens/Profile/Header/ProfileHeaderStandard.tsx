@@ -39,6 +39,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_IOS, IS_NATIVE} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {GermButton} from '../components/GermButton'
 import {ProfileHeaderDisplayName} from './DisplayName'
@@ -232,6 +234,8 @@ export function HeaderStandardButtons({
     profile,
     'ProfileHeader',
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profile)
   const [, queueUnblock] = useProfileBlockMutationQueue(profile)
   const editProfileControl = useDialogControl()
   const inviteFriendsControl = useDialogControl()
@@ -395,31 +399,33 @@ export function HeaderStandardButtons({
             </>
           )}
 
-          {(!minimal || !profile.viewer?.following) && (
-            <Button
-              testID={profile.viewer?.following ? 'unfollowBtn' : 'followBtn'}
-              size="small"
-              color={profile.viewer?.following ? 'secondary' : 'primary'}
-              label={
-                profile.viewer?.following
-                  ? _(msg`Unfollow ${profile.handle}`)
-                  : _(msg`Follow ${profile.handle}`)
-              }
-              onPress={
-                profile.viewer?.following ? onPressUnfollow : onPressFollow
-              }>
-              {!profile.viewer?.following && <ButtonIcon icon={Plus} />}
-              <ButtonText>
-                {profile.viewer?.following ? (
-                  <Trans>Following</Trans>
-                ) : profile.viewer?.followedBy ? (
-                  <Trans>Follow back</Trans>
-                ) : (
-                  <Trans>Follow</Trans>
-                )}
-              </ButtonText>
-            </Button>
-          )}
+          {/* HORIZON: a visitor-form restored view hides follow */}
+          {(!minimal || !profile.viewer?.following) &&
+            !restoredActionsHidden && (
+              <Button
+                testID={profile.viewer?.following ? 'unfollowBtn' : 'followBtn'}
+                size="small"
+                color={profile.viewer?.following ? 'secondary' : 'primary'}
+                label={
+                  profile.viewer?.following
+                    ? _(msg`Unfollow ${profile.handle}`)
+                    : _(msg`Follow ${profile.handle}`)
+                }
+                onPress={
+                  profile.viewer?.following ? onPressUnfollow : onPressFollow
+                }>
+                {!profile.viewer?.following && <ButtonIcon icon={Plus} />}
+                <ButtonText>
+                  {profile.viewer?.following ? (
+                    <Trans>Following</Trans>
+                  ) : profile.viewer?.followedBy ? (
+                    <Trans>Follow back</Trans>
+                  ) : (
+                    <Trans>Follow</Trans>
+                  )}
+                </ButtonText>
+              </Button>
+            )}
         </>
       ) : null}
       <ProfileMenu profile={profile} />

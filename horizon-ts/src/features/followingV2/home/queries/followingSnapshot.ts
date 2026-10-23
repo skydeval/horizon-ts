@@ -190,7 +190,8 @@ function carryBoundary(
  * `indexedAt`, which can be later. That's close enough for
  * {@link carryBoundary}: carrying a post that didn't need it does no harm.
  */
-function feedSortTime(item: app.bsky.feed.defs.FeedViewPost) {
+// HORIZON: exported for the gap boundary carry (item 7 3.4)
+export function feedSortTime(item: app.bsky.feed.defs.FeedViewPost) {
   const reason = item.reason as {indexedAt?: unknown} | undefined
   if (typeof reason?.indexedAt === 'string') {
     return Date.parse(reason.indexedAt)

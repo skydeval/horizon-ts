@@ -4,11 +4,26 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 jest.unmock('multiformats/cid')
 jest.unmock('multiformats/hashes/hasher')
 
+let mockPdsUrl: string | undefined
 jest.mock('#/horizon/private/adapt/pds', () => ({
-  authorPdsUrl: () => Promise.resolve(undefined),
+  authorPdsUrl: () => Promise.resolve(mockPdsUrl),
+}))
+let mockPdsFetch: (url: string) => Promise<Response> = () =>
+  Promise.reject(new Error('no PDS'))
+jest.mock('#/state/session/network', () => ({
+  ...jest.requireActual<object>('#/state/session/network'),
+  networkAwareFetch: (input: unknown) =>
+    mockPdsFetch(
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as {url: string}).url,
+    ),
 }))
 
 import {type Client} from '@atproto/lex'
+import {QueryClient} from '@tanstack/react-query'
 
 import {
   clearCurrentClients,
@@ -22,6 +37,9 @@ import {
   privateGatesQueryKey,
   readPrivateGates,
   readRootThreadgate,
+  rootThreadgateQueryKey,
+  rootThreadgateQueryOptions,
+  rootThreadgateView,
   rootUriOf,
 } from '../api/gates'
 import {replySummary} from '../composer/interaction'
@@ -294,10 +312,104 @@ describe('readPrivateGates and readRootThreadgate', () => {
   })
 })
 
+describe('the shared root threadgate read (hidden replies 5.4, HR2-N2; test 19)', () => {
+  const PUBLIC_ROOT = `at://${OTHER_DID}/app.bsky.feed.post/3kroot2222222`
+
+  function servePds(reads: string[]) {
+    mockPdsUrl = 'https://pds.example'
+    mockPdsFetch = url => {
+      const params = new URL(url).searchParams
+      const collection = params.get('collection') ?? ''
+      reads.push(collection)
+      if (collection !== 'app.bsky.feed.threadgate') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({error: 'RecordNotFound', message: 'none'}),
+            {status: 400, headers: {'content-type': 'application/json'}},
+          ),
+        )
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            uri: `at://${OTHER_DID}/app.bsky.feed.threadgate/3kroot2222222`,
+            value: {...threadgate([]), post: PUBLIC_ROOT, hiddenReplies: [REPLY]},
+          }),
+          {status: 200, headers: {'content-type': 'application/json'}},
+        ),
+      )
+    }
+  }
+
+  beforeEach(() => {
+    clearPrivateStores()
+    clearCurrentClients()
+  })
+
+  it('the evaluation, the dialog and the thread share one read; the thread’s view has the built uri and no cid', async () => {
+    const reads: string[] = []
+    servePds(reads)
+    const queryClient = new QueryClient({
+      defaultOptions: {queries: {retry: false}},
+    })
+    publishCurrentClients({
+      did: READER,
+      handle: 'reader.test',
+      pdsUrl: undefined,
+      pdsClient: {} as never,
+      prismClient: {} as never,
+      appviewClient: {} as never,
+      queryClient,
+    })
+    await fetchPrivateGateEvaluation(PUBLIC_ROOT, REPLY)
+    const view = await rootThreadgateView(queryClient, PUBLIC_ROOT)
+    const dialog = await queryClient.fetchQuery(
+      rootThreadgateQueryOptions(PUBLIC_ROOT),
+    )
+    expect(reads.filter(c => c === 'app.bsky.feed.threadgate')).toHaveLength(1)
+    expect(view?.uri).toBe(
+      `at://${OTHER_DID}/app.bsky.feed.threadgate/3kroot2222222`,
+    )
+    expect(view?.cid).toBeUndefined()
+    expect(
+      (view?.record as {hiddenReplies?: string[]}).hiddenReplies,
+    ).toEqual([REPLY])
+    expect(dialog?.hiddenReplies).toEqual([REPLY])
+  })
+
+  it('an injected clientFor reads directly and writes no cache', async () => {
+    const queryClient = new QueryClient()
+    publishCurrentClients({
+      did: READER,
+      handle: 'reader.test',
+      pdsUrl: undefined,
+      pdsClient: {} as never,
+      prismClient: {} as never,
+      appviewClient: {} as never,
+      queryClient,
+    })
+    const calls: {did: string; call: Call}[] = []
+    await readPrivateGates(ROOT, REPLY, did =>
+      Promise.resolve(
+        pdsFor(
+          did,
+          {'app.bsky.feed.threadgate/3kroot2222222': threadgate([])},
+          calls,
+        ),
+      ),
+    )
+    expect(calls.length).toBeGreaterThan(0)
+    expect(
+      queryClient.getQueryData(rootThreadgateQueryKey(ROOT)),
+    ).toBeUndefined()
+  })
+})
+
 describe('fetchPrivateGateEvaluation', () => {
   beforeEach(() => {
     clearPrivateStores()
     clearCurrentClients()
+    mockPdsUrl = undefined
   })
 
   it('reads the relationship for a follower rule and evaluates as the current account', async () => {

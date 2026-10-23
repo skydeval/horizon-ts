@@ -50,11 +50,18 @@ import {
   type ReasonFeedSource,
 } from '#/features/followingV2/home/api/types'
 import {type NewPostsCheckTrigger} from '#/features/followingV2/home/useNewPostsCheck'
-// HORIZON: Following while prism is busy: degraded pages and the carry
+// HORIZON: Following while prism is busy: degraded pages and the carry; item 7's carries
 import {
+  carryFillPage,
+  carryGapBoundary,
   carryOwnPrivateItems,
+  carryStagedPrivate,
   carryTopFeedPage,
+  judgeStaged,
+  newestPublicRow,
 } from '#/horizon/private/feed/carry'
+// HORIZON: new private posts in Following (item 7)
+import {isHeldMarker} from '#/horizon/private/feed/cursor'
 // HORIZON: Following while prism is busy: degraded pages and the carry
 import {
   anyPageDegraded,
@@ -721,7 +728,10 @@ export function usePostFeedPrepend(
     topFetchedAt,
     listAtRest,
     isRefreshing,
+    onWithdrawn,
   }: {
+    // HORIZON: a staged page removed with nothing newer puts the Home dot out (item 7 3.4, D-6)
+    onWithdrawn?: () => void
     enabled: boolean
     /** The `fetchedAt` of the top page as rendered, if there is one. */
     topFetchedAt: number | undefined
@@ -796,7 +806,53 @@ export function usePostFeedPrepend(
     before: PostFeedData,
     {since, replacing}: {since: string; replacing?: {fetchedAt: number}},
   ) => {
-    const page = await fetchPage(undefined, {since, limit: PREPEND_LIMIT})
+    // HORIZON: the staged page's private rows are judged before the exits (item 7 3.4) (start)
+    let page = await fetchPage(undefined, {since, limit: PREPEND_LIMIT})
+    const judged = replacing ? judgeStaged(before.pages[0], page) : undefined
+    /*
+     * The staged page, unread and above the reader, is written without a row
+     * prism left out, or removed when nothing is left, so nothing on screen
+     * moves and the next check matches its peek.
+     */
+    const dropUnserved = async (isFull: boolean) => {
+      await listAtRest()
+      const current = stagedRef.current
+      if (
+        !judged ||
+        !current ||
+        isRefreshing() ||
+        current.fetchedAt !== replacing?.fetchedAt
+      ) {
+        return undefined
+      }
+      const {kept} = judged
+      const isGone = kept.feed.length === 0
+      const wrote = await commit(
+        queryClient,
+        queryKey,
+        before,
+        (data = before) =>
+          isGone
+            ? {
+                pages: data.pages.slice(1),
+                pageParams: [undefined, ...data.pageParams.slice(2)],
+              }
+            : {
+                pages: [kept, ...data.pages.slice(1)],
+                pageParams: data.pageParams,
+              },
+        {dependsOn: 2},
+      )
+      if (wrote) {
+        setStaged(
+          isGone ? undefined : {...current, isFull: current.isFull || isFull},
+        )
+        // Nothing staged and nothing newer: nothing is new to the reader.
+        if (isGone && !isFull) onWithdrawn?.()
+      }
+      return undefined
+    }
+    // HORIZON: the staged page's private rows are judged before the exits (item 7 3.4) (end)
     /*
      * A bounded range always comes back with a cursor, the echo of `since` or
      * one into what it didn't return, so a page without one can't go above the
@@ -804,10 +860,14 @@ export function usePostFeedPrepend(
      */
     const {cursor} = page
     if (!page.feed.length || cursor === undefined) {
+      // HORIZON: an empty answer still drops a staged row prism left out (item 7 3.4)
+      if (judged?.dropped) return dropUnserved(false)
       return undefined
     }
     const isFull = cursor !== since
     if (replacing && isFull) {
+      // HORIZON: a full answer still drops a staged row prism left out (item 7 3.4)
+      if (judged?.dropped) return dropUnserved(true)
       // It would leave out some of the staged posts, so the staged page stays.
       const current = stagedRef.current
       if (current?.fetchedAt === replacing.fetchedAt) {
@@ -815,6 +875,8 @@ export function usePostFeedPrepend(
       }
       return undefined
     }
+    // HORIZON: the replacement carries the staged rows judged to stay (item 7 3.4)
+    if (replacing) page = carryStagedPrivate(judged, page)
     await listAtRest()
     const wasStaged = stagedRef.current
     if (
@@ -899,8 +961,19 @@ export function usePostFeedPrepend(
     return (async () => {
       let page: FeedPageUnselected | undefined
       try {
-        const latest = await createFeedApi().peekLatest({source: top.source})
-        if (latest && !isSameFeedItem(latest, top.feed[0])) {
+        // HORIZON: a held top skips the peek; the peek knows the newest public row (item 7 3.2, 3.4) (start)
+        const isHeld = isHeldMarker(top.startCursor)
+        const newestPublic = newestPublicRow(before.pages)
+        const latest = isHeld
+          ? undefined
+          : await createFeedApi().peekLatest({
+              source: top.source,
+              ...(newestPublic && {
+                isCurrent: item => isSameFeedItem(item, newestPublic),
+              }),
+            })
+        if (isHeld || (latest && !isSameFeedItem(latest, top.feed[0]))) {
+          // HORIZON: a held top skips the peek; the peek knows the newest public row (item 7 3.2, 3.4) (end)
           page = await run(trigger)
         }
       } finally {
@@ -1059,7 +1132,12 @@ export function usePostFeedGapFill(
       return 'superseded'
     }
     try {
-      const page = await fetchPage({cursor})
+      // HORIZON: the fill carries the boundary posts and, degraded, the rows it replaces (item 7 3.4)
+      const page = carryFillPage(
+        cursor,
+        await fetchPage({cursor}),
+        before.pages.slice(index + 1),
+      )
       const wrote = await commit(
         queryClient,
         queryKey,
@@ -1115,7 +1193,15 @@ export function usePostFeedSettle(
       queryKey,
       before,
       (data = before) => ({
-        pages: data.pages.slice(0, index + 1),
+        // HORIZON: the kept page carries the boundary posts of the first page dropped (item 7 3.4)
+        pages: [
+          ...data.pages.slice(0, index),
+          carryGapBoundary(
+            data.pages[index].cursor,
+            data.pages[index],
+            data.pages[index + 1],
+          ),
+        ],
         pageParams: data.pageParams.slice(0, index + 1),
       }),
       {dependsOn: index + 2},

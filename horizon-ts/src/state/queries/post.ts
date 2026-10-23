@@ -22,10 +22,7 @@ import {
   muteThreadOnPrism,
 } from '#/horizon/private/api/thread-mute'
 // HORIZON: a private post is retried while prism is busy
-import {
-  privateQueryFn,
-  privateRetryFor,
-} from '#/horizon/private/api/transient'
+import {privateQueryFn, privateRetryFor} from '#/horizon/private/api/transient'
 // HORIZON: a private post is deleted through its own procedure
 import {deletePrivatePost} from '#/horizon/private/api/writes'
 // HORIZON: a held private post is read again on the suspect clock
@@ -36,6 +33,8 @@ import {fetchPrivatePost} from '#/horizon/private/links'
 import {useBusyPostQuery} from '#/horizon/private/post-one'
 // HORIZON: private posts are read through prism and deleted through their own procedure
 import {isPrivatePostUri, isPrivateRead} from '#/horizon/private/uri'
+// HORIZON: a visitor-form restored view's like and repost are never written
+import {refuseRestoredAction} from '#/horizon/refract/visitor'
 import {app, com} from '#/lexicons'
 import {useIsThreadMuted, useSetThreadMute} from '../cache/thread-mutes'
 import {findProfileQueryData} from './profile'
@@ -192,12 +191,14 @@ export function usePostLikeMutationQueue(
   })
 
   const queueLike = useCallback(() => {
+    // HORIZON: a visitor-form restored view's like is never written (it may already exist)
+    if (refuseRestoredAction(post)) return Promise.resolve(initialLikeUri)
     // optimistically update
     updatePostShadow(queryClient, postUri, {
       likeUri: 'pending',
     })
     return queueToggle(true)
-  }, [queryClient, postUri, queueToggle])
+  }, [queryClient, postUri, queueToggle, post, initialLikeUri])
 
   const queueUnlike = useCallback(() => {
     // optimistically update
@@ -324,12 +325,14 @@ export function usePostRepostMutationQueue(
   })
 
   const queueRepost = useCallback(() => {
+    // HORIZON: a visitor-form restored view's repost is never written (it may already exist)
+    if (refuseRestoredAction(post)) return Promise.resolve(initialRepostUri)
     // optimistically update
     updatePostShadow(queryClient, postUri, {
       repostUri: 'pending',
     })
     return queueToggle(true)
-  }, [queryClient, postUri, queueToggle])
+  }, [queryClient, postUri, queueToggle, post, initialRepostUri])
 
   const queueUnrepost = useCallback(() => {
     // optimistically update

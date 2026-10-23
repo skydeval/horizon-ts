@@ -267,6 +267,10 @@ describe('the further replies\' private half (6.1, BR14-L3)', () => {
       seen: new Set(),
       cids: new Map(),
       stockHasOther: false,
+      key: 'private|pages|',
+      hidden: [],
+      pages: true,
+      readAt: 0,
     })
   const reindexing: Reply = {status: 503, body: {error: 'Reindexing', message: 'x', retryAfter: 30}}
 

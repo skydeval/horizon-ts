@@ -279,3 +279,35 @@ export const MEDIA_GRID: boolean = true
  * Guards Horizon code only.
  */
 export const REPLY_BLOCK_CHECK: boolean = true
+
+/**
+ * Restored accounts (refract client design RF-1, RF-12; code under
+ * `refract/`): accounts Bluesky's AppView withholds that a community prism
+ * trusts still hosts, read through prism's `app.nearhorizon.refract.*` and
+ * rendered as ordinary content, while prism lists `refract`. RF-12's gate
+ * needed prism's deploy reply to name `14c5b57` (fixes A, the not-hosted
+ * cache), `5bbd301` (RF-S14, `withheld` `unavailable`) and `c037058`
+ * (RF-S16, a DID restored after the snapshot answers `pending`) as deployed.
+ * It was met on 2026-10-23: prism.nearhorizon.app runs `839e8ed`, which
+ * carries all three with `b87c39d` (`withheld`, `servedAs`, `viewerChecked`),
+ * then `53128b9` (RF-S15 and the parallel profile walk)
+ * (`docs/internal/handoff/prism-refract-client-fixes-deployed.md`). `false`:
+ * no refract call, and every hook keeps Bluesky's behaviour.
+ */
+export const REFRACT: boolean = true
+
+/**
+ * C-8, pending skydeval; default decided overnight, recommended (D1). `true`
+ * moderates a restored view with its community's labeler added for that view
+ * only (built in RF-B9, not yet). `false`: stock moderation, which honours the
+ * community's labels only for readers who subscribe to that labeler.
+ */
+export const REFRACT_COMMUNITY_LABELER: boolean = false
+
+/**
+ * Development builds only, off by default (refract client design 11.3): the
+ * seven refract methods are answered from synthetic fixtures
+ * (`refract/dev-fixtures.ts`), so the screens can be checked without reading
+ * a real account. Ignored outside `__DEV__`.
+ */
+export const REFRACT_DEV_FIXTURES: boolean = false

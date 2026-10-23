@@ -45,6 +45,8 @@ import {Text} from '#/components/Typography'
 import {IS_WEB_TOUCH_DEVICE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
 import {LiveStatus} from '#/features/liveNow/components/LiveStatusDialog'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {type ProfileHoverCardProps} from './types'
 
@@ -443,6 +445,8 @@ function Inner({
     profile: profileShadow,
     logContext: 'ProfileHoverCard',
   })
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profileShadow)
   const isBlockedUser =
     profile.viewer?.blocking ||
     profile.viewer?.blockedBy ||
@@ -481,6 +485,8 @@ function Inner({
 
         {!isMe &&
           !isLabeler &&
+          // HORIZON: a visitor-form restored view hides follow
+          !restoredActionsHidden &&
           (isBlockedUser ? (
             <Link
               to={profileURL}

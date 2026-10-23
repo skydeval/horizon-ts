@@ -70,6 +70,25 @@ export function hidesGateControls(
 }
 
 /**
+ * Whether Menu 3's "Hide reply for everyone" is left out on the post at
+ * `uri` whose thread root is `rootUri` (hidden replies design 5.1): on a
+ * private post while it (or its root) is pending-unwritten, or under a
+ * private root until prism applies the gates (`private.gates`, answered in
+ * this run, since the press writes). Under a public root it stays: the press
+ * writes the public root's own threadgate, as for a public reply. Who can
+ * reply keeps {@link hidesGateControls}.
+ */
+export function hidesHideReply(
+  uri: string | undefined,
+  rootUri: string | undefined = uri,
+): boolean {
+  if (!isPrivateDisplay(uri)) return false
+  if (isPendingUnwritten(uri) || isPendingUnwritten(rootUri)) return true
+  if (!isPrivatePostUri(rootUri)) return false
+  return !privateGatesServed({forWrite: true})
+}
+
+/**
  * Whether Menu 3's detach quote is left out on the private post at
  * `postUri` quoting `quotedUri`: prism detaches private quoting posts of
  * private posts only, once the gates are answered in this run.

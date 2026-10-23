@@ -126,6 +126,12 @@ export function useFollowingBusy<P extends SlicedFeedPage>({
   onRestAtTop: () => void
   /** Called by every refresh from the top: nothing is owed any more. */
   clearPending: () => void
+  /**
+   * Called when a check removed the staged page and nothing is newer (item 7
+   * 3.4): the Home dot goes out, unless a lift scrolled down still owes a
+   * refresh.
+   */
+  onStagedWithdrawn: () => void
   /** The header slot: the note above `Header`, or `Header` itself when ungated. */
   Header: (() => React.ReactElement) | undefined
 } {
@@ -160,8 +166,7 @@ export function useFollowingBusy<P extends SlicedFeedPage>({
       : {pages: data?.pages ?? [], hidden: 0}
   const NoteHeader = useNoteHeader(gate.hidden, {Header})
   return {
-    data:
-      data && gated.hidden > 0 ? {...data, pages: gated.pages} : data,
+    data: data && gated.hidden > 0 ? {...data, pages: gated.pages} : data,
     hidden: gate.hidden,
     restart: gate.restart,
     onRestAtTop: () => {
@@ -171,6 +176,9 @@ export function useFollowingBusy<P extends SlicedFeedPage>({
     },
     clearPending: () => {
       pending.current = false
+    },
+    onStagedWithdrawn: () => {
+      if (!pending.current) onHasNew?.(false)
     },
     Header: enabled ? NoteHeader : Header,
   }

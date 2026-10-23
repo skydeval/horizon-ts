@@ -45,6 +45,11 @@ import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {PrivateQuote} from '#/horizon/private/render/PrivateQuote'
 // HORIZON: private post links use the ppost segment; quoted private posts are read through prism
 import {isPrivateRead, postSegment} from '#/horizon/private/uri'
+// HORIZON: a quote Bluesky withholds may be a restored post prism serves
+import {
+  RestoredQuoteSlot,
+  restoredQuoteSlotActive,
+} from '#/horizon/refract/RestoredQuote'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
@@ -297,6 +302,36 @@ function RecordEmbed({
         )
       }
       // HORIZON: a quoted private post is resolved for readers who may view it (end)
+      // HORIZON: a quote Bluesky withholds may be a restored post prism serves (start)
+      if (restoredQuoteSlotActive(embed.view.uri)) {
+        if (rest.isWithinQuote && !rest.allowNestedQuotes) {
+          return null
+        }
+        return (
+          <RestoredQuoteSlot
+            uri={embed.view.uri}
+            render={quote => (
+              <QuoteEmbed
+                {...rest}
+                embed={quote}
+                viewContext={rest.viewContext}
+                isWithinQuote={rest.isWithinQuote}
+                allowNestedQuotes={rest.allowNestedQuotes}
+              />
+            )}
+            placeholder={kind => (
+              <PostPlaceholderText>
+                {kind === 'blocked' ? (
+                  <Trans>Blocked</Trans>
+                ) : (
+                  <Trans>Deleted</Trans>
+                )}
+              </PostPlaceholderText>
+            )}
+          />
+        )
+      }
+      // HORIZON: a quote Bluesky withholds may be a restored post prism serves (end)
       return (
         <PostPlaceholderText>
           <Trans>Deleted</Trans>

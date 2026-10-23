@@ -67,6 +67,8 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {app, chat} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -804,11 +806,15 @@ function FollowBackButton({
     profileShadow,
     'ProfileCard',
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profileShadow)
 
   // Don't show button if not logged in or for own profile
   if (!hasSession || profile.did === currentAccount?.did) {
     return null
   }
+  // HORIZON: a visitor-form restored view hides follow
+  if (restoredActionsHidden) return null
 
   const onPressFollow = async (e: GestureResponderEvent) => {
     e.preventDefault()

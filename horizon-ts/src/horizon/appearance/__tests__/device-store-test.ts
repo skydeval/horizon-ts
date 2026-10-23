@@ -3,6 +3,7 @@ import {describe, expect, it} from '@jest/globals'
 import {
   defaultDeviceValue,
   type DeviceAppearanceV1,
+  emptyAccountCopy,
   parseDeviceValue,
   serializeDeviceValue,
 } from '#/horizon/appearance/device-value'
@@ -78,14 +79,7 @@ describe('the device value (T10)', () => {
     expect(a.pending?.seq).toBe(2)
     expect(a.blocked).toBe(true)
     const c = parsed.accounts['did:plc:c']
-    expect(c).toEqual({
-      record: null,
-      raw: null,
-      cid: null,
-      syncedAt: 0,
-      pending: null,
-      blocked: false,
-    })
+    expect(c).toEqual(emptyAccountCopy())
   })
 
   it('reads every frame style, retired Buttons as Bars, and the retired inset toggle as Gutter', () => {
@@ -132,6 +126,7 @@ describe('the device value (T10)', () => {
       southern: true,
       accounts: {
         'did:plc:a': {
+          ...emptyAccountCopy(),
           record: DEFAULT_APPEARANCE,
           raw: {version: 1, extra: [1, 2]},
           cid: 'bafyabc',

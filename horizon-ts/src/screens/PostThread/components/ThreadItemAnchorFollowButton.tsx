@@ -17,6 +17,8 @@ import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Che
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import * as Toast from '#/components/Toast'
 import {IS_IOS} from '#/env'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {GrowthHack} from './GrowthHack'
 
@@ -68,6 +70,8 @@ function PostThreadFollowBtnLoaded({
     'PostThreadItem',
   )
   const requireAuth = useRequireAuth()
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profile)
 
   const isFollowing = !!profile.viewer?.following
   const isFollowedBy = !!profile.viewer?.followedBy
@@ -136,7 +140,8 @@ function PostThreadFollowBtnLoaded({
     }
   }, [isFollowing, requireAuth, queueFollow, _, queueUnfollow])
 
-  if (!showFollowBtn) return null
+  // HORIZON: a visitor-form restored view hides follow
+  if (!showFollowBtn || restoredActionsHidden) return null
 
   return (
     <Button

@@ -41,6 +41,8 @@ import {useStarterPackLink} from '#/components/StarterPack/StarterPackCard'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {type Metrics} from '#/analytics'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {Card} from './media'
@@ -145,7 +147,11 @@ function FollowButtonInner({
     profile,
     logContext,
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profile)
 
+  // HORIZON: a visitor-form restored view hides follow
+  if (restoredActionsHidden) return null
   if (!profile.viewer) return null
   if (
     profile.viewer.blockedBy ||

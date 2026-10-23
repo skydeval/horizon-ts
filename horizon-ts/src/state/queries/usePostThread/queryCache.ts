@@ -37,6 +37,8 @@ import {
   embedViewRecordToPostView,
   getEmbeddedPost,
 } from '#/state/queries/util'
+// HORIZON: a tapped restored reply or quote renders at once from the placeholder
+import {findRestoredPosts} from '#/horizon/refract/finders'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -290,6 +292,10 @@ export function* getThreadPlaceholderCandidates(
     queryClient,
     uri,
   )) {
+    yield postViewToThreadPlaceholder(post, postNumbering)
+  }
+  // HORIZON: a tapped restored reply or quote renders at once from the placeholder
+  for (let post of findRestoredPosts(queryClient, uri)) {
     yield postViewToThreadPlaceholder(post, postNumbering)
   }
 }

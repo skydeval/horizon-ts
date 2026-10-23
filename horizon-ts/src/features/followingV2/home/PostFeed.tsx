@@ -417,6 +417,8 @@ let PostFeed = ({
     topFetchedAt: lastFetchedAt,
     listAtRest: listRest.atRest,
     isRefreshing: isRefreshPending,
+    // HORIZON: a staged page removed with nothing newer puts the Home dot out (item 7 3.4)
+    onWithdrawn: busy.onStagedWithdrawn,
   })
   const fillGap = usePostFeedGapFill(feed, feedParams)
   /*

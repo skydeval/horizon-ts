@@ -14,6 +14,12 @@
  * and when prism pages replies (`private.paging`) and the anchor's direct
  * replies may go on, the rest is a continuation (`thread/replies.ts`) that
  * the stock "Show more replies" loads.
+ *
+ * Hidden replies (hidden replies design 4.2, 5.4): the root gate's private
+ * URIs prism left out are the continuation's candidates, prefetched in the
+ * background on a confirmed read (`thread/hidden.ts`), so the same row opens
+ * them. Under a public root the gate is read from the root author's PDS and
+ * returned as the thread's `threadgate`.
  */
 
 import {type Client, XrpcResponseError} from '@atproto/lex'
@@ -35,6 +41,7 @@ import {
 } from '#/horizon/private/adapt/feed-view'
 import {
   gatesServedForRoot,
+  rootThreadgateView,
   threadGateEvaluation,
 } from '#/horizon/private/api/gates'
 import {
@@ -55,16 +62,27 @@ import {
   isOwnPrivateUri,
   noteMiss,
 } from '#/horizon/private/known'
+import {fetchStamp} from '#/horizon/private/load-gate'
 import {countsServed} from '#/horizon/private/render/controls'
 import {privatePagingServed} from '#/horizon/private/server-support'
 import {getPendingPost, getPendingPosts} from '#/horizon/private/store'
 import {
   clearReplyContinuation,
+  continuationKey,
   setReplyContinuation,
 } from '#/horizon/private/thread/continuation'
+import {
+  answerHasHidden,
+  cachedHiddenAnswer,
+  hiddenCandidates,
+  hiddenPrefetchAllowed,
+  narrowedPages,
+  prefetchHiddenReplies,
+  threadgateHiddenReplies,
+} from '#/horizon/private/thread/hidden'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {requireCurrentClients} from '#/horizon/routing/current-clients'
-import {getPrismHealth} from '#/horizon/routing/health'
+import {getPrismHealth, isPrismConfirmed} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {type app, com} from '#/lexicons'
 
@@ -81,6 +99,11 @@ export type PrivateThreadResult = {
    */
   threadgate?: app.bsky.feed.defs.ThreadgateView
   hasOtherReplies: boolean
+  /**
+   * The key of the continuation the read wrote, `''` with none (hidden
+   * replies design 4.2), so a changed continuation closes an open row.
+   */
+  horizonContinuation?: string
 }
 
 /**
@@ -581,9 +604,17 @@ export async function fetchPrivateThreadV2(
   context?: ThreadQueryContext,
 ): Promise<PrivateThreadResult> {
   const clients = requireCurrentClients()
-  // Every main read replaces the anchor's continuation.
-  clearReplyContinuation(anchor)
-  if (!isPrivateMember(clients.did)) return notFoundThread(anchor)
+  /*
+   * Every main read replaces the anchor's continuation at its end, never
+   * clearing it first (hidden replies design 4.2, HR2-L2): an other-replies
+   * read beside it reads from the previous one. A throw leaves it.
+   */
+  if (!isPrivateMember(clients.did)) {
+    clearReplyContinuation(anchor)
+    return notFoundThread(anchor)
+  }
+  // The hidden prefetch's start test, taken when the read starts (6.2).
+  const prefetchAllowed = hiddenPrefetchAllowed(clients.did, anchor)
   const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
 
   let raw: RawThread | undefined
@@ -622,6 +653,7 @@ export async function fetchPrivateThreadV2(
   }
   raw ??= fromPending(anchorUri)
   if (!raw) {
+    clearReplyContinuation(anchor)
     return missedAnchor(
       anchorUri,
       clients.did,
@@ -640,7 +672,10 @@ export async function fetchPrivateThreadV2(
   )
 
   const anchorView = views.get(raw.anchor.input.view.uri)
-  if (!anchorView) return notFoundThread(anchorUri)
+  if (!anchorView) {
+    clearReplyContinuation(anchor)
+    return notFoundThread(anchorUri)
+  }
 
   /*
    * The top of the chain: a public parent prism served; else what the
@@ -704,6 +739,16 @@ export async function fetchPrivateThreadV2(
   const gatesPromise = servedGates
     ? Promise.resolve(undefined)
     : threadGateEvaluation(rootUri, anchorView.uri)
+  /*
+   * Under a public root prism decorates no gate (hidden replies design 5.4,
+   * HR1-L2): the root's threadgate record is read from the root author's PDS
+   * beside the rest, and returned as the thread's, so the stock blur, the
+   * OP's "Reply Hidden by You" and the menu's "Show reply for everyone" work,
+   * and the candidates come from it.
+   */
+  const rootGatePromise = isPrivatePostUri(rootUri)
+    ? undefined
+    : rootThreadgateView(context?.client, rootUri)
   const rootAuthor = didOf(rootUri)
   const chainReachesRoot = !topRefs
   const byOp = (post: app.bsky.feed.defs.PostView) =>
@@ -736,24 +781,11 @@ export async function fetchPrivateThreadV2(
    * or its served count says so. The rest pages through `getReplies`.
    */
   const directReplies = raw.anchor.replies.length
-  const hasOtherReplies =
+  const counted = countsServed(anchorView.uri)
+  const paging =
     privatePagingServed() &&
     (directReplies >= PRISM_NODE_REPLY_CAP ||
-      (countsServed(anchorView.uri) &&
-        (anchorView.replyCount ?? 0) > directReplies))
-  if (hasOtherReplies) {
-    setReplyContinuation(anchor, {
-      kind: 'private',
-      anchorUri: anchorView.uri,
-      cursor: undefined,
-      depth: Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH)),
-      sort,
-      branchingFactor,
-      seen: new Set(raw.anchor.replies.map(node => node.input.view.uri)),
-      cids: new Map([[anchorView.uri, anchorView.cid]]),
-      stockHasOther: false,
-    })
-  }
+      (counted && (anchorView.replyCount ?? 0) > directReplies))
 
   /*
    * Gates. Where prism applies them (`private.gates`, a private root), the
@@ -789,9 +821,95 @@ export async function fetchPrivateThreadV2(
     }
   }
 
+  /*
+   * Hidden replies (hidden replies design 4.2): the root gate's private URIs
+   * the read did not serve are candidates, behind "Show more replies". The
+   * first guess, before the prefetch answers: a cached answer for the same
+   * candidates decides; else, with counts served, only when some direct
+   * replies went unserved; without counts, the row shows and the prefetch
+   * corrects it (6.4).
+   */
+  const threadgate = rootGatePromise
+    ? await rootGatePromise
+    : views.get(rootUri)?.threadgate
+  const candidates = hiddenCandidates(
+    threadgateHiddenReplies(threadgate),
+    thread,
+    clients.did,
+  )
+  const unserved = counted
+    ? (anchorView.replyCount ?? 0) - directReplies
+    : undefined
+  const cached = cachedHiddenAnswer(
+    context?.client,
+    clients.did,
+    anchor,
+    candidates,
+  )
+  const pages = narrowedPages(paging, unserved, cached)
+  const hasHidden =
+    candidates.length > 0 &&
+    (cached
+      ? answerHasHidden(cached)
+      : !counted || (anchorView.replyCount ?? 0) > directReplies)
+  const hasOtherReplies = pages || hasHidden
+
+  /*
+   * The continuation, replaced at the read's end: set whenever paging or a
+   * candidate remains, its `key` from `pages` as computed here (before any
+   * narrowing), so a cached answer's narrowing never changes it.
+   */
+  let key = ''
+  if (paging || candidates.length > 0) {
+    key = continuationKey({kind: 'private', pages: paging, hidden: candidates})
+    setReplyContinuation(anchor, {
+      kind: 'private',
+      anchorUri: anchorView.uri,
+      cursor: undefined,
+      depth: Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH)),
+      sort,
+      branchingFactor,
+      seen: new Set(raw.anchor.replies.map(node => node.input.view.uri)),
+      cids: new Map([[anchorView.uri, anchorView.cid]]),
+      stockHasOther: false,
+      key,
+      hidden: candidates,
+      pages,
+      readAt: fetchStamp(),
+    })
+  } else {
+    clearReplyContinuation(anchor)
+  }
+
+  /*
+   * The prefetch, not awaited (6.2): only on a confirmed read (confirmed at
+   * its start and its end, the anchor not a suspect at its start, its answer
+   * not degraded), in a query.
+   */
+  if (
+    context &&
+    candidates.length > 0 &&
+    prefetchAllowed &&
+    !answer?.degraded &&
+    isPrismConfirmed(clients.did)
+  ) {
+    prefetchHiddenReplies({
+      client: context.client,
+      threadKey: context.queryKey,
+      clients,
+      did: clients.did,
+      anchor,
+      anchorUri: anchorView.uri,
+      candidates,
+      cidOf: uri => (uri === anchorView.uri ? anchorView.cid : undefined),
+      unserved,
+    })
+  }
+
   return {
     thread,
-    threadgate: views.get(rootUri)?.threadgate,
+    threadgate,
     hasOtherReplies,
+    horizonContinuation: key,
   }
 }

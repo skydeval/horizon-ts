@@ -61,6 +61,8 @@ import {useActorStatus, useLiveNowConfig} from '#/features/liveNow'
 import {EditLiveDialog} from '#/features/liveNow/components/EditLiveDialog'
 import {GoLiveDialog} from '#/features/liveNow/components/GoLiveDialog'
 import {GoLiveDisabledDialog} from '#/features/liveNow/components/GoLiveDisabledDialog'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
 import {useDevMode} from '#/storage/hooks/dev-mode'
 
@@ -93,6 +95,8 @@ let ProfileMenu = ({
     profile,
     'ProfileMenu',
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profile)
 
   const blockPromptControl = Prompt.usePromptControl()
   const loggedOutWarningPromptControl = Prompt.usePromptControl()
@@ -338,29 +342,33 @@ let ProfileMenu = ({
               <Menu.Group>
                 {!isSelf && (
                   <>
-                    {(isLabelerAndNotBlocked || isFollowingBlockedAccount) && (
-                      <Menu.Item
-                        testID="profileHeaderDropdownFollowBtn"
-                        label={
-                          isFollowing ? l`Unfollow account` : l`Follow account`
-                        }
-                        onPress={
-                          isFollowing
-                            ? () => void onPressUnfollowAccount()
-                            : () => void onPressFollowAccount()
-                        }>
-                        <Menu.ItemText>
-                          {isFollowing ? (
-                            <Trans>Unfollow account</Trans>
-                          ) : (
-                            <Trans>Follow account</Trans>
-                          )}
-                        </Menu.ItemText>
-                        <Menu.ItemIcon
-                          icon={isFollowing ? UserMinusIcon : PlusIcon}
-                        />
-                      </Menu.Item>
-                    )}
+                    {/* HORIZON: a visitor-form restored view hides follow */}
+                    {(isLabelerAndNotBlocked || isFollowingBlockedAccount) &&
+                      !restoredActionsHidden && (
+                        <Menu.Item
+                          testID="profileHeaderDropdownFollowBtn"
+                          label={
+                            isFollowing
+                              ? l`Unfollow account`
+                              : l`Follow account`
+                          }
+                          onPress={
+                            isFollowing
+                              ? () => void onPressUnfollowAccount()
+                              : () => void onPressFollowAccount()
+                          }>
+                          <Menu.ItemText>
+                            {isFollowing ? (
+                              <Trans>Unfollow account</Trans>
+                            ) : (
+                              <Trans>Follow account</Trans>
+                            )}
+                          </Menu.ItemText>
+                          <Menu.ItemIcon
+                            icon={isFollowing ? UserMinusIcon : PlusIcon}
+                          />
+                        </Menu.Item>
+                      )}
                   </>
                 )}
                 <Menu.Item

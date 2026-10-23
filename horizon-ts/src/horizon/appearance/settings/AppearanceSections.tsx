@@ -7,7 +7,8 @@
  * change list 2 covers the theme settings too) just above the Custom chip,
  * then while Custom is selected, its card; while "Follow the season" is
  * selected, the "Southern hemisphere" switch, change list 3), "Backdrop
- * softness" (live fix batch 1), then the "Phone frame" picker of 10.8 (while
+ * softness" (live fix batch 1) after "Save my appearance" (storage choice
+ * design, section 2; signed in only), then the "Phone frame" picker of 10.8 (while
  * `SHOW_FRAME_STYLE_PICKER`), whose Gutter style replaced the "Reading card
  * on small screens" toggle.
  */
@@ -34,6 +35,7 @@ import {
   PICKER_SECTIONS,
   type PickerCollection,
 } from '#/horizon/appearance/settings/picker'
+import {SaveAppearanceGroup} from '#/horizon/appearance/settings/SaveAppearance'
 import {SoftnessSlider} from '#/horizon/appearance/settings/SoftnessSlider'
 import {
   effectiveAppearance,
@@ -542,6 +544,7 @@ export function HorizonAppearanceSections() {
     <Animated.View layout={native(LinearTransition)}>
       <SettingsList.Divider />
       <BackdropGroup />
+      <SaveAppearanceGroup />
       <SoftnessGroup />
       {SHOW_FRAME_STYLE_PICKER && COMPACT_FRAME_WINDOWS && <FrameStyleGroup />}
     </Animated.View>

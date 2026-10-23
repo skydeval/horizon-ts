@@ -40,10 +40,7 @@ import {useAppviewClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
 // HORIZON: the Private tab is retried while prism is busy
-import {
-  privateQueryFn,
-  privateRetryFor,
-} from '#/horizon/private/api/transient'
+import {privateQueryFn, privateRetryFor} from '#/horizon/private/api/transient'
 // HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
 import {useBusyFeedQuery, useFeedGate} from '#/horizon/private/feed/busy'
 // HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
@@ -56,6 +53,8 @@ import {privateTabDid, withPrivateKey} from '#/horizon/private/feed/keys'
 import {horizonFeedApi} from '#/horizon/private/feed/legacy'
 // HORIZON: private posts on profile feeds
 import {usePrivateFeedSource} from '#/horizon/private/membership'
+// HORIZON: a restored account's tabs read prism's pages when stock fails
+import {refractAuthorFeedApi} from '#/horizon/refract/author-feed'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {useFeedTuners} from '../preferences/feed-tuners'
@@ -228,16 +227,20 @@ export function usePostFeedQuery(
             api: horizonFeedApi(
               feedDesc,
               privateSource,
-              createApi({
+              // HORIZON: a restored account's tabs read prism's pages when stock fails
+              refractAuthorFeedApi(
                 feedDesc,
-                feedParams: params || {},
-                feedTuners,
-                client,
-                // Not in the query key because they don't change:
-                userInterests,
-                // Not in the query key. Reacting to it switching isn't important:
-                enableFollowingToDiscoverFallback,
-              }),
+                createApi({
+                  feedDesc,
+                  feedParams: params || {},
+                  feedTuners,
+                  client,
+                  // Not in the query key because they don't change:
+                  userInterests,
+                  // Not in the query key. Reacting to it switching isn't important:
+                  enableFollowingToDiscoverFallback,
+                }),
+              ),
             ),
             // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (end)
             cursor: undefined,

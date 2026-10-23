@@ -37,23 +37,88 @@ import {
 
 export const APPEARANCE_DEVICE_KEY = 'horizon:appearance'
 
+/**
+ * Where an account's appearance is saved ("Save my appearance", storage
+ * choice design section 2): `private` on prism (members only), `public` in
+ * the account's repo record, `device` on each device only.
+ */
+export type AppearanceStore = 'private' | 'public' | 'device'
+
+export const APPEARANCE_STORES: readonly AppearanceStore[] = [
+  'private',
+  'public',
+  'device',
+]
+
+/** An edit, a choice change, or both, not yet written (5, 5.1). */
+export type PendingAppearance = {
+  fields: AppearanceField[]
+  appearance: Appearance
+  seq: number
+  /** A choice change not yet landed (`pending.store`). */
+  store?: AppearanceStore
+  /**
+   * The put is a row creation the member table made (the migration, a first
+   * move-up, a rejoin), not the user's choice (sections 4, 6, 8.5).
+   */
+  auto?: boolean
+}
+
 export type AccountCopy = {
-  /** Parsed from the repo, or what was last written; null = the repo has none. */
+  /**
+   * The account's value as this device last had it. A non-member: the
+   * record as read, or this device's own copy with `device`. A member:
+   * prism's row value, or this device's own copy with `device`.
+   */
   record: Appearance | null
-  /** The record as read, for 5.4; null with `record` null. */
+  /** `record` as read (without `$type`), kept for writing back; null with `record` null. */
   raw: Record<string, unknown> | null
-  /** CID of `raw`, for `swapRecord`; null with `record` null. */
+  /** A non-member's record CID, for `swapRecord`; unused for members. */
   cid: string | null
   /** Epoch ms of the last successful read or write; 0 = never read. */
   syncedAt: number
-  /** An edit not yet written. */
-  pending: {
-    fields: AppearanceField[]
-    appearance: Appearance
-    seq: number
-  } | null
+  /** An edit or a choice change not yet written. */
+  pending: PendingAppearance | null
   /** Set after a write the PDS refused for good (6.5); cleared when the store loads at app start. */
   blocked: boolean
+  /** The chosen store as last answered or derived; null = never resolved. */
+  store: AppearanceStore | null
+  /**
+   * Whether `store` was answered or derived in this run, rather than only
+   * remembered. Cleared when the store loads at app start.
+   */
+  storeKnown: boolean
+  /**
+   * prism's row `rev` as last read or put; `''` after reading no row; null
+   * when this copy was last resolved as a non-member (section 4, AS7-N2).
+   */
+  rev: string | null
+  /** The record step (5.3) is still to run. */
+  recordDue: boolean
+  /** A non-member's record delete still to land, swapped on `cid` (7.3). */
+  cleanup: {cid: string} | null
+  /** The migration note is owed, once its delete is confirmed (section 6). */
+  noteDue: boolean
+  /** The migration note's line under the setting shows, until dismissed. */
+  noted: boolean
+  /**
+   * The last row this device read or put as a member said `device` (8.5).
+   * Set and cleared only by such an answer; kept through a removal.
+   */
+  memberDevice: boolean
+  /** The removal note was shown for this removal (8.4). */
+  removalNoted: boolean
+  /** The removal note's line under the setting shows, until dismissed. */
+  removalLine: boolean
+  /**
+   * prism refused the migration's value for its size (over 16 KiB). The
+   * account stays public and the `auto` put is not tried again at sign-in;
+   * the next edit tries again, checked locally first. Cleared by the next
+   * member row answered.
+   */
+  tooLarge: boolean
+  /** The too-large note's line under the setting shows, until dismissed. */
+  tooLargeLine: boolean
 }
 
 export type DeviceAppearanceV1 = {
@@ -85,6 +150,30 @@ export type DeviceAppearanceV1 = {
    * is about where the device is.
    */
   southern: boolean
+}
+
+/** An account copy for an account never read on this device. */
+export function emptyAccountCopy(): AccountCopy {
+  return {
+    record: null,
+    raw: null,
+    cid: null,
+    syncedAt: 0,
+    pending: null,
+    blocked: false,
+    store: null,
+    storeKnown: false,
+    rev: null,
+    recordDue: false,
+    cleanup: null,
+    noteDue: false,
+    noted: false,
+    memberDevice: false,
+    removalNoted: false,
+    removalLine: false,
+    tooLarge: false,
+    tooLargeLine: false,
+  }
 }
 
 export function defaultDeviceValue(): DeviceAppearanceV1 {
@@ -142,7 +231,25 @@ function parsePending(value: unknown): AccountCopy['pending'] {
   )
   const seq =
     typeof value.seq === 'number' && Number.isInteger(value.seq) ? value.seq : 0
-  return {fields, appearance, seq}
+  const store = parseStore(value.store)
+  const out: PendingAppearance = {fields, appearance, seq}
+  if (store) {
+    out.store = store
+    if (value.auto === true) out.auto = true
+  }
+  return out
+}
+
+/** A stored choice, or null for anything else. */
+export function parseStore(value: unknown): AppearanceStore | null {
+  return APPEARANCE_STORES.find(store => store === value) ?? null
+}
+
+function parseCleanup(value: unknown): AccountCopy['cleanup'] {
+  if (!isObject(value) || typeof value.cid !== 'string' || !value.cid) {
+    return null
+  }
+  return {cid: value.cid}
 }
 
 function parseCopy(value: unknown): AccountCopy | null {
@@ -150,6 +257,7 @@ function parseCopy(value: unknown): AccountCopy | null {
   const record = parseStoredAppearance(value.record)
   const raw = record && isObject(value.raw) ? value.raw : null
   const cid = record && typeof value.cid === 'string' ? value.cid : null
+  const store = parseStore(value.store)
   return {
     record,
     raw: record ? (raw ?? {}) : null,
@@ -160,6 +268,18 @@ function parseCopy(value: unknown): AccountCopy | null {
         : 0,
     pending: parsePending(value.pending),
     blocked: value.blocked === true,
+    store,
+    storeKnown: store !== null && value.storeKnown === true,
+    rev: typeof value.rev === 'string' ? value.rev : null,
+    recordDue: value.recordDue === true,
+    cleanup: parseCleanup(value.cleanup),
+    noteDue: value.noteDue === true,
+    noted: value.noted === true,
+    memberDevice: value.memberDevice === true,
+    removalNoted: value.removalNoted === true,
+    removalLine: value.removalLine === true,
+    tooLarge: value.tooLarge === true,
+    tooLargeLine: value.tooLargeLine === true,
   }
 }
 

@@ -193,6 +193,8 @@ import {attachSourceDraft} from '#/horizon/private/outbox'
 import {useOutboxEdit} from '#/horizon/private/outbox/edit'
 // HORIZON: private composing
 import {isPrivatePostUri, navigateToPost} from '#/horizon/private/uri'
+// HORIZON: a reply under a restored post is kept for its thread
+import {noteOwnRestoredReply} from '#/horizon/refract/own-replies'
 // HORIZON: spoiler tags
 import {SpoilerButton} from '#/horizon/spoilers/SpoilerButton'
 // HORIZON: spoiler tags
@@ -1190,6 +1192,8 @@ export const ComposePost = ({
             replyToUri: replyTo?.uri,
             posts,
           }
+          // HORIZON: a reply under a restored post is kept for its thread
+          noteOwnRestoredReply(queryClient, replyTo?.uri, posts)
         }
       } catch (waitErr) {
         logger.info(`composer: waiting for app view failed`, {

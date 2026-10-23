@@ -73,6 +73,8 @@ import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 import {PrivateThreadNotFound} from '#/horizon/private/thread/PrivateThreadNotFound'
 // HORIZON: the catching-up note after 20 s of ill health on a private thread
 import {isPrivateRead} from '#/horizon/private/uri'
+// HORIZON: Try again on a restored anchor starts a new ask first
+import {refractThreadRetry} from '#/horizon/refract/thread/anchor'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -598,7 +600,11 @@ export function PostThread({uri}: {uri: string}) {
       {thread.state.error ? (
         <ThreadError
           error={thread.state.error}
-          onRetry={thread.actions.refetch}
+          // HORIZON: Try again on a restored anchor starts a new ask first
+          onRetry={refractThreadRetry(
+            thread.state.error,
+            thread.actions.refetch,
+          )}
         />
       ) : (
         <AnalyticsOnlyFeedFeedbackProvider

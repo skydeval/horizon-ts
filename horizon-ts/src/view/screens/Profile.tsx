@@ -54,6 +54,11 @@ import {ProfileStarterPacks} from '#/components/StarterPack/ProfileStarterPacks'
 import {PrivateProfileSection} from '#/horizon/private/profile/PrivateProfileSection'
 // HORIZON: the Private tab
 import {useShowPrivateTab} from '#/horizon/private/profile/useShowPrivateTab'
+// HORIZON: a restored account's profile: its error, and the tabs prism doesn't serve
+import {
+  isRestoredProfile,
+  useRefractProfileError,
+} from '#/horizon/refract/profile'
 import {type app} from '#/lexicons'
 import {navigate} from '#/Navigation'
 
@@ -89,17 +94,29 @@ function ProfileScreenInner({route}: Props) {
     refetch: refetchProfile,
     isPlaceholderData: isPlaceholderProfile,
     isPending: isProfilePending,
+    // HORIZON: a restored account's profile error reads the fetch status
+    fetchStatus: profileFetchStatus,
   } = useProfileQuery({
     did: resolvedDid,
+  })
+  // HORIZON: a restored account's profile error: its title, text and Try again
+  const refractError = useRefractProfileError({
+    did: resolvedDid,
+    error: profileError,
+    fetchStatus: profileFetchStatus,
+    refetch: refetchProfile,
   })
 
   const onPressTryAgain = useCallback(() => {
     if (resolveError) {
       void refetchDid()
+      // HORIZON: Try again on a restored account's profile starts a new ask first
+    } else if (refractError.onRetry) {
+      refractError.onRetry()
     } else {
       void refetchProfile()
     }
-  }, [resolveError, refetchDid, refetchProfile])
+  }, [resolveError, refetchDid, refetchProfile, refractError])
 
   // Apply hard-coded redirects as need
   useEffect(() => {
@@ -121,7 +138,12 @@ function ProfileScreenInner({route}: Props) {
   // Most pushes will happen here, since we will have only placeholder data
   // A disabled dependent query remains pending, so only consider the profile
   // pending once handle resolution has produced a DID.
-  if (isDidPending || (!!resolvedDid && isProfilePending)) {
+  if (
+    isDidPending ||
+    (!!resolvedDid && isProfilePending) ||
+    // HORIZON: Try again on a restored account's profile shows the loading state while it runs
+    refractError.loading
+  ) {
     return (
       <Layout.Content>
         <ProfileHeaderLoading />
@@ -133,8 +155,16 @@ function ProfileScreenInner({route}: Props) {
       <SafeAreaView style={[a.flex_1]}>
         <ErrorScreen
           testID="profileErrorScreen"
-          title={profileError ? _(msg`Not Found`) : _(msg`Oops!`)}
-          message={cleanError(resolveError || profileError)}
+          // HORIZON: a restored account's profile error has its own title and text
+          title={
+            refractError.title ??
+            (profileError ? _(msg`Not Found`) : _(msg`Oops!`))
+          }
+          // HORIZON: a restored account's profile error has its own title and text
+          message={
+            (!resolveError && refractError.message) ||
+            cleanError(resolveError || profileError)
+          }
           onPressTryAgain={onPressTryAgain}
           showHeader
         />
@@ -227,13 +257,18 @@ function ProfileScreenLoaded({
   const showMediaTab = !hasLabeler
   const showVideosTab = !hasLabeler
   const showLikesTab = isMe
+  // HORIZON: a restored account's Feeds, Lists and Starter Packs tabs wait until prism serves them
+  const restoredProfile = isRestoredProfile(profile)
   const feedGenCount = profile.associated?.feedgens || 0
-  const showFeedsTab = isMe || feedGenCount > 0
+  // HORIZON: a restored account's Feeds, Lists and Starter Packs tabs wait until prism serves them
+  const showFeedsTab = (isMe || feedGenCount > 0) && !restoredProfile
   const starterPackCount = profile.associated?.starterPacks || 0
-  const showStarterPacksTab = isMe || starterPackCount > 0
+  // HORIZON: a restored account's Feeds, Lists and Starter Packs tabs wait until prism serves them
+  const showStarterPacksTab = (isMe || starterPackCount > 0) && !restoredProfile
   // subtract starterpack count from list count, since starterpacks are a type of list
   const listCount = (profile.associated?.lists || 0) - starterPackCount
-  const showListsTab = hasSession && (isMe || listCount > 0)
+  // HORIZON: a restored account's Feeds, Lists and Starter Packs tabs wait until prism serves them
+  const showListsTab = hasSession && (isMe || listCount > 0) && !restoredProfile
   // HORIZON: the Private tab, for a signed-in member
   const showPrivateTab = useShowPrivateTab()
 

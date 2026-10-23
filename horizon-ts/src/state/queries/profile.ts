@@ -41,6 +41,12 @@ import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {useAnalytics} from '#/analytics'
 import {type Metrics, toClout} from '#/analytics/metrics'
+// HORIZON: a restored account's profile is read from prism when stock fails
+import {refractProfileQuery} from '#/horizon/refract/profile'
+// HORIZON: this session's mutes apply to restored accounts' views
+import {noteRestoredMuteChange} from '#/horizon/refract/relations'
+// HORIZON: a visitor-form restored view's follow is never written
+import {refuseRestoredAction} from '#/horizon/refract/visitor'
 import {app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 import {
@@ -84,9 +90,15 @@ export function useProfileQuery({
     refetchOnWindowFocus: true,
     queryKey: RQKEY(did ?? ''),
     queryFn: async () => {
-      return await client.call(app.bsky.actor.getProfile, {
-        actor: (did ?? '') as AtIdentifierString,
-      })
+      // HORIZON: a restored account's profile is read from prism when stock fails
+      return await refractProfileQuery(
+        did ?? '',
+        () =>
+          client.call(app.bsky.actor.getProfile, {
+            actor: (did ?? '') as AtIdentifierString,
+          }),
+        did ? getUnstableProfile(did) : undefined,
+      )
     },
     placeholderData: () => {
       if (!did) return
@@ -355,12 +367,16 @@ export function useProfileFollowMutationQueue(
   })
 
   const queueFollow = useCallback(() => {
+    // HORIZON: a visitor-form restored view's follow is never written (it may already exist)
+    if (refuseRestoredAction(profile)) {
+      return Promise.resolve(initialFollowingUri)
+    }
     // optimistically update
     updateProfileShadow(queryClient, did, {
       followingUri: 'pending',
     })
     return queueToggle(true)
-  }, [queryClient, did, queueToggle])
+  }, [queryClient, did, queueToggle, profile, initialFollowingUri])
 
   const queueUnfollow = useCallback(() => {
     // optimistically update
@@ -450,6 +466,8 @@ export function useProfileMuteMutationQueue(
     onSuccess(finalMuted) {
       // finalize
       updateProfileShadow(queryClient, did, {muted: finalMuted})
+      // HORIZON: this session's mutes apply to restored accounts' views
+      noteRestoredMuteChange(did, !!finalMuted)
     },
   })
 

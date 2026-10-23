@@ -16,6 +16,8 @@ import {findAllPostsInQueryData as findAllPostsInThreadV2QueryData} from '#/stat
 import {findPrivateBookmarkPosts} from '#/horizon/private/api/bookmarks'
 // HORIZON: the private notifications and search lists carry shadows too
 import {findHorizonPrivatePosts} from '#/horizon/private/cache-finders'
+// HORIZON: restored posts outside stock queries carry shadows too
+import {findRestoredPosts} from '#/horizon/refract/finders'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {castAsShadow, type Shadow} from './types'
@@ -225,4 +227,6 @@ function* findPostsInCache(
   for (let post of findHorizonPrivatePosts(queryClient, uri)) {
     yield post
   }
+  // HORIZON: restored posts outside stock queries carry shadows too
+  yield* findRestoredPosts(queryClient, uri)
 }

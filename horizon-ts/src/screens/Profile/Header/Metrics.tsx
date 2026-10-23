@@ -8,6 +8,10 @@ import {formatCount} from '#/view/com/util/numeric/format'
 import {atoms as a, useTheme} from '#/alf'
 import {InlineLinkText} from '#/components/Link'
 import {Text} from '#/components/Typography'
+// HORIZON: a restored account's counts are plain text until prism serves its people lists
+import {isRestoredProfile} from '#/horizon/refract/profile'
+// HORIZON: a restored account's counts are plain text until prism serves its people lists
+import {RestoredProfileMetrics} from '#/horizon/refract/RestoredMetrics'
 import {type app} from '#/lexicons'
 
 export function ProfileHeaderMetrics({
@@ -27,6 +31,23 @@ export function ProfileHeaderMetrics({
     one: 'following',
     other: 'following',
   })
+
+  // HORIZON: a restored account's counts are plain text until prism serves its people lists
+  if (isRestoredProfile(profile)) {
+    return (
+      <RestoredProfileMetrics
+        followers={followers}
+        followersLabel={pluralizedFollowers}
+        following={following}
+        followingLabel={pluralizedFollowings}
+        posts={formatCount(i18n, profile.postsCount || 0)}
+        postsLabel={plural(profile.postsCount || 0, {
+          one: 'post',
+          other: 'posts',
+        })}
+      />
+    )
+  }
 
   return (
     <View

@@ -95,7 +95,7 @@ import {IS_INTERNAL} from '#/env'
 // HORIZON: menu items that govern public-only machinery are absent on private posts
 import {
   hidesDetachQuote,
-  hidesGateControls,
+  hidesHideReply,
   hideThreadMute,
   isPrivateDisplay,
 } from '#/horizon/private/render/controls'
@@ -383,9 +383,9 @@ let PostMenuItems = ({
   }
 
   const canHidePostForMe = !isAuthor && !isPostHidden
-  // HORIZON: hide reply on a private post once prism applies the gates of its private root
+  // HORIZON: hide reply on a private post under a public root, or once prism applies the gates of its private root
   const canHideReplyForEveryone =
-    !hidesGateControls(postUri, rootUri, {forWrite: true}) &&
+    !hidesHideReply(postUri, rootUri) &&
     !isAuthor &&
     isRootPostAuthor &&
     !isPostHidden &&

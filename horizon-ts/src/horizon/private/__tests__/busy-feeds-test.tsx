@@ -43,7 +43,10 @@ import {act, render, renderHook, screen} from '@testing-library/react-native'
  * `refreshPending`, the pill's `stale` input and the note in the header slot.
  */
 import {type FeedAPI} from '#/lib/api/feed/types'
-import {likesListAccess, stampListPage} from '#/horizon/private/api/interactions'
+import {
+  likesListAccess,
+  stampListPage,
+} from '#/horizon/private/api/interactions'
 import {
   gateSlicedPages,
   hiddenInFeedPages,
@@ -152,7 +155,10 @@ beforeEach(() => {
   resetKnown()
   clearPrivateStores()
   qc = new QueryClient({defaultOptions: {queries: {retry: false}}})
-  publishCurrentClients({did: DID, queryClient: qc} as unknown as CurrentClients)
+  publishCurrentClients({
+    did: DID,
+    queryClient: qc,
+  } as unknown as CurrentClients)
 })
 
 afterEach(() => {
@@ -184,7 +190,10 @@ describe('degraded pages (6.4, 6.5)', () => {
         ],
         false,
       ),
-    ).toMatchObject({privateDegraded: true, privateAnswer: {unavailable: [OWN]}})
+    ).toMatchObject({
+      privateDegraded: true,
+      privateAnswer: {unavailable: [OWN]},
+    })
     // Two refills, one degraded: the page is degraded.
     expect(
       degradedFlags([ANSWER, {...ANSWER, degraded: true}], false)
@@ -304,7 +313,12 @@ describe('carryOwnPrivateItems (6.4)', () => {
     const previous = [
       {
         fetchedAt: 100,
-        feed: [publicRow('p9', 9), row(OWN, 5), row(OTHER, 6), publicRow('p4', 4)],
+        feed: [
+          publicRow('p9', 9),
+          row(OWN, 5),
+          row(OTHER, 6),
+          publicRow('p4', 4),
+        ],
       },
     ]
     const page = {
@@ -388,9 +402,9 @@ describe('the gate on feed rows (4.1)', () => {
     // A carried row is judged by its own stamp.
     const carried = row(OTHER, 4)
     ;(carried.post as {horizonFromCache?: number}).horizonFromCache = 80
-    expect(hiddenInFeedPages([{fetchedAt: 120, feed: [carried]}], DID, 100)).toBe(
-      1,
-    )
+    expect(
+      hiddenInFeedPages([{fetchedAt: 120, feed: [carried]}], DID, 100),
+    ).toBe(1)
   })
 
   it('gates selected slices, returning untouched pages as they are', () => {
@@ -485,10 +499,20 @@ describe('Following’s load gate and lift (6.5, 4.1)', () => {
     // Scrolled down at mount: no request, the affordance instead.
     expect(refreshToTop).not.toHaveBeenCalled()
     expect(onHasNew).toHaveBeenLastCalledWith(true)
+    // A staged page withdrawn meanwhile leaves the affordance lit (item 7).
+    act(() => {
+      hook.result.current.onStagedWithdrawn()
+    })
+    expect(onHasNew).not.toHaveBeenCalledWith(false)
     act(() => {
       hook.result.current.onRestAtTop()
     })
     expect(refreshToTop).toHaveBeenCalledTimes(1)
+    // Nothing owed, a withdrawn staged page puts it out.
+    act(() => {
+      hook.result.current.onStagedWithdrawn()
+    })
+    expect(onHasNew).toHaveBeenLastCalledWith(false)
     // Nothing more is owed.
     act(() => {
       hook.result.current.onRestAtTop()
@@ -559,7 +583,11 @@ describe('notifications (6.7)', () => {
     const page = {
       fetchedAt: 50,
       notifications: [
-        {type: 'reply', post: {uri: OTHER}, parent: {type: 'post', post: {uri: OWN}}},
+        {
+          type: 'reply',
+          post: {uri: OTHER},
+          parent: {type: 'post', post: {uri: OWN}},
+        },
         {type: 'like', post: {uri: OWN}},
       ],
     }

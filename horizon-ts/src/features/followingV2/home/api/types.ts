@@ -27,6 +27,8 @@ export interface FeedAPI {
   /** The feed's newest post, if it has one. */
   peekLatest(opts?: {
     source?: FeedSource
+    // HORIZON: the merged peek answers at once when public posts already differ (item 7 3.2)
+    isCurrent?: (item: app.bsky.feed.defs.FeedViewPost) => boolean
   }): Promise<app.bsky.feed.defs.FeedViewPost | undefined>
   fetch({
     cursor,

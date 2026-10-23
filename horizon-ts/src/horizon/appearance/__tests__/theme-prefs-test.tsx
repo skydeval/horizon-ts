@@ -5,6 +5,7 @@ import {
   type AccountCopy,
   defaultDeviceValue,
   type DeviceAppearanceV1,
+  emptyAccountCopy,
   serializeDeviceValue,
 } from '#/horizon/appearance/device-value'
 import {type Appearance, DEFAULT_APPEARANCE} from '#/horizon/appearance/model'
@@ -76,12 +77,11 @@ const B = 'did:plc:bob'
 
 function copy(record: Appearance | null): AccountCopy {
   return {
+    ...emptyAccountCopy(),
     record,
     raw: record ? {} : null,
     cid: record ? 'c' : null,
     syncedAt: 1,
-    pending: null,
-    blocked: false,
   }
 }
 

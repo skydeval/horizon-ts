@@ -102,6 +102,8 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_ANDROID} from '#/env'
 import {usePostFeedQuery as useFollowingV2PostFeedQuery} from '#/features/followingV2/home/queries/postFeed'
+// HORIZON: a visitor-form restored view hides like and follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {Scrubber, VIDEO_PLAYER_BOTTOM_INSET} from './components/Scrubber'
@@ -874,6 +876,8 @@ function Overlay({
     profile,
     'ImmersiveVideo',
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredFollowHidden = useRestoredActionsHidden(profile)
 
   const rkey = new AtUri(post.uri).rkey
   const record = bsky.isType(app.bsky.feed.post, post.record)
@@ -977,7 +981,9 @@ function Overlay({
                 </Link>
                 {/* show button based on non-reactive version, so it doesn't hide on press */}
                 {post.author.did !== currentAccount?.did &&
-                  !post.author.viewer?.following && (
+                  !post.author.viewer?.following &&
+                  // HORIZON: a visitor-form restored view hides follow
+                  !restoredFollowHidden && (
                     <Button
                       label={
                         profile.viewer?.following
@@ -1191,6 +1197,8 @@ function PlayPauseTapArea({
     undefined,
     'ImmersiveVideo',
   )
+  // HORIZON: a visitor-form restored view takes no like gesture
+  const restoredActionsHidden = useRestoredActionsHidden(post)
   const {sendInteraction} = useFeedFeedbackContext()
   const {isPlaying} = useEvent(player, 'playingChange', {
     isPlaying: player.playing,
@@ -1220,7 +1228,8 @@ function PlayPauseTapArea({
   })
 
   const onPress = () => {
-    if (doubleTapRef.current) {
+    // HORIZON: a visitor-form restored view takes no like gesture
+    if (doubleTapRef.current && !restoredActionsHidden) {
       clearTimeout(doubleTapRef.current)
       doubleTapRef.current = null
       haptics.tap()

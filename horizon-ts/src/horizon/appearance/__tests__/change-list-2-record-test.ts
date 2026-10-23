@@ -2,6 +2,7 @@ import {describe, expect, it, jest} from '@jest/globals'
 
 import {
   defaultDeviceValue,
+  emptyAccountCopy,
   parseDeviceValue,
   serializeDeviceValue,
 } from '#/horizon/appearance/device-value'
@@ -92,6 +93,7 @@ describe('removed solids (change list 2, item 9)', () => {
       device: stored,
       accounts: {
         'did:plc:a': {
+          ...emptyAccountCopy(),
           record: {...DEFAULT_APPEARANCE, backdrop: 'solids.violet'},
           raw: {backdrop: 'solids.violet'},
           cid: 'c1',
@@ -293,6 +295,7 @@ describe('the theme fields (change list 2, item 11)', () => {
       ...defaultDeviceValue(),
       accounts: {
         'did:plc:a': {
+          ...emptyAccountCopy(),
           record: {...DEFAULT_APPEARANCE, fontSize: 'smaller'},
           raw: {fontSize: 'smaller'},
           cid: 'c',

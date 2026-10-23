@@ -383,6 +383,59 @@ export const privatePutNotificationPreferences = l.procedure(
 )
 
 /*
+ * Private appearance (appearance storage choice design, section 3; the prism
+ * handoff `prism-private-appearance.md`), behind `private.appearance`. The
+ * value is an `app.nearhorizon.actor.appearance` record value, `$type`
+ * included: `unknown` in prism's lexicon (a record def can't be a `ref`
+ * target), any map here, parsed leniently by `appearance/record.ts`.
+ * `store` is a known-values string; a value Horizon doesn't know is read as
+ * unanswered (`appearance/prism.ts`). Every field of the answer is optional:
+ * with no row, prism answers `{}`.
+ *
+ * Errors as prism's lexicons declare them: these methods skip readiness, so
+ * they answer `NotEnrolled` but never `NotReady` or `Reindexing` (prism's
+ * reply). `InvalidRequest` includes the 16 KiB cap on the value.
+ */
+const APPEARANCE_ERRORS = ['NotEnrolled'] as const
+
+const privateAppearanceAnswer = {
+  store: l.optional(
+    l.string<{knownValues: ['private', 'public', 'device']}>({maxLength: 32}),
+  ),
+  appearance: l.optional(l.lexMap()),
+  rev: l.optional(l.string()),
+  migratedAt: l.optional(l.string()),
+}
+
+/** `app.nearhorizon.private.getAppearance`: the reader's own row. */
+export const privateGetAppearance = l.query(
+  'app.nearhorizon.private.getAppearance',
+  l.params(),
+  l.jsonPayload(privateAppearanceAnswer),
+  APPEARANCE_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.private.putAppearance`: a whole-value replace, swapped
+ * on `swapRev` (`''`: only if there is no row). `appearance` is required
+ * with `private` and `public` and refused with `device`. Answers as get,
+ * after the write.
+ */
+export const privatePutAppearance = l.procedure(
+  'app.nearhorizon.private.putAppearance',
+  l.params(),
+  l.jsonPayload({
+    store: l.string<{knownValues: ['private', 'public', 'device']}>({
+      maxLength: 32,
+    }),
+    appearance: l.optional(l.lexMap()),
+    swapRev: l.optional(l.string()),
+  }),
+  l.jsonPayload(privateAppearanceAnswer),
+  ['InvalidRequest', 'InvalidSwap', ...APPEARANCE_ERRORS],
+)
+
+/*
  * Activity subscriptions for private posts (activity subscriptions design
  * section 3, PR-AS-1; the prism handoff, section 2): Bluesky's shapes for
  * prism's own store. The flags are stock

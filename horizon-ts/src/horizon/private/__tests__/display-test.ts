@@ -42,6 +42,7 @@ import {
 import {
   hidesDetachQuote,
   hidesGateControls,
+  hidesHideReply,
   hidesPrivateStatsRow,
   hideThreadMute,
   isPrivateBadgeHref,
@@ -51,7 +52,12 @@ import {
   threadRepliesCount,
 } from '../render/controls'
 import {privatePostStyle} from '../render/styles'
-import {clearPrivateStores, setPrivatePostFacts} from '../store'
+import {
+  addPendingPost,
+  clearPrivateStores,
+  type PendingPost,
+  setPrivatePostFacts,
+} from '../store'
 import {DID, OTHER_DID} from './fixtures'
 
 afterAll(() => clearCurrentClients())
@@ -98,6 +104,38 @@ describe('gate controls (Anchor 2, Menu 3)', () => {
     expect(hidesDetachQuote(PRIVATE, PRIVATE_REPLY)).toBe(true)
     answerPrismFeatures(DID, ['private', 'private.gates'])
     expect(hidesGateControls(PRIVATE, PRIVATE, {forWrite: true})).toBe(false)
+  })
+
+  it('hide reply (hidden replies 5.1): offered under a public root, under a private one once prism applies its gates', () => {
+    // A private reply under a public root: the press writes the root's own gate.
+    expect(hidesHideReply(PRIVATE_REPLY, PUBLIC)).toBe(false)
+    // Under a private root, only once `private.gates` is answered in this run.
+    expect(hidesHideReply(PRIVATE_REPLY, PRIVATE)).toBe(true)
+    loadPrismFeatures(DID, ['private', 'private.gates'])
+    expect(hidesHideReply(PRIVATE_REPLY, PRIVATE)).toBe(true)
+    answerPrismFeatures(DID, ['private', 'private.gates'])
+    expect(hidesHideReply(PRIVATE_REPLY, PRIVATE)).toBe(false)
+    // Public posts are stock.
+    expect(hidesHideReply(PUBLIC, PUBLIC)).toBe(false)
+    // Who can reply is unchanged: still left out under a public root.
+    expect(hidesGateControls(PRIVATE_REPLY, PUBLIC)).toBe(true)
+    expect(
+      hidesGateControls(PRIVATE_REPLY, PUBLIC, {forWrite: true}),
+    ).toBe(true)
+  })
+
+  it('hide reply is left out while the post or its root is pending-unwritten', () => {
+    answerPrismFeatures(DID, ['private', 'private.gates'])
+    addPendingPost({
+      uri: PRIVATE,
+      did: DID,
+      phase: 'sending',
+    } as unknown as PendingPost)
+    expect(hidesHideReply(PRIVATE_REPLY, PRIVATE)).toBe(true)
+    expect(hidesHideReply(PRIVATE, PUBLIC)).toBe(true)
+    clearPrivateStores()
+    expect(hidesHideReply(PRIVATE_REPLY, PRIVATE)).toBe(false)
+    expect(hidesHideReply(PRIVATE, PUBLIC)).toBe(false)
   })
 
   it('detach quote: only a private quote of a private post, once served', () => {

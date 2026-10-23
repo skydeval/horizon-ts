@@ -44,6 +44,8 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {type Metrics} from '#/analytics'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: a visitor-form restored view hides follow
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import type * as bsky from '#/types/bsky'
 
 export function Default({
@@ -489,6 +491,8 @@ export function FollowButtonInner({
     position,
     contextProfileDid,
   )
+  // HORIZON: a visitor-form restored view hides follow
+  const restoredActionsHidden = useRestoredActionsHidden(profile)
   const isRound = Boolean(rest.shape && rest.shape === 'round')
 
   const onPressFollow = async (e: GestureResponderEvent) => {
@@ -559,6 +563,8 @@ export function FollowButtonInner({
       })
 
   if (!profile.viewer) return null
+  // HORIZON: a visitor-form restored view hides follow
+  if (restoredActionsHidden) return null
   if (
     profile.viewer.blockedBy ||
     profile.viewer.blocking ||

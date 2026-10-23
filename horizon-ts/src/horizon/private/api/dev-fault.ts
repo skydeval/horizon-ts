@@ -23,7 +23,11 @@
  *   answers;
  * - `thread-500`: one plain 500 from the next `getPostThread`, then clean
  *   until the value is set again;
- * - `hang`: no private call answers (a read ends at its deadline).
+ * - `hang`: no private call answers (a read ends at its deadline);
+ * - `not-enrolled` (appearance storage choice design 11.1): a removed member
+ *   after the purge, or a non-member. Every private call answers 400
+ *   `NotEnrolled`, the appearance methods included, and the probe answers
+ *   `notEligible` with the features prism answered.
  */
 
 import {XrpcResponseError} from '@atproto/lex'
@@ -46,6 +50,7 @@ export const DEV_PRISM_FAULTS = [
   'degraded',
   'thread-500',
   'hang',
+  'not-enrolled',
 ] as const
 
 export type DevPrismFault = (typeof DEV_PRISM_FAULTS)[number]
@@ -182,5 +187,10 @@ export async function withDevFault<T>(
       return omitted(nsid, await send(), fault === 'degraded') as T
     case 'hang':
       return hang(signal)
+    case 'not-enrolled':
+      throw answered(method, 400, {
+        error: 'NotEnrolled',
+        message: 'Not enrolled in this AppView',
+      })
   }
 }

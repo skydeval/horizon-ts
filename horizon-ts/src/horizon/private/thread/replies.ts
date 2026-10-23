@@ -13,6 +13,10 @@
  *   replies of its anchor (a continuation, `continuation.ts`), the stock
  *   "Show more replies" reads on through `getReplies`, beside the stock
  *   other-replies call when that has something too.
+ * - Hidden replies (hidden replies design 4.3, 5.3, 6.3): the gate's private
+ *   URIs the thread did not serve, read from the background prefetch
+ *   (`thread/hidden.ts`) and shown after the paged ones. On a public anchor
+ *   they need only a member, not `private.paging`.
  */
 
 import {type QueryClient, type QueryKey} from '@tanstack/react-query'
@@ -29,9 +33,11 @@ import {
 import {withDeadline} from '#/horizon/private/feed/merge-core'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
 import {hold} from '#/horizon/private/known'
+import {fetchStamp} from '#/horizon/private/load-gate'
 import {privatePagingServed} from '#/horizon/private/server-support'
 import {
   clearReplyContinuation,
+  continuationKey,
   getReplyContinuation,
   setReplyContinuation,
 } from '#/horizon/private/thread/continuation'
@@ -44,8 +50,20 @@ import {
   toTreeNode,
   type TreeNode,
 } from '#/horizon/private/thread/fetch'
+import {type Stamped} from '#/horizon/private/thread/gate'
+import {
+  answerHasHidden,
+  cachedHiddenAnswer,
+  type ContinuationKeyed,
+  ensureHidden,
+  hiddenCandidates,
+  hiddenPrefetchAllowed,
+  prefetchHiddenReplies,
+  threadgateHiddenReplies,
+} from '#/horizon/private/thread/hidden'
+import {isPrivateRead} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
-import {healthEnvironment} from '#/horizon/routing/health'
+import {healthEnvironment, isPrismConfirmed} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
 import {app} from '#/lexicons'
@@ -56,7 +74,12 @@ import * as bsky from '#/types/bsky'
  * the private half is rethrown over data the query has, which keeps it, and
  * with none the read goes on without it, held for the lift and the catch-up.
  */
-export type RepliesQueryContext = {client: QueryClient; queryKey: QueryKey}
+export type RepliesQueryContext = {
+  client: QueryClient
+  queryKey: QueryKey
+  /** The query's signal: a paging read stops once it aborts (HR4-L2). */
+  signal?: AbortSignal
+}
 
 /**
  * The private half's transient failure (`error`) in the query `context`:
@@ -191,117 +214,182 @@ export async function withPrivateBranches(
   }: {below: number; branchingFactor?: number; sort?: string},
   fetchStock: () => Promise<ThreadOutput>,
   context?: RepliesQueryContext,
-): Promise<ThreadOutput> {
+): Promise<ThreadOutput & ContinuationKeyed> {
   const clients = PRIVATE_READING ? getCurrentClients() : undefined
-  if (!clients || !isPrivateMember(clients.did) || !privatePagingServed()) {
-    return fetchStock()
-  }
+  if (!clients || !isPrivateMember(clients.did)) return fetchStock()
+  // The hidden prefetch's start test, taken when the read starts (6.2).
+  const prefetchAllowed = hiddenPrefetchAllowed(clients.did, anchor)
   const depth = Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH))
-  const privatePart = withDeadline(
-    (async () => {
-      const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
-      const loaded = await fetchUntilItems<unknown>(async cursor => {
-        const page = await getPrivateReplies(clients.prismClient, {
-          uri: anchorUri,
-          limit: BRANCH_PAGE_LIMIT,
-          depth,
-          cursor,
-        })
-        return {items: page.replies, cursor: page.cursor}
-      }, undefined)
-      return {anchorUri, ...loaded}
-    })(),
-    BRANCH_DEADLINE_MS,
-  ).catch((error: unknown) => {
-    logger.warn('private branches unavailable', {safeMessage: error})
-    return {failed: error}
-  })
+  /*
+   * The branch read only while prism pages replies; the hidden part (hidden
+   * replies design 5.3) needs only a member and `PRIVATE_READING`.
+   */
+  const privatePart = privatePagingServed()
+    ? withDeadline(
+        (async () => {
+          const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
+          const loaded = await fetchUntilItems<unknown>(async cursor => {
+            const page = await getPrivateReplies(clients.prismClient, {
+              uri: anchorUri,
+              limit: BRANCH_PAGE_LIMIT,
+              depth,
+              cursor,
+            })
+            return {items: page.replies, cursor: page.cursor}
+          }, undefined)
+          return {anchorUri, ...loaded}
+        })(),
+        BRANCH_DEADLINE_MS,
+      ).catch((error: unknown) => {
+        logger.warn('private branches unavailable', {safeMessage: error})
+        return {failed: error}
+      })
+    : Promise.resolve(undefined)
   const [stock, part] = await Promise.all([fetchStock(), privatePart])
-  if ('failed' in part) keepOrHold(context, part.failed)
-  const found = 'failed' in part ? undefined : part
+  if (part && 'failed' in part) keepOrHold(context, part.failed)
+  const found = part && !('failed' in part) ? part : undefined
 
   const nodes = (found?.items ?? [])
     .map(toTreeNode)
     .filter((node): node is TreeNode => !!node)
-  if (!found || nodes.length === 0) {
-    clearReplyContinuation(anchor)
-    return stock
-  }
 
   const anchorAt = stock.thread.findIndex(item => item.depth === 0)
-  const head = stock.thread.slice(0, anchorAt + 1)
-  const replies = stock.thread.slice(anchorAt + 1)
+  const anchorPost =
+    anchorAt >= 0 ? itemPost(stock.thread[anchorAt]) : undefined
   const cids = new Map<string, string>()
   for (const item of stock.thread) {
     const post = itemPost(item)
     if (post) cids.set(post.uri, post.cid)
   }
-  const views = await adaptTree(nodes, clients.appviewClient, uri =>
-    cids.get(uri),
-  )
 
-  const priv = sortSiblings(nodes, sort).map(node => ({
-    time: privateHeadTime(node),
-    items: emitPrivateReplies([node], 1, {sort, branchingFactor, views}),
-  }))
-  const thread = [
-    ...head,
-    ...spliceSubtrees(stockSubtrees(replies), priv, sort),
-  ]
-
-  /*
-   * Bluesky's mute state of the root, on the stock anchor, against prism's,
-   * on a private reply under that root: prism follows Bluesky (H-5).
-   */
-  const anchorPost =
-    anchorAt >= 0 ? itemPost(stock.thread[anchorAt]) : undefined
-  if (anchorPost) {
-    const rootUri =
-      (anchorPost.record as {reply?: {root?: {uri?: unknown}}}).reply?.root
-        ?.uri ?? anchorPost.uri
-    const underRoot = nodes.find(
-      node => readReplyRefs(node.input.view.record)?.root.uri === rootUri,
+  let thread = stock.thread
+  if (nodes.length > 0) {
+    const head = stock.thread.slice(0, anchorAt + 1)
+    const replies = stock.thread.slice(anchorAt + 1)
+    const views = await adaptTree(nodes, clients.appviewClient, uri =>
+      cids.get(uri),
     )
-    const prismMuted = underRoot
-      ? views.get(underRoot.input.view.uri)?.viewer?.threadMuted
-      : undefined
-    if (typeof rootUri === 'string') {
-      resyncPublicThreadMute(
-        rootUri,
-        anchorPost.viewer?.threadMuted,
-        prismMuted,
+
+    const priv = sortSiblings(nodes, sort).map(node => ({
+      time: privateHeadTime(node),
+      items: emitPrivateReplies([node], 1, {sort, branchingFactor, views}),
+    }))
+    thread = [...head, ...spliceSubtrees(stockSubtrees(replies), priv, sort)]
+
+    /*
+     * Bluesky's mute state of the root, on the stock anchor, against prism's,
+     * on a private reply under that root: prism follows Bluesky (H-5).
+     */
+    if (anchorPost) {
+      const rootUri =
+        (anchorPost.record as {reply?: {root?: {uri?: unknown}}}).reply?.root
+          ?.uri ?? anchorPost.uri
+      const underRoot = nodes.find(
+        node => readReplyRefs(node.input.view.record)?.root.uri === rootUri,
       )
+      const prismMuted = underRoot
+        ? views.get(underRoot.input.view.uri)?.viewer?.threadMuted
+        : undefined
+      if (typeof rootUri === 'string') {
+        resyncPublicThreadMute(
+          rootUri,
+          anchorPost.viewer?.threadMuted,
+          prismMuted,
+        )
+      }
     }
   }
 
-  if (found.cursor) {
+  /*
+   * Hidden private replies (5.3): the private URIs Bluesky's gate of the
+   * thread lists that the merged thread (branches included) does not hold.
+   * While prism serves one in the branch read it is in the thread, and the
+   * stock blur moves it under the row; once prism leaves it out it is a
+   * candidate, prefetched, and added by the tap. A branch claiming another
+   * root escapes this root's hide on prism (its `getReplies` judges each
+   * reply by the root it claims), so it is served, and the stock blur hides
+   * it here from this root's gate.
+   */
+  const anchorUri = found?.anchorUri ?? anchorPost?.uri
+  const candidates = anchorUri
+    ? hiddenCandidates(
+        threadgateHiddenReplies(stock.threadgate),
+        thread,
+        clients.did,
+      )
+    : []
+  const pages = !!found?.cursor
+  const cached = cachedHiddenAnswer(
+    context?.client,
+    clients.did,
+    anchor,
+    candidates,
+  )
+  const hasHidden =
+    candidates.length > 0 && (cached ? answerHasHidden(cached) : true)
+
+  let key = ''
+  if (anchorUri && (pages || candidates.length > 0)) {
+    key = continuationKey({kind: 'public', pages, hidden: candidates})
     setReplyContinuation(anchor, {
       kind: 'public',
-      anchorUri: found.anchorUri,
-      cursor: found.cursor,
+      anchorUri,
+      cursor: found?.cursor,
       depth,
       sort,
       branchingFactor,
       seen: new Set(nodes.map(node => node.input.view.uri)),
       cids,
       stockHasOther: !!stock.hasOtherReplies,
+      key,
+      hidden: candidates,
+      pages,
+      readAt: fetchStamp(),
     })
   } else {
     clearReplyContinuation(anchor)
   }
+
+  // The prefetch, on a confirmed read only (6.2), not awaited.
+  if (
+    context &&
+    anchorUri &&
+    candidates.length > 0 &&
+    prefetchAllowed &&
+    isPrismConfirmed(clients.did)
+  ) {
+    prefetchHiddenReplies({
+      client: context.client,
+      threadKey: context.queryKey,
+      clients,
+      did: clients.did,
+      anchor,
+      anchorUri,
+      candidates,
+      cidOf: uri => cids.get(uri),
+      unserved: undefined,
+    })
+  }
+
+  // Nothing private to add: the stock answer as it came.
+  if (nodes.length === 0 && !key) return stock
   return {
     ...stock,
     thread,
-    hasOtherReplies: !!found.cursor || !!stock.hasOtherReplies,
+    hasOtherReplies: pages || !!stock.hasOtherReplies || hasHidden,
+    horizonContinuation: key,
   }
 }
 
 /**
  * The other-replies answer for `anchor` (Thread 4): `fetchStockOther` alone
- * without a continuation; else the stock part (only when it has something,
- * a failure giving none) and the private replies past the continuation's
- * cursor, page after page up to {@link MAX_OTHER_REPLY_PAGES}, the direct
- * replies already shown left out.
+ * without a continuation (a private anchor never asks it: the query's data,
+ * else nothing); else the stock part (only when it has something, a failure
+ * giving none), the private replies past the continuation's cursor while it
+ * pages, page after page up to {@link MAX_OTHER_REPLY_PAGES} or until the
+ * query's signal aborts, then the hidden replies (hidden replies design 4.3,
+ * 6.3), each reply once and the direct replies already shown left out. It
+ * carries the key of the continuation it read from (`horizonContinuation`).
  *
  * The answer carries its own completion stamp, `horizonFetchedAt`, which the
  * load gate judges apart from the thread's (prism busy design 6.1, BR13-L3).
@@ -315,12 +403,33 @@ export async function fetchOtherReplies(
   anchor: string,
   fetchStockOther: () => Promise<OtherOutput>,
   context?: RepliesQueryContext,
-): Promise<OtherOutput & {horizonFetchedAt?: number}> {
+): Promise<OtherOutput & {horizonFetchedAt?: number} & ContinuationKeyed> {
+  // Taken at the start, as the continuation itself is (hidden replies 4.2).
   const continuation = PRIVATE_READING
     ? getReplyContinuation(anchor)
     : undefined
   const clients = getCurrentClients()
-  if (!continuation || !clients) return fetchStockOther()
+  if (!continuation || !clients) {
+    /*
+     * A private anchor with no continuation (4.3): never Bluesky's AppView,
+     * which would be asked for a private URI. The query's data stays when it
+     * has some, so the replies on screen are not replaced with nothing.
+     */
+    if (isPrivateRead(anchor)) {
+      const data = context?.client.getQueryData<OtherOutput & Stamped>(
+        context.queryKey,
+      )
+      return (
+        data ?? {
+          thread: [],
+          horizonFetchedAt: healthEnvironment().now(),
+          horizonContinuation: '',
+        }
+      )
+    }
+    // The stock path carries no key, read as `''`.
+    return fetchStockOther()
+  }
 
   const stockPart: Promise<OtherOutput> = continuation.stockHasOther
     ? fetchStockOther().catch((error: unknown) => {
@@ -329,13 +438,20 @@ export async function fetchOtherReplies(
       })
     : Promise.resolve({thread: []})
 
-  const readPrivate = async () => {
+  const readPrivate = async (): Promise<{
+    nodes: TreeNode[]
+    items: ThreadItem[]
+  }> => {
     const nodes: TreeNode[] = []
+    // Only while the continuation pages (4.3); a hidden-only one reads none.
+    if (!continuation.pages) return {nodes, items: []}
     const seen = new Set(continuation.seen)
     let cursor = continuation.cursor
     let pages = 0
     try {
       do {
+        // A read the tap's reset cancelled pages no further (HR4-L2).
+        if (context?.signal?.aborted) break
         const asked: string | undefined = cursor
         const page = await getPrivateReplies(clients.prismClient, {
           uri: continuation.anchorUri,
@@ -352,32 +468,86 @@ export async function fetchOtherReplies(
         }
         cursor = page.cursor && page.cursor !== asked ? page.cursor : undefined
       } while (cursor && pages < MAX_OTHER_REPLY_PAGES)
-      if (cursor) {
+      if (cursor && pages >= MAX_OTHER_REPLY_PAGES) {
         logger.warn('other replies: page cap reached', {pages})
       }
     } catch (error) {
       logger.warn('other private replies unavailable', {safeMessage: error})
       keepOrHold(context, error)
     }
-    if (nodes.length === 0) return []
+    if (nodes.length === 0) return {nodes, items: []}
     const views = await adaptTree(nodes, clients.appviewClient, uri =>
       continuation.cids.get(uri),
     )
-    return emitPrivateReplies(nodes, 1, {
-      sort: continuation.sort,
-      branchingFactor: continuation.branchingFactor,
-      views,
-    })
+    return {
+      nodes,
+      items: emitPrivateReplies(nodes, 1, {
+        sort: continuation.sort,
+        branchingFactor: continuation.branchingFactor,
+        views,
+      }),
+    }
   }
 
-  const [stock, privateItems] = await Promise.all([stockPart, readPrivate()])
+  /*
+   * The hidden replies (6.3): the prefetched answer when it is fresh, so no
+   * call is made; leaves only, each with a read-more row from its
+   * `replyCount` for its subtree. Its views carry their read's stamp, which
+   * the load gate judges each by.
+   */
+  const readHidden = async (): Promise<{
+    nodes: TreeNode[]
+    views: Map<string, PostView>
+  }> => {
+    if (continuation.hidden.length === 0 || !context) {
+      return {nodes: [], views: new Map()}
+    }
+    try {
+      return await ensureHidden(
+        context.client,
+        clients,
+        clients.did,
+        anchor,
+        continuation,
+      )
+    } catch (error) {
+      logger.warn('hidden replies unavailable', {safeMessage: error})
+      keepOrHold(context, error)
+      return {nodes: [], views: new Map()}
+    }
+  }
+
+  const [stock, paged, hidden] = await Promise.all([
+    stockPart,
+    readPrivate(),
+    readHidden(),
+  ])
+  // Stock part, paged items, then hidden items, de-duplicated by URI.
+  const shown = new Set<string>([
+    ...continuation.seen,
+    ...stock.thread.map(item => item.uri),
+    ...paged.items.map(item => item.uri),
+  ])
+  const hiddenItems = emitPrivateReplies(
+    hidden.nodes.filter(node => !shown.has(node.input.view.uri)),
+    1,
+    {
+      sort: continuation.sort,
+      branchingFactor: continuation.branchingFactor,
+      views: hidden.views,
+    },
+  )
   /*
    * The two outputs' items differ only in their optional `$type` name; the
    * private items carry none.
    */
-  const asOther = privateItems as unknown as OtherOutput['thread']
+  const asOther = [
+    ...paged.items,
+    ...hiddenItems,
+  ] as unknown as OtherOutput['thread']
   return {
     thread: [...stock.thread, ...asOther],
     horizonFetchedAt: healthEnvironment().now(),
+    horizonContinuation: continuation.key,
   }
 }

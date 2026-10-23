@@ -21,6 +21,7 @@ import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
+import {RefractHost} from '#/horizon/refract/RefractHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
 import {DirectPrismPrefetch} from '#/horizon/routing/DirectPrismPrefetch'
 import {
@@ -79,6 +80,7 @@ export function HorizonHost() {
       <MembershipNotice />
       <WriteRouteResolver />
       <DirectPrismPrefetch />
+      <RefractHost />
       <OutboxHost />
       <AppearanceSync />
       <OtherAppSpoilersSync />

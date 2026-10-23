@@ -32,6 +32,34 @@ export type ReplyContinuation = {
   cids: Map<string, string>
   /** Whether the stock other-replies call also has something (public only). */
   stockHasOther: boolean
+  /**
+   * The continuation's identity (hidden replies design 4.1, 4.2): its `kind`,
+   * `pages` as the thread read computed it and its `hidden` sorted, in one
+   * string (`continuationKey`). The row's correction narrowing `pages` (6.4)
+   * leaves it as written. `''` stands for no continuation.
+   */
+  key: string
+  /** The candidate hidden reply URIs, in the gate's order (4.2, 5.3). */
+  hidden: string[]
+  /**
+   * Whether `getReplies` is read at all: false when only hidden replies (and,
+   * on a public anchor, the stock part) remain.
+   */
+  pages: boolean
+  /** The `fetchStamp()` of the thread read that wrote it (6.3). */
+  readAt: number
+}
+
+/**
+ * The key of a continuation (4.1): equal for equal `kind`, `pages` and
+ * `hidden` in any order.
+ */
+export function continuationKey({
+  kind,
+  pages,
+  hidden,
+}: Pick<ReplyContinuation, 'kind' | 'pages' | 'hidden'>): string {
+  return `${kind}|${pages ? 'pages' : 'no-pages'}|${[...hidden].sort().join(' ')}`
 }
 
 const continuations = new Map<string, ReplyContinuation>()

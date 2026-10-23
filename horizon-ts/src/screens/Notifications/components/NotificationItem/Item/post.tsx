@@ -49,6 +49,8 @@ import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 // HORIZON: links in a private post open directly
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
+// HORIZON: a visitor-form restored view hides like
+import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
 import {app} from '#/lexicons'
@@ -637,6 +639,8 @@ function PostActionsInner({
    * sent from this row while it's mounted.
    */
   const [hasReplied, setHasReplied] = useState(false)
+  // HORIZON: a visitor-form restored view hides like
+  const restoredActionsHidden = useRestoredActionsHidden(post)
 
   const isLiked = Boolean(post.viewer?.like)
   const isBlocked = Boolean(
@@ -708,29 +712,32 @@ function PostActionsInner({
   return (
     <View style={[a.flex_row, a.justify_between, a.align_center]}>
       <View style={[a.flex_row, a.gap_xs]}>
-        <ActionPill
-          testID="likeBtn"
-          label={
-            isLiked
-              ? l({message: 'Unlike', comment: 'Verb, to remove a like'})
-              : l({message: 'Like', comment: 'Verb, to like a post'})
-          }
-          icon={isLiked ? HeartFilled : Heart}
-          color={isLiked ? t.palette.pink : undefined}
-          backgroundColor={isLiked ? likedBackground : undefined}
-          text={
-            isLiked
-              ? l({
-                  message: 'Liked',
-                  comment: 'Shown on the like button once the post is liked',
-                })
-              : l({message: 'Like', context: 'verb'})
-          }
-          onPress={() => {
-            haptics.tap()
-            requireAuth(() => onToggleLike())
-          }}
-        />
+        {/* HORIZON: a visitor-form restored view hides like */}
+        {!restoredActionsHidden && (
+          <ActionPill
+            testID="likeBtn"
+            label={
+              isLiked
+                ? l({message: 'Unlike', comment: 'Verb, to remove a like'})
+                : l({message: 'Like', comment: 'Verb, to like a post'})
+            }
+            icon={isLiked ? HeartFilled : Heart}
+            color={isLiked ? t.palette.pink : undefined}
+            backgroundColor={isLiked ? likedBackground : undefined}
+            text={
+              isLiked
+                ? l({
+                    message: 'Liked',
+                    comment: 'Shown on the like button once the post is liked',
+                  })
+                : l({message: 'Like', context: 'verb'})
+            }
+            onPress={() => {
+              haptics.tap()
+              requireAuth(() => onToggleLike())
+            }}
+          />
+        )}
         <ActionPill
           testID="replyBtn"
           label={l({message: 'Reply', context: 'verb'})}

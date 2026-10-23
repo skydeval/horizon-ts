@@ -361,7 +361,11 @@ export function getDirectPrismClient(pdsClient: Client): Client {
  */
 export type DirectPrefetchOptions = {
   methods: readonly NsidString[]
-  routes: readonly PrivateWriteRoute[]
+  /**
+   * The posting routes the prefetch runs on, or `'any'` for every route
+   * (refract client design 7.1: Refract's tokens serve non-members too).
+   */
+  routes: readonly PrivateWriteRoute[] | 'any'
 }
 
 export const DIRECT_PREFETCH_2K: DirectPrefetchOptions = {
@@ -410,6 +414,7 @@ export function startDirectTokenPrefetch(
   const active = () => {
     const current = getCurrentClients()
     if (!current || !env.isForeground()) return undefined
+    if (options.routes === 'any') return current
     const route = getWriteRoute(current.did).postingRoute
     return options.routes.includes(route) ? current : undefined
   }

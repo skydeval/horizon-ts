@@ -16,8 +16,11 @@ import {
 } from '#/horizon/appearance/device-store'
 import {
   type AccountCopy,
+  type AppearanceStore,
   type DeviceAppearanceV1,
+  emptyAccountCopy,
   parseDeviceValue,
+  type PendingAppearance,
   serializeDeviceValue,
 } from '#/horizon/appearance/device-value'
 import {
@@ -45,6 +48,8 @@ export type AppearanceState = {
 export type AppearanceSyncHooks = {
   scheduleFlush: (did: string) => void
   cancelAll: () => void
+  /** Run `did`'s queue now (a choice change flushes at once, 5). */
+  flushNow?: (did: string) => void
 }
 
 let syncHooks: AppearanceSyncHooks | null = null
@@ -75,11 +80,19 @@ function load(): AppearanceState {
   if (state) return state
   storedJson = readDeviceJson()
   let device = parseDeviceValue(storedJson)
-  // A write refused for good is retried once per app start (6.5).
-  if (Object.values(device.accounts).some(copy => copy.blocked)) {
+  /*
+   * A write refused for good is retried once per app start (6.5), and a
+   * store answered in an earlier run is only remembered in this one
+   * (storage choice design, section 4).
+   */
+  if (
+    Object.values(device.accounts).some(
+      copy => copy.blocked || copy.storeKnown,
+    )
+  ) {
     const accounts: Record<string, AccountCopy> = {}
     for (const [did, copy] of Object.entries(device.accounts)) {
-      accounts[did] = {...copy, blocked: false}
+      accounts[did] = {...copy, blocked: false, storeKnown: false}
     }
     device = {...device, accounts}
     storedJson = serializeDeviceValue(device)
@@ -136,14 +149,7 @@ export function deleteAccountCopy(did: string) {
 
 /** An account copy for an account never read on this device. */
 export function emptyCopy(): AccountCopy {
-  return {
-    record: null,
-    raw: null,
-    cid: null,
-    syncedAt: 0,
-    pending: null,
-    blocked: false,
-  }
+  return emptyAccountCopy()
 }
 
 /** Set or clear the editor's live preview. */
@@ -209,7 +215,9 @@ export function editAppearance(
   if (did && !device.optOut && APPEARANCE_SYNC) {
     const copy = device.accounts[did] ?? emptyCopy()
     const old = copy.pending
-    const pending = {
+    // A choice change not yet landed rides along with the edit (5).
+    const pending: PendingAppearance = {
+      ...old,
       fields: union(old?.fields ?? [], fields),
       appearance: next,
       seq: (old?.seq ?? 0) + 1,
@@ -318,7 +326,9 @@ export function clearPreset(did: string | undefined, slot: number) {
 
 /**
  * The per-device opt-out. Turning it on keeps the current look (`device`
- * already holds it) and drops every unsent edit on this device.
+ * already holds it) and drops every unsent edit on this device. A choice
+ * change not yet landed is the account's, not the device's, so it stays
+ * (storage choice design 5.1, AS8-N5).
  */
 export function setOptOut(on: boolean) {
   const device = load().device
@@ -328,10 +338,58 @@ export function setOptOut(on: boolean) {
   }
   const accounts: Record<string, AccountCopy> = {}
   for (const [did, copy] of Object.entries(device.accounts)) {
-    accounts[did] = {...copy, pending: null}
+    const pending = copy.pending
+    accounts[did] = {
+      ...copy,
+      pending: pending?.store
+        ? {
+            ...pending,
+            fields: [],
+            appearance: copy.record ?? pending.appearance,
+          }
+        : null,
+    }
   }
   syncHooks?.cancelAll()
   setDeviceValue({...device, optOut: true, accounts})
+}
+
+/**
+ * "Save my appearance" (storage choice design 2, 7): the choice changes at
+ * once (`pending.store`, replacing any earlier one not yet landed) and the
+ * account's queue runs at once. The user's choice, never an `auto` one.
+ */
+export function chooseAppearanceStore(did: string, store: AppearanceStore) {
+  const device = load().device
+  const copy = device.accounts[did] ?? emptyCopy()
+  const old = copy.pending
+  // The account's value, also when this device is opted out.
+  const pending: PendingAppearance = {
+    fields: old?.fields ?? [],
+    appearance: old?.appearance ?? copy.record ?? device.device,
+    seq: (old?.seq ?? 0) + 1,
+    store,
+  }
+  setDeviceValue({
+    ...device,
+    accounts: {...device.accounts, [did]: {...copy, pending}},
+  })
+  if (syncHooks?.flushNow) syncHooks.flushNow(did)
+  else syncHooks?.scheduleFlush(did)
+}
+
+/** Dismiss the migration, removal or too-large note's line under the setting. */
+export function dismissAppearanceNote(did: string) {
+  const copy = load().device.accounts[did]
+  if (!copy || (!copy.noted && !copy.removalLine && !copy.tooLargeLine)) {
+    return
+  }
+  updateAccountCopy(did, c => ({
+    ...c,
+    noted: false,
+    removalLine: false,
+    tooLargeLine: false,
+  }))
 }
 
 /** The phone frame (9.3, 9.6, 9.7). Device only. */
