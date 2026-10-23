@@ -85,11 +85,16 @@ import {
   loadEncoder,
   PrivateEncodeFailedError,
 } from '#/horizon/private/encoder'
+import {
+  resetPendingLoop,
+  startPendingLoop,
+} from '#/horizon/private/pending-confirm'
 import {parseGenerationSecs} from '#/horizon/private/rotation/generation'
 import {
   CONFIRM_AT_MS,
   confirmPendingPost,
   getPendingPost,
+  notifyPrivateStores,
 } from '#/horizon/private/store'
 import {isPrivatePostUri, PP_COLLECTION} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
@@ -425,13 +430,19 @@ const confirmationTimers = new Set<ReturnType<typeof setTimeout>>()
 /**
  * Ask prism, in the background, whether it serves the just-written posts
  * yet; each one it returns stops being pending. Nothing is shown either way:
- * the posts exist on the PDS.
+ * the posts exist on the PDS. After the last of {@link CONFIRM_AT_MS} the
+ * store-wide loop takes over (prism busy design 6.6), and the store's
+ * listeners hear of it, so the "Syncing" label turns on (D-19).
  */
 export function confirmInBackground(prism: Client, uris: string[]) {
   let remaining = [...uris]
   let previous = 0
   const attempt = (index: number) => {
-    if (index >= CONFIRM_AT_MS.length || remaining.length === 0) return
+    if (index >= CONFIRM_AT_MS.length || remaining.length === 0) {
+      notifyPrivateStores()
+      startPendingLoop()
+      return
+    }
     const delay = CONFIRM_AT_MS[index] - previous
     previous = CONFIRM_AT_MS[index]
     const timer = setTimeout(() => {
@@ -470,6 +481,7 @@ export function confirmNow(prism: Client, uris: string[]) {
 export function stopPrivateConfirmations() {
   confirmationTimers.forEach(timer => clearTimeout(timer))
   confirmationTimers.clear()
+  resetPendingLoop()
 }
 
 /**

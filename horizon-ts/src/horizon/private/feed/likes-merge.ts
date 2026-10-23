@@ -30,10 +30,15 @@ import {
   type PrivateSource,
   toFeedViewPosts,
 } from '#/horizon/private/adapt/feed-view'
-import {getPrivatePosts} from '#/horizon/private/api/reads'
+import {
+  type AnswerContext,
+  getPrivatePostsAnswered,
+} from '#/horizon/private/api/reads'
 import {fromBase64Url, toBase64Url} from '#/horizon/private/feed/cursor'
+import {degradedFlags} from '#/horizon/private/feed/degraded'
 import {withDeadline} from '#/horizon/private/feed/merge-core'
 import {MAX_PAGES_PER_LOAD} from '#/horizon/private/feed/paging'
+import {noteOmissions} from '#/horizon/private/known'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {type app} from '#/lexicons'
 
@@ -212,6 +217,13 @@ export class PrivateLikesMergeFeedAPI implements FeedAPI {
       cursor === undefined
         ? initialLikesMergeState()
         : decodeLikesMergeCursor(cursor)
+    /*
+     * The private side's answers, and whether its refill failed or was
+     * skipped or an answer left out a suspect (6.4: dropped, as now, and the
+     * page degraded).
+     */
+    const answers: AnswerContext[] = []
+    let incomplete = state.priv.failed
 
     const refillPublic = async () => {
       const pub = state.pub
@@ -242,13 +254,22 @@ export class PrivateLikesMergeFeedAPI implements FeedAPI {
           if (rkey && uri && isPrivatePostUri(uri)) liked.push({rkey, uri})
         }
         if (liked.length > 0) {
-          const views = await withDeadline(
-            getPrivatePosts(
+          const {posts: views, answer} = await withDeadline(
+            getPrivatePostsAnswered(
               this.source.prism,
               liked.map(like => like.uri),
             ),
             LIKES_MERGE_DEADLINE_MS,
           )
+          answers.push(answer)
+          const verdicts = noteOmissions(
+            answer,
+            liked.map(like => like.uri),
+            views.map(view => view.uri),
+          )
+          for (const verdict of verdicts.values()) {
+            if (verdict === 'suspect') incomplete = true
+          }
           const byUri = new Map(views.map(view => [view.uri as string, view]))
           const seen = new Set<string>()
           for (const like of liked) {
@@ -267,6 +288,7 @@ export class PrivateLikesMergeFeedAPI implements FeedAPI {
       } catch (error) {
         // Stock only until the tab is refreshed from the top.
         priv.failed = true
+        incomplete = true
         logger.warn('liked private posts unavailable; the tab continues', {
           safeMessage: error,
         })
@@ -299,6 +321,11 @@ export class PrivateLikesMergeFeedAPI implements FeedAPI {
       }
       if (feed.length > 0 || drained) break
     }
-    return {feed, cursor: drained ? undefined : encodeLikesMergeCursor(state)}
+    return {
+      feed,
+      cursor: drained ? undefined : encodeLikesMergeCursor(state),
+      // A degraded page is marked so (6.4); the flag never reaches the tuners.
+      ...degradedFlags(answers, incomplete),
+    }
   }
 }

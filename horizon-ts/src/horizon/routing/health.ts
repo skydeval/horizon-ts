@@ -80,6 +80,13 @@ function defaultEnvironment(): HealthEnvironment {
 
 let env = defaultEnvironment()
 let launchAt = env.now()
+/** Raised by every reset, so timers set before one can tell (the catch-up). */
+let generation = 0
+
+/** The reset generation: timers set before a reset do nothing after it. */
+export function healthGeneration(): number {
+  return generation
+}
 
 /** The environment in use (the call deadline and the waiters read it too). */
 export function healthEnvironment(): HealthEnvironment {
@@ -400,6 +407,7 @@ export function resetPrismHealth(next?: Partial<HealthEnvironment>) {
     if (state.degradedTimer !== undefined) env.clearTimeout(state.degradedTimer)
   })
   states.clear()
+  generation++
   env = {...defaultEnvironment(), ...next}
   launchAt = env.now()
   listeners.forEach(listener => listener())

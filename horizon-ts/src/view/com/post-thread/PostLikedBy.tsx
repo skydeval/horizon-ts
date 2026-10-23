@@ -10,6 +10,8 @@ import {useResolveUriQuery} from '#/state/queries/resolve-uri'
 import {ProfileCardWithFollowBtn} from '#/view/com/profile/ProfileCard'
 import {List} from '#/view/com/util/List'
 import {ListFooter, ListMaybePlaceholder} from '#/components/Lists'
+// HORIZON: the catching-up note where the load gate hid a row
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 import {type app} from '#/lexicons'
 
 function renderItem({
@@ -51,6 +53,10 @@ export function PostLikedBy({uri}: {uri: string}) {
     fetchNextPage,
     error,
     refetch,
+    // HORIZON: the list's load gate while prism is busy
+    horizonHidden,
+    horizonOnScrolledDownChange,
+    horizonRestart,
   } = useLikedByQuery(resolvedUri?.uri)
 
   const isError = Boolean(resolveError || error)
@@ -64,13 +70,15 @@ export function PostLikedBy({uri}: {uri: string}) {
 
   const onRefresh = useCallback(async () => {
     setIsPTRing(true)
+    // HORIZON: a pull is a new load for the gate
+    horizonRestart()
     try {
       await refetch()
     } catch (err) {
       logger.error('Failed to refresh likes', {message: err})
     }
     setIsPTRing(false)
-  }, [refetch, setIsPTRing])
+  }, [refetch, setIsPTRing, horizonRestart])
 
   const onEndReached = useCallback(async () => {
     if (isFetchingNextPage || !hasNextPage || isError) return
@@ -100,6 +108,10 @@ export function PostLikedBy({uri}: {uri: string}) {
 
   return (
     <List
+      // HORIZON: the catching-up note where the load gate hid a row
+      ListHeaderComponent={<CatchingUpNote hidden={horizonHidden} />}
+      // HORIZON: a refresh the lift owes runs once back at the top
+      onScrolledDownChange={horizonOnScrolledDownChange}
       data={likes}
       renderItem={renderItem}
       keyExtractor={keyExtractor}

@@ -8,12 +8,19 @@ import {
 
 import {useAppviewClient} from '#/state/session'
 // HORIZON: a private post's reposters are listed by prism
-import {fetchPrivateRepostedByPage} from '#/horizon/private/api/interactions'
+import {
+  fetchPrivateRepostedByPage,
+  // HORIZON: a private post's reposters are gated while prism is busy
+  repostsListAccess,
+  stampListPage,
+} from '#/horizon/private/api/interactions'
 // HORIZON: a private post's reposters are retried while prism is busy
 import {
   keepOverData,
   privateRetryFor,
 } from '#/horizon/private/api/transient'
+// HORIZON: a private post's reposters are gated while prism is busy
+import {useBusyListQuery} from '#/horizon/private/list-busy'
 // HORIZON: a private post's reposters are listed by prism
 import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
@@ -27,7 +34,7 @@ export const RQKEY = (resolvedUri: string) => [RQKEY_ROOT, resolvedUri]
 
 export function usePostRepostedByQuery(resolvedUri: string | undefined) {
   const client = useAppviewClient()
-  return useInfiniteQuery<
+  const query = useInfiniteQuery<
     app.bsky.feed.getRepostedBy.$OutputBody,
     Error,
     InfiniteData<app.bsky.feed.getRepostedBy.$OutputBody>,
@@ -40,7 +47,9 @@ export function usePostRepostedByQuery(resolvedUri: string | undefined) {
       // HORIZON: a private post's reposters are listed by prism
       if (isPrivateRead(resolvedUri))
         return keepOverData(context, () =>
-          fetchPrivateRepostedByPage(resolvedUri!, pageParam, PAGE_SIZE),
+          fetchPrivateRepostedByPage(resolvedUri!, pageParam, PAGE_SIZE).then(
+            stampListPage,
+          ),
         )
       return await client.call(app.bsky.feed.getRepostedBy, {
         // the enabled flag prevents this from running until resolvedUri is set
@@ -54,6 +63,12 @@ export function usePostRepostedByQuery(resolvedUri: string | undefined) {
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,
     enabled: !!resolvedUri,
+  })
+  // HORIZON: a private post's reposters are gated while prism is busy
+  return useBusyListQuery(query, {
+    subjectUri: resolvedUri,
+    queryKey: RQKEY(resolvedUri || ''),
+    access: repostsListAccess(resolvedUri),
   })
 }
 

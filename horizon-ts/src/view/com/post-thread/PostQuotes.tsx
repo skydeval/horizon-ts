@@ -16,6 +16,8 @@ import {
 import {useResolveUriQuery} from '#/state/queries/resolve-uri'
 import {Post} from '#/view/com/post/Post'
 import {ListFooter, ListMaybePlaceholder} from '#/components/Lists'
+// HORIZON: the catching-up note where the load gate hid a row
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {List} from '../util/List'
@@ -74,6 +76,10 @@ export function PostQuotes({
     fetchNextPage,
     error,
     refetch,
+    // HORIZON: the list's load gate while prism is busy
+    horizonHidden,
+    horizonOnScrolledDownChange,
+    horizonRestart,
   } = usePostQuotesQuery(resolvedUri?.uri, {
     quoteSort,
     enabled: active,
@@ -111,13 +117,15 @@ export function PostQuotes({
 
   const onRefresh = useCallback(async () => {
     setIsPTRing(true)
+    // HORIZON: a pull is a new load for the gate
+    horizonRestart()
     try {
       await refetch()
     } catch (err) {
       logger.error('Failed to refresh quotes', {message: err})
     }
     setIsPTRing(false)
-  }, [refetch, setIsPTRing])
+  }, [refetch, setIsPTRing, horizonRestart])
 
   const onEndReached = useCallback(async () => {
     if (isFetchingNextPage || !hasNextPage || isError) return
@@ -151,6 +159,10 @@ export function PostQuotes({
   // =
   return (
     <List
+      // HORIZON: the catching-up note where the load gate hid a row
+      ListHeaderComponent={<CatchingUpNote hidden={horizonHidden} />}
+      // HORIZON: a refresh the lift owes runs once back at the top
+      onScrolledDownChange={horizonOnScrolledDownChange}
       data={quotes}
       renderItem={renderItem}
       keyExtractor={keyExtractor}

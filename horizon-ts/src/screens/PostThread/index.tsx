@@ -52,7 +52,15 @@ import {
   ThreadItemTreePost,
   ThreadItemTreePostSkeleton,
 } from '#/screens/PostThread/components/ThreadItemTreePost'
-import {atoms as a, native, platform, useBreakpoints, web} from '#/alf'
+// HORIZON: useTheme, for the catching-up note above the reply prompt
+import {
+  atoms as a,
+  native,
+  platform,
+  useBreakpoints,
+  useTheme,
+  web,
+} from '#/alf'
 import * as Layout from '#/components/Layout'
 import {ListFooter} from '#/components/Lists'
 import {useAnalytics} from '#/analytics'
@@ -63,6 +71,8 @@ import {isPrivateDisplay} from '#/horizon/private/render/controls'
 import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 // HORIZON: a private post the reader may not view shows the stand-in
 import {PrivateThreadNotFound} from '#/horizon/private/thread/PrivateThreadNotFound'
+// HORIZON: the catching-up note after 20 s of ill health on a private thread
+import {isPrivateRead} from '#/horizon/private/uri'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -593,8 +603,13 @@ export function PostThread({uri}: {uri: string}) {
       ) : (
         <AnalyticsOnlyFeedFeedbackProvider
           feedDescriptor={feedFeedback.feedDescriptor}>
-          {/* HORIZON: the catching-up note where the load gate hid a private item */}
-          <CatchingUpNote hidden={thread.state.horizonHidden} />
+          {/* HORIZON: the catching-up note where the load gate hid a private item, or after 20 s of ill health with no reply prompt below */}
+          <CatchingUpNote
+            hidden={thread.state.horizonHidden}
+            illHealth={
+              isPrivateRead(uri) && (gtMobile || !canReply || !hasSession)
+            }
+          />
           <List
             ref={listRef}
             data={deferredSlices}
@@ -661,7 +676,15 @@ export function PostThread({uri}: {uri: string}) {
       )}
 
       {!gtMobile && canReply && hasSession && (
-        <MobileComposePrompt onPressReply={onReplyToAnchor} />
+        <MobileComposePrompt
+          onPressReply={onReplyToAnchor}
+          // HORIZON: the catching-up note above a private thread's reply prompt after 20 s of ill health
+          note={
+            thread.state.horizonHidden === 0 && isPrivateRead(uri) ? (
+              <CatchingUpNote hidden={0} illHealth />
+            ) : null
+          }
+        />
       )}
     </PostThreadContextProvider>
   )
@@ -697,8 +720,17 @@ function AnalyticsOnlyFeedFeedbackProvider({
   return <FeedFeedbackProvider value={value}>{children}</FeedFeedbackProvider>
 }
 
-function MobileComposePrompt({onPressReply}: {onPressReply: () => unknown}) {
+function MobileComposePrompt({
+  onPressReply,
+  // HORIZON: the catching-up note above the reply prompt
+  note,
+}: {
+  onPressReply: () => unknown
+  note?: React.ReactNode
+}) {
   const {footerHeight} = useShellLayout()
+  // HORIZON: the catching-up note above the reply prompt
+  const t = useTheme()
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
@@ -708,6 +740,8 @@ function MobileComposePrompt({onPressReply}: {onPressReply: () => unknown}) {
 
   return (
     <Animated.View style={[a.fixed, a.left_0, a.right_0, animatedStyle]}>
+      {/* HORIZON: the catching-up note above the reply prompt */}
+      {note ? <View style={[t.atoms.bg]}>{note}</View> : null}
       <ThreadComposePrompt onPressCompose={onPressReply} />
     </Animated.View>
   )

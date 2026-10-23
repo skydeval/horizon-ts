@@ -17,7 +17,6 @@ import {
 
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {STALE} from '#/state/queries'
-import {type LoadedGroupedNotificationsPage} from '#/state/queries/notifications/grouped'
 import {moderateNotification} from '#/state/queries/notifications/grouped/moderate'
 import {useSession} from '#/state/session'
 import {useThreadgateHiddenReplyUris} from '#/state/threadgate-hidden-replies'
@@ -31,12 +30,14 @@ import {useMutedDids} from '#/horizon/private/activity-subscriptions/muted'
 import {getPrivateUnreadCount} from '#/horizon/private/api/reads'
 import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
+import {degradedStaleTime} from '#/horizon/private/feed/degraded'
 import {
   type PrivateFeedSource,
   usePrivateFeedSource,
 } from '#/horizon/private/membership'
 import {
   fetchPrivateNotificationsPage,
+  type PrivateNotificationsPage,
   type PrivateNotificationsTab,
 } from '#/horizon/private/notifications/page'
 import {privateNotificationsQueryKey} from '#/horizon/private/notifications/refresh'
@@ -77,7 +78,7 @@ function privateNotificationsQueryFn(
     pageParam,
   }: {
     pageParam: string | undefined
-  }): Promise<LoadedGroupedNotificationsPage> => {
+  }): Promise<PrivateNotificationsPage> => {
     if (!source) throw new Error('private notifications: no source')
     return fetchPrivateNotificationsPage({
       source,
@@ -110,7 +111,8 @@ export function usePrivateNotificationsQuery({
   const fetchPage = privateNotificationsQueryFn(source, tab, viewerDid)
   return useInfiniteQuery({
     enabled: !!source && !!moderationOpts,
-    staleTime: STALE.SECONDS.FIFTEEN,
+    // Stale at once while a page is degraded (busy design 6.7).
+    staleTime: degradedStaleTime(STALE.SECONDS.FIFTEEN),
     queryKey: privateNotificationsQueryKey(source?.did ?? '', tab),
     // Retried while prism is busy, never over a page it shows (busy design 5).
     queryFn: context => keepOverData(context, () => fetchPage(context)),

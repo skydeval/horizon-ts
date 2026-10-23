@@ -66,6 +66,8 @@ export type PrivateBookmarkView = {
 export type PrivateBookmarksPage = {
   bookmarks: PrivateBookmarkView[]
   cursor?: string
+  /** When the page's fetch completed (the load gate's stamp, prism busy 4.1). */
+  fetchedAt?: number
 }
 
 /**

@@ -84,6 +84,10 @@ import {
   MediaGridPlaceholder,
   MediaGridRow,
 } from '#/horizon/media-grid/MediaGrid'
+// HORIZON: a private feed prism can't answer for now shows the quiet row
+import {isPrivateFeedBusyError} from '#/horizon/private/feed/busy'
+// HORIZON: a private feed prism can't answer for now shows the quiet row
+import {ListUnavailable} from '#/horizon/private/render/ListUnavailable'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {ComposerPrompt} from '../feeds/ComposerPrompt'
@@ -830,6 +834,10 @@ let PostFeed = ({
       if (row.type === 'empty') {
         return renderEmptyState()
       } else if (row.type === 'error') {
+        // HORIZON: a private feed prism can't answer for now shows the quiet row
+        if (isPrivateFeedBusyError(feed, error, currentAccount?.did)) {
+          return <ListUnavailable queryKey={RQKEY(feed, feedParams)} />
+        }
         return (
           <PostFeedErrorMessage
             feedDesc={feed}
@@ -967,6 +975,9 @@ let PostFeed = ({
       feedCacheKey,
       onPressShowLess,
       t,
+      // HORIZON: a private feed prism can't answer for now shows the quiet row
+      currentAccount?.did,
+      feedParams,
     ],
   )
 

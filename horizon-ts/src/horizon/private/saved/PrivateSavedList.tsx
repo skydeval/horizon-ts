@@ -3,6 +3,14 @@
  * prism, rendered with the stock `Post` row as the stock list renders
  * bookmarks. While prism does not list `private.bookmarks`, or for a reader
  * without a private source, it shows its empty state and makes no request.
+ *
+ * While prism is busy (prism busy design 4.1, 5, 10): opened while the
+ * account is not confirmed it hides another author's private posts from
+ * pages fetched before it until a page fetched since holds them, with the
+ * catching-up note at the top (also after 20 s of ill health), and runs its
+ * stock `refetch()`. Once confirmed it lifts itself: at the top a refetch,
+ * scrolled down `refreshPending`, run when back at the top. With nothing to
+ * show, the skeleton waits at most 30 s, then the quiet row with Try again.
  */
 
 import {useState} from 'react'
@@ -26,14 +34,36 @@ import {
   privateBookmarksQueryKey,
   type PrivateBookmarkView,
 } from '#/horizon/private/api/bookmarks'
-import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
+import {
+  isTransientPrismError,
+  keepOverData,
+  PRIVATE_RETRY,
+} from '#/horizon/private/api/transient'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
+import {useListBusy} from '#/horizon/private/list-busy'
+import {
+  fetchStamp,
+  gatePages,
+  type PageAccess,
+  useEmptyWaitCapped,
+} from '#/horizon/private/load-gate'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
+import {ListUnavailable} from '#/horizon/private/render/ListUnavailable'
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 
 type ListItem =
   | {type: 'loading'; key: 'loading'}
   | {type: 'empty'; key: 'empty'}
+  | {type: 'unavailable'; key: 'unavailable'}
   | {type: 'bookmark'; key: string; bookmark: PrivateBookmarkView}
+
+/** How the load gate reads a page of saved posts: each by its post. */
+const SAVED_ACCESS: PageAccess<PrivateBookmarksPage, PrivateBookmarkView> = {
+  stampOf: page => page.fetchedAt,
+  itemsOf: page => page.bookmarks,
+  withItems: (page, bookmarks) => ({...page, bookmarks}),
+  urisOf: bookmark => [bookmark.item.uri],
+}
 
 /**
  * The private list (see the file header).
@@ -46,9 +76,11 @@ export function PrivateSavedList() {
   const enabled = served && !!source
   const initialNumToRender = useInitialNumToRender()
   const [isPTRing, setIsPTRing] = useState(false)
+  const queryKey = privateBookmarksQueryKey(source?.did ?? '')
   const {
-    data,
+    data: queryData,
     isLoading,
+    isFetching,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
@@ -56,18 +88,40 @@ export function PrivateSavedList() {
     refetch,
   } = useInfiniteQuery({
     enabled,
-    queryKey: privateBookmarksQueryKey(source?.did ?? ''),
+    queryKey,
     // Retried while prism is busy, never over a page it shows (busy design 5).
     queryFn: (context): Promise<PrivateBookmarksPage> => {
       if (!source) return Promise.resolve({bookmarks: []})
-      return keepOverData(context, () =>
-        fetchPrivateBookmarksPage(source, context.pageParam),
-      )
+      return keepOverData(context, async () => ({
+        ...(await fetchPrivateBookmarksPage(source, context.pageParam)),
+        // The page's completion stamp, for the gate (busy design 4.1).
+        fetchedAt: fetchStamp(),
+      }))
     },
     ...PRIVATE_RETRY,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: lastPage => lastPage.cursor,
   })
+
+  // The load gate (busy design 4.1), after the query so its fetch is joined.
+  const busy = useListBusy<{pages: PrivateBookmarksPage[]}>({
+    did: enabled ? source?.did : undefined,
+    queryKey,
+    urisOf: raw =>
+      raw.pages.flatMap(page => page.bookmarks.map(b => b.item.uri)),
+    hiddenOf: (raw, since) =>
+      gatePages(raw.pages, source?.did ?? '', since, SAVED_ACCESS).hidden,
+    refetch: () => refetch(),
+  })
+  const gated =
+    queryData && busy.loadSince !== undefined && source
+      ? gatePages(queryData.pages, source.did, busy.loadSince, SAVED_ACCESS)
+      : undefined
+  const data =
+    queryData && gated && gated.hidden > 0
+      ? {...queryData, pages: gated.pages}
+      : queryData
+  const capped = useEmptyWaitCapped(enabled && !queryData && isFetching)
 
   if (!enabled) {
     // Outside a list, so it centres itself in the column as the list would
@@ -90,6 +144,7 @@ export function PrivateSavedList() {
 
   const onRefresh = async () => {
     setIsPTRing(true)
+    busy.restart()
     try {
       await refetch()
     } finally {
@@ -105,10 +160,15 @@ export function PrivateSavedList() {
   }
 
   const items: ListItem[] = []
-  if (isLoading) {
+  const transient = !!error && isTransientPrismError(error)
+  const bookmarks = data?.pages.flatMap(page => page.bookmarks) ?? []
+  const allHidden = !!gated && gated.hidden > 0 && bookmarks.length === 0
+  if (capped || (!queryData && transient) || (allHidden && !isFetching)) {
+    // The quiet row while retries go on (busy design 5).
+    items.push({type: 'unavailable', key: 'unavailable'})
+  } else if (isLoading || allHidden) {
     items.push({type: 'loading', key: 'loading'})
   } else if (data) {
-    const bookmarks = data.pages.flatMap(page => page.bookmarks)
     if (bookmarks.length === 0) {
       items.push({type: 'empty', key: 'empty'})
     }
@@ -121,6 +181,8 @@ export function PrivateSavedList() {
     switch (item.type) {
       case 'loading':
         return <PostFeedLoadingPlaceholder />
+      case 'unavailable':
+        return <ListUnavailable queryKey={queryKey} />
       case 'empty':
         return (
           <EmptyState
@@ -144,6 +206,8 @@ export function PrivateSavedList() {
       keyExtractor={(item: ListItem) => item.key}
       refreshing={isPTRing}
       onRefresh={() => void onRefresh()}
+      onScrolledDownChange={busy.onScrolledDownChange}
+      ListHeaderComponent={<CatchingUpNote hidden={busy.hidden} illHealth />}
       onEndReached={() => void onEndReached()}
       onEndReachedThreshold={4}
       ListFooterComponent={

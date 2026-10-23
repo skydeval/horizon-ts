@@ -27,7 +27,12 @@ export const SEARCH_PAGES_PER_LOAD = 3
  */
 export const SEARCH_PAGE_LIMIT = 25
 
-export type PrivateSearchPage = {posts: PostView[]; cursor?: string}
+export type PrivateSearchPage = {
+  posts: PostView[]
+  cursor?: string
+  /** When the load completed (the load gate's stamp, prism busy design 4.1). */
+  fetchedAt?: number
+}
 
 /**
  * One load of a private search from `cursor`: up to

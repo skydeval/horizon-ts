@@ -25,6 +25,10 @@ import {Text} from '#/components/Typography'
 import {IS_IOS, IS_NATIVE} from '#/env'
 // HORIZON: the Media tab is drawn as a grid, through the video grid rows
 import {isMediaGridFeed} from '#/horizon/media-grid/grid'
+// HORIZON: the load gate of a feed with private posts while prism is busy
+import {FeedGateProvider} from '#/horizon/private/feed/busy'
+// HORIZON: the load gate of a feed with private posts while prism is busy
+import {useProfileFeedBusy} from '#/horizon/private/feed/busy-view'
 import {type SectionRef} from './types'
 
 interface FeedSectionProps {
@@ -76,6 +80,19 @@ export function ProfileFeedSection({
     scrollToTop: onScrollToTop,
   }))
 
+  // HORIZON: the load gate, its lift and the catching-up note (prism busy design 6.4) (start)
+  const busy = useProfileFeedBusy({
+    feedDesc: feed,
+    queryKey: FEED_RQKEY(feed),
+    isScrolledDown: () => isScrolledDown,
+    refreshFromTop: () => {
+      void truncateAndInvalidate(queryClient, FEED_RQKEY(feed))
+      setHasNew(false)
+    },
+    onScrolledDownLift: () => setHasNew(true),
+  })
+  // HORIZON: the load gate, its lift and the catching-up note (prism busy design 6.4) (end)
+
   const renderPostsEmpty = useCallback(() => {
     return (
       <View style={[a.flex_1, a.justify_center, a.align_center]}>
@@ -99,6 +116,8 @@ export function ProfileFeedSection({
 
   return (
     <View>
+      {/* HORIZON: the load gate of a feed with private posts while prism is busy */}
+      <FeedGateProvider gate={busy.gate}>
       <PostFeed
         testID="postsFeed"
         enabled={isFocused}
@@ -117,7 +136,10 @@ export function ProfileFeedSection({
         // HORIZON: the Media tab is drawn as a grid, through the video grid rows
         isVideoFeed={isVideoFeed || isMediaGridFeed(feed)}
         ref={postFeedRef}
+        // HORIZON: the catching-up note in the list's header slot
+        ListHeaderComponent={busy.Header}
       />
+      </FeedGateProvider>
       {(isScrolledDown || hasNew) && (
         <LoadLatestBtn
           onPress={onScrollToTop}

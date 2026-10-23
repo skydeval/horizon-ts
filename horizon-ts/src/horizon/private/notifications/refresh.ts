@@ -104,13 +104,16 @@ export function pressNotificationsModeTab({
 /**
  * Whether the Private list offers the stock "Refresh" pill: it's in view,
  * its first page has loaded and isn't being asked again, and prism's unread
- * count, checked since that page was asked, has something unread.
+ * count, checked since that page was asked, has something unread; or the
+ * load gate's lift, scrolled down, marked the list stale since that page was
+ * asked (prism busy design 6.7).
  */
 export function isPrivateRefreshPillVisible({
   isActive,
   unread,
   top,
   isFetchingTop,
+  stale,
 }: {
   /**
    * Whether the list is in view, on the focused screen.
@@ -126,8 +129,15 @@ export function isPrivateRefreshPillVisible({
    */
   top: Pick<LoadedGroupedNotificationsPage, 'requestedAt'> | undefined
   isFetchingTop: boolean
+  /**
+   * When the load gate's lift found the list scrolled down, in ms since the
+   * epoch: the pill shows while it is newer than the first page's request.
+   */
+  stale?: number
 }): boolean {
-  if (!isActive || !unread || !top || isFetchingTop) return false
+  if (!isActive || !top || isFetchingTop) return false
+  if (stale !== undefined && stale > top.requestedAt) return true
+  if (!unread) return false
   if (unread.checkedAt <= top.requestedAt) return false
   return unread.count > 0
 }

@@ -15,6 +15,15 @@
  * and asks for the first page again, and the stock "Refresh" pill is offered
  * when prism's unread count says there's something new. The cached list stays
  * shown while it asks, and if the ask fails.
+ *
+ * While prism is busy (prism busy design 6.7, 4.1, 5): a load that begins
+ * while the account is not confirmed hides groups whose subject is another
+ * author's private post until a page fetched since holds them, with the
+ * catching-up note at the top (also after 20 s of ill health, design 10).
+ * The gated mount asks for the first page again, joining one in flight. Once
+ * the account is confirmed the list lifts itself: at the top it refreshes
+ * from the top, scrolled down it offers the "Refresh" pill. With nothing to
+ * show, the skeleton waits at most 30 s, then the quiet row with Try again.
  */
 
 import {useEffect, useEffectEvent, useRef, useState} from 'react'
@@ -39,18 +48,31 @@ import {RefreshPill} from '#/screens/Notifications/components/RefreshPill'
 import {atoms as a, useTheme} from '#/alf'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+import {isTransientPrismError} from '#/horizon/private/api/transient'
 import {usePrismFeatureForWrite} from '#/horizon/private/features-hooks'
+import {isPageDegraded} from '#/horizon/private/feed/degraded'
+import {useEmptyWaitCapped, useLoadGate} from '#/horizon/private/load-gate'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
-import {type PrivateNotificationsTab} from '#/horizon/private/notifications/page'
+import {
+  gateNotificationPages,
+  notificationPrivateUris,
+} from '#/horizon/private/notifications/busy'
+import {
+  type PrivateNotificationsPage,
+  type PrivateNotificationsTab,
+} from '#/horizon/private/notifications/page'
 import {
   usePrivateNotificationsQuery,
   usePrivateUnreadCheck,
 } from '#/horizon/private/notifications/query'
 import {
   isPrivateRefreshPillVisible,
+  privateNotificationsQueryKey,
   refreshPrivateNotifications,
 } from '#/horizon/private/notifications/refresh'
 import {markPrivateNotificationsSeen} from '#/horizon/private/notifications/unread'
+import {ListUnavailable} from '#/horizon/private/render/ListUnavailable'
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 
 type Row =
   | {type: 'section'; key: string; section: 'today' | 'earlier'}
@@ -58,6 +80,7 @@ type Row =
   | {type: 'loading'; key: string}
   | {type: 'empty'; key: string}
   | {type: 'error'; key: string}
+  | {type: 'unavailable'; key: string}
   | {type: 'loadMoreError'; key: string}
 
 /**
@@ -102,7 +125,7 @@ export function PrivateNotificationsList({
   const markedAt = useRef<number | undefined>(undefined)
 
   const {
-    data,
+    data: queryData,
     isFetched,
     isFetching,
     isError,
@@ -111,7 +134,48 @@ export function PrivateNotificationsList({
     isFetchingNextPage,
     fetchNextPage,
     refetch,
+    status,
   } = usePrivateNotificationsQuery({tab})
+
+  // The load gate (busy design 6.7, 4.1), after the query so its fetch is joined.
+  const did = source?.did
+  const queryKey = privateNotificationsQueryKey(did ?? '', tab)
+  const isScrolledDown = useRef(false)
+  const [liftMark, setLiftMark] = useState<number | undefined>(undefined)
+  const gate = useLoadGate<{pages: PrivateNotificationsPage[]}>(
+    did,
+    queryKey,
+    raw =>
+      raw.pages.flatMap(page =>
+        page.notifications.flatMap(notificationPrivateUris),
+      ),
+    {
+      hiddenOf: (raw, since) =>
+        gateNotificationPages(raw.pages, did, since).hidden,
+      refreshFromTop: () => {
+        if (!did) return
+        gate.restart()
+        void refreshPrivateNotifications(queryClient, did, tab)
+      },
+      isAtTop: () => !isScrolledDown.current,
+      onScrolledDownLift: () => setLiftMark(Date.now()),
+      trimmedOf: raw => isPageDegraded(raw.pages[0]),
+    },
+  )
+  const gated = queryData
+    ? gateNotificationPages(
+        queryData.pages as PrivateNotificationsPage[],
+        did,
+        gate.loadSince,
+      )
+    : undefined
+  const data =
+    queryData && gated && gated.hidden > 0
+      ? {...queryData, pages: gated.pages}
+      : queryData
+  const capped = useEmptyWaitCapped(
+    !queryData && status === 'pending' && isFetching,
+  )
 
   const top = data?.pages[0]
   const topRequestedAt = top?.requestedAt
@@ -142,6 +206,8 @@ export function PrivateNotificationsList({
   const loadLatest = () => {
     listRef.current?.scrollToOffset({animated: IS_NATIVE, offset: 0})
     if (!source) return
+    gate.restart()
+    setLiftMark(undefined)
     void refreshPrivateNotifications(queryClient, source.did, tab)
   }
   const onSoftReset = useEffectEvent(loadLatest)
@@ -156,6 +222,7 @@ export function PrivateNotificationsList({
     unread,
     top,
     isFetchingTop: isFetching && !isFetchingNextPage,
+    stale: liftMark,
   })
   // The private pills don't hide on scroll, so the pill stays beneath them
   const pillTitleHeight = useSharedValue(0)
@@ -165,11 +232,21 @@ export function PrivateNotificationsList({
     isFetched && !isError && notifications.length === 0 && !hasNextPage
 
   let rows: Row[]
-  if (notifications.length === 0) {
+  // Every group hidden by the gate, with no fetch to bring them: the quiet row.
+  const allHidden =
+    !!gated && gated.hidden > 0 && notifications.length === 0 && !isFetching
+  if (capped || allHidden || (isError && isTransientPrismError(error))) {
+    if (notifications.length === 0) {
+      rows = [{type: 'unavailable', key: 'unavailable'}]
+    } else {
+      rows = buildPrivateRows(notifications)
+      rows.push({type: 'loadMoreError', key: 'loadMoreError'})
+    }
+  } else if (notifications.length === 0) {
     rows = [
       isError
         ? {type: 'error', key: 'error'}
-        : isEmpty
+        : isEmpty && !(gated && gated.hidden > 0)
           ? {type: 'empty', key: 'empty'}
           : {type: 'loading', key: 'loading'},
     ]
@@ -180,6 +257,8 @@ export function PrivateNotificationsList({
 
   const onRefresh = async () => {
     setIsPTRing(true)
+    gate.restart()
+    setLiftMark(undefined)
     try {
       await refetch()
     } catch (err) {
@@ -233,6 +312,8 @@ export function PrivateNotificationsList({
                   </Text>
                 </View>
               )
+            case 'unavailable':
+              return <ListUnavailable queryKey={queryKey} />
             case 'error':
               return (
                 <ErrorMessage
@@ -258,6 +339,12 @@ export function PrivateNotificationsList({
         }
         refreshing={isPTRing}
         onRefresh={() => void onRefresh()}
+        onScrolledDownChange={(down: boolean) => {
+          isScrolledDown.current = down
+        }}
+        ListHeaderComponent={
+          <CatchingUpNote hidden={gate.hidden} illHealth />
+        }
         onEndReached={() => void onEndReached()}
         onEndReachedThreshold={2}
         contentContainerStyle={{paddingBottom: 200}}

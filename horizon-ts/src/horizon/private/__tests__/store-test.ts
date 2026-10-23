@@ -7,6 +7,7 @@ import {
   applyPrivatePostAudience,
   AUDIENCE_PIN_MS,
   clearPrivateStores,
+  dropAbsentPendingPost,
   getPendingPost,
   getPrivatePostFacts,
   PENDING_TTL_MS,
@@ -194,7 +195,7 @@ describe('pending phases (2K design PA-28 step 3, T-23)', () => {
     }
   }
 
-  it('sending and failed entries survive 11 minutes; a written one lapses after PENDING_TTL_MS', () => {
+  it('every entry survives 11 minutes; a written one stays past PENDING_TTL_MS until the PDS says it is gone (busy 6.6)', () => {
     const start = Date.now()
     const now = jest.spyOn(Date, 'now')
     now.mockReturnValue(start)
@@ -204,6 +205,9 @@ describe('pending phases (2K design PA-28 step 3, T-23)', () => {
     now.mockReturnValue(start + 11 * 60_000)
     expect(getPendingPost(privateUri('3ksending222'), DID)).toBeDefined()
     expect(getPendingPost(privateUri('3kfailed2222'), DID)).toBeDefined()
+    expect(getPendingPost(privateUri('3kwritten222'), DID)).toBeDefined()
+    // Only the PDS's RecordNotFound drops it (the confirmation loop).
+    dropAbsentPendingPost(privateUri('3kwritten222'))
     expect(getPendingPost(privateUri('3kwritten222'), DID)).toBeUndefined()
   })
 

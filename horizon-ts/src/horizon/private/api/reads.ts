@@ -46,6 +46,7 @@ import {
   PrivateDeadlineError,
   PrivateWaiterError,
 } from '#/horizon/private/api/transient'
+import {startCatchUp} from '#/horizon/private/catch-up'
 import {noteServed, servedUrisOf} from '#/horizon/private/known'
 import {
   noteQuoteVerdicts,
@@ -208,6 +209,8 @@ async function sendRead<T>(
   request: PrismRead<T>,
   page: AbortSignal | undefined,
 ): Promise<Result<T>> {
+  // The catch-up watches health from the first private read on (2.4).
+  startCatchUp()
   const seq = nextAnswerSeq(did)
   try {
     const body = await withCallDeadline(
@@ -468,12 +471,25 @@ export async function getPrivateTimeline(
   prism: Client,
   params: {limit?: number; cursor?: string},
 ): Promise<{feed: PrivatePostView[]; cursor?: string}> {
-  const res = await reportedPrismCall(nearhorizon.privateGetTimeline, {
+  return (await getPrivateTimelineAnswered(prism, params)).body
+}
+
+/**
+ * {@link getPrivateTimeline} with its answer, for the merges, which mark a
+ * page degraded from it (design 6.4, 6.5).
+ */
+export async function getPrivateTimelineAnswered(
+  prism: Client,
+  params: {limit?: number; cursor?: string},
+): Promise<{
+  body: {feed: PrivatePostView[]; cursor?: string}
+  answer: AnswerContext
+}> {
+  return reportedPrismCall(nearhorizon.privateGetTimeline, {
     params,
     send: signal =>
       prism.call(nearhorizon.privateGetTimeline, params, {signal}),
   })
-  return res.body
 }
 
 /**
@@ -499,13 +515,31 @@ export async function getPrivateAuthorFeed(
     filter?: PrivateAuthorFeedFilter
   },
 ): Promise<{feed: PrivatePostView[]; cursor?: string}> {
+  return (await getPrivateAuthorFeedAnswered(prism, params)).body
+}
+
+/**
+ * {@link getPrivateAuthorFeed} with its answer, for the profile feeds, which
+ * mark a page degraded from it (design 6.4).
+ */
+export async function getPrivateAuthorFeedAnswered(
+  prism: Client,
+  params: {
+    actor: string
+    limit?: number
+    cursor?: string
+    filter?: PrivateAuthorFeedFilter
+  },
+): Promise<{
+  body: {feed: PrivatePostView[]; cursor?: string}
+  answer: AnswerContext
+}> {
   const request = {...params, actor: params.actor as DidString}
-  const res = await reportedPrismCall(nearhorizon.privateGetAuthorFeed, {
+  return reportedPrismCall(nearhorizon.privateGetAuthorFeed, {
     params: request,
     send: signal =>
       prism.call(nearhorizon.privateGetAuthorFeed, request, {signal}),
   })
-  return res.body
 }
 
 /**
@@ -576,12 +610,25 @@ export async function listPrivateNotifications(
   prism: Client,
   params: {reasons?: string[]; limit?: number; cursor?: string},
 ): Promise<{notifications: Items; cursor?: string; seenAt?: string}> {
-  const res = await reportedPrismCall(nearhorizon.privateListNotifications, {
+  return (await listPrivateNotificationsAnswered(prism, params)).body
+}
+
+/**
+ * {@link listPrivateNotifications} with its answer, for the page, which is
+ * marked degraded from it (design 6.7).
+ */
+export async function listPrivateNotificationsAnswered(
+  prism: Client,
+  params: {reasons?: string[]; limit?: number; cursor?: string},
+): Promise<{
+  body: {notifications: Items; cursor?: string; seenAt?: string}
+  answer: AnswerContext
+}> {
+  return reportedPrismCall(nearhorizon.privateListNotifications, {
     params,
     send: signal =>
       prism.call(nearhorizon.privateListNotifications, params, {signal}),
   })
-  return res.body
 }
 
 /**

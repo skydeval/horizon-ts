@@ -21,10 +21,12 @@ import {
   toFeedViewPosts,
 } from '#/horizon/private/adapt/feed-view'
 import {
-  getPrivateAuthorFeed,
+  type AnswerContext,
+  getPrivateAuthorFeedAnswered,
   getPrivatePosts,
 } from '#/horizon/private/api/reads'
 import {PrivateAuthorMergeFeedAPI} from '#/horizon/private/feed/author-merge'
+import {degradedFlags} from '#/horizon/private/feed/degraded'
 import {privateTabDid} from '#/horizon/private/feed/keys'
 import {
   LIKE_RECORDS_PAGE_LIMIT,
@@ -67,13 +69,18 @@ export class PrivateAuthorFeedAPI implements FeedAPI {
     cursor: string | undefined
     limit: number
   }): Promise<FeedAPIResponse> {
+    const answers: AnswerContext[] = []
     // A short or empty page with a cursor is followed (feed/paging.ts).
     const page = await fetchUntilItems(async pageCursor => {
-      const res = await getPrivateAuthorFeed(this.source.prism, {
-        actor: this.actor,
-        limit: Math.min(limit, AUTHOR_FEED_MAX),
-        cursor: pageCursor,
-      })
+      const {body: res, answer} = await getPrivateAuthorFeedAnswered(
+        this.source.prism,
+        {
+          actor: this.actor,
+          limit: Math.min(limit, AUTHOR_FEED_MAX),
+          cursor: pageCursor,
+        },
+      )
+      answers.push(answer)
       return {items: res.feed, cursor: res.cursor}
     }, cursor)
     const inputs: AdaptInput[] = page.items.map(view => ({view}))
@@ -89,7 +96,8 @@ export class PrivateAuthorFeedAPI implements FeedAPI {
       inputs.unshift(...pending)
     }
     const feed = await toFeedViewPosts(inputs, this.source)
-    return {cursor: page.cursor, feed}
+    // A degraded answer marks the page (6.4); a failure is rethrown (5).
+    return {cursor: page.cursor, feed, ...degradedFlags(answers, false)}
   }
 }
 

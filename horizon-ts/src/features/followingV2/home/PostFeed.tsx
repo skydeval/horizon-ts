@@ -74,6 +74,10 @@ import {
   isStatusValidForViewers,
   useLiveNowConfig,
 } from '#/features/liveNow'
+// HORIZON: Following's load gate while prism is busy
+import {useFollowingBusy} from '#/horizon/private/feed/busy-view'
+// HORIZON: Following's load gate while prism is busy
+import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {GapRow} from './GapRow'
@@ -348,7 +352,8 @@ let PostFeed = ({
     [enabled, ignoreFilterFor],
   )
   const {
-    data: feedData,
+    // HORIZON: the query's data, gated below (prism busy design 6.5)
+    data: queryFeedData,
     isFetching,
     isFetched,
     isError,
@@ -364,6 +369,19 @@ let PostFeed = ({
     isRefreshing,
     isPending: isRefreshPending,
   } = usePostFeedRefresh(feed, feedParams)
+  // HORIZON: Following's load gate, its lift and the note (prism busy design 6.5) (start)
+  const privateSource = usePrivateFeedSource()
+  const busy = useFollowingBusy({
+    enabled: feed === 'following' && !!privateSource,
+    queryKey: RQKEY(feed, feedParams),
+    data: queryFeedData,
+    isScrolledDown: () => isScrolledDownRef.current,
+    refreshToTop: () => refreshToTop(),
+    onHasNew,
+    Header: ListHeaderComponent,
+  })
+  const feedData = busy.data
+  // HORIZON: Following's load gate, its lift and the note (prism busy design 6.5) (end)
   const samples = useSavedFeedSamples({
     enabled: enabled !== false && feed === 'following',
     pages: feedData?.pages,
@@ -414,7 +432,11 @@ let PostFeed = ({
   const settleAtTop = useSettleAtTop(feed, feedParams, {
     enabled: isAnchored && enabled !== false,
     // At the newest post, nothing is new to the reader any more.
-    onRestAtTop: () => onHasNew?.(false),
+    onRestAtTop: () => {
+      onHasNew?.(false)
+      // HORIZON: a lift scrolled down owes a refresh from the top
+      busy.onRestAtTop()
+    },
   })
   /** The list's scroll offset, which its scroll handlers keep. */
   const listOffsetY = useSharedValue(0)
@@ -432,6 +454,9 @@ let PostFeed = ({
     })
   })
   const refreshToTop = async () => {
+    // HORIZON: a refresh from the top is a new load for the gate, and owes nothing
+    busy.restart()
+    busy.clearPending()
     const page = await refresh()
     if (!page || !isAnchored) {
       return
@@ -1448,7 +1473,8 @@ let PostFeed = ({
           keyExtractor={(item: FeedRow) => item.key}
           renderItem={renderItem}
           ListFooterComponent={FeedFooter}
-          ListHeaderComponent={ListHeaderComponent}
+          // HORIZON: the catching-up note in the header slot (prism busy design 6.5)
+          ListHeaderComponent={busy.Header}
           refreshing={isPTRing}
           onRefresh={() => void onRefresh()}
           headerOffset={headerOffset}

@@ -568,8 +568,70 @@ export function hold(
 ): void {
   if (!did) return
   const registry = registryOf(did)
-  registry.holds.set(holdKey(queryKey, uri), {queryKey, uri})
-  if (qc) invalidateWhenSettled(qc, queryKey)
+  const key = holdKey(queryKey, uri)
+  const fresh = !registry.holds.has(key)
+  registry.holds.set(key, {queryKey, uri})
+  if (qc) {
+    invalidateWhenSettled(qc, queryKey)
+    // A hold with no URI ends at the query's next 2xx (HR2-L3); a URI's on its serve.
+    if (uri === undefined && fresh) releaseOnNextSuccess(qc, queryKey, did)
+  }
+}
+
+/**
+ * Drop the URI-less hold on `queryKey` once a fetch that starts after the
+ * one that made it succeeds. That fetch may itself succeed (`keepOrHold`'s
+ * does) and must not end it: the watch arms on the next turn, once that fetch
+ * is idle, and then needs a fetch of its own followed by its success (a
+ * manual `setQueryData` is not a 2xx).
+ */
+function releaseOnNextSuccess(qc: QueryClient, queryKey: QueryKey, did: string) {
+  const cache = qc.getQueryCache()
+  const query = cache.find({queryKey, exact: true})
+  if (!query) return
+  const registry = registryOf(did)
+  let armed: 'no' | 'idle' | 'yes' = 'no'
+  let fetched = false
+  const unsubscribe = cache.subscribe(event => {
+    if (event.query !== query) return
+    if (event.type === 'removed' || registries.get(did) !== registry) {
+      unsubscribe()
+      return
+    }
+    if (!registry.holds.has(holdKey(queryKey, undefined))) {
+      unsubscribe()
+      return
+    }
+    if (armed === 'idle' && query.state.fetchStatus === 'idle') armed = 'yes'
+    if (armed !== 'yes' || event.type !== 'updated') return
+    if (event.action.type === 'fetch') fetched = true
+    if (event.action.type === 'success' && fetched) {
+      unsubscribe()
+      registry.holds.delete(holdKey(queryKey, undefined))
+      notify()
+    }
+  })
+  setTimeout(() => {
+    armed = query.state.fetchStatus === 'idle' ? 'yes' : 'idle'
+  }, 0)
+}
+
+/**
+ * Drop every hold of `did` that has no URI (2.4, HR2-L3): the catch-up calls
+ * it once it has refetched them, so a query held during an outage is not held
+ * for the rest of the session. A URI's hold still ends on its serve.
+ */
+export function releaseUnspecificHolds(did: string): void {
+  const registry = registries.get(did)
+  if (!registry) return
+  let changed = false
+  for (const [key, held] of registry.holds) {
+    if (held.uri === undefined) {
+      registry.holds.delete(key)
+      changed = true
+    }
+  }
+  if (changed) notify()
 }
 
 /** The held queries of `did` (2.4). */

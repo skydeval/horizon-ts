@@ -10,6 +10,12 @@
  *
  * Nothing is asked for a reader who is not a signed-in member, or while
  * prism does not list `private.interactions`: the list is empty.
+ *
+ * While prism is busy (prism busy design 4.1, BR11-N6) each page carries its
+ * completion stamp (`fetchedAt`), and the lists are gated: every row of a
+ * likes or reposts list whose subject is another author's private post, none
+ * under the reader's own; the quotes list's private quoting posts of other
+ * authors.
  */
 
 import {type AtUriString} from '@atproto/syntax'
@@ -28,6 +34,7 @@ import {
 } from '#/horizon/private/api/reads'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
 import {memberClients} from '#/horizon/private/links'
+import {fetchStamp, type PageAccess} from '#/horizon/private/load-gate'
 import {resolvePrivateQuotes} from '#/horizon/private/quotes/resolve'
 import {privateInteractionsServed} from '#/horizon/private/server-support'
 import {type CurrentClients} from '#/horizon/routing/current-clients'
@@ -209,4 +216,54 @@ export async function fetchPrivateQuotesPage(
   }
   await resolvePrivateQuotes(posts)
   return {uri: uri as AtUriString, cursor: loaded.cursor, posts}
+}
+
+/** A page of a private list with its completion stamp (4.1). */
+export function stampListPage<P extends object>(page: P): P {
+  return {...page, fetchedAt: fetchStamp()}
+}
+
+function stampOf(page: object): number | undefined {
+  const stamp = (page as {fetchedAt?: unknown}).fetchedAt
+  return typeof stamp === 'number' ? stamp : undefined
+}
+
+type LikesPage = app.bsky.feed.getLikes.$OutputBody
+type RepostsPage = app.bsky.feed.getRepostedBy.$OutputBody
+type QuotesPage = app.bsky.feed.getQuotes.$OutputBody
+
+/**
+ * How the gate reads a likes list (BR11-N6): every row stands for the
+ * subject, so each is gated when the subject is another author's private
+ * post.
+ */
+export function likesListAccess(
+  subjectUri: string | undefined,
+): PageAccess<LikesPage, Like> {
+  return {
+    stampOf,
+    itemsOf: page => page.likes,
+    withItems: (page, likes) => ({...page, likes}),
+    urisOf: () => (subjectUri ? [subjectUri] : []),
+  }
+}
+
+/** How the gate reads a reposts list (BR11-N6), as {@link likesListAccess}. */
+export function repostsListAccess(
+  subjectUri: string | undefined,
+): PageAccess<RepostsPage, ProfileView> {
+  return {
+    stampOf,
+    itemsOf: page => page.repostedBy,
+    withItems: (page, repostedBy) => ({...page, repostedBy}),
+    urisOf: () => (subjectUri ? [subjectUri] : []),
+  }
+}
+
+/** How the gate reads a quotes list: each row by its quoting post. */
+export const quotesListAccess: PageAccess<QuotesPage, PostView> = {
+  stampOf,
+  itemsOf: page => page.posts,
+  withItems: (page, posts) => ({...page, posts}),
+  urisOf: post => [post.uri],
 }

@@ -10,6 +10,14 @@
  * AppView's mute and block state. The page is grouped on the client by the
  * stock grouping (D2-85's limits) and its posts read through prism (private
  * URIs) and the public AppView (`app.bsky.feed.post` URIs).
+ *
+ * While prism is busy (prism busy design 6.7): each private post the read
+ * left out asks the registry. The reader's own suspect post is filled from
+ * its cached view (labelled "Syncing"); another author's group drops, as
+ * stock drops a group it cannot hydrate. The page is `privateDegraded` when a
+ * post was suspect, the read failed transiently or an answer carried
+ * `degraded: true`, and carries its completion stamp (`fetchedAt`) for the
+ * load gate; `requestedAt` stays the send time for marking seen.
  */
 
 import {logger} from '#/logger'
@@ -24,11 +32,35 @@ import {
   type PrivateSource,
 } from '#/horizon/private/adapt/feed-view'
 import {fetchPublicAuthors} from '#/horizon/private/adapt/profiles'
-import {listPrivateNotifications} from '#/horizon/private/api/reads'
+import {
+  type AnswerContext,
+  listPrivateNotificationsAnswered,
+} from '#/horizon/private/api/reads'
+import {isTransientPrismError} from '#/horizon/private/api/transient'
+import {
+  degradedFlags,
+  type PrivateDegradedFlags,
+} from '#/horizon/private/feed/degraded'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
-import {readPrivatePostViews} from '#/horizon/private/links'
+import {
+  findCachedPrivatePostView,
+  isOwnPrivateUri,
+  noteOmissions,
+} from '#/horizon/private/known'
+import {readPrivatePostViewsAnswered} from '#/horizon/private/links'
+import {fetchStamp} from '#/horizon/private/load-gate'
 import {isPrivatePostUri} from '#/horizon/private/uri'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {app} from '#/lexicons'
+
+/**
+ * A page of the Private view: the stock grouped page with its completion
+ * stamp and, while prism is busy, its degraded flag (6.7).
+ */
+export type PrivateNotificationsPage = LoadedGroupedNotificationsPage & {
+  /** When the page's fetch completed (the load gate's stamp, 4.1). */
+  fetchedAt?: number
+} & PrivateDegradedFlags
 
 /**
  * The Private view's pills. Activity is shown only while prism lists
@@ -87,26 +119,70 @@ export function toNotification(
   return undefined
 }
 
+type PostView = app.bsky.feed.defs.PostView
+
+/** What the page's reads said about the private side (6.7). */
+type PageRead = {answers: AnswerContext[]; incomplete: boolean}
+
+/**
+ * The reader's own private posts the read left out, filled from their cached
+ * views and tagged as such (6.7): another author's are never filled (BR-5).
+ */
+function ownFromCache(
+  did: string,
+  uris: readonly string[],
+): Map<string, PostView> {
+  const qc = getCurrentClients()?.queryClient
+  const out = new Map<string, PostView>()
+  if (!qc) return out
+  for (const uri of uris) {
+    if (!isOwnPrivateUri(uri, did)) continue
+    const view = findCachedPrivatePostView(qc, uri)
+    if (view) out.set(uri, {...view, horizonFromCache: Date.now()} as PostView)
+  }
+  return out
+}
+
 /**
  * The page's post reader: private posts through prism, public posts through
- * the public AppView; any other URI has no view.
+ * the public AppView; any other URI has no view. A private post left out is
+ * judged by the registry (6.7): the reader's own suspect is filled from its
+ * cached view; a transient failure of the read leaves the private side to
+ * the reader's own cached posts and marks the page degraded.
  */
-function privatePageReader(source: PrivateSource): PostReader {
+function privatePageReader(source: PrivateSource, read: PageRead): PostReader {
   return async uris => {
     const privateUris = uris.filter(uri => isPrivatePostUri(uri))
     const publicUris = uris.filter(
       uri => !isPrivatePostUri(uri) && uri.includes('/app.bsky.feed.post/'),
     )
+    const readPrivate = async (): Promise<Map<string, PostView>> => {
+      if (!privateUris.length) return new Map()
+      try {
+        const {views, answer} = await readPrivatePostViewsAnswered(
+          {prismClient: source.prism, appviewClient: source.appview},
+          privateUris,
+        )
+        read.answers.push(answer)
+        const verdicts = noteOmissions(answer, privateUris, views.keys())
+        const suspects: string[] = []
+        verdicts.forEach((verdict, uri) => {
+          if (verdict !== 'suspect') return
+          read.incomplete = true
+          suspects.push(uri)
+        })
+        return new Map([...views, ...ownFromCache(source.did, suspects)])
+      } catch (error) {
+        if (!isTransientPrismError(error)) throw error
+        read.incomplete = true
+        return ownFromCache(source.did, privateUris)
+      }
+    }
     const [privatePosts, publicPosts] = await Promise.all([
-      privateUris.length
-        ? readPrivatePostViews(
-            {prismClient: source.prism, appviewClient: source.appview},
-            privateUris,
-          )
-        : Promise.resolve(new Map<string, app.bsky.feed.defs.PostView>()),
+      readPrivate(),
       publicUris.length
         ? fetchPublicPosts(source.appview, publicUris)
-        : Promise.resolve(new Map<string, app.bsky.feed.defs.PostView>()),
+        : Promise.resolve(new Map<string, PostView>()),
     ])
     return new Map([...privatePosts, ...publicPosts])
   }
@@ -129,14 +205,19 @@ export async function fetchPrivateNotificationsPage({
   cursor: string | undefined
   viewerDid: string | undefined
   requestedAt: number
-}): Promise<LoadedGroupedNotificationsPage> {
+}): Promise<PrivateNotificationsPage> {
   let seenAt: string | undefined
+  const read: PageRead = {answers: [], incomplete: false}
   const loaded = await fetchUntilItems<Notification>(async next => {
-    const page = await listPrivateNotifications(source.prism, {
-      limit: PRIVATE_NOTIFICATIONS_PAGE_SIZE,
-      cursor: next,
-      reasons: reasonsForTab(tab),
-    })
+    const {body: page, answer} = await listPrivateNotificationsAnswered(
+      source.prism,
+      {
+        limit: PRIVATE_NOTIFICATIONS_PAGE_SIZE,
+        cursor: next,
+        reasons: reasonsForTab(tab),
+      },
+    )
+    read.answers.push(answer)
     seenAt ??= page.seenAt
     return {
       items: page.notifications
@@ -157,13 +238,18 @@ export async function fetchPrivateNotificationsPage({
     return {...n, author: {...n.author, ...rest}}
   })
 
-  return buildGroupedPage({
+  const page = await buildGroupedPage({
     client: source.appview,
     notifications,
-    readPosts: privatePageReader(source),
+    readPosts: privatePageReader(source, read),
     cursor: loaded.cursor,
     seenAt,
     viewerDid,
     requestedAt,
   })
+  return {
+    ...page,
+    fetchedAt: fetchStamp(),
+    ...degradedFlags(read.answers, read.incomplete),
+  }
 }

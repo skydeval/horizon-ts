@@ -44,6 +44,12 @@ import {
   privateQueryFn,
   privateRetryFor,
 } from '#/horizon/private/api/transient'
+// HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
+import {useBusyFeedQuery, useFeedGate} from '#/horizon/private/feed/busy'
+// HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
+import {carryTopFeedPage} from '#/horizon/private/feed/carry'
+// HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
+import {anyPageDegraded, pageFlagsOf} from '#/horizon/private/feed/degraded'
 // HORIZON: private posts on profile feeds
 import {privateTabDid, withPrivateKey} from '#/horizon/private/feed/keys'
 // HORIZON: private posts on profile feeds
@@ -171,6 +177,8 @@ export function usePostFeedQuery(
   const client = useAppviewClient()
   // HORIZON: a member's private source, for the Private tab and the Posts and Replies merges
   const privateSource = usePrivateFeedSource()
+  // HORIZON: the load gate of the section rendering this feed, if any
+  const feedGate = useFeedGate()
   const lastRun = useRef<{
     data: InfiniteData<FeedPageUnselected>
     args: typeof selectArgs
@@ -204,11 +212,15 @@ export function usePostFeedQuery(
     RQPageParam
   >({
     enabled,
-    staleTime: STALE.INFINITY,
+    // HORIZON: stale while a page is degraded (prism busy design 6.4)
+    staleTime: query =>
+      anyPageDegraded(query.state.data?.pages) ? 0 : STALE.INFINITY,
     queryKey: RQKEY(feedDesc, params),
     async queryFn(context) {
       const {pageParam} = context
       logger.debug('usePostFeedQuery', {feedDesc, cursor: pageParam?.cursor})
+      // HORIZON: a fetch from the top is a new load for the gate (prism busy design 4.1)
+      if (!pageParam) feedGate?.restart()
       const {api, cursor} = pageParam
         ? pageParam
         : {
@@ -250,12 +262,15 @@ export function usePostFeedQuery(
         )
       }
 
-      return {
+      // HORIZON: a degraded top page carries the reader's own private posts (start)
+      return carryTopFeedPage(context, {
         api,
         cursor: res.cursor,
         feed: res.feed,
         fetchedAt: Date.now(),
-      }
+        ...pageFlagsOf(res),
+      })
+      // HORIZON: a degraded top page carries the reader's own private posts (end)
     },
     // HORIZON: the Private tab is retried while prism is busy
     ...privateRetryFor(!!privateTabDid(feedDesc)),
@@ -405,7 +420,8 @@ export function usePostFeedQuery(
   }
   useAutoPagination(query, itemCount, MIN_POSTS)
 
-  return query
+  // HORIZON: the load gate and the wait cap (prism busy design 4.1, 5)
+  return useBusyFeedQuery(query, {feedDesc, gate: feedGate})
 }
 
 export async function pollLatest(page: FeedPage | undefined) {

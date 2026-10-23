@@ -473,6 +473,8 @@ let SearchScreenPostResults = ({
                 privateSearch.onEndReached()
                 onEndReached()
               }}
+              // HORIZON: a refresh the private part's lift owes runs back at the top
+              onScrolledDownChange={privateSearch.onScrolledDownChange}
               // HORIZON: the private part's note heads the merged list
               ListHeaderComponent={
                 <PrivateSearchNote state={privateSearch.state} />

@@ -20,6 +20,7 @@ import {type QueryClient} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
 import {PrivateWaiterError} from '#/horizon/private/api/transient'
+import {registerCatchUpStep} from '#/horizon/private/catch-up'
 import {
   answeredSince,
   heldQueries,
@@ -208,6 +209,13 @@ export function watchQuotes() {
   if (watching) return
   watching = true
   subscribeRegistry(scheduleQuoteTimer)
+  // The catch-up reads every held quote in one batch (2.4).
+  registerCatchUpStep(did => {
+    const uris = heldQueries(did)
+      .filter(held => held.queryKey[0] === 'horizon-private-quote' && held.uri)
+      .map(held => held.uri as string)
+    if (uris.length > 0) void readQuotes(did, uris)
+  })
   const first = getCurrentDid()
   let confirmed = new Map<string, boolean>(
     first ? [[first, isPrismConfirmed(first)]] : [],

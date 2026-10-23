@@ -21,7 +21,10 @@ import {
   type PrivateSource,
   toFeedViewPosts,
 } from '#/horizon/private/adapt/feed-view'
-import {getPrivateTimeline} from '#/horizon/private/api/reads'
+import {
+  type AnswerContext,
+  getPrivateTimelineAnswered,
+} from '#/horizon/private/api/reads'
 import {
   decodeMergeCursor,
   encodeMergeCursor,
@@ -29,6 +32,7 @@ import {
   isMergeCursor,
   type MergeState,
 } from '#/horizon/private/feed/cursor'
+import {degradedFlags} from '#/horizon/private/feed/degraded'
 import {
   insertPending,
   mergeStep,
@@ -91,6 +95,9 @@ class PrivateTimelineFeedAPI implements FeedAPI {
       : decodeMergeCursor(cursor)
 
     let startCursor: string | undefined
+    // The private side's answers, and whether its refill failed or was skipped (6.5).
+    const answers: AnswerContext[] = []
+    let incomplete = state.priv.failed
     const refillPublic = async () => {
       const pub = state.pub
       if (pub.buf.length > 0 || pub.done) return
@@ -124,10 +131,11 @@ class PrivateTimelineFeedAPI implements FeedAPI {
           // A short or empty page with a cursor is followed (feed/paging.ts).
           const page = await withDeadline(
             fetchUntilItems(async pageCursor => {
-              const res = await getPrivateTimeline(this.source.prism, {
-                limit: PRIVATE_PAGE_LIMIT,
-                cursor: pageCursor,
-              })
+              const {body: res, answer} = await getPrivateTimelineAnswered(
+                this.source.prism,
+                {limit: PRIVATE_PAGE_LIMIT, cursor: pageCursor},
+              )
+              answers.push(answer)
               return {items: res.feed, cursor: res.cursor}
             }, priv.cursor ?? undefined),
             PRIVATE_DEADLINE_MS,
@@ -141,6 +149,7 @@ class PrivateTimelineFeedAPI implements FeedAPI {
            * top; buffered private items are still emitted.
            */
           priv.failed = true
+          incomplete = true
           logger.warn('private timeline unavailable; Following continues', {
             safeMessage: error,
           })
@@ -161,6 +170,8 @@ class PrivateTimelineFeedAPI implements FeedAPI {
       },
     )
 
+    // A degraded page is marked so (6.5); the flag never reaches the tuners.
+    const flags = degradedFlags(answers, incomplete)
     if (drained) {
       if (state.tail) {
         return {
@@ -168,11 +179,12 @@ class PrivateTimelineFeedAPI implements FeedAPI {
           cursor: state.tail.cursor,
           startCursor,
           source: 'discover',
+          ...flags,
         }
       }
-      return {feed, cursor: undefined, startCursor}
+      return {feed, cursor: undefined, startCursor, ...flags}
     }
-    return {feed, cursor: encodeMergeCursor(state), startCursor}
+    return {feed, cursor: encodeMergeCursor(state), startCursor, ...flags}
   }
 }
 

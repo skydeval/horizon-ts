@@ -28,7 +28,8 @@ import {
   toFeedViewPosts,
 } from '#/horizon/private/adapt/feed-view'
 import {
-  getPrivateAuthorFeed,
+  type AnswerContext,
+  getPrivateAuthorFeedAnswered,
   type PrivateAuthorFeedFilter,
 } from '#/horizon/private/api/reads'
 import {
@@ -38,6 +39,7 @@ import {
   isMergeCursor,
   type MergeState,
 } from '#/horizon/private/feed/cursor'
+import {degradedFlags} from '#/horizon/private/feed/degraded'
 import {
   insertPending,
   mergeStep,
@@ -173,6 +175,9 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
     const state: MergeState = isFirst
       ? initialMergeState()
       : decodeMergeCursor(cursor)
+    // The private side's answers, and whether its refill failed or was skipped (6.4).
+    const answers: AnswerContext[] = []
+    let incomplete = state.priv.failed
 
     const refillPublic = async () => {
       const pub = state.pub
@@ -194,14 +199,18 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
         const res = await withDeadline(
           fetchUntilItems(
             async pageCursor => {
-              const page = await getPrivateAuthorFeed(this.source.prism, {
-                actor: this.actor,
-                limit: AUTHOR_MERGE_PAGE_LIMIT,
-                cursor: pageCursor,
-                ...(prismFilters(this.filter)
-                  ? {filter: STOCK_FILTER[this.filter]}
-                  : {}),
-              })
+              const {body: page, answer} = await getPrivateAuthorFeedAnswered(
+                this.source.prism,
+                {
+                  actor: this.actor,
+                  limit: AUTHOR_MERGE_PAGE_LIMIT,
+                  cursor: pageCursor,
+                  ...(prismFilters(this.filter)
+                    ? {filter: STOCK_FILTER[this.filter]}
+                    : {}),
+                },
+              )
+              answers.push(answer)
               return {items: page.feed, cursor: page.cursor}
             },
             priv.cursor ?? undefined,
@@ -222,6 +231,7 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
       } catch (error) {
         // Public-only until the tab is refreshed from the top.
         priv.failed = true
+        incomplete = true
         logger.warn('private author feed unavailable; the tab continues', {
           safeMessage: error,
         })
@@ -256,6 +266,11 @@ export class PrivateAuthorMergeFeedAPI implements FeedAPI {
         publicKeyOf: profilePublicKey,
       },
     )
-    return {feed, cursor: drained ? undefined : encodeMergeCursor(state)}
+    return {
+      feed,
+      cursor: drained ? undefined : encodeMergeCursor(state),
+      // A degraded page is marked so (6.4); the flag never reaches the tuners.
+      ...degradedFlags(answers, incomplete),
+    }
   }
 }

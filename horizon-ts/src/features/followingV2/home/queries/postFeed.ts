@@ -50,6 +50,17 @@ import {
   type ReasonFeedSource,
 } from '#/features/followingV2/home/api/types'
 import {type NewPostsCheckTrigger} from '#/features/followingV2/home/useNewPostsCheck'
+// HORIZON: Following while prism is busy: degraded pages and the carry
+import {
+  carryOwnPrivateItems,
+  carryTopFeedPage,
+} from '#/horizon/private/feed/carry'
+// HORIZON: Following while prism is busy: degraded pages and the carry
+import {
+  anyPageDegraded,
+  pageFlagsOf,
+  type PrivateDegradedFlags,
+} from '#/horizon/private/feed/degraded'
 // HORIZON: private posts in Following
 import {withPrivateKey} from '#/horizon/private/feed/keys'
 // HORIZON: private posts in Following
@@ -145,6 +156,10 @@ export interface FeedPageUnselected {
   source?: FeedSource
   feed: app.bsky.feed.defs.FeedViewPost[]
   fetchedAt: number
+  // HORIZON: a page whose private side could not be read in full (prism busy design 6.5)
+  privateDegraded?: PrivateDegradedFlags['privateDegraded']
+  // HORIZON: the degraded page's own misses, for the carry (prism busy design 6.5)
+  privateAnswer?: PrivateDegradedFlags['privateAnswer']
 }
 
 export interface FeedPage {
@@ -209,12 +224,17 @@ export function usePostFeedQuery(
     RQPageParam
   >({
     enabled,
-    staleTime: STALE.INFINITY,
+    // HORIZON: stale while a page is degraded (prism busy design 6.5)
+    staleTime: query =>
+      anyPageDegraded(query.state.data?.pages) ? 0 : STALE.INFINITY,
     queryKey: RQKEY(feedDesc, params),
-    queryFn({pageParam}: {pageParam: RQPageParam}) {
+    // HORIZON: a degraded top page carries the reader's own private posts (start)
+    async queryFn(context) {
+      const {pageParam} = context
       logger.debug('usePostFeedQuery', {feedDesc, cursor: pageParam?.cursor})
-      return fetchPage(pageParam)
+      return carryTopFeedPage(context, await fetchPage(pageParam))
     },
+    // HORIZON: a degraded top page carries the reader's own private posts (end)
     initialPageParam: undefined,
     getNextPageParam: lastPage =>
       lastPage.cursor
@@ -474,6 +494,8 @@ export function usePostFeedFetcher(feedDesc: FeedDescriptor) {
       source: res.source,
       feed: res.feed,
       fetchedAt: Date.now(),
+      // HORIZON: the merge's degraded flag (prism busy design 6.5)
+      ...pageFlagsOf(res),
     }
   }
 
@@ -510,7 +532,15 @@ export function usePostFeedRefresh(
     setError(undefined)
     setIsRefreshing(true)
     try {
-      const page = await fetchPage(undefined)
+      // HORIZON: a degraded new top carries the reader's own private posts (start)
+      const fetched = await fetchPage(undefined)
+      const page = fetched.privateDegraded
+        ? carryOwnPrivateItems(before?.pages, fetched, {
+            top: true,
+            answer: fetched.privateAnswer,
+          })
+        : fetched
+      // HORIZON: a degraded new top carries the reader's own private posts (end)
       const wrote = await commit(queryClient, queryKey, before, () => ({
         pages: [page],
         pageParams: [undefined],

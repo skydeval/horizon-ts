@@ -8,12 +8,19 @@ import {
 
 import {useAppviewClient} from '#/state/session'
 // HORIZON: a private post's quotes are listed by prism
-import {fetchPrivateQuotesPage} from '#/horizon/private/api/interactions'
+import {
+  fetchPrivateQuotesPage,
+  // HORIZON: a private post's quotes are gated while prism is busy
+  quotesListAccess,
+  stampListPage,
+} from '#/horizon/private/api/interactions'
 // HORIZON: a private post's quotes are retried while prism is busy
 import {
   keepOverData,
   privateRetryFor,
 } from '#/horizon/private/api/transient'
+// HORIZON: a private post's quotes are gated while prism is busy
+import {useBusyListQuery} from '#/horizon/private/list-busy'
 // HORIZON: a private post's quotes are listed by prism
 import {isPrivateRead} from '#/horizon/private/uri'
 import {app} from '#/lexicons'
@@ -60,7 +67,7 @@ export function usePostQuotesQuery(
 ) {
   const client = useAppviewClient()
 
-  return useInfiniteQuery<
+  const query = useInfiniteQuery<
     app.bsky.feed.getQuotes.$OutputBody,
     Error,
     InfiniteData<app.bsky.feed.getQuotes.$OutputBody>,
@@ -73,7 +80,9 @@ export function usePostQuotesQuery(
       // HORIZON: a private post's quotes are listed by prism
       if (isPrivateRead(resolvedUri))
         return keepOverData(context, () =>
-          fetchPrivateQuotesPage(resolvedUri!, pageParam, PAGE_SIZE),
+          fetchPrivateQuotesPage(resolvedUri!, pageParam, PAGE_SIZE).then(
+            stampListPage,
+          ),
         )
       return await client.call(app.bsky.feed.getQuotes, {
         // the enabled flag prevents this from running until resolvedUri is set
@@ -89,6 +98,12 @@ export function usePostQuotesQuery(
     getNextPageParam: lastPage => lastPage.cursor,
     enabled: !!resolvedUri && enabled,
     select: selectPostQuotes,
+  })
+  // HORIZON: a private post's quotes are gated while prism is busy
+  return useBusyListQuery(query, {
+    subjectUri: resolvedUri,
+    queryKey: RQKEY(resolvedUri || '', quoteSort),
+    access: quotesListAccess,
   })
 }
 

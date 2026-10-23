@@ -5,6 +5,10 @@
  * a load that found nothing), that nothing matched in the year it covers, or
  * that it failed (with a retry). Nothing once private results are listed and
  * nothing was left out.
+ *
+ * While prism is busy (prism busy design 4.1, 5, 10): the catching-up note
+ * above it when the load gate hid private results, and "Couldn't load private
+ * posts right now" with Try again once a first load has waited 30 s.
  */
 
 import {ActivityIndicator, View} from 'react-native'
@@ -15,11 +19,21 @@ import {Button, ButtonText} from '#/components/Button'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Text} from '#/components/Typography'
 import {type PrivateSearchState} from '#/horizon/private/search/results'
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 
 export function PrivateSearchNote({state}: {state: PrivateSearchState}) {
+  if (!state.active) return null
+  return (
+    <>
+      <CatchingUpNote hidden={state.hidden} />
+      <PrivateSearchLine state={state} />
+    </>
+  )
+}
+
+function PrivateSearchLine({state}: {state: PrivateSearchState}) {
   const t = useTheme()
   const {t: l} = useLingui()
-  if (!state.active) return null
 
   const lines: React.ReactNode[] = []
   let action: {label: string; onPress: () => void} | undefined
@@ -34,7 +48,10 @@ export function PrivateSearchNote({state}: {state: PrivateSearchState}) {
     lines.push(l`Only words and the author filter apply to private posts.`)
   }
   if (q) {
-    if (state.error) {
+    if (state.capped) {
+      lines.push(l`Couldn’t load private posts right now.`)
+      action = {label: l`Try again`, onPress: state.restart}
+    } else if (state.error) {
       lines.push(
         l`We’re sorry, but your private search could not be completed. Please try again in a few minutes.`,
       )

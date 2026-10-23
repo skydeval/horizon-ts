@@ -15,18 +15,42 @@
  * while prism does not list `private.search`, or for a search with no word
  * and no author. The posts are moderated as the stock search moderates, but
  * not when an author is given (as `search-posts-v2.ts`).
+ *
+ * While prism is busy (prism busy design 4.1, 5): each load carries its
+ * completion stamp; a search opened while the account is not confirmed
+ * leaves out another author's private results from loads made before it
+ * until a load since holds them (the catching-up note heads the list), and
+ * runs its stock `refetch()` at mount. Once confirmed it lifts itself: at the
+ * top it refetches, scrolled down it sets `refreshPending`, run when the list
+ * is back at the top. With nothing loaded the "searching" line waits at most
+ * 30 s, then "Couldn't load private posts right now" with Try again.
  */
 
 import {moderatePost} from '@bsky/sdk/moderation'
-import {type InfiniteData, useInfiniteQuery} from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {useResolveDidQuery} from '#/state/queries/resolve-uri'
 import {useSession} from '#/state/session'
 import {type SearchFilters} from '#/screens/Search/searchParams'
-import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
+import {
+  keepOverData,
+  PRIVATE_RETRY,
+  restartPrivateQuery,
+} from '#/horizon/private/api/transient'
 import {PRIVATE_SEARCH_ROOT} from '#/horizon/private/cache-finders'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
+import {useListBusy} from '#/horizon/private/list-busy'
+import {
+  fetchStamp,
+  gatePages,
+  type PageAccess,
+  useEmptyWaitCapped,
+} from '#/horizon/private/load-gate'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {
   fetchPrivateSearchLoad,
@@ -41,6 +65,14 @@ import {PRIVATE_SEARCH_SWITCH} from '#/horizon/switches'
 import {type app} from '#/lexicons'
 
 type PostView = app.bsky.feed.defs.PostView
+
+/** How the load gate reads a search page: each result by its own post. */
+const SEARCH_ACCESS: PageAccess<PrivateSearchPage, PostView> = {
+  stampOf: page => page.fetchedAt,
+  itemsOf: page => page.posts,
+  withItems: (page, posts) => ({...page, posts}),
+  urisOf: post => [post.uri],
+}
 
 /**
  * What the private part of a search shows beside the results.
@@ -62,6 +94,12 @@ export type PrivateSearchState = {
   hasNextPage: boolean
   fetchNextPage: () => void
   refetch: () => void
+  /** Results the load gate hides, for the catching-up note (4.1). */
+  hidden: number
+  /** The wait for a first load passed 30 s: the quiet line (design 5). */
+  capped: boolean
+  /** Try again on the quiet line: the search restarts at once. */
+  restart: () => void
 }
 
 /**
@@ -87,8 +125,11 @@ export function usePrivateSearchResults({
   posts: PostView[]
   /** Called with the list's end: loads more private results when due. */
   onEndReached: () => void
+  /** The stock `List`'s `onScrolledDownChange`: runs a refresh the lift owes. */
+  onScrolledDownChange: (isScrolledDown: boolean) => void
   state: PrivateSearchState
 } {
+  const queryClient = useQueryClient()
   const {currentAccount} = useSession()
   const source = usePrivateFeedSource()
   const served = usePrismFeature('private.search')
@@ -123,9 +164,11 @@ export function usePrivateSearchResults({
     // Retried while prism is busy, never over a page it shows (busy design 5).
     queryFn: context => {
       if (!source || !q) return Promise.resolve({posts: []})
-      return keepOverData(context, () =>
-        fetchPrivateSearchLoad(source, q, context.pageParam),
-      )
+      return keepOverData(context, async () => ({
+        ...(await fetchPrivateSearchLoad(source, q, context.pageParam)),
+        // The load's completion stamp, for the gate (busy design 4.1).
+        fetchedAt: fetchStamp(),
+      }))
     },
     ...PRIVATE_RETRY,
     initialPageParam: undefined,
@@ -146,8 +189,25 @@ export function usePrivateSearchResults({
   })
 
   const shown = offered && !!q
+  const queryKey = [PRIVATE_SEARCH_ROOT, source?.did, q]
+  const busy = useListBusy<InfiniteData<PrivateSearchPage>>({
+    did: shown ? source?.did : undefined,
+    queryKey,
+    urisOf: data => data.pages.flatMap(page => page.posts.map(p => p.uri)),
+    hiddenOf: (data, since) =>
+      gatePages(data.pages, source?.did ?? '', since, SEARCH_ACCESS).hidden,
+    refetch: () => search.refetch(),
+  })
+  const gatedPages =
+    search.data && busy.loadSince !== undefined && source
+      ? gatePages(search.data.pages, source.did, busy.loadSince, SEARCH_ACCESS)
+          .pages
+      : search.data?.pages
+  const capped = useEmptyWaitCapped(
+    shown && !search.data && search.isFetching,
+  )
   const privatePosts = shown
-    ? (search.data?.pages.flatMap(page => page.posts) ?? [])
+    ? (gatedPages?.flatMap(page => page.posts) ?? [])
     : []
   const merged = mergeSearchResults(publicPosts, privatePosts, {
     sort,
@@ -171,6 +231,7 @@ export function usePrivateSearchResults({
   return {
     posts: merged.posts,
     onEndReached,
+    onScrolledDownChange: busy.onScrolledDownChange,
     state: {
       active: offered,
       ignoredSomething: terms.ignoredSomething,
@@ -182,7 +243,16 @@ export function usePrivateSearchResults({
       found: privatePosts.length,
       hasNextPage: shown && search.hasNextPage,
       fetchNextPage: () => void search.fetchNextPage(),
-      refetch: () => void search.refetch(),
+      refetch: () => {
+        busy.restart()
+        void search.refetch()
+      },
+      hidden: shown ? busy.hidden : 0,
+      capped: shown && capped,
+      restart: () => {
+        busy.restart()
+        void restartPrivateQuery(queryClient, queryKey)
+      },
     },
   }
 }

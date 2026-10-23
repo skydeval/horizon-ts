@@ -9,7 +9,10 @@
  *   adapter for every private view it builds and by the write path for
  *   pending posts.
  * - Pending posts: the author's own just-written posts, built from the record
- *   as sent, until prism serves them (or for ten minutes).
+ *   as sent, until prism serves them. A written post prism has not served
+ *   past its ten minutes is kept while the author's PDS has it (prism busy
+ *   design 6.6): the confirmation loop (`pending-confirm.ts`) drops it only
+ *   on the PDS's `RecordNotFound`.
  *
  * Both live in memory only and are cleared when the account changes.
  */
@@ -112,7 +115,9 @@ export function pendingPhase(entry: PendingPost): PendingPhase {
 }
 
 /**
- * How long a pending post is kept when prism never confirms it.
+ * How long a written pending post waits for prism before the confirmation
+ * loop asks the author's PDS whether it is still there (6.6). The entry's
+ * `expiresAt` is its write time plus this; it is never moved.
  */
 export const PENDING_TTL_MS = 10 * 60 * 1000
 
@@ -257,15 +262,24 @@ export function usePrivatePostFacts(
   )
 }
 
-function isLive(entry: PendingPost, now: number) {
-  if (pendingPhase(entry) !== 'written') return true
-  if (entry.expiresAt > now) return true
-  logger.warn('private post never confirmed by prism; dropping pending entry', {
-    uri: entry.uri,
-  })
-  pending.delete(entry.uri)
-  facts.delete(entry.uri)
-  return false
+/**
+ * Tell every store listener the pending posts may read differently now (the
+ * "Syncing" label turns on at a set time after a write, design 4, D-19).
+ */
+export function notifyPrivateStores() {
+  notify()
+}
+
+/**
+ * Drop a written pending post the author's PDS says is gone (6.6): the only
+ * way one prism never confirmed leaves the store.
+ */
+export function dropAbsentPendingPost(uri: string) {
+  if (!pending.has(uri)) return
+  logger.warn('private post gone from the PDS; dropping pending entry', {uri})
+  pending.delete(uri)
+  facts.delete(uri)
+  notify()
 }
 
 /**
@@ -295,7 +309,8 @@ export function setPendingBatch(uris: string[]) {
 
 /**
  * The pending post at `uri` of the account `did` (the current account when
- * not given), if it has not expired, in any phase. A caller that places a
+ * not given), in any phase. A written entry stays past its ten minutes while
+ * the author's PDS has it (6.6). A caller that places a
  * reply from it uses it only when it is `written` (2K design PA-28 step 3).
  */
 export function getPendingPost(
@@ -304,7 +319,7 @@ export function getPendingPost(
 ): PendingPost | undefined {
   const entry = pending.get(uri)
   if (!entry || !did || entry.did !== did) return undefined
-  return isLive(entry, Date.now()) ? entry : undefined
+  return entry
 }
 
 /**
@@ -359,9 +374,8 @@ export function dropPendingPosts(uris: readonly string[]) {
  */
 export function getPendingPosts(): PendingPost[] {
   const did = getCurrentDid()
-  const now = Date.now()
   return Array.from(pending.values())
-    .filter(entry => entry.did === did && isLive(entry, now))
+    .filter(entry => entry.did === did)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
 }
 

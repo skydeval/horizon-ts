@@ -330,7 +330,8 @@ export function useLoadGate<D = unknown>(
     previous.current = {confirmed, failures}
     const turnedConfirmed = !before.confirmed && confirmed
     const answered = before.failures > 0 && failures === 0
-    if (!trimmed || !(turnedConfirmed || answered)) return
+    // No account: an ungated surface (a public feed) never lifts.
+    if (!did || !trimmed || !(turnedConfirmed || answered)) return
     const current = qc.getQueryState<D>(queryKey)
     if (current?.data === undefined) {
       void restartPrivateQuery(qc, queryKey)
