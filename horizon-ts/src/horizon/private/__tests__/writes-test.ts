@@ -110,6 +110,7 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const PP = 'tools.kryphocron.feed.postPrivate'
 const AUD = 'tools.kryphocron.policy.audience'
+const BLOCK = 'tools.kryphocron.graph.block'
 const EVERYONE_AUDIENCE = `at://${DID}/${AUD}/3keveryone22`
 const COMMIT_CID = 'commit-cid-is-not-the-record-cid'
 
@@ -133,6 +134,8 @@ function fakePds() {
   const audiences: {uri: string; value: Record<string, unknown>}[] = [
     {uri: EVERYONE_AUDIENCE, value: {$type: AUD, mode: 'everyone'}},
   ]
+  /** The member's private blocks (`tools.kryphocron.graph.block`). */
+  const blocks: Record<string, unknown>[] = []
   const failures: {
     create?: (
       call: Call,
@@ -210,6 +213,18 @@ function fakePds() {
         return {status: 200, body: {}}
       }
       case 'com.atproto.repo.listRecords':
+        if (call.params.get('collection') === BLOCK) {
+          return {
+            status: 200,
+            body: {
+              records: blocks.map((value, n) => ({
+                uri: `at://${DID}/${BLOCK}/3kblock${n}2222`,
+                cid: recordCids[5],
+                value,
+              })),
+            },
+          }
+        }
         return {
           status: 200,
           body: {
@@ -231,7 +246,7 @@ function fakePds() {
     }
   }
   const {client, calls} = fakeClient(DID, handler)
-  return {client, calls, repo, audiences, failures, gates}
+  return {client, calls, repo, audiences, blocks, failures, gates}
 }
 
 let prismHandler: (call: Call) => Reply
@@ -1569,6 +1584,87 @@ describe('postPrivate: the reply block check on the locus route', () => {
     expect(mockResolveEmbed).toHaveBeenCalled()
     expect(writesAny()).toEqual([])
     mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+  })
+
+  function blockListingsOf(calls: Call[]) {
+    return calls.filter(
+      c =>
+        c.nsid === 'com.atproto.repo.listRecords' &&
+        c.params.get('collection') === BLOCK,
+    )
+  }
+
+  it.each([
+    ['the member privately blocks the author', 'own'],
+    ['the author privately blocks the member', 'other'],
+  ])(
+    'prism served the parent and %s during the uploads: refused before the first gate or post (RB-2)',
+    async (_name, side) => {
+      REPLY_BLOCK_TIMING.freshMs = 0
+      let uploaded = false
+      mockResolveEmbed.mockImplementation(() => {
+        uploaded = true
+        if (side === 'own') pds.blocks.push({$type: BLOCK, subject: OTHER_DID})
+        return Promise.resolve(undefined)
+      })
+      const other = fakeClient(OTHER_DID, call =>
+        call.nsid === 'com.atproto.repo.listRecords'
+          ? {
+              status: 200,
+              body: {
+                records:
+                  uploaded && side === 'other'
+                    ? [
+                        {
+                          uri: `at://${OTHER_DID}/${BLOCK}/3kblock02222`,
+                          cid: recordCids[5],
+                          value: {$type: BLOCK, subject: DID},
+                        },
+                      ]
+                    : [],
+              },
+            }
+          : {status: 501, body: {}},
+      )
+      mockOtherPdsClient = other.client
+      const error = await postPrivate(
+        new QueryClient(),
+        opts(['reply'], PARENT, LIMITS),
+      ).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+      expect(uploaded).toBe(true)
+      expect(blockListingsOf(other.calls)).toHaveLength(1)
+      expect(writesAny()).toEqual([])
+      mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+    },
+  )
+
+  it('prism served the parent and a listing cannot be read after the uploads: the neutral text, nothing written (RB-2)', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    mockOtherPdsClient = fakeClient(OTHER_DID, () => ({
+      status: 500,
+      body: {},
+    })).client
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, LIMITS),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyCheckError)
+    expect(writesAny()).toEqual([])
+  })
+
+  it('prism served the parent and the verdict is still fresh: no listing is read', async () => {
+    const other = fakeClient(OTHER_DID, () => ({
+      status: 200,
+      body: {records: []},
+    }))
+    mockOtherPdsClient = other.client
+    await postPrivate(new QueryClient(), opts(['reply'], PARENT, LIMITS))
+    expect(nsids(pds.calls)).toContain(
+      'tools.kryphocron.actor.participatePrivate',
+    )
+    expect(blockListingsOf(pds.calls)).toEqual([])
+    expect(blockListingsOf(other.calls)).toEqual([])
   })
 
   it('the thread root’s author blocked, the parent’s not: the reply is written', async () => {

@@ -482,6 +482,54 @@ describe('the check before the first write (PR2-L1)', () => {
     expect(relationshipCalls()).toHaveLength(2)
   })
 
+  it.each([
+    ['the member privately blocks the author', 'own'],
+    ['the author privately blocks the member', 'other'],
+  ])(
+    'prism served the parent and %s since the plan: the recheck reads the listings and refuses (RB-2)',
+    async (_name, side) => {
+      served = [servedPost(PARENT, OTHER_DID)]
+      const placed = await plan(PARENT)
+      expect(placed.blockCheck).toMatchObject({privateBlocks: 'prism'})
+      expect(blockListings(pds.calls)).toEqual([])
+      expect(blockListings(other.calls)).toEqual([])
+
+      REPLY_BLOCK_TIMING.freshMs = 0
+      if (side === 'own') ownBlocks = [{$type: BLOCK, subject: OTHER_DID}]
+      else otherBlocks = [{$type: BLOCK, subject: DID}]
+      await expect(
+        recheckReplyBlock(clients(), placed.blockCheck),
+      ).rejects.toBeInstanceOf(PrivateReplyBlockedError)
+      expect(blockListings(pds.calls).map(c => c.params.get('repo'))).toEqual([
+        DID,
+      ])
+      expect(blockListings(other.calls).map(c => c.params.get('repo'))).toEqual(
+        [OTHER_DID],
+      )
+    },
+  )
+
+  it('prism served the parent and a listing cannot be read at the recheck: cannot check (RB-2)', async () => {
+    served = [servedPost(PARENT, OTHER_DID)]
+    const placed = await plan(PARENT)
+    REPLY_BLOCK_TIMING.freshMs = 0
+    other = fakeClient(OTHER_DID, () => ({status: 500, body: {}}))
+    mockOtherPds = other.client
+    await expect(
+      recheckReplyBlock(clients(), placed.blockCheck),
+    ).rejects.toBeInstanceOf(PrivateReplyCheckError)
+  })
+
+  it('prism served the parent and the verdict is fresh: the recheck reads no listing', async () => {
+    served = [servedPost(PARENT, OTHER_DID)]
+    const placed = await plan(PARENT)
+    ownBlocks = [{$type: BLOCK, subject: OTHER_DID}]
+    await recheckReplyBlock(clients(), placed.blockCheck)
+    expect(relationshipCalls()).toHaveLength(1)
+    expect(blockListings(pds.calls)).toEqual([])
+    expect(blockListings(other.calls)).toEqual([])
+  })
+
   it('the recheck repeats the listings when the plan used them', async () => {
     const placed = await plan(PUBLIC_PARENT)
     REPLY_BLOCK_TIMING.freshMs = 0

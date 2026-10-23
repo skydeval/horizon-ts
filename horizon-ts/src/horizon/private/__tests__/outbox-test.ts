@@ -49,6 +49,18 @@ let mockDirectClient: unknown
 jest.mock('#/horizon/routing/prism-direct', () => ({
   getDirectPrismClient: () => mockDirectClient,
 }))
+/** When set, another author's PDS, as the block check's listing reads it. */
+let mockOtherPds: unknown
+jest.mock('#/horizon/private/api/gates', () => {
+  const actual = jest.requireActual<{
+    gatePdsClient: (did: string) => Promise<unknown>
+  }>('#/horizon/private/api/gates')
+  return {
+    ...actual,
+    gatePdsClient: (did: string) =>
+      mockOtherPds ? Promise.resolve(mockOtherPds) : actual.gatePdsClient(did),
+  }
+})
 
 /** When set, a checked device write whose value matches fails (quota). */
 let mockFailChecked: ((value: string | undefined) => boolean) | undefined
@@ -154,6 +166,7 @@ i18n.loadAndActivate({locale: 'en', messages: {}})
 
 const PP = 'tools.kryphocron.feed.postPrivate'
 const AUD = 'tools.kryphocron.policy.audience'
+const BLOCK = 'tools.kryphocron.graph.block'
 const TG = 'app.bsky.feed.threadgate'
 const PG = 'app.bsky.feed.postgate'
 const EVERYONE_AUDIENCE = `at://${DID}/${AUD}/3keveryone22`
@@ -194,6 +207,8 @@ function fakePds() {
     {uri: EVERYONE_AUDIENCE, value: {$type: AUD, mode: 'everyone'}},
     {uri: LIST_AUDIENCE, value: {$type: AUD, mode: 'list', name: 'Friends'}},
   ]
+  /** The member's private blocks (`tools.kryphocron.graph.block`). */
+  const blocks: Record<string, unknown>[] = []
   const handler = (call: Call): Reply => {
     const failure = state.fail?.(call)
     if (failure) return failure
@@ -256,6 +271,18 @@ function fakePds() {
         store.delete(key)
         return {status: 200, body: {}}
       case 'com.atproto.repo.listRecords':
+        if (collection === BLOCK) {
+          return {
+            status: 200,
+            body: {
+              records: blocks.map((value, n) => ({
+                uri: `at://${DID}/${BLOCK}/3kblock${n}2222`,
+                cid: cids[39],
+                value,
+              })),
+            },
+          }
+        }
         return {
           status: 200,
           body: {
@@ -271,7 +298,7 @@ function fakePds() {
     }
   }
   const {client, calls} = fakeClient(DID, handler)
-  return {client, calls, posts, gates, audiences, state}
+  return {client, calls, posts, gates, audiences, blocks, state}
 }
 
 let pds: ReturnType<typeof fakePds>
@@ -452,6 +479,7 @@ beforeEach(async () => {
     call => relationships(call) ?? {status: 200, body: {}},
   )
   REPLY_BLOCK_TIMING.freshMs = 2_000
+  mockOtherPds = undefined
   mockPrismClient = prism.client
   mockDirectClient = direct.client
   mockFailChecked = undefined
@@ -1702,6 +1730,78 @@ describe('the reply block check (reply design 2, skydeval 2026-10-23)', () => {
     expect(uploaded).toBe(true)
     expect(anyWrites()).toEqual([])
     mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+  })
+
+  function blockListingsOf(calls: Call[]) {
+    return calls.filter(
+      c =>
+        c.nsid === 'com.atproto.repo.listRecords' &&
+        c.params.get('collection') === BLOCK,
+    )
+  }
+
+  function otherPds(blocks: () => Record<string, unknown>[]) {
+    const other = fakeClient(OTHER_DID, call =>
+      call.nsid === 'com.atproto.repo.listRecords'
+        ? {
+            status: 200,
+            body: {
+              records: blocks().map((value, n) => ({
+                uri: `at://${OTHER_DID}/${BLOCK}/3kblock${n}2222`,
+                cid: cids[39],
+                value,
+              })),
+            },
+          }
+        : {status: 501, body: {}},
+    )
+    mockOtherPds = other.client
+    return other
+  }
+
+  it.each([
+    ['the member privately blocks the author', 'own'],
+    ['the author privately blocks the member', 'other'],
+  ])(
+    'prism served the parent and %s during the uploads: reply-blocked, no gate or post written (RB-2)',
+    async (_name, side) => {
+      REPLY_BLOCK_TIMING.freshMs = 0
+      let uploaded = false
+      mockResolveEmbed.mockImplementation(() => {
+        uploaded = true
+        if (side === 'own') pds.blocks.push({$type: BLOCK, subject: OTHER_DID})
+        return Promise.resolve(undefined)
+      })
+      const other = otherPds(() =>
+        uploaded && side === 'other' ? [{$type: BLOCK, subject: DID}] : [],
+      )
+      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+      expect(only()).toMatchObject({state: 'failed', failure: 'reply-blocked'})
+      expect(uploaded).toBe(true)
+      expect(blockListingsOf(pds.calls)).toHaveLength(1)
+      expect(blockListingsOf(other.calls)).toHaveLength(1)
+      expect(anyWrites()).toEqual([])
+      mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+    },
+  )
+
+  it('prism served the parent and a listing cannot be read after the uploads: parent-busy, nothing written (RB-2)', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    mockOtherPds = fakeClient(OTHER_DID, () => ({status: 500, body: {}})).client
+    await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+    const record = only()
+    expect(record).toMatchObject({state: 'failed', failure: 'parent-busy'})
+    expect(actionsOf(record).detail).toBe(BUSY)
+    expect(anyWrites()).toEqual([])
+  })
+
+  it('prism served the parent and the verdict is still fresh: no listing is read', async () => {
+    const other = otherPds(() => [])
+    await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+    expect(records()).toEqual([])
+    expect(postWrites()).toHaveLength(1)
+    expect(blockListingsOf(pds.calls)).toEqual([])
+    expect(blockListingsOf(other.calls)).toEqual([])
   })
 
   it('a reply to the member’s own post asks the AppView nothing', async () => {

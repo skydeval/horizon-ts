@@ -13,9 +13,10 @@
  *   `blockedBy` and the list fields are filled in;
  * - **private blocks** (`tools.kryphocron.graph.block`): when prism served
  *   the parent in this run, prism's read rule already related the pair
- *   (`prism:private_tier/schema.rs:549`), so nothing more is read; otherwise
- *   the two public listings of that collection, the member's for the author
- *   and the author's for the member.
+ *   (`prism:private_tier/schema.rs:549`), so the plan reads nothing more;
+ *   otherwise the two public listings of that collection, the member's for
+ *   the author and the author's for the member. The re-check after uploads
+ *   reads the listings either way (RB-2).
  *
  * prism's `blocked` does not read list blocks, so prism's serve alone lets a
  * list-blocked reply through; this check closes that without depending on
@@ -92,7 +93,8 @@ export class PrivateReplyCheckError extends Error {
 
 /**
  * Where a plan's private-block verdict came from: prism's serve of the
- * parent in this run, or the two listings.
+ * parent in this run, or the two listings. The re-check reads the listings
+ * for both.
  */
 export type PrivateBlockSource = 'prism' | 'listings'
 
@@ -279,26 +281,30 @@ export function assertClear(verdict: BlockVerdict) {
 
 /**
  * Take a plan's check again just before the first gate or post write, when
- * it is older than {@link REPLY_BLOCK_TIMING.freshMs} (PR2-L1): the same
- * parts the plan used, in one parallel round trip. Throws
+ * it is older than {@link REPLY_BLOCK_TIMING.freshMs} (PR2-L1): the AppView
+ * and both private block listings, in one parallel round trip. Throws
  * {@link PrivateReplyBlockedError} or {@link PrivateReplyCheckError} when
  * the verdict is not `clear`. A recent verdict, or no check (no pair), reads
  * nothing.
+ *
+ * The listings are read even when the plan's private-block verdict was
+ * prism's serve (RB-2): that serve cannot be taken again without a second
+ * placement read, and a private block made during a slow upload would
+ * otherwise be written.
  */
 export async function recheckReplyBlock(
   clients: ReplyBlockClients,
   check: ReplyBlockCheck | undefined,
   clientFor: RepoClientFor = gatePdsClient,
 ): Promise<void> {
-  if (!check) return
+  if (!REPLY_BLOCK_CHECK || !check) return
   if (Date.now() - check.checkedAt < REPLY_BLOCK_TIMING.freshMs) return
-  const parts = [
-    readAppviewBlocks(clients.appviewClient, clients.did, check.authorDid),
-  ]
-  if (check.privateBlocks === 'listings') {
-    parts.push(readPrivateBlocks(clients, check.authorDid, clientFor))
-  }
-  const verdict = combineVerdicts(await Promise.all(parts))
+  const verdict = combineVerdicts(
+    await Promise.all([
+      readAppviewBlocks(clients.appviewClient, clients.did, check.authorDid),
+      readPrivateBlocks(clients, check.authorDid, clientFor),
+    ]),
+  )
   if (verdict !== 'clear') {
     logger.info('reply block check: recheck refused', {verdict})
   }
