@@ -20,7 +20,6 @@ describe('the device value (T10)', () => {
     expect(defaultDeviceValue()).toEqual({
       v: 1,
       device: DEFAULT_APPEARANCE,
-      optOut: false,
       accounts: {},
       frameStyle: 'bars',
       softness: {dim: 40, dark: 50},
@@ -67,7 +66,7 @@ describe('the device value (T10)', () => {
       b: '#ABCDEF',
     })
     expect(parsed.device.presets).toEqual(emptyPresetSlots())
-    expect(parsed.optOut).toBe(false)
+    expect(parsed).not.toHaveProperty('optOut')
     expect(parsed.frameStyle).toBe('bars')
     expect(parsed.softness).toEqual({dim: 40, dark: 100})
     expect(Object.keys(parsed.accounts)).toEqual(['did:plc:a', 'did:plc:c'])
@@ -105,6 +104,23 @@ describe('the device value (T10)', () => {
     )
   })
 
+  it('ignores a stored opt-out from the removed toggle and drops it on write', () => {
+    const parsed = parseDeviceValue(
+      JSON.stringify({
+        v: 1,
+        device: {backdrop: 'pride.bi'},
+        optOut: true,
+        grain: true,
+      }),
+    )
+    expect(parsed).not.toHaveProperty('optOut')
+    expect(parsed.device.backdrop).toBe('pride.bi')
+    expect(parsed.grain).toBe(true)
+    expect(JSON.parse(serializeDeviceValue(parsed))).not.toHaveProperty(
+      'optOut',
+    )
+  })
+
   it('round trips', () => {
     const presets = emptyPresetSlots()
     presets[9] = {
@@ -119,7 +135,6 @@ describe('the device value (T10)', () => {
         custom: {mode: 'solid', a: '#101010', b: '#202020'},
         presets,
       },
-      optOut: true,
       frameStyle: 'headerBand',
       softness: {dim: 0, dark: 73},
       grain: true,

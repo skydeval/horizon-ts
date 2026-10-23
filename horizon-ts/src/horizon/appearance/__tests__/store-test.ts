@@ -35,7 +35,6 @@ jest.mock('#/horizon/appearance/device-store', () => ({
 
 const DID = 'did:plc:alice'
 const scheduled: string[] = []
-let cancelled = 0
 
 function seed(value: Partial<DeviceAppearanceV1>) {
   mockJson = serializeDeviceValue({...defaultDeviceValue(), ...value})
@@ -46,13 +45,9 @@ beforeEach(() => {
   mockJson = undefined
   mockListeners.clear()
   scheduled.length = 0
-  cancelled = 0
   store.resetAppearanceStoreForTests()
   store.registerAppearanceSync({
     scheduleFlush: did => scheduled.push(did),
-    cancelAll: () => {
-      cancelled++
-    },
   })
 })
 
@@ -61,7 +56,7 @@ function device() {
 }
 
 describe('effectiveAppearance (T11)', () => {
-  it('signed out, opted out and with sync off: the device appearance', () => {
+  it('signed out and with sync off: the device appearance', () => {
     const record = {...DEFAULT_APPEARANCE, backdrop: 'pride.bi'}
     seed({
       device: {...DEFAULT_APPEARANCE, backdrop: 'materials.paper'},
@@ -74,12 +69,6 @@ describe('effectiveAppearance (T11)', () => {
       'materials.paper',
     )
     expect(store.effectiveAppearance(state, DID).backdrop).toBe('pride.bi')
-    expect(
-      store.effectiveAppearance(
-        {...state, device: {...state.device, optOut: true}},
-        DID,
-      ).backdrop,
-    ).toBe('materials.paper')
     mockSync = false
     expect(store.effectiveAppearance(state, DID).backdrop).toBe(
       'materials.paper',
@@ -173,30 +162,40 @@ describe('edits (T11)', () => {
     expect(device().device.presets[0]?.name).toBe('Mine')
   })
 
-  it('no pending signed out or opted out; opting out drops pending', () => {
+  it('no pending signed out', () => {
     store.selectBackdrop(undefined, 'pride.pan')
     expect(device().accounts).toEqual({})
     expect(device().device.backdrop).toBe('pride.pan')
+    expect(scheduled).toEqual([])
+  })
 
-    store.selectBackdrop(DID, 'pride.gay')
-    expect(device().accounts[DID].pending).not.toBeNull()
-    store.setOptOut(true)
-    expect(device().optOut).toBe(true)
-    expect(device().accounts[DID].pending).toBeNull()
-    expect(cancelled).toBe(1)
-    // The look is kept.
+  it('a stored opt-out from the removed toggle is ignored: the account syncs', () => {
+    const record = {...DEFAULT_APPEARANCE, backdrop: 'pride.bi'}
+    mockJson = JSON.stringify({
+      ...JSON.parse(
+        serializeDeviceValue({
+          ...defaultDeviceValue(),
+          device: {...DEFAULT_APPEARANCE, backdrop: 'materials.paper'},
+          accounts: {
+            [DID]: {
+              ...store.emptyCopy(),
+              record,
+              raw: {},
+              cid: 'c',
+              syncedAt: 1,
+            },
+          },
+        }),
+      ),
+      optOut: true,
+    })
     expect(
       store.effectiveAppearance(store.getAppearanceState(), DID).backdrop,
-    ).toBe('pride.gay')
-
-    scheduled.length = 0
-    store.selectBackdrop(DID, 'materials.paper')
-    expect(device().accounts[DID].pending).toBeNull()
-    expect(scheduled).toEqual([])
-
-    store.setOptOut(false)
-    expect(device().optOut).toBe(false)
-    expect(scheduled).toEqual([])
+    ).toBe('pride.bi')
+    store.selectBackdrop(DID, 'pride.gay')
+    expect(device().accounts[DID].pending?.fields).toEqual(['backdrop'])
+    expect(scheduled).toEqual([DID])
+    expect(JSON.parse(mockJson)).not.toHaveProperty('optOut')
   })
 
   it('clears blocked at load', () => {

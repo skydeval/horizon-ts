@@ -327,18 +327,6 @@ describe('non-member flush (5.2)', () => {
     expect(copy().pending?.appearance.backdrop).toBe('pride.ace')
   })
 
-  it('reads when opted out; writes nothing', async () => {
-    const pds = fakePds(DID, stored())
-    sync.registerAppearanceClient(DID, pds.client)
-    await answerMembership(DID, 'notEligible')
-    store.setOptOut(true)
-    store.selectBackdrop(DID, 'pride.ace')
-    expect(await sync.refresh(DID)).toBe(true)
-    await sync.flush(DID)
-    await drain()
-    expect(callsOf(pds.server, 'putRecord')).toHaveLength(0)
-  })
-
   it('rebase lays the pending fields over the fresh appearance', () => {
     const fresh = {
       backdrop: 'pride.bi',

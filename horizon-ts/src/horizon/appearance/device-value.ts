@@ -1,10 +1,12 @@
 /*
  * The device value under `horizon:appearance` (Phase 3 design, 6.1): this
- * device's own appearance, the opt-out, a copy per account and the
- * device-only settings (the phone frame, the backdrop softness, the grain
- * and the hemisphere "Follow the season" uses). Parsed leniently, field by field; a missing, unparsable or
- * other-version value reads as the default. A stored id of a removed solid
- * reads as a custom one-tone of its colour (change list 2, item 9).
+ * device's own appearance, a copy per account and the device-only settings
+ * (the phone frame, the backdrop softness, the grain and the hemisphere
+ * "Follow the season" uses). Parsed leniently, field by field; a missing,
+ * unparsable or other-version value reads as the default. A stored id of a
+ * removed solid reads as a custom one-tone of its colour (change list 2,
+ * item 9). A stored `optOut` from the removed per-device opt-out
+ * (2026-10-23) is ignored and dropped on the next write.
  */
 
 import {
@@ -123,10 +125,8 @@ export type AccountCopy = {
 
 export type DeviceAppearanceV1 = {
   v: 1
-  /** This device's own appearance: used signed out and when opted out. */
+  /** This device's own appearance: used signed out. */
   device: Appearance
-  /** The opt-out: when true this device ignores every account's record. */
-  optOut: boolean
   /** Per account on this device, by DID. */
   accounts: Record<string, AccountCopy>
   /**
@@ -180,7 +180,6 @@ export function defaultDeviceValue(): DeviceAppearanceV1 {
   return {
     v: 1,
     device: DEFAULT_APPEARANCE,
-    optOut: false,
     accounts: {},
     frameStyle: DEFAULT_FRAME_STYLE,
     softness: DEFAULT_SOFTNESS,
@@ -303,7 +302,6 @@ export function parseDeviceValue(json: string | undefined): DeviceAppearanceV1 {
   return {
     v: 1,
     device: parseStoredAppearance(value.device) ?? DEFAULT_APPEARANCE,
-    optOut: value.optOut === true,
     accounts,
     frameStyle: parseFrameStyle(value.frameStyle, value.insetCard),
     softness: parseSoftness(value.softness),

@@ -442,15 +442,6 @@ describe('the member flush (5.1)', () => {
     expect(prism.server.row?.store).toBe('public')
     expect(pds.server.stored?.value).toMatchObject({backdrop: 'pride.pan'})
   })
-
-  it('an opted-out device still sends a choice change and runs the record step (AS8-N5)', async () => {
-    const {pds, prism} = await member({prismRow: row('private')})
-    store.setOptOut(true)
-    store.chooseAppearanceStore(DID, 'public')
-    await drain()
-    expect(prism.server.row?.store).toBe('public')
-    expect(pds.server.stored?.value).toMatchObject({backdrop: 'pride.ace'})
-  })
 })
 
 describe('choice changes (7.1)', () => {

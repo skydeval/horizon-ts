@@ -44,10 +44,9 @@ export type AppearanceState = {
   preview: CustomConfig | null
 }
 
-/** What `sync.ts` registers: its write scheduler and its cancel-all. */
+/** What `sync.ts` registers: its write scheduler. */
 export type AppearanceSyncHooks = {
   scheduleFlush: (did: string) => void
-  cancelAll: () => void
   /** Run `did`'s queue now (a choice change flushes at once, 5). */
   flushNow?: (did: string) => void
 }
@@ -167,7 +166,7 @@ export function effectiveAppearance(
 ): Appearance {
   const {device} = current
   let result: Appearance
-  if (!did || device.optOut || !APPEARANCE_SYNC) {
+  if (!did || !APPEARANCE_SYNC) {
     result = device.device
   } else {
     const copy = device.accounts[did]
@@ -200,8 +199,8 @@ function union(a: AppearanceField[], b: AppearanceField[]): AppearanceField[] {
 
 /**
  * The one edit path (6.3): the change applies to the shown appearance
- * (without preview), `device` always takes the result, and a signed-in,
- * not opted-out device also records a pending edit and schedules a write.
+ * (without preview), `device` always takes the result, and a signed-in
+ * device also records a pending edit and schedules a write.
  */
 export function editAppearance(
   did: string | undefined,
@@ -212,7 +211,7 @@ export function editAppearance(
   const base = effectiveAppearance({...current, preview: null}, did)
   const next = change(base)
   const device = current.device
-  if (did && !device.optOut && APPEARANCE_SYNC) {
+  if (did && APPEARANCE_SYNC) {
     const copy = device.accounts[did] ?? emptyCopy()
     const old = copy.pending
     // A choice change not yet landed rides along with the edit (5).
@@ -237,7 +236,7 @@ export function editAppearance(
  * The theme settings per account (change list 2, item 11). The stock
  * settings stay where they always were (colour mode and dark theme in the
  * persisted store, font and size in device storage): they are the
- * device's values, used signed out and with the opt-out on. An account's
+ * device's values, used signed out. An account's
  * saved values are applied over them on account switch (`AppearanceSync`)
  * and are never copied into this device's own appearance, so an account
  * with none saved leaves the device's settings as they are.
@@ -249,7 +248,7 @@ export function accountThemePrefs(
   did: string | undefined,
 ): ThemePrefs {
   const {device} = current
-  if (!did || device.optOut || !APPEARANCE_SYNC || !BACKDROPS) return {}
+  if (!did || !APPEARANCE_SYNC || !BACKDROPS) return {}
   const copy = device.accounts[did]
   const source = copy?.pending?.appearance ?? copy?.record
   if (!source) return {}
@@ -262,16 +261,15 @@ export function accountThemePrefs(
 }
 
 /**
- * Save one theme setting to `did`'s record, when signed in and not opted
- * out; nothing otherwise (the stock setter has already set the device).
+ * Save one theme setting to `did`'s record, when signed in; nothing
+ * otherwise (the stock setter has already set the device).
  */
 export function saveThemePref<K extends ThemePrefField>(
   did: string | undefined,
   field: K,
   value: ThemePrefs[K],
 ) {
-  const device = load().device
-  if (!did || device.optOut || !APPEARANCE_SYNC || !BACKDROPS) return
+  if (!did || !APPEARANCE_SYNC || !BACKDROPS) return
   editAppearance(did, [field], base => ({...base, [field]: value}))
 }
 
@@ -325,36 +323,6 @@ export function clearPreset(did: string | undefined, slot: number) {
 }
 
 /**
- * The per-device opt-out. Turning it on keeps the current look (`device`
- * already holds it) and drops every unsent edit on this device. A choice
- * change not yet landed is the account's, not the device's, so it stays
- * (storage choice design 5.1, AS8-N5).
- */
-export function setOptOut(on: boolean) {
-  const device = load().device
-  if (!on) {
-    setDeviceValue({...device, optOut: false})
-    return
-  }
-  const accounts: Record<string, AccountCopy> = {}
-  for (const [did, copy] of Object.entries(device.accounts)) {
-    const pending = copy.pending
-    accounts[did] = {
-      ...copy,
-      pending: pending?.store
-        ? {
-            ...pending,
-            fields: [],
-            appearance: copy.record ?? pending.appearance,
-          }
-        : null,
-    }
-  }
-  syncHooks?.cancelAll()
-  setDeviceValue({...device, optOut: true, accounts})
-}
-
-/**
  * "Save my appearance" (storage choice design 2, 7): the choice changes at
  * once (`pending.store`, replacing any earlier one not yet landed) and the
  * account's queue runs at once. The user's choice, never an `auto` one.
@@ -363,7 +331,6 @@ export function chooseAppearanceStore(did: string, store: AppearanceStore) {
   const device = load().device
   const copy = device.accounts[did] ?? emptyCopy()
   const old = copy.pending
-  // The account's value, also when this device is opted out.
   const pending: PendingAppearance = {
     fields: old?.fields ?? [],
     appearance: old?.appearance ?? copy.record ?? device.device,

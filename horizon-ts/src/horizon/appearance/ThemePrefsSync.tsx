@@ -6,7 +6,7 @@
  * on the account, so this mounts again on every account switch and
  * applies that account's values at once (from the device's copy of its
  * record, then again when a fresh read changes them). A value the account
- * never saved changes nothing, and with the opt-out on nothing is applied.
+ * never saved changes nothing.
  * Rendered by `AppearanceSync`.
  */
 

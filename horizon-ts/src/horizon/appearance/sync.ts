@@ -131,7 +131,7 @@ function cancel(did: string) {
   timers.delete(did)
 }
 
-/** Cancel every scheduled write (the opt-out turned on). */
+/** Cancel every scheduled write. */
 export function cancelAllFlushes() {
   for (const did of [...timers.keys()]) cancel(did)
 }
@@ -156,7 +156,7 @@ export function flushNow(did: string) {
   void flush(did)
 }
 
-registerAppearanceSync({scheduleFlush, cancelAll: cancelAllFlushes, flushNow})
+registerAppearanceSync({scheduleFlush, flushNow})
 
 /** A membership or feature answer changed: a new table runs the queue. */
 function onAnswersChanged() {
@@ -318,9 +318,8 @@ function contextFor(
 /**
  * Read `did`'s record (and, from the persisted membership, its prism row)
  * and apply them with the table that applies. Returns whether the record
- * read succeeded. Runs whether or not the device is opted out. With
- * `flushAfter`, the queue runs after (a pending edit is written, a due
- * record step runs).
+ * read succeeded. With `flushAfter`, the queue runs after (a pending edit
+ * is written, a due record step runs).
  */
 export async function refresh(
   did: string,
@@ -766,5 +765,5 @@ export function resetAppearanceSyncForTests() {
   modeSeen.clear()
   unsubscribeAnswers?.()
   unsubscribeAnswers = null
-  registerAppearanceSync({scheduleFlush, cancelAll: cancelAllFlushes, flushNow})
+  registerAppearanceSync({scheduleFlush, flushNow})
 }

@@ -2,10 +2,9 @@
  * Horizon's Appearance sections (Phase 3 design, section 10), after Dark
  * theme and before Font (BD-11): the Backdrops group (the selected name, the
  * swatches in sections by collection (change list 2), each section's title
- * showing the hovered swatch's name, "Film grain" (web, change list 2) and
- * the per-device opt-out ("Keep this device's own appearance", which since
- * change list 2 covers the theme settings too) just above the Custom chip,
- * then while Custom is selected, its card; while "Follow the season" is
+ * showing the hovered swatch's name, "Film grain" (web, change list 2) just
+ * above the Custom chip (the per-device opt-out that sat beside it was
+ * removed 2026-10-23; "This device only" replaces it), then while Custom is selected, its card; while "Follow the season" is
  * selected, the "Southern hemisphere" switch, change list 3), "Backdrop
  * softness" (live fix batch 1) after "Save my appearance" (storage choice
  * design, section 2; signed in only), then the "Phone frame" picker of 10.8 (while
@@ -43,7 +42,6 @@ import {
   setBackdropSoftness,
   setFrameStyle,
   setGrain,
-  setOptOut,
   setSouthernHemisphere,
   useAppearanceState,
 } from '#/horizon/appearance/store'
@@ -243,7 +241,6 @@ function BackdropGroup() {
   const state = useAppearanceState()
   const shown = effectiveAppearance(state, did)
   const committed = effectiveAppearance({...state, preview: null}, did)
-  const {hasSession} = useSession()
   /*
    * The hovered or focused swatch's name, shown beside its own section's
    * title rather than at the top of the group, which a long picker scrolls
@@ -352,11 +349,10 @@ function BackdropGroup() {
           )
         })}
         {/*
-         * Film grain and the device switch sit just above the Custom chip
-         * (live check, 2026-10-21), so the custom card opens below them.
+         * Film grain sits just above the Custom chip (live check,
+         * 2026-10-21), so the custom card opens below it.
          */}
         {IS_WEB && <GrainToggle />}
-        {hasSession && <DeviceOptOutToggle />}
         <View style={[a.w_full, a.flex_row, a.flex_wrap, {gap: GAP}]}>
           <CustomChip
             def={customDef(shown.custom)}
@@ -401,29 +397,6 @@ function HemisphereToggle() {
       </Toggle.Item>
       <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
         {l`Follows the seasons by southern months: summer from December, winter from June.`}
-      </Text>
-    </View>
-  )
-}
-
-function DeviceOptOutToggle() {
-  const t = useTheme()
-  const {t: l} = useLingui()
-  const {device} = useAppearanceState()
-  const label = l`Keep this device’s own appearance`
-  return (
-    <View style={[a.w_full, a.gap_xs]}>
-      <Toggle.Item
-        name="horizon_backdrop_device_only"
-        label={label}
-        value={device.optOut}
-        onChange={setOptOut}
-        style={[a.w_full]}>
-        <Toggle.LabelText style={[a.flex_1]}>{label}</Toggle.LabelText>
-        <Toggle.Platform />
-      </Toggle.Item>
-      <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
-        {l`The backdrop, color mode, dark theme, font and font size set here stay on this device and are not saved to your account.`}
       </Text>
     </View>
   )

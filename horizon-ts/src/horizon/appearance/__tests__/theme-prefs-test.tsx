@@ -107,7 +107,6 @@ beforeEach(() => {
   store.resetAppearanceStoreForTests()
   store.registerAppearanceSync({
     scheduleFlush: did => scheduled.push(did),
-    cancelAll: () => {},
   })
 })
 
@@ -170,16 +169,13 @@ describe('saving a theme setting', () => {
     expect('colorMode' in after.device).toBe(false)
   })
 
-  it('signed out or opted out: nothing is saved', () => {
+  it('signed out: nothing is saved', () => {
     store.saveThemePref(undefined, 'colorMode', 'dark')
     expect(store.getAppearanceState().device.accounts).toEqual({})
-    store.setOptOut(true)
-    store.saveThemePref(A, 'font', 'system')
-    expect(store.getAppearanceState().device.accounts[A]).toBeUndefined()
     expect(scheduled).toEqual([])
   })
 
-  it('the account values: pending over the record, none when opted out', () => {
+  it('the account values: pending over the record', () => {
     seed({
       accounts: {
         [A]: {
@@ -197,12 +193,6 @@ describe('saving a theme setting', () => {
     expect(store.accountThemePrefs(state, A)).toEqual({colorMode: 'dark'})
     expect(store.accountThemePrefs(state, B)).toEqual({})
     expect(store.accountThemePrefs(state, undefined)).toEqual({})
-    expect(
-      store.accountThemePrefs(
-        {...state, device: {...state.device, optOut: true}},
-        A,
-      ),
-    ).toEqual({})
   })
 })
 
@@ -253,10 +243,7 @@ describe('ThemePrefsSync: on account switch', () => {
     expect(mockSetFontScale).not.toHaveBeenCalled()
   })
 
-  it('signed out or opted out: nothing is applied', () => {
-    render(<ThemePrefsSync />).unmount()
-    store.setOptOut(true)
-    mockDid = A
+  it('signed out: nothing is applied', () => {
     render(<ThemePrefsSync />)
     expect(mockSetColorMode).not.toHaveBeenCalled()
     expect(mockSetFontFamily).not.toHaveBeenCalled()
