@@ -253,11 +253,14 @@ export async function adaptPosts(
 
 /**
  * Public posts by URI from the public AppView, 25 at a time. A URI it does
- * not return, or one whose batch failed, is absent.
+ * not return, or one whose batch failed, is absent. With `strict` (Thread
+ * Lens's public-view pass, Phase 4 design 6.2) a failed batch rethrows
+ * instead, since an absent URI there means "unavailable", not "unknown".
  */
 export async function fetchPublicPosts(
   appview: Client,
   uris: Iterable<string>,
+  {strict = false}: {strict?: boolean} = {},
 ): Promise<Map<string, app.bsky.feed.defs.PostView>> {
   const unique = Array.from(new Set(uris))
   const found = new Map<string, app.bsky.feed.defs.PostView>()
@@ -273,6 +276,7 @@ export async function fetchPublicPosts(
         })
         for (const post of res.posts) found.set(post.uri, post)
       } catch (error) {
+        if (strict) throw error
         logger.warn('private replies: public parents unavailable', {
           safeMessage: error,
         })

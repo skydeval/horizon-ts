@@ -62,7 +62,10 @@ import {
   threadgateHiddenReplies,
 } from '#/horizon/private/thread/hidden'
 import {isPrivateRead} from '#/horizon/private/uri'
-import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {
+  type CurrentClients,
+  getCurrentClients,
+} from '#/horizon/routing/current-clients'
 import {healthEnvironment, isPrismConfirmed} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
@@ -195,6 +198,136 @@ export function spliceSubtrees(
   return out
 }
 
+/** The `getReplies` depth for a thread read `below` levels deep. */
+function branchDepth(below: number): number {
+  return Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH))
+}
+
+/** The branch page read: its anchor, items and cursor, or its failure. */
+type BranchPage =
+  {anchorUri: string; items: unknown[]; cursor?: string} | {failed: unknown}
+
+/**
+ * The anchor's private replies, paged until some come, within
+ * {@link BRANCH_DEADLINE_MS}. Never rejects: a failure or the deadline is
+ * `{failed}`.
+ */
+function readBranchPage(
+  clients: CurrentClients,
+  anchor: string,
+  depth: number,
+): Promise<BranchPage> {
+  return withDeadline(
+    (async () => {
+      const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
+      const loaded = await fetchUntilItems<unknown>(async cursor => {
+        const page = await getPrivateReplies(clients.prismClient, {
+          uri: anchorUri,
+          limit: BRANCH_PAGE_LIMIT,
+          depth,
+          cursor,
+        })
+        return {items: page.replies, cursor: page.cursor}
+      }, undefined)
+      return {anchorUri, ...loaded}
+    })(),
+    BRANCH_DEADLINE_MS,
+  ).catch((error: unknown) => {
+    logger.warn('private branches unavailable', {safeMessage: error})
+    return {failed: error}
+  })
+}
+
+/**
+ * Bluesky's mute state of the root, on the public anchor, against prism's,
+ * on a private reply under that root: prism follows Bluesky (H-5).
+ */
+function resyncBranchMute(
+  anchorPost: PostView,
+  nodes: TreeNode[],
+  views: Map<string, PostView>,
+) {
+  const rootUri =
+    (anchorPost.record as {reply?: {root?: {uri?: unknown}}}).reply?.root
+      ?.uri ?? anchorPost.uri
+  const underRoot = nodes.find(
+    node => readReplyRefs(node.input.view.record)?.root.uri === rootUri,
+  )
+  const prismMuted = underRoot
+    ? views.get(underRoot.input.view.uri)?.viewer?.threadMuted
+    : undefined
+  if (typeof rootUri === 'string') {
+    resyncPublicThreadMute(rootUri, anchorPost.viewer?.threadMuted, prismMuted)
+  }
+}
+
+/** The private branches of a public anchor, adapted (Thread Lens 5.5). */
+export type PrivateBranches = {
+  /** The anchor with a DID authority, as `getReplies` was asked. */
+  anchorUri: string
+  nodes: TreeNode[]
+  views: Map<string, PostView>
+  /** Where the branch read stopped, for the continuation. */
+  cursor?: string
+  /** The `getReplies` depth the read used. */
+  depth: number
+}
+
+/**
+ * Where a lens read's public views come from (Thread Lens 5.5): each held
+ * view's `cid`, for reply refs without one, and the anchor's public view,
+ * for the thread-mute re-sync. `undefined` when the public-view pass failed
+ * or turned the anchor into a gap, which discards the branches.
+ */
+export type BranchPublicViews =
+  | {cidOf: (uri: string) => string | undefined; anchorPost?: PostView}
+  | undefined
+
+/**
+ * The private half of {@link withPrivateBranches} for a caller that reads
+ * the public thread elsewhere (Thread Lens 5.5): for a member, while
+ * `PRIVATE_READING` is on and prism pages replies, the anchor's private
+ * replies are read at once with the stock deadline; once both they and
+ * `cidOf` have answered, the replies are adapted with its cids and the
+ * thread mute is re-synced when `resyncMute()` says so, asked just before.
+ * `undefined` when there is nothing to read, or when `cidOf` gives
+ * nothing; `{failed}` on the page read's failure. Never rejects for the
+ * page read; rejects only if `cidOf` does.
+ */
+export async function readPrivateBranches(
+  anchor: string,
+  {
+    below,
+    cidOf,
+    resyncMute,
+  }: {
+    below: number
+    cidOf: () => Promise<BranchPublicViews>
+    resyncMute: () => boolean
+  },
+): Promise<PrivateBranches | {failed: unknown} | undefined> {
+  const clients = PRIVATE_READING ? getCurrentClients() : undefined
+  if (!clients || !isPrivateMember(clients.did) || !privatePagingServed()) {
+    return undefined
+  }
+  const depth = branchDepth(below)
+  const page = readBranchPage(clients, anchor, depth)
+  const [part, held] = await Promise.all([page, cidOf()])
+  if ('failed' in part) return part
+  if (!held) return undefined
+  const nodes = part.items
+    .map(toTreeNode)
+    .filter((node): node is TreeNode => !!node)
+  const views =
+    nodes.length > 0
+      ? await adaptTree(nodes, clients.appviewClient, held.cidOf)
+      : new Map<string, PostView>()
+  if (nodes.length > 0 && held.anchorPost && resyncMute()) {
+    resyncBranchMute(held.anchorPost, nodes, views)
+  }
+  return {anchorUri: part.anchorUri, nodes, views, cursor: part.cursor, depth}
+}
+
 /**
  * The stock answer for a public anchor with the anchor's private branches
  * spliced in after it (Thread 1). `fetchStock` is the stock call; it alone
@@ -219,31 +352,13 @@ export async function withPrivateBranches(
   if (!clients || !isPrivateMember(clients.did)) return fetchStock()
   // The hidden prefetch's start test, taken when the read starts (6.2).
   const prefetchAllowed = hiddenPrefetchAllowed(clients.did, anchor)
-  const depth = Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH))
+  const depth = branchDepth(below)
   /*
    * The branch read only while prism pages replies; the hidden part (hidden
    * replies design 5.3) needs only a member and `PRIVATE_READING`.
    */
   const privatePart = privatePagingServed()
-    ? withDeadline(
-        (async () => {
-          const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
-          const loaded = await fetchUntilItems<unknown>(async cursor => {
-            const page = await getPrivateReplies(clients.prismClient, {
-              uri: anchorUri,
-              limit: BRANCH_PAGE_LIMIT,
-              depth,
-              cursor,
-            })
-            return {items: page.replies, cursor: page.cursor}
-          }, undefined)
-          return {anchorUri, ...loaded}
-        })(),
-        BRANCH_DEADLINE_MS,
-      ).catch((error: unknown) => {
-        logger.warn('private branches unavailable', {safeMessage: error})
-        return {failed: error}
-      })
+    ? readBranchPage(clients, anchor, depth)
     : Promise.resolve(undefined)
   const [stock, part] = await Promise.all([fetchStock(), privatePart])
   if (part && 'failed' in part) keepOrHold(context, part.failed)
@@ -276,28 +391,7 @@ export async function withPrivateBranches(
     }))
     thread = [...head, ...spliceSubtrees(stockSubtrees(replies), priv, sort)]
 
-    /*
-     * Bluesky's mute state of the root, on the stock anchor, against prism's,
-     * on a private reply under that root: prism follows Bluesky (H-5).
-     */
-    if (anchorPost) {
-      const rootUri =
-        (anchorPost.record as {reply?: {root?: {uri?: unknown}}}).reply?.root
-          ?.uri ?? anchorPost.uri
-      const underRoot = nodes.find(
-        node => readReplyRefs(node.input.view.record)?.root.uri === rootUri,
-      )
-      const prismMuted = underRoot
-        ? views.get(underRoot.input.view.uri)?.viewer?.threadMuted
-        : undefined
-      if (typeof rootUri === 'string') {
-        resyncPublicThreadMute(
-          rootUri,
-          anchorPost.viewer?.threadMuted,
-          prismMuted,
-        )
-      }
-    }
+    if (anchorPost) resyncBranchMute(anchorPost, nodes, views)
   }
 
   /*

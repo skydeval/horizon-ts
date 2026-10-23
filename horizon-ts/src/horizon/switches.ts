@@ -281,6 +281,21 @@ export const MEDIA_GRID: boolean = true
 export const REPLY_BLOCK_CHECK: boolean = true
 
 /**
+ * Thread Lens (Phase 4 design, `thread-lens/`): with the reader's toggle on,
+ * a public thread is read from prism's `app.nearhorizon.threadLens.*` and
+ * every post prism does not show is a placeholder in its place. `false`
+ * restores every Thread Lens hook to stock: the stock keys and fetch, no
+ * `select` change, no writer routing, no finders, no menu item, no settings
+ * group, no rows, no notice, no emitted threadgate, no composer note, no
+ * gap-only screens, and the lens gap mark ignored (design 12.1).
+ *
+ * Off while the hooks are being built (sub-steps 4A to 4C): 4A adds the
+ * client, the tree and the adapter, which nothing calls yet. 4C turns it on
+ * with the hooks, as the design's `true`.
+ */
+export const THREAD_LENS: boolean = false
+
+/**
  * Restored accounts (refract client design RF-1, RF-12; code under
  * `refract/`): accounts Bluesky's AppView withholds that a community prism
  * trusts still hosts, read through prism's `app.nearhorizon.refract.*` and

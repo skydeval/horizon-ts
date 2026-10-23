@@ -582,3 +582,62 @@ export const privateGetReplies = l.query(
   }),
   ['InvalidRequest', ...NOT_MEMBER_ERRORS],
 )
+
+/*
+ * Thread Lens (Phase 4 design 5.4), from prism's
+ * `lexicons/app/nearhorizon/threadLens/*.json`. Both are procedures: `POST`
+ * with a JSON body, through the account's PDS. `nodes` and `items` are
+ * unions of `#postNode` and `#gapNode`; they are typed as maps here and each
+ * node is checked where it is read (`thread-lens/nodes.ts`), so one
+ * malformed node never fails a response. `bridging` and `gap` are open
+ * sets, so plain strings. `truncated` is optional: nothing reads it, and a
+ * response without it should not fail as a whole.
+ */
+
+/** The errors both Thread Lens methods declare. */
+const THREAD_LENS_ERRORS = [
+  'InvalidRequest',
+  'NotEnrolled',
+  'NotReady',
+  'Reindexing',
+] as const
+
+/**
+ * `app.nearhorizon.threadLens.getThread`: the thread around `anchor` for
+ * the caller, the parent chain root-most first, the anchor, then replies
+ * level by level. `depth` defaults to 6 and `parentHeight` to 80 on prism.
+ */
+export const threadLensGetThread = l.procedure(
+  'app.nearhorizon.threadLens.getThread',
+  l.params(),
+  l.jsonPayload({
+    anchor: l.string({format: 'at-uri'}),
+    depth: l.optional(l.integer({minimum: 0, maximum: 1000})),
+    parentHeight: l.optional(l.integer({minimum: 0, maximum: 1000})),
+    repliesCursor: l.optional(l.string({maxLength: 1024})),
+  }),
+  l.jsonPayload({
+    anchor: l.string(),
+    nodes: l.array(l.lexMap()),
+    truncated: l.optional(l.boolean()),
+    bridging: l.string(),
+  }),
+  THREAD_LENS_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.threadLens.resolve`: one item per URI, in input order,
+ * at most 25. Items carry no continuation markers and no `parentUri`.
+ */
+export const threadLensResolve = l.procedure(
+  'app.nearhorizon.threadLens.resolve',
+  l.params(),
+  l.jsonPayload({
+    uris: l.array(l.string({format: 'at-uri'}), {minLength: 1, maxLength: 25}),
+  }),
+  l.jsonPayload({
+    items: l.array(l.lexMap()),
+    bridging: l.string(),
+  }),
+  THREAD_LENS_ERRORS,
+)
