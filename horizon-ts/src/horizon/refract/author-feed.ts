@@ -32,11 +32,8 @@ import {
 import {refractActive} from '#/horizon/refract/gate'
 import {REFRACT_METHODS} from '#/horizon/refract/lexicon'
 import {isNotedRestored} from '#/horizon/refract/marker'
-import {ownRepostsFeedApi} from '#/horizon/refract/own-reposts'
-import {
-  getCurrentClients,
-  getCurrentDid,
-} from '#/horizon/routing/current-clients'
+import {profileRepostsFeedApi} from '#/horizon/refract/profile-reposts'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {type app} from '#/lexicons'
 
 type FeedViewPost = app.bsky.feed.defs.FeedViewPost
@@ -189,17 +186,17 @@ class RefractAuthorFeedAPI implements FeedAPI {
 
 /**
  * The stock author feed, or the same with prism's restored pages for a DID
- * noted restored (4.1). The reader's own Posts and Replies tabs get their
- * reposts of restored posts back (`own-reposts.ts`). Any other feed is
- * returned as it is.
+ * noted restored (4.1). Any other profile's Posts and Replies tabs (the
+ * reader's own or another account's) get the owner's reposts of restored
+ * posts back (`profile-reposts.ts`). Any other feed is returned as it is.
  */
 export function refractAuthorFeedApi(feedDesc: string, api: FeedAPI): FeedAPI {
   if (!feedDesc.startsWith('author|')) return api
   if (!refractActive()) return api
   const [, did, filter] = feedDesc.split('|')
-  if (did && did === getCurrentDid()) {
-    return ownRepostsFeedApi(did, filter ?? '', api)
+  if (!did) return api
+  if (isNotedRestored(did)) {
+    return new RefractAuthorFeedAPI(api, did, filter ?? '')
   }
-  if (!did || !isNotedRestored(did)) return api
-  return new RefractAuthorFeedAPI(api, did, filter ?? '')
+  return profileRepostsFeedApi(did, filter ?? '', api)
 }

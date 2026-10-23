@@ -1,43 +1,57 @@
 /*
- * The reader's own reposts of restored posts, on the reader's own profile
+ * A profile owner's reposts of restored posts, on that owner's profile
  * (refract client design 4.1, "Feed tabs"). Bluesky's `getAuthorFeed` drops
- * a repost whose subject it can't hydrate, so a member's repost of a
- * restored post counts on the post but is missing from their Posts and
+ * a repost whose subject it can't hydrate, so anyone's repost of a restored
+ * post counts on the post but is missing from the reposter's Posts and
  * Replies tabs. prism has no read that gives it: `refract.getAuthorFeed`
  * serves restored actors only, and `refract.getTimeline` restored
  * originators only.
  *
- * - Only `author|<reader>|<filter>`, for the tabs stock shows reposts on.
+ * - Only `author|<owner>|<filter>`, for the tabs stock shows reposts on, on
+ *   any profile the reader views (their own or another account's) while
+ *   Refract is active. A restored owner's tabs come from prism instead
+ *   (`author-feed.ts`).
  * - Every stock page passes through as it is. Its time window runs from the
  *   previous page's oldest item (the top page: now) down to its own oldest
- *   item (the last page: the start). The reader's `app.bsky.feed.repost`
- *   records are read from their own repo (`listRecords`, newest first), kept
- *   on this API instance and read further as the feed pages, at most
- *   {@link OWN_REPOST_PAGES_PER_LOAD} record pages per feed page. The top
- *   page reads its first record page alongside stock.
+ *   item (the last page: the start). The owner's `app.bsky.feed.repost`
+ *   records are read from the owner's repo (`listRecords`, newest first),
+ *   kept on this API instance and read further as the feed pages, at most
+ *   {@link PROFILE_REPOST_PAGES_PER_LOAD} record pages per feed page. The top
+ *   page reads its first record page alongside stock. The reader's own repo
+ *   is read with their PDS client; another owner's without a session, from
+ *   the PDS their DID document names (repo records are public).
+ * - Record pages are shared while a read runs and kept for
+ *   {@link PROFILE_REPOST_CACHE_MS} (another owner's) so the Posts and
+ *   Replies tabs, and a quick return to the profile, read the repo once. The
+ *   reader's own pages are only shared in flight, so an unrepost shows on the
+ *   next load.
  * - A record stock already shows (its `reason.uri`, or a repost item of its
  *   subject) is left alone. For the rest, a subject whose author may be
  *   restored is read from the restored-post store, else from one `fill`.
  *   Positive posts are inserted by time as stock repost items, `reason` a
- *   `reasonRepost` by the reader. Anything else stays dropped, as stock has
+ *   `reasonRepost` by the owner. Anything else stays dropped, as stock has
  *   it.
- * - A failure, or a `fill` slower than {@link OWN_REPOST_DEADLINE_MS}, leaves
- *   the page as stock sent it.
+ * - A failure, or a repo read or `fill` slower than
+ *   {@link PROFILE_REPOST_DEADLINE_MS}, leaves the page as stock sent it.
  * - An unrepost deletes the record, so the next load from the top no longer
  *   shows it.
  *
- * Quotes need nothing here: a quote is the reader's own post, which stock
- * keeps, and its restored embed is filled by the quote slot (4.4). Own
- * replies under restored posts are the reader's own posts too.
+ * Quotes need nothing here: a quote is the owner's own post, which stock
+ * keeps, and its restored embed is filled by the quote slot (4.4). Replies
+ * under restored posts are the owner's own posts too.
  */
 
 import {type AtIdentifierString} from '@atproto/syntax'
 
 import {type FeedAPI, type FeedAPIResponse} from '#/lib/api/feed/types'
+import {createLexClient} from '#/lib/lexClient'
+import {networkAwareFetch} from '#/state/session/network'
+import {authorPdsUrl} from '#/horizon/private/adapt/pds'
 import {askFill, isDefinitelyNotRestored} from '#/horizon/refract/fill'
 import {peekRestoredPost} from '#/horizon/refract/store'
 import {
   getCurrentClients,
+  getCurrentDid,
   getCurrentPdsClient,
 } from '#/horizon/routing/current-clients'
 import {app, com} from '#/lexicons'
@@ -58,25 +72,36 @@ const REPOST_FILTERS = new Set([
   'posts_no_replies',
 ])
 
-/** Repost records read per page of the reader's repo. */
-export const OWN_REPOST_RECORDS_LIMIT = 100
+/** Repost records read per page of the owner's repo. */
+export const PROFILE_REPOST_RECORDS_LIMIT = 100
 
 /** The most record pages one feed page reads. */
-export const OWN_REPOST_PAGES_PER_LOAD = 3
+export const PROFILE_REPOST_PAGES_PER_LOAD = 3
 
-/** How long a feed page waits on the `fill` for its reposted posts. */
-export const OWN_REPOST_DEADLINE_MS = 3_000
+/** How long a feed page waits on one repo read, or on the `fill`. */
+export const PROFILE_REPOST_DEADLINE_MS = 3_000
 
-/** One page of the reader's repost records, newest first. */
+/** How long another owner's record pages are kept. */
+export const PROFILE_REPOST_CACHE_MS = 60_000
+
+/** The most record pages kept at once. */
+const CACHE_MAX = 100
+
+/** One page of the owner's repost records, newest first. */
 export type RepostRecordPage = {
   records: {uri: string; cid?: string; value: unknown}[]
   cursor?: string
 }
 
-/** Reads one page of the reader's repost records from `cursor`. */
+/** Reads one page of the owner's repost records from `cursor`. */
 export type ListRepostRecords = (
   cursor: string | undefined,
 ) => Promise<RepostRecordPage>
+
+/** A client that reads `did`'s repo. */
+export type RepoClientFor = (
+  did: string,
+) => Promise<Pick<ReturnType<typeof createLexClient>, 'call'>>
 
 type RepostRecord = {
   uri: string
@@ -170,10 +195,9 @@ function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * The reader's own author feed with their reposts of restored posts put
- * back in.
+ * The owner's author feed with their reposts of restored posts put back in.
  */
-export class OwnRepostsFeedAPI implements FeedAPI {
+export class ProfileRepostsFeedAPI implements FeedAPI {
   /** Records read and not yet placed, newest first. */
   private records: RepostRecord[] = []
   private listCursor: string | undefined
@@ -201,7 +225,10 @@ export class OwnRepostsFeedAPI implements FeedAPI {
     if (this.listDone || this.listFailed) return
     try {
       const asked = this.listCursor
-      const page = await this.list(asked)
+      const page = await withDeadline(
+        this.list(asked),
+        PROFILE_REPOST_DEADLINE_MS,
+      )
       for (const raw of page.records) {
         const record = readRecord(raw)
         if (!record) continue
@@ -225,22 +252,30 @@ export class OwnRepostsFeedAPI implements FeedAPI {
       !this.listDone &&
       !this.listFailed &&
       this.listedLow > low &&
-      pages < OWN_REPOST_PAGES_PER_LOAD
+      pages < PROFILE_REPOST_PAGES_PER_LOAD
     ) {
       await this.readPage()
       pages++
     }
   }
 
+  /** The owner as a repost's `by`: the profile query's view, else the feed's. */
   private byProfile(feed: FeedViewPost[]): ProfileViewBasic {
-    const cached = getCurrentClients()?.queryClient?.getQueryData<
-      Record<string, unknown>
-    >(['profile', this.did])
+    const clients = getCurrentClients()
+    const cached = clients?.queryClient?.getQueryData<Record<string, unknown>>([
+      'profile',
+      this.did,
+    ])
     if (cached?.did === this.did) return basicOf(cached)
     const own = feed.find(item => item.post.author.did === this.did)
     if (own) return own.post.author
-    const clients = getCurrentClients()
-    return basicOf({did: this.did, handle: clients?.handle ?? this.did})
+    for (const item of feed) {
+      const by = (item.reason as {by?: ProfileViewBasic} | undefined)?.by
+      if (isRepostItem(item) && by?.did === this.did) return by
+    }
+    const handle =
+      clients?.did === this.did ? (clients.handle ?? this.did) : this.did
+    return basicOf({did: this.did, handle})
   }
 
   /** The restored posts for `subjects`, from the store or one `fill`. */
@@ -256,7 +291,7 @@ export class OwnRepostsFeedAPI implements FeedAPI {
     try {
       const outcome = await withDeadline(
         askFill({uris: ask}, {kind: 'slot', foreground: true, screen: true}),
-        OWN_REPOST_DEADLINE_MS,
+        PROFILE_REPOST_DEADLINE_MS,
       )
       for (const uri of ask) {
         const verdict = outcome.uris.get(uri)
@@ -352,24 +387,109 @@ export class OwnRepostsFeedAPI implements FeedAPI {
 }
 
 /**
- * The reader's own Posts or Replies tab with their reposts of restored
- * posts, or `api` as it is for any other tab or without a PDS client.
+ * An unauthenticated client for the PDS `did`'s DID document names, as the
+ * private code reads another account's gate records. Throws when the PDS is
+ * unknown.
  */
-export function ownRepostsFeedApi(
+export async function ownerPdsClient(did: string) {
+  const pdsUrl = await authorPdsUrl(did)
+  if (!pdsUrl) throw new Error('The PDS of a profile owner could not be found')
+  return createLexClient(
+    {service: pdsUrl, fetch: networkAwareFetch},
+    {appLabelers: null},
+  )
+}
+
+type CacheEntry = {
+  promise: Promise<RepostRecordPage>
+  /** When the read settled; `undefined` while it runs. */
+  at?: number
+}
+
+/** Record pages by `<did>|<cursor>`, shared in flight and kept briefly. */
+const pageCache = new Map<string, CacheEntry>()
+
+function prune(now: number) {
+  for (const [key, entry] of pageCache) {
+    if (entry.at !== undefined && now - entry.at >= PROFILE_REPOST_CACHE_MS) {
+      pageCache.delete(key)
+    }
+  }
+  // Oldest first, as a Map iterates in insertion order.
+  for (const key of pageCache.keys()) {
+    if (pageCache.size <= CACHE_MAX) break
+    pageCache.delete(key)
+  }
+}
+
+/**
+ * `read` with one in-flight read per owner and cursor, and settled pages
+ * kept for `keepMs` (0: only shared while running). A failed read is not
+ * kept.
+ */
+export function sharedRepostPages(
+  did: string,
+  read: ListRepostRecords,
+  keepMs: number,
+): ListRepostRecords {
+  return cursor => {
+    const key = `${did}|${cursor ?? ''}`
+    const now = Date.now()
+    const hit = pageCache.get(key)
+    if (hit && (hit.at === undefined || now - hit.at < keepMs)) {
+      return hit.promise
+    }
+    prune(now)
+    const entry: CacheEntry = {promise: read(cursor)}
+    pageCache.set(key, entry)
+    entry.promise.then(
+      () => {
+        if (pageCache.get(key) !== entry) return
+        if (keepMs > 0) entry.at = Date.now()
+        else pageCache.delete(key)
+      },
+      () => {
+        if (pageCache.get(key) === entry) pageCache.delete(key)
+      },
+    )
+    return entry.promise
+  }
+}
+
+/** Test-only: forget kept record pages. */
+export function resetProfileRepostCache() {
+  pageCache.clear()
+}
+
+/**
+ * The Posts or Replies tab of `did` with the owner's reposts of restored
+ * posts, or `api` as it is for any other tab. The reader's own repo is read
+ * with their PDS client, any other owner's without a session.
+ */
+export function profileRepostsFeedApi(
   did: string,
   filter: string,
   api: FeedAPI,
+  clientFor: RepoClientFor = ownerPdsClient,
 ): FeedAPI {
   if (!REPOST_FILTERS.has(filter)) return api
-  const pds = getCurrentPdsClient()
-  if (!pds) return api
-  return new OwnRepostsFeedAPI(api, did, async cursor => {
-    const res = await pds.call(com.atproto.repo.listRecords, {
+  if (!did.startsWith('did:')) return api
+  const own = did === getCurrentDid()
+  const ownPds = own ? getCurrentPdsClient() : undefined
+  if (own && !ownPds) return api
+  const read: ListRepostRecords = async cursor => {
+    const client = ownPds ?? (await clientFor(did))
+    const res = await client.call(com.atproto.repo.listRecords, {
       repo: did as AtIdentifierString,
       collection: REPOST_COLLECTION,
-      limit: OWN_REPOST_RECORDS_LIMIT,
+      limit: PROFILE_REPOST_RECORDS_LIMIT,
       cursor,
     })
     return {records: res.records, cursor: res.cursor}
-  })
+  }
+  return new ProfileRepostsFeedAPI(
+    api,
+    did,
+    sharedRepostPages(did, read, own ? 0 : PROFILE_REPOST_CACHE_MS),
+  )
 }
