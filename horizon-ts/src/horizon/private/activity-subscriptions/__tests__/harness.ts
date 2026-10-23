@@ -1,27 +1,24 @@
 /*
- * Test harness for activity subscriptions: a virtual monotonic clock with
- * its own timers, a dirty store shared by any number of "tabs", and fake
- * Bluesky and prism servers over the lex client.
+ * Test harness for activity subscriptions: a virtual clock with its own
+ * timers, fake Bluesky and prism servers over the lex client, and the savers
+ * over them with fake toasts.
  */
 
 import {jest} from '@jest/globals'
+import {QueryClient} from '@tanstack/react-query'
 
 import {resetPrismHealth} from '#/horizon/routing/health'
 import {type Call, fakeClient, type Reply} from '../../__tests__/fixtures'
-import {
-  dirtyKey,
-  type Flags,
-  OFF,
-  parseDirtyKey,
-} from '../common'
-import {type DirtyStore} from '../mirror'
-import {type BellUi} from '../saver'
-import {type ActivityTab, createActivityTab} from '../tab'
+import {type Flags} from '../common'
+import {type ActivityToasts, createActivitySavers} from '../saver'
 
 export const DID = 'did:plc:memberaaaaaaaaaaaaaaaaaaa'
 export const OTHER_ACCOUNT = 'did:plc:secondbbbbbbbbbbbbbbbbbbb'
 export const SUBJECT = 'did:plc:subjectccccccccccccccccc'
 export const SUBJECT_2 = 'did:plc:subjectdddddddddddddddddd'
+
+export const ON: Flags = {post: true, reply: false}
+export const BOTH: Flags = {post: true, reply: true}
 
 const tick =
   typeof setImmediate === 'function'
@@ -42,7 +39,6 @@ export function virtualClock(start = 1_000_000) {
   const timers = new Map<number, {at: number; callback: () => void}>()
   return {
     now: () => now,
-    wallNow: () => Date.parse('2026-10-22T12:00:00.000Z') + (now - start),
     setTimeout: (callback: () => void, ms: number): unknown => {
       const id = ++seq
       timers.set(id, {at: now + ms, callback})
@@ -50,15 +46,6 @@ export function virtualClock(start = 1_000_000) {
     },
     clearTimeout: (handle: unknown) => {
       timers.delete(handle as number)
-    },
-    setInterval: (callback: () => void, ms: number): unknown => {
-      const id = ++seq
-      const run = () => {
-        timers.set(id, {at: now + ms, callback: run})
-        callback()
-      }
-      timers.set(id, {at: now + ms, callback: run})
-      return id
     },
     /** Move forward `ms`, running each timer as it comes due. */
     async advance(ms: number) {
@@ -83,101 +70,53 @@ export function virtualClock(start = 1_000_000) {
   }
 }
 
-/**
- * A dirty store several tabs share, as `localStorage` is: each write is
- * heard by every subscriber.
- */
-export function sharedStore() {
-  const values = new Map<string, string>()
-  const reconciled = new Map<string, number>()
-  const listeners = new Set<(did: string, subject: string) => void>()
-  const notify = (did: string, subject: string) => {
-    listeners.forEach(listener => listener(did, subject))
-  }
-  const store: DirtyStore = {
-    readToken: (did, subject) => values.get(dirtyKey(did, subject)),
-    writeToken: (did, subject, token) => {
-      values.set(dirtyKey(did, subject), token)
-      notify(did, subject)
-    },
-    removeToken: (did, subject) => {
-      values.delete(dirtyKey(did, subject))
-      notify(did, subject)
-    },
-    listSubjects: did =>
-      Array.from(values.keys()).flatMap(key => {
-        const parsed = parseDirtyKey(key)
-        return parsed && parsed.did === did ? [parsed.subject] : []
-      }),
-    subscribeDirty: listener => {
-      listeners.add(listener)
-      return () => {
-        listeners.delete(listener)
-      }
-    },
-    readReconciled: did => reconciled.get(did),
-    writeReconciled: (did, at) => {
-      reconciled.set(did, at)
-    },
-    clearReconciled: did => {
-      reconciled.delete(did)
-    },
-  }
-  return {store, values, reconciled}
-}
-
-export function fakeUi() {
+export function fakeToasts() {
   return {
-    setBell: jest.fn<BellUi['setBell']>(),
-    savedToast: jest.fn<BellUi['savedToast']>(),
-    failedToast: jest.fn<BellUi['failedToast']>(),
-    mirrorPendingToast: jest.fn<BellUi['mirrorPendingToast']>(),
+    savedToast: jest.fn<ActivityToasts['savedToast']>(),
+    failedToast: jest.fn<ActivityToasts['failedToast']>(),
+    privateFailedToast: jest.fn<ActivityToasts['privateFailedToast']>(),
+    combinedFailedToast: jest.fn<ActivityToasts['combinedFailedToast']>(),
   }
 }
 
-export type Pending = {
-  resolve: (reply: Reply) => void
+/** Every toast shown, in order, as `[name, ...args]`. */
+export function toastsShown(toasts: ReturnType<typeof fakeToasts>) {
+  const all: {order: number; call: unknown[]}[] = []
+  for (const [name, fn] of Object.entries(toasts)) {
+    fn.mock.calls.forEach((args, i) =>
+      all.push({order: fn.mock.invocationCallOrder[i], call: [name, ...args]}),
+    )
+  }
+  return all.sort((a, b) => a.order - b.order).map(entry => entry.call)
 }
+
+type Held = {call: Call; resolve: (reply: Reply) => void}
 
 /**
  * Bluesky as the fake AppView keeps it: the bell per subject, which a put
  * changes. `putReply` answers a put instead (a refusal, a network failure,
- * or `'hang'` to hold it until the test answers it).
+ * or `'hang'` to hold it until the test answers it); `profileReply` likewise
+ * for `getProfile`.
  */
 export function fakeBluesky(did = DID) {
   const bells = new Map<string, Flags>()
-  const blocked = new Set<string>()
-  const held: {call: Call; resolve: (reply: Reply) => void}[] = []
+  const held: Held[] = []
   const state = {
     putReply: undefined as Reply | 'hang' | undefined,
     profileReply: undefined as Reply | 'hang' | undefined,
-    /** What a profile read shows instead of the bell (read-back lag). */
-    lagged: new Map<string, Flags | undefined>(),
-    listPages: undefined as Reply[] | undefined,
   }
   const profile = (subject: string) => {
-    const bell = state.lagged.has(subject)
-      ? state.lagged.get(subject)
-      : bells.get(subject)
+    const bell = bells.get(subject)
     return {
       did: subject,
       handle: 'subject.test',
-      viewer: {
-        ...(bell && (bell.post || bell.reply)
-          ? {activitySubscription: bell}
-          : {}),
-        ...(blocked.has(subject)
-          ? {blocking: `at://${did}/app.bsky.graph.block/3kblock222222`}
-          : {}),
-      },
+      viewer:
+        bell && (bell.post || bell.reply) ? {activitySubscription: bell} : {},
     }
   }
   const {client, calls} = fakeClient(did, call => {
     if (call.nsid === 'app.bsky.notification.putActivitySubscription') {
-      const body = call.body as {
-        subject: string
-        activitySubscription: Flags
-      }
+      const body = call.body as {subject: string; activitySubscription: Flags}
       const apply = () => bells.set(body.subject, body.activitySubscription)
       const answer = ok({
         subject: body.subject,
@@ -205,76 +144,106 @@ export function fakeBluesky(did = DID) {
       const reply = state.profileReply
       if (reply === 'hang') {
         return new Promise<Reply>(resolve =>
-          held.push({call, resolve: () => resolve(ok(profile(subject)))}),
+          held.push({
+            call,
+            resolve: r =>
+              resolve(
+                !(r instanceof Error) && r.status === 200 ? ok(profile(subject)) : r,
+              ),
+          }),
         )
       }
       if (reply) return reply
       return ok(profile(subject))
     }
-    if (call.nsid === 'app.bsky.notification.listActivitySubscriptions') {
-      if (state.listPages) {
-        const index = Number(call.params.get('cursor') ?? '0')
-        return state.listPages[index] ?? ok({subscriptions: []})
-      }
-      return ok({
-        subscriptions: Array.from(bells.entries())
-          .filter(([, flags]) => flags.post || flags.reply)
-          .map(([subject]) => profile(subject)),
-      })
-    }
     return {status: 404, body: {error: 'NotFound'}}
   })
-  return {client, calls, bells, blocked, held, state}
+  const puts = () =>
+    calls
+      .filter(c => c.nsid === 'app.bsky.notification.putActivitySubscription')
+      .map(c => (c.body as {activitySubscription: Flags}).activitySubscription)
+  const reads = () =>
+    calls.filter(c => c.nsid === 'app.bsky.actor.getProfile').length
+  const heldOf = (nsid: string) => held.filter(h => h.call.nsid === nsid)
+  return {client, calls, bells, held, heldOf, state, puts, reads}
 }
 
-/** prism as the fake keeps it: one row per subject, stamped on each put. */
+/**
+ * prism as the fake keeps it: one row per subject with a flag on. The put
+ * answers with the accepted flags (none after an off); the list pages by
+ * `limit` with a numeric cursor. `putReply` and `listReply` answer instead
+ * (`'hang'` holds the call; a function decides per call).
+ */
 export function fakePrism(did = DID) {
-  const rows = new Map<string, {flags: Flags; updatedAt: string}>()
+  const rows = new Map<string, Flags>()
+  const held: Held[] = []
+  type Answer = Reply | 'hang' | undefined
   const state = {
-    putReply: undefined as Reply | ((call: Call) => Reply | undefined) | undefined,
-    listReply: undefined as Reply | undefined,
-    asOf: '2026-10-22T12:00:00.000Z',
-    /** The time a put stamps. */
-    stamp: '2026-10-22T12:00:00.000Z',
+    putReply: undefined as Answer | ((call: Call) => Answer),
+    listReply: undefined as Answer | ((call: Call) => Answer),
+  }
+  const pick = (reply: Answer | ((call: Call) => Answer), call: Call) =>
+    typeof reply === 'function' ? reply(call) : reply
+  const list = (call: Call) => {
+    const limit = Number(call.params.get('limit') ?? '50')
+    const start = Number(call.params.get('cursor') ?? '0')
+    const all = Array.from(rows.entries())
+    const page = all.slice(start, start + limit)
+    return ok({
+      subscriptions: page.map(([subject, flags]) => ({
+        subject,
+        activitySubscription: flags,
+      })),
+      ...(start + limit < all.length ? {cursor: String(start + limit)} : {}),
+    })
   }
   const {client, calls} = fakeClient(did, call => {
     if (call.nsid === 'app.nearhorizon.private.putActivitySubscription') {
-      const reply =
-        typeof state.putReply === 'function'
-          ? state.putReply(call)
-          : state.putReply
+      const body = call.body as {subject: string; activitySubscription: Flags}
+      const apply = () => {
+        const flags = body.activitySubscription
+        if (flags.post || flags.reply) rows.set(body.subject, flags)
+        else rows.delete(body.subject)
+        const now = rows.get(body.subject)
+        return ok({
+          subject: body.subject,
+          ...(now ? {activitySubscription: now} : {}),
+        })
+      }
+      const reply = pick(state.putReply, call)
+      if (reply === 'hang') {
+        return new Promise<Reply>(resolve =>
+          held.push({
+            call,
+            resolve: r =>
+              resolve(!(r instanceof Error) && r.status === 200 ? apply() : r),
+          }),
+        )
+      }
       if (reply) return reply
-      const body = call.body as {
-        subject: string
-        activitySubscription: Flags
-        ifNotChangedSince?: string
-      }
-      const row = rows.get(body.subject)
-      if (
-        body.ifNotChangedSince &&
-        row &&
-        Date.parse(row.updatedAt) > Date.parse(body.ifNotChangedSince)
-      ) {
-        return {status: 409, body: {error: 'Conflict', message: 'changed'}}
-      }
-      rows.set(body.subject, {
-        flags: body.activitySubscription,
-        updatedAt: state.stamp,
-      })
-      return ok({subject: body.subject})
+      return apply()
     }
     if (call.nsid === 'app.nearhorizon.private.listActivitySubscriptions') {
-      if (state.listReply) return state.listReply
-      return ok({
-        asOf: state.asOf,
-        subscriptions: Array.from(rows.entries())
-          .filter(([, row]) => row.flags.post || row.flags.reply)
-          .map(([subject, row]) => ({
-            subject,
-            activitySubscription: row.flags,
-            updatedAt: row.updatedAt,
-          })),
-      })
+      const reply = pick(state.listReply, call)
+      if (reply === 'hang') {
+        /*
+         * A plain 200 takes the page when the test answers, not when it was
+         * asked; a 200 with a body answers that body (an old page).
+         */
+        return new Promise<Reply>(resolve =>
+          held.push({
+            call,
+            resolve: r =>
+              resolve(
+                !(r instanceof Error) && r.status === 200 && r.body === undefined
+                  ? list(call)
+                  : r,
+              ),
+          }),
+        )
+      }
+      if (reply) return reply
+      return list(call)
     }
     return {status: 404, body: {error: 'NotFound'}}
   })
@@ -282,7 +251,12 @@ export function fakePrism(did = DID) {
     calls
       .filter(c => c.nsid === 'app.nearhorizon.private.putActivitySubscription')
       .map(c => c.body as Record<string, unknown>)
-  return {client, calls, rows, state, puts}
+  const lists = () =>
+    calls.filter(
+      c => c.nsid === 'app.nearhorizon.private.listActivitySubscriptions',
+    )
+  const heldOf = (nsid: string) => held.filter(h => h.call.nsid === nsid)
+  return {client, calls, rows, held, heldOf, state, puts, lists}
 }
 
 export function ok(body: unknown): Reply {
@@ -296,103 +270,38 @@ export function xrpcError(status: number, error: string): Reply {
 export type Harness = ReturnType<typeof harness>
 
 /**
- * One tab over `shared` (a new store by default), signed in as `did` with
- * the given servers.
+ * The savers on a virtual clock against fake servers, signed in as `did`,
+ * with one query client (the account's cache) and fake toasts. prism's calls
+ * report to health (FU-3), so health starts clean.
  */
 export function harness({
   clock = virtualClock(),
-  shared = sharedStore(),
   bluesky = fakeBluesky(),
   prism = fakePrism(),
   did = DID,
 }: {
   clock?: VirtualClock
-  shared?: ReturnType<typeof sharedStore>
   bluesky?: ReturnType<typeof fakeBluesky>
   prism?: ReturnType<typeof fakePrism>
   did?: string
 } = {}) {
-  // prism's calls report to health (FU-3); each tab starts healthy.
   resetPrismHealth()
-  const ui = fakeUi()
-  const checks = new Set<() => void>()
-  const env = {
-    applies: 'yes' as 'yes' | 'no' | 'wait',
-    current: did as string | undefined,
-    enabled: true,
-    expectsMirror: true,
-    removals: false,
-  }
-  let tokens = 0
-  const tab: ActivityTab = createActivityTab({
-    store: shared.store,
-    ui,
-    now: clock.now,
-    wallNow: clock.wallNow,
+  const toasts = fakeToasts()
+  const queryClient = new QueryClient({
+    defaultOptions: {queries: {retry: false, structuralSharing: false}},
+  })
+  const savers = createActivitySavers({
     setTimeout: clock.setTimeout,
     clearTimeout: clock.clearTimeout,
-    newToken: () => `token-${Math.random().toString(36).slice(2)}-${++tokens}`,
-    current: () =>
-      env.current
-        ? {
-            did: env.current,
-            prismClient: prism.client,
-            appviewClient: bluesky.client,
-          }
-        : undefined,
-    enabled: () => env.enabled,
-    removals: () => env.removals,
-    applies: () => env.applies,
-    expectsMirror: () => env.expectsMirror,
-    subscribeChecks: listener => {
-      checks.add(listener)
-      return () => {
-        checks.delete(listener)
-      }
-    },
-    reportError: () => {},
+    toasts,
   })
-  return {
-    tab,
-    clock,
-    shared,
-    bluesky,
-    prism,
-    ui,
-    env,
+  const ctx = (subject = SUBJECT) => ({
     did,
-    /** Membership or features answered. */
-    answer() {
-      checks.forEach(listener => listener())
-    },
-    /** A press of Save as the dialog makes it, after the close. */
-    press(flags: Flags, {subject = SUBJECT, before}: {subject?: string; before?: Flags} = {}) {
-      tab.mirror.markPressed(did, subject)
-      tab.saver.press(
-        {
-          did,
-          subject,
-          handle: 'subject.test',
-          appview: bluesky.client,
-          before: before ?? tab.saver.status(did, subject)?.shown ?? OFF,
-        },
-        flags,
-      )
-    },
-    token(subject = SUBJECT) {
-      return shared.store.readToken(did, subject)
-    },
-    profileReads() {
-      return bluesky.calls.filter(c => c.nsid === 'app.bsky.actor.getProfile')
-        .length
-    },
-    blueskyPuts() {
-      return bluesky.calls
-        .filter(c => c.nsid === 'app.bsky.notification.putActivitySubscription')
-        .map(c => (c.body as {activitySubscription: Flags}).activitySubscription)
-    },
-  }
+    subject,
+    handle: 'subject.test',
+    appview: bluesky.client,
+    prism: prism.client,
+    queryClient,
+  })
+  return {savers, clock, bluesky, prism, toasts, queryClient, did, ctx}
 }
-
-export const ON: Flags = {post: true, reply: false}
-export const BOTH: Flags = {post: true, reply: true}

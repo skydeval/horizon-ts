@@ -31,6 +31,7 @@ import {
 import {useAudiencesQuery} from '#/horizon/private/audiences/useAudiencesQuery'
 import {isPrivateDisplay} from '#/horizon/private/render/controls'
 import {PrivateMark} from '#/horizon/private/render/PrivateBadge'
+import {SyncingLabel} from '#/horizon/private/render/SyncingLabel'
 import {usePrivatePostFacts} from '#/horizon/private/store'
 import {isAudienceUri} from '#/horizon/private/uri'
 
@@ -153,6 +154,7 @@ function PrivatePostDetailsInner({uri}: {uri: string}) {
           </Text>
         </>
       ) : null}
+      <SyncingLabel uri={uri} size="sm" />
     </View>
   )
 }

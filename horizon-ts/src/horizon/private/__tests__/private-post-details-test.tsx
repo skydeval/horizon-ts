@@ -52,6 +52,10 @@ jest.mock('#/horizon/private/store', () => ({
 jest.mock('@tanstack/react-query', () => ({
   useQuery: () => ({data: undefined}),
 }))
+// The "Syncing" label reads the registry; not under test here.
+jest.mock('#/horizon/private/render/SyncingLabel', () => ({
+  SyncingLabel: () => null,
+}))
 
 import {PrivatePostDetails} from '#/horizon/private/render/AudienceLabel'
 

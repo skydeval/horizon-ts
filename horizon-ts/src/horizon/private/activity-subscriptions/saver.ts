@@ -1,22 +1,26 @@
 /*
- * The saver (activity subscriptions design 2.1, AS-1): the bell's save to
- * Bluesky, in memory, per tab and per (account, subject). The dialog closes
- * at press and the bell shows the press; the saver then puts it to Bluesky
- * with the clients captured at press, one put in flight at a time, so only
- * the latest press follows the current put.
+ * The savers (activity subscriptions design 2.3): the bell dialog's
+ * optimistic save, one saver per store, in memory, per tab and per
+ * (account, subject). The dialog closes at Save and each changed pair's cache
+ * shows the press; its store's saver then puts it with the clients captured
+ * at press, one put in flight at a time, so only the latest press follows the
+ * current put. "The latest" is the press counter, whatever the flags.
  *
- * - Accepted, and still the latest: the stock success toast, and the
- *   accepted flags go to the mirror.
- * - Refused (an answered error), and still the latest: the bell goes back to
- *   what Bluesky last accepted, the F-4 toast, and the mirror levels.
- * - No answer within 15 s, or a transport error at once: one `getProfile`
- *   read sets the bell to Bluesky's value; a read equal to the press counts
- *   as accepted, otherwise the F-4 toast and the mirror waits G after that
- *   put. A late answer to it changes nothing.
+ * - Accepted, and the latest: `accepted`; `acked` is the accepted flags.
+ * - Refused (an answered error), and the latest: the cache goes back to
+ *   `acked`, `refused`.
+ * - No answer within 15 s, or a transport error: one truth read. Equal to the
+ *   press is `confirmed`, anything else `refused`, and the cache takes it; a
+ *   failed read goes back to `acked`, `refused`. A late answer changes
+ *   nothing.
+ * - Superseded: a put or a truth read whose press is no longer the latest
+ *   reports `superseded` to its group and to every group of a press made
+ *   after it but before the newest, and writes nothing.
  *
- * A superseded answer shows nothing. A read never overwrites a newer press:
- * every read writes the bell only if `presses` has not moved since it began.
- * Nothing resumes after a reload; only the dirty mark survives (2.2).
+ * Every outcome goes to the press's `PressGroup`, which speaks once for the
+ * press across both stores. At a press that finds the saver idle, `acked` is
+ * the `truth` the caller read from the store's cache before writing the
+ * press. Nothing is stored on the device and nothing resumes after a reload.
  */
 
 import {type Client} from '@atproto/lex'
@@ -24,152 +28,219 @@ import {type QueryClient} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
 import {
+  classifyPrismError,
+  failureName,
   putBlueskySubscription,
+  putPrismSubscription,
   readBlueskyBell,
   wasAnswered,
 } from '#/horizon/private/activity-subscriptions/api'
 import {
   type Flags,
+  OFF,
   pairKey,
   PUT_TIMEOUT_MS,
   sameFlags,
 } from '#/horizon/private/activity-subscriptions/common'
+import {
+  privateActivitySubscriptionsKey,
+  readAllPrismSubscriptions,
+  readCachedPrivateFlags,
+  setPrivateFlags,
+} from '#/horizon/private/activity-subscriptions/private-state'
+import {
+  bellUi,
+  readBellTruth,
+  setBell,
+} from '#/horizon/private/activity-subscriptions/ui'
 import type * as bsky from '#/types/bsky'
 
-/** The bell's visible side: the shadow, the cached list and the toasts. */
-export type BellUi = {
-  /** Set the profile shadow and the cached list to `flags`. */
-  setBell: (
-    queryClient: QueryClient | undefined,
-    subject: string,
-    flags: Flags,
-    profile?: bsky.profile.AnyProfileView,
-  ) => void
-  /** The stock success toast; `before` is what the bell showed at press. */
-  savedToast: (handle: string, flags: Flags, before: Flags) => void
-  /** "Couldn't save notification settings for @handle" (F-4). */
-  failedToast: (handle: string) => void
-  /** The mirror's once-per-press toast while prism is not reached (2.2). */
-  mirrorPendingToast: (flags: Flags) => void
-}
+/** The two stores (D-2). */
+export type StoreName = 'bluesky' | 'prism'
 
-/** What a press captures (AS1-N5): nothing later reads the current account. */
+/** How a store's part of a press ended. */
+export type Outcome = 'accepted' | 'confirmed' | 'refused' | 'superseded'
+
+/** What a press captures: nothing later reads the current account (F7-7). */
 export type PressContext = {
   did: string
   subject: string
   handle: string
   profile?: bsky.profile.AnyProfileView
   appview: Client
+  /** The account's prism client; only a private press needs it. */
+  prism?: Client
   queryClient?: QueryClient
-  /** What the bell showed before the press: the dialog's initial state. */
-  before: Flags
 }
 
-/** How the mirror is told of an answer it should act on. */
-export type HandoffKind = 'accepted' | 'confirmed' | 'refused'
+/** One store: its put, its truth read and its cache. */
+export type Store = {
+  name: StoreName
+  /** Put `flags`; resolves with the flags the store accepted. */
+  put: (ctx: PressContext, flags: Flags) => Promise<Flags>
+  /** The truth read: the subject's flags as the store holds them now. */
+  read: (ctx: PressContext) => Promise<Flags>
+  /** Write the subject's flags to the store's cache. */
+  write: (ctx: PressContext, flags: Flags) => void
+  /** The subject's cached truth, without any pending press (`truth`). */
+  cached: (ctx: PressContext) => Flags
+  /** Write an accepted put's flags too (prism's returned flags). */
+  writesAccepted: boolean
+  /** Whether a refusal is the store's limit (prism's `LimitReached`). */
+  isLimit: (error: unknown) => boolean
+}
+
+/** The toasts a press can end with (2.3, "The per-press join"). */
+export type ActivityToasts = {
+  /** The stock success toast, worded from all four flags. */
+  savedToast: (handle: string, after: Flags, before: Flags) => void
+  /** Bluesky's refusal. */
+  failedToast: (handle: string) => void
+  /** prism's refusal; `limit` for `LimitReached`. */
+  privateFailedToast: (handle: string, limit: boolean) => void
+  /** Both refused; `limit` when prism's refusal is `LimitReached`. */
+  combinedFailedToast: (handle: string, limit: boolean) => void
+}
+
+/** Both pairs as the dialog showed them. */
+export type FourFlags = {public: Flags; private: Flags}
+
+/** The per-press join across the two savers. */
+export type PressGroup = {
+  report: (store: StoreName, outcome: Outcome, limit?: boolean) => void
+}
+
+/**
+ * The join for one press of Save. `sent` are the pairs that changed; it
+ * speaks once, after each has reported:
+ * - each `accepted` or `confirmed`: the success toast;
+ * - any `refused`: that store's toast, or one combined toast for both;
+ * - otherwise (some `superseded`): nothing, the newer press speaks.
+ */
+export function createPressGroup(
+  toasts: ActivityToasts,
+  {
+    handle,
+    sent,
+    before,
+    after,
+  }: {handle: string; sent: StoreName[]; before: FourFlags; after: FourFlags},
+): PressGroup {
+  const outcomes = new Map<StoreName, {outcome: Outcome; limit: boolean}>()
+  let spoken = sent.length === 0
+  const union = (flags: FourFlags): Flags => ({
+    post: flags.public.post || flags.private.post,
+    reply: flags.public.reply || flags.private.reply,
+  })
+  const speak = () => {
+    spoken = true
+    const refused = sent.filter(
+      store => outcomes.get(store)?.outcome === 'refused',
+    )
+    const limit = outcomes.get('prism')?.limit ?? false
+    if (refused.length > 1) {
+      toasts.combinedFailedToast(handle, limit)
+    } else if (refused[0] === 'bluesky') {
+      toasts.failedToast(handle)
+    } else if (refused[0] === 'prism') {
+      toasts.privateFailedToast(handle, limit)
+    } else if (
+      sent.every(store => {
+        const outcome = outcomes.get(store)?.outcome
+        return outcome === 'accepted' || outcome === 'confirmed'
+      })
+    ) {
+      toasts.savedToast(handle, union(after), union(before))
+    }
+  }
+  return {
+    report(store, outcome, limit = false) {
+      if (spoken || !sent.includes(store) || outcomes.has(store)) return
+      outcomes.set(store, {outcome, limit})
+      if (sent.every(name => outcomes.has(name))) speak()
+    },
+  }
+}
 
 export type SaverDeps = {
-  now: () => number
+  store: Store
   setTimeout: (callback: () => void, ms: number) => unknown
   clearTimeout: (handle: unknown) => void
-  ui: BellUi
-  /** The mirror's hand-off (2.2). */
-  handoff: (did: string, subject: string, kind: HandoffKind) => void
-  /** Ask the mirror to look at the subject again at monotonic time `at`. */
-  levelAt: (did: string, subject: string, at: number) => void
-  /** G, for the wait after an unanswered put. */
-  graceMs: number
 }
 
 type Put = {
-  id: number
+  /** The press counter when it was sent. */
+  press: number
   flags: Flags
-  sentAt: number
   timer: unknown
   settled: boolean
 }
 
-/** A put that went unanswered and was not confirmed by the 15 s read. */
-type Unanswered = {sentAt: number; confirmed: boolean}
-
 type Entry = {
-  did: string
-  subject: string
-  handle: string
-  profile?: bsky.profile.AnyProfileView
-  appview: Client
-  queryClient?: QueryClient
-  /** What Bluesky last accepted in this run; at first the initial state. */
+  ctx: PressContext
+  /** What the store last accepted, or the cached truth at an idle press. */
   acked: Flags
-  /** When `acked` was accepted (or confirmed); `undefined` for the initial. */
-  ackedAt: number | undefined
-  /** The latest press. */
+  /** The latest press; the same object until the next press. */
   wanted: Flags
-  /** What the bell showed before the latest press, for the toast's wording. */
-  before: Flags
   /** Raised at each press. */
   presses: number
-  lastPressAt: number
-  /** What the saver last set the bell to. */
-  shown: Flags
+  /** The presses not reported yet, oldest first. */
+  groups: {press: number; group: PressGroup}[]
   inFlight: Put | undefined
   /** `wanted` still has to be sent. */
   pending: boolean
-  /** The 15 s read is running. */
+  /** A truth read is running. */
   reading: boolean
-  unanswered: Unanswered[]
-}
-
-/** What the mirror reads of a subject's saver. */
-export type SaverStatus = {
-  /** Nothing in flight, nothing waiting, no 15 s read. */
-  idle: boolean
-  handle: string
-  acked: Flags
-  ackedAt: number | undefined
-  /** The latest press. */
-  latest: Flags
-  presses: number
-  lastPressAt: number
-  shown: Flags
-  /** The latest send time of an unanswered, unconfirmed put. */
-  unansweredSentAt: number | undefined
 }
 
 export type Saver = ReturnType<typeof createSaver>
 
 export function createSaver(deps: SaverDeps) {
+  const {store} = deps
   const entries = new Map<string, Entry>()
-  let nextId = 1
+  const listeners = new Set<() => void>()
 
-  function setShown(entry: Entry, flags: Flags) {
-    entry.shown = flags
-    deps.ui.setBell(entry.queryClient, entry.subject, flags, entry.profile)
+  const notify = () => {
+    for (const listener of Array.from(listeners)) listener()
   }
 
-  function isLatest(entry: Entry, put: Put) {
-    return sameFlags(entry.wanted, put.flags)
+  const isIdle = (entry: Entry) =>
+    !entry.inFlight && !entry.pending && !entry.reading
+
+  /** `superseded` to every group of a press before `press`. */
+  function supersede(entry: Entry, press: number) {
+    while (entry.groups.length > 0 && entry.groups[0].press < press) {
+      entry.groups.shift()?.group.report(store.name, 'superseded')
+    }
+  }
+
+  /** The latest press's outcome, after superseding any older group. */
+  function finish(
+    entry: Entry,
+    press: number,
+    outcome: Outcome,
+    limit?: boolean,
+  ) {
+    supersede(entry, press)
+    if (entry.groups[0]?.press === press) {
+      entry.groups.shift()?.group.report(store.name, outcome, limit)
+    }
   }
 
   function pump(entry: Entry) {
     if (entry.inFlight || !entry.pending) return
     entry.pending = false
-    send(entry, entry.wanted)
-  }
-
-  function send(entry: Entry, flags: Flags) {
     const put: Put = {
-      id: nextId++,
-      flags,
-      sentAt: deps.now(),
+      press: entry.presses,
+      flags: entry.wanted,
       timer: undefined,
       settled: false,
     }
     entry.inFlight = put
     put.timer = deps.setTimeout(() => unanswered(entry, put), PUT_TIMEOUT_MS)
-    putBlueskySubscription(entry.appview, entry.subject, flags).then(
-      () => accepted(entry, put),
-      error => {
+    store.put(entry.ctx, put.flags).then(
+      flags => accepted(entry, put, flags),
+      (error: unknown) => {
         if (wasAnswered(error)) refused(entry, put, error)
         else unanswered(entry, put)
       },
@@ -184,225 +255,131 @@ export function createSaver(deps: SaverDeps) {
     return true
   }
 
-  function accepted(entry: Entry, put: Put) {
+  const isLatest = (entry: Entry, press: number) => entry.presses === press
+
+  /** A put or read that is not the latest: the newer press stands. */
+  function overtaken(entry: Entry) {
+    supersede(entry, entry.presses)
+    pump(entry)
+    notify()
+  }
+
+  function accepted(entry: Entry, put: Put, flags: Flags) {
     if (!settle(entry, put)) return
-    entry.acked = put.flags
-    entry.ackedAt = deps.now()
-    if (isLatest(entry, put)) {
-      entry.pending = false
-      deps.ui.savedToast(entry.handle, put.flags, entry.before)
-      deps.handoff(entry.did, entry.subject, 'accepted')
-    } else {
-      pump(entry)
-    }
+    entry.acked = flags
+    if (!isLatest(entry, put.press)) return overtaken(entry)
+    if (store.writesAccepted) store.write(entry.ctx, flags)
+    finish(entry, put.press, 'accepted')
+    notify()
   }
 
   function refused(entry: Entry, put: Put, error: unknown) {
     if (!settle(entry, put)) return
-    logger.error('Could not save activity subscription', {message: error})
-    if (isLatest(entry, put)) {
-      entry.pending = false
-      setShown(entry, entry.acked)
-      deps.ui.failedToast(entry.handle)
-      deps.handoff(entry.did, entry.subject, 'refused')
-    } else {
-      pump(entry)
-    }
+    logger.error('Could not save activity subscription', {
+      safeMessage: `${store.name}: ${failureName(error)}`,
+    })
+    if (!isLatest(entry, put.press)) return overtaken(entry)
+    store.write(entry.ctx, entry.acked)
+    finish(entry, put.press, 'refused', store.isLimit(error))
+    notify()
   }
 
   function unanswered(entry: Entry, put: Put) {
     if (!settle(entry, put)) return
-    const record: Unanswered = {sentAt: put.sentAt, confirmed: false}
-    entry.unanswered.push(record)
-    const levelAt = put.sentAt + deps.graceMs
-    if (!isLatest(entry, put)) {
-      // A waiting newer press is sent now.
-      deps.levelAt(entry.did, entry.subject, levelAt)
-      pump(entry)
-      return
-    }
-    entry.pending = false
+    if (!isLatest(entry, put.press)) return overtaken(entry)
     entry.reading = true
-    const presses = entry.presses
-    readBlueskyBell(entry.appview, entry.subject).then(
-      bell => {
+    const press = put.press
+    store.read(entry.ctx).then(
+      flags => {
         entry.reading = false
-        if (entry.presses !== presses) {
-          // A newer press came during the read: it stands.
-          deps.levelAt(entry.did, entry.subject, levelAt)
-          pump(entry)
-          return
-        }
-        setShown(entry, bell.flags)
-        if (sameFlags(bell.flags, put.flags)) {
-          // Bluesky holds the press; the late put can only write the same.
-          record.confirmed = true
-          entry.acked = put.flags
-          entry.ackedAt = deps.now()
-          deps.handoff(entry.did, entry.subject, 'confirmed')
-        } else {
-          deps.ui.failedToast(entry.handle)
-          deps.levelAt(entry.did, entry.subject, levelAt)
-        }
-        pump(entry)
+        if (!isLatest(entry, press)) return overtaken(entry)
+        // The cache takes the store's value; the late put changes nothing.
+        entry.acked = flags
+        store.write(entry.ctx, flags)
+        finish(entry, press, sameFlags(flags, put.flags) ? 'confirmed' : 'refused')
+        notify()
       },
       () => {
         entry.reading = false
-        if (entry.presses === presses) {
-          setShown(entry, entry.acked)
-          deps.ui.failedToast(entry.handle)
-        }
-        deps.levelAt(entry.did, entry.subject, levelAt)
-        pump(entry)
+        if (!isLatest(entry, press)) return overtaken(entry)
+        store.write(entry.ctx, entry.acked)
+        finish(entry, press, 'refused')
+        notify()
       },
     )
   }
 
   return {
+    store: store.name,
+
+    /** The store's cached truth for the subject (2.3, `truth`). */
+    cached: (ctx: PressContext) => store.cached(ctx),
+
+    /** Write the subject's flags to the store's cache. */
+    write: (ctx: PressContext, flags: Flags) => store.write(ctx, flags),
+
     /**
-     * A press of Save, after the dialog closed and the bell shows `flags`.
-     * The caller has marked the subject dirty (2.2) and written the bell.
+     * A press of Save, inside the dialog's close callback, after the caller
+     * has read `truth` (the store's cached value for the subject) and then
+     * written `flags` to the cache. An idle saver takes `truth` as `acked`;
+     * one with a put, a waiting press or a truth read keeps its own.
      */
-    press(ctx: PressContext, flags: Flags) {
+    press(ctx: PressContext, flags: Flags, truth: Flags, group: PressGroup) {
       const key = pairKey(ctx.did, ctx.subject)
       let entry = entries.get(key)
       if (!entry) {
         entry = {
-          did: ctx.did,
-          subject: ctx.subject,
-          handle: ctx.handle,
-          profile: ctx.profile,
-          appview: ctx.appview,
-          queryClient: ctx.queryClient,
-          acked: ctx.before,
-          ackedAt: undefined,
+          ctx,
+          acked: truth,
           wanted: flags,
-          before: ctx.before,
           presses: 0,
-          lastPressAt: 0,
-          shown: flags,
+          groups: [],
           inFlight: undefined,
           pending: false,
           reading: false,
-          unanswered: [],
         }
         entries.set(key, entry)
+      } else if (isIdle(entry)) {
+        entry.acked = truth
       }
-      // The latest press's account clients and profile are used from here.
-      entry.handle = ctx.handle
-      entry.profile = ctx.profile ?? entry.profile
-      entry.appview = ctx.appview
-      entry.queryClient = ctx.queryClient
+      // The latest press's clients and profile are used from here.
+      entry.ctx = ctx
       entry.wanted = flags
-      entry.before = ctx.before
       entry.presses += 1
-      entry.lastPressAt = deps.now()
-      entry.shown = flags
+      entry.groups.push({press: entry.presses, group})
       entry.pending = true
       pump(entry)
+      notify()
     },
 
     /**
-     * A press of Save with `OPTIMISTIC_ACTIVITY_SUBSCRIPTIONS` off: the stock
-     * dialog puts and waits itself, and reports its answer with
-     * `stockAnswered`. Until then the subject counts as in flight.
+     * The subject's pending press while the saver is not idle, else
+     * `undefined`. The same object on every call until it changes, so it can
+     * be a `useSyncExternalStore` snapshot.
      */
-    stockPress(ctx: PressContext, flags: Flags) {
-      const key = pairKey(ctx.did, ctx.subject)
-      const entry: Entry = entries.get(key) ?? {
-        did: ctx.did,
-        subject: ctx.subject,
-        handle: ctx.handle,
-        profile: ctx.profile,
-        appview: ctx.appview,
-        queryClient: ctx.queryClient,
-        acked: ctx.before,
-        ackedAt: undefined,
-        wanted: flags,
-        before: ctx.before,
-        presses: 0,
-        lastPressAt: 0,
-        shown: ctx.before,
-        inFlight: undefined,
-        pending: false,
-        reading: false,
-        unanswered: [],
-      }
-      entries.set(key, entry)
-      entry.wanted = flags
-      entry.before = ctx.before
-      entry.presses += 1
-      entry.lastPressAt = deps.now()
-      entry.inFlight = {
-        id: nextId++,
-        flags,
-        sentAt: deps.now(),
-        timer: undefined,
-        settled: false,
-      }
-    },
-
-    /**
-     * The stock dialog's answer: accepted flags go to the mirror (rule a), a
-     * failure has the mirror level from Bluesky.
-     */
-    stockAnswered(did: string, subject: string, flags: Flags, ok: boolean) {
+    pending(did: string, subject: string): Flags | undefined {
       const entry = entries.get(pairKey(did, subject))
-      if (!entry) return
-      entry.inFlight = undefined
-      if (ok) {
-        entry.acked = flags
-        entry.ackedAt = deps.now()
-        entry.shown = flags
-        deps.handoff(did, subject, 'accepted')
-      } else {
-        deps.handoff(did, subject, 'refused')
+      return entry && !isIdle(entry) ? entry.wanted : undefined
+    },
+
+    /** Called on every press, settle and truth-read end. */
+    subscribe(listener: () => void): () => void {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
       }
     },
 
-    /** The subject's saver as the mirror reads it; `undefined`: no press. */
-    status(did: string, subject: string): SaverStatus | undefined {
+    /** What the saver holds for a subject (tests). */
+    status(did: string, subject: string) {
       const entry = entries.get(pairKey(did, subject))
       if (!entry) return undefined
-      let unansweredSentAt: number | undefined
-      for (const put of entry.unanswered) {
-        if (put.confirmed) continue
-        unansweredSentAt = Math.max(unansweredSentAt ?? put.sentAt, put.sentAt)
-      }
       return {
-        idle: !entry.inFlight && !entry.pending && !entry.reading,
-        handle: entry.handle,
+        idle: isIdle(entry),
         acked: entry.acked,
-        ackedAt: entry.ackedAt,
-        latest: entry.wanted,
+        wanted: entry.wanted,
         presses: entry.presses,
-        lastPressAt: entry.lastPressAt,
-        shown: entry.shown,
-        unansweredSentAt,
       }
-    },
-
-    /** Presses so far for the subject (0 without a saver). */
-    presses(did: string, subject: string): number {
-      return entries.get(pairKey(did, subject))?.presses ?? 0
-    },
-
-    /**
-     * A levelling read's value for the bell: written only when no press came
-     * since the read began (`presses`). Returns whether it was written.
-     */
-    showRead(
-      did: string,
-      subject: string,
-      presses: number,
-      flags: Flags,
-      queryClient: QueryClient | undefined,
-    ): boolean {
-      const entry = entries.get(pairKey(did, subject))
-      if ((entry?.presses ?? 0) !== presses) return false
-      if (entry) setShown(entry, flags)
-      else deps.ui.setBell(queryClient, subject, flags)
-      return true
     },
 
     /** Forget everything (tests). */
@@ -411,6 +388,136 @@ export function createSaver(deps: SaverDeps) {
         if (entry.inFlight) deps.clearTimeout(entry.inFlight.timer)
       }
       entries.clear()
+      listeners.clear()
     },
   }
+}
+
+/** Bluesky's store: the public pair (`ui.ts` `setBell`, unchanged). */
+export const blueskyStore: Store = {
+  name: 'bluesky',
+  put: async (ctx, flags) => {
+    await putBlueskySubscription(ctx.appview, ctx.subject, flags)
+    return flags
+  },
+  read: async ctx => (await readBlueskyBell(ctx.appview, ctx.subject)).flags,
+  write: (ctx, flags) =>
+    setBell(ctx.queryClient, ctx.subject, flags, ctx.profile),
+  cached: ctx => readBellTruth(ctx.queryClient, ctx.subject, ctx.profile),
+  writesAccepted: false,
+  isLimit: () => false,
+}
+
+/**
+ * prism's store: the private pair, through the busy wrappers. The truth read
+ * is a direct read of the whole list outside the query, with
+ * `{shared: false}`, so it is fresh: it starts after the put's outcome and
+ * never takes a throttled lead's body (2.3). Its cache is 2.2's list, for
+ * the subject only; an accepted put's returned flags are written too.
+ */
+export const prismStore: Store = {
+  name: 'prism',
+  put: (ctx, flags) =>
+    ctx.prism
+      ? putPrismSubscription(ctx.prism, ctx.subject, flags)
+      : Promise.reject(new Error('No prism client')),
+  read: async ctx => {
+    if (!ctx.prism) throw new Error('No prism client')
+    const map = await readAllPrismSubscriptions(ctx.prism, {shared: false})
+    return map[ctx.subject] ?? OFF
+  },
+  write: (ctx, flags) =>
+    setPrivateFlags(ctx.queryClient, ctx.did, ctx.subject, flags),
+  cached: ctx => readCachedPrivateFlags(ctx.queryClient, ctx.did, ctx.subject),
+  writesAccepted: true,
+  isLimit: error => classifyPrismError(error) === 'limit',
+}
+
+export type ActivitySavers = {
+  bluesky: Saver
+  prism: Saver
+  toasts: ActivityToasts
+}
+
+export type ActivitySaversDeps = {
+  setTimeout: (callback: () => void, ms: number) => unknown
+  clearTimeout: (handle: unknown) => void
+  toasts: ActivityToasts
+  bluesky: Store
+  prism: Store
+}
+
+/** The savers over the production stores; tests replace any dependency. */
+export function createActivitySavers(
+  overrides: Partial<ActivitySaversDeps> = {},
+): ActivitySavers {
+  const deps: ActivitySaversDeps = {
+    setTimeout: (callback, ms) => setTimeout(callback, ms),
+    clearTimeout: handle =>
+      clearTimeout(handle as ReturnType<typeof setTimeout>),
+    toasts: bellUi,
+    bluesky: blueskyStore,
+    prism: prismStore,
+    ...overrides,
+  }
+  const timers = {setTimeout: deps.setTimeout, clearTimeout: deps.clearTimeout}
+  return {
+    bluesky: createSaver({store: deps.bluesky, ...timers}),
+    prism: createSaver({store: deps.prism, ...timers}),
+    toasts: deps.toasts,
+  }
+}
+
+/**
+ * One press of Save, run inside the dialog's close callback (2.3, steps 2 to
+ * 4): only if the private pair is sent, cancel the list's fetches (a cancel
+ * reverts synchronously, so the writes below stand); then for each pair that
+ * changed, read the store's cached truth for the subject, write the press to
+ * the cache, and hand it to the store's saver, all in one synchronous run,
+ * with one `PressGroup` for the press. A list left with no data (a first
+ * load cancelled) is invalidated, so a mounted observer reads it again.
+ * Returns the pairs sent.
+ */
+export function savePress(
+  activity: ActivitySavers,
+  {ctx, before, after}: {ctx: PressContext; before: FourFlags; after: FourFlags},
+): StoreName[] {
+  const sent: StoreName[] = []
+  if (!sameFlags(before.public, after.public)) sent.push('bluesky')
+  if (ctx.prism && !sameFlags(before.private, after.private)) {
+    sent.push('prism')
+  }
+  if (sent.length === 0) return sent
+  const listKey = privateActivitySubscriptionsKey(ctx.did)
+  if (sent.includes('prism')) {
+    void ctx.queryClient?.cancelQueries({queryKey: listKey})
+  }
+  const group = createPressGroup(activity.toasts, {
+    handle: ctx.handle,
+    sent,
+    before,
+    after,
+  })
+  const hand = (saver: Saver, flags: Flags) => {
+    // Read before the write, so an idle saver's `acked` is not the press.
+    const truth = saver.cached(ctx)
+    saver.write(ctx, flags)
+    saver.press(ctx, flags, truth, group)
+  }
+  if (sent.includes('bluesky')) hand(activity.bluesky, after.public)
+  if (sent.includes('prism')) {
+    hand(activity.prism, after.private)
+    if (ctx.queryClient && ctx.queryClient.getQueryData(listKey) === undefined) {
+      void ctx.queryClient.invalidateQueries({queryKey: listKey})
+    }
+  }
+  return sent
+}
+
+let savers: ActivitySavers | undefined
+
+/** This tab's savers, made on first use. */
+export function getActivitySavers(): ActivitySavers {
+  if (!savers) savers = createActivitySavers()
+  return savers
 }

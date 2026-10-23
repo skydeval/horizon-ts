@@ -1,10 +1,10 @@
 /*
- * The requests of activity subscriptions for private posts (activity
- * subscriptions design 2.1 to 2.3; the prism handoff, section 2): Bluesky's
- * put, list and profile read on the account's AppView client, and prism's
- * private put and list on its prism client. Each takes the client it is
- * given, never the current account's, so a save finishes with the clients
- * captured at press (F-8).
+ * The requests of activity subscriptions (activity subscriptions design 2.2
+ * and 2.3; the prism handoff, section 2): Bluesky's put and profile read on
+ * the account's AppView client, for the public pair, and prism's private put
+ * and list on its prism client, for the private pair. Each takes the client
+ * it is given, never the current account's, so a save finishes with the
+ * clients captured at press (F7-7).
  */
 
 import {
@@ -12,7 +12,7 @@ import {
   XrpcInvalidResponseError,
   XrpcResponseError,
 } from '@atproto/lex'
-import {type DatetimeString, type DidString} from '@atproto/syntax'
+import {type DidString} from '@atproto/syntax'
 
 import {nearhorizon} from '#/horizon/lexicons'
 import {
@@ -26,7 +26,7 @@ import {
 import {leadErrorOf} from '#/horizon/private/api/transient'
 import {app} from '#/lexicons'
 
-/** Bluesky's put of the bell (the stock dialog's request). */
+/** Bluesky's put of the public pair (the stock dialog's request). */
 export async function putBlueskySubscription(
   appview: Client,
   subject: string,
@@ -38,19 +38,13 @@ export async function putBlueskySubscription(
   })
 }
 
-/** What Bluesky's profile of the subject says about the bell. */
-export type BlueskyBell = {
-  flags: Flags
-  /** A block either way, or through a list. */
-  blocked: boolean
-  /** Whether `viewer.activitySubscription` was present. */
-  present: boolean
-}
+/** What Bluesky's profile of the subject says about the public pair. */
+export type BlueskyBell = {flags: Flags}
 
 /**
  * One `app.bsky.actor.getProfile` of the subject (not `getProfiles`),
  * reading `viewer.activitySubscription` as the stock dialog does: an absent
- * field is off.
+ * field is off. The public pair's truth read.
  */
 export async function readBlueskyBell(
   appview: Client,
@@ -59,80 +53,59 @@ export async function readBlueskyBell(
   const profile = await appview.call(app.bsky.actor.getProfile, {
     actor: subject as DidString,
   })
-  const viewer = profile.viewer
-  return {
-    flags: readFlags(viewer?.activitySubscription),
-    present: !!viewer?.activitySubscription,
-    blocked: !!(
-      viewer?.blocking ||
-      viewer?.blockedBy ||
-      viewer?.blockingByList
-    ),
-  }
-}
-
-/** One page of Bluesky's list: each subject with its flags. */
-export async function listBlueskySubscriptions(
-  appview: Client,
-  {limit, cursor}: {limit: number; cursor?: string},
-): Promise<{
-  subscriptions: {subject: string; flags: Flags}[]
-  cursor?: string
-}> {
-  const res = await appview.call(
-    app.bsky.notification.listActivitySubscriptions,
-    {limit, cursor},
-  )
-  return {
-    subscriptions: res.subscriptions.map(profile => ({
-      subject: profile.did,
-      flags: readFlags(profile.viewer?.activitySubscription),
-    })),
-    cursor: res.cursor,
-  }
+  return {flags: readFlags(profile.viewer?.activitySubscription)}
 }
 
 /**
- * prism's private put. `ifNotChangedSince` only from the reconcile. A write
- * (prism busy design 2.2, FU-3): it goes at once, and its outcome is reported
- * to health and membership for the client's own account.
+ * prism's private put. A write (prism busy design 2.2, FU-3): it goes at
+ * once, and its outcome is reported to health and membership for the
+ * client's own account. Resolves with the flags prism accepted (absent is
+ * off).
  */
 export async function putPrismSubscription(
   prism: Client,
   subject: string,
   flags: Flags,
-  ifNotChangedSince?: string,
-): Promise<void> {
-  await reportedPrismWrite(nearhorizon.privatePutActivitySubscription, {
-    did: prism.did,
-    send: () =>
-      prism.call(nearhorizon.privatePutActivitySubscription, {
-        subject: subject as DidString,
-        activitySubscription: {post: flags.post, reply: flags.reply},
-        ...(ifNotChangedSince
-          ? {ifNotChangedSince: ifNotChangedSince as DatetimeString}
-          : {}),
-      }),
-  })
+): Promise<Flags> {
+  const output = await reportedPrismWrite(
+    nearhorizon.privatePutActivitySubscription,
+    {
+      did: prism.did,
+      send: () =>
+        prism.call(nearhorizon.privatePutActivitySubscription, {
+          subject: subject as DidString,
+          activitySubscription: {post: flags.post, reply: flags.reply},
+        }),
+    },
+  )
+  return readFlags(output.activitySubscription)
 }
 
 /** One prism row as listed. */
-export type PrismRow = {subject: string; flags: Flags; updatedAt: string}
+export type PrismRow = {subject: string; flags: Flags}
 
 /**
- * One page of prism's private list; `asOf` is the database's time. A read
- * (prism busy design 2, FU-3): through the throttle, with the call deadline.
+ * One page of prism's private list. A read (prism busy design 2, FU-3):
+ * through the throttle, with the call deadline.
+ *
+ * `shared` (default `true`) lets the page join an earlier identical call
+ * while the account is throttled. `false` leaves `params` out of the read
+ * the wrapper is given (they are still sent), so the single-flight join never
+ * hands it a lead's body: as a waiter it is sent on its own after the lead
+ * ends, and as the lead no waiter takes its answer (design 2.2). prism's
+ * truth read passes `false`.
  */
 export async function listPrismSubscriptions(
   prism: Client,
   {limit, cursor}: {limit: number; cursor?: string},
-): Promise<{asOf: string; rows: PrismRow[]; cursor?: string}> {
+  {shared = true}: {shared?: boolean} = {},
+): Promise<{rows: PrismRow[]; cursor?: string}> {
   const params = {limit, cursor}
   const {body: res} = await reportedPrismCall(
     nearhorizon.privateListActivitySubscriptions,
     {
       did: prism.did,
-      params,
+      ...(shared ? {params} : {}),
       send: signal =>
         prism.call(nearhorizon.privateListActivitySubscriptions, params, {
           signal,
@@ -140,56 +113,38 @@ export async function listPrismSubscriptions(
     },
   )
   return {
-    asOf: res.asOf,
     rows: res.subscriptions.map(row => ({
       subject: row.subject,
       flags: readFlags(row.activitySubscription),
-      updatedAt: row.updatedAt,
     })),
     cursor: res.cursor,
   }
 }
 
 /**
- * How a prism answer is handled:
- * - `invalid`: `InvalidRequest` (the subject is the member, or malformed);
- * - `not-enrolled`: `NotEnrolled`;
- * - `conflict`: `Conflict` (the reconcile's compare-and-set refused);
- * - `limit`: `LimitReached` (the cap of active rows);
- * - `transient`: anything else. That is every error the shared classifier
- *   (`classifyPrismCall`, prism busy design 3) calls transient (`NotReady`,
- *   `Reindexing`, 5xx, 429, network, the call deadline) and, unlike it, the
- *   permanent errors no rule here names (a 501, an auth error), which the
- *   press's retry sequence bounds (activity subscriptions log D-6).
+ * How a prism refusal is worded (design 2.3, the toasts):
+ * - `limit`: `LimitReached` (the cap of rows), the one refusal the member can
+ *   act on;
+ * - `other`: anything else.
  *
  * A waiter's error (`PrivateWaiterError`, when a list read waited behind the
  * account's lead call) is read through its `cause`, the lead's, as the
  * shared classifier reads it.
  */
-export type PrismFailure =
-  'invalid' | 'not-enrolled' | 'conflict' | 'limit' | 'transient'
+export type PrismFailure = 'limit' | 'other'
 
 export function classifyPrismError(error: unknown): PrismFailure {
   const lead = leadErrorOf(error)
-  if (lead instanceof XrpcResponseError) {
-    switch (lead.error) {
-      case 'InvalidRequest':
-        return 'invalid'
-      case 'NotEnrolled':
-        return 'not-enrolled'
-      case 'Conflict':
-        return 'conflict'
-      case 'LimitReached':
-        return 'limit'
-    }
+  if (lead instanceof XrpcResponseError && lead.error === 'LimitReached') {
+    return 'limit'
   }
-  return 'transient'
+  return 'other'
 }
 
 /**
- * Whether a Bluesky request was answered (an error with a response), rather
- * than failing in transport (offline, DNS, a reset), where the put may
- * still have reached Bluesky.
+ * Whether a request to either store was answered (an error with a
+ * response), rather than failing in transport (offline, DNS, a reset), where
+ * the put may still have reached the store.
  */
 export function wasAnswered(error: unknown): boolean {
   return (

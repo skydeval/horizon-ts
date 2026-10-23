@@ -41,7 +41,7 @@ export const PRIVATE_ONLY_UNREAD_PAGES = 3
  * The reader's unread private notifications that the public count cannot
  * hold: those whose `uri` is a private post (replies, quotes and mentions
  * written privately, and with `activity` new private posts from accounts
- * whose bell is on, activity subscriptions design 2.6). Likes and reposts of
+ * whose bell is on, activity subscriptions design 2.5). Likes and reposts of
  * private posts, and public replies and quotes, are already counted by
  * Bluesky's AppView. Read newest first, page after page, until a page holds
  * a read item (everything after it is read too), the list ends, or

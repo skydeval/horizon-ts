@@ -1,5 +1,5 @@
 /*
- * The client mute filter (activity subscriptions design 2.6, AS1-L4). prism
+ * The client mute filter (activity subscriptions design 2.5, AS1-L4). prism
  * applies only the mutes it stores, and Horizon sends `muteActor` to
  * Bluesky, which keeps a bell when its subject is muted. So the private
  * list and the nav badge's private-only count drop authors the member muted

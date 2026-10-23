@@ -28,8 +28,12 @@ import {
 } from '#/horizon/private/api/transient'
 // HORIZON: a private post is deleted through its own procedure
 import {deletePrivatePost} from '#/horizon/private/api/writes'
+// HORIZON: a held private post is read again on the suspect clock
+import {heldPostRefetchInterval} from '#/horizon/private/known'
 // HORIZON: a private post is read through prism
 import {fetchPrivatePost} from '#/horizon/private/links'
+// HORIZON: a private post is gated while prism is busy, and its wait capped
+import {useBusyPostQuery} from '#/horizon/private/post-one'
 // HORIZON: private posts are read through prism and deleted through their own procedure
 import {isPrivatePostUri, isPrivateRead} from '#/horizon/private/uri'
 import {app, com} from '#/lexicons'
@@ -41,7 +45,8 @@ export const RQKEY = (postUri: string) => [RQKEY_ROOT, postUri]
 
 export function usePostQuery(uri: string | undefined) {
   const client = useAppviewClient()
-  return useQuery<app.bsky.feed.defs.PostView>({
+  // HORIZON: a private post is gated while prism is busy, and its wait capped
+  const query = useQuery<app.bsky.feed.defs.PostView>({
     queryKey: RQKEY(uri || ''),
     queryFn: async context => {
       if (!uri) throw new Error('[unreachable] No URI provided')
@@ -58,8 +63,12 @@ export function usePostQuery(uri: string | undefined) {
     },
     // HORIZON: a private post is retried while prism is busy
     ...privateRetryFor(isPrivateRead(uri)),
+    // HORIZON: a held private post is read again on the suspect clock
+    refetchInterval: () => heldPostRefetchInterval(uri),
     enabled: !!uri,
   })
+  // HORIZON: a private post is gated while prism is busy, and its wait capped
+  return useBusyPostQuery(uri, RQKEY(uri || ''), query)
 }
 
 /**

@@ -3,79 +3,70 @@
  * in the account's query cache under a persisted key, so a launch or refresh
  * paints a quote it has seen at once while it is read again in the
  * background. The page fetches fill it for every quote they carry
- * (`resolve.ts`); `PrivateQuote` reads it, and fetches the one post itself
+ * (`resolve.ts`), and prism's verdicts on the quotes of every answer land in
+ * it (`verdicts.ts`); `PrivateQuote` reads it, and fetches the one post itself
  * only for a quote no page fetch filled.
  *
  * The cache holds JSON (CIDs as `{$link}`), as the persister writes JSON;
- * `null` is a post the reader may not view (or that does not exist).
+ * `null` is a post the reader may not view (or that does not exist), and
+ * `{unavailable: true, uri}` one prism cannot answer for now (prism busy
+ * design 6.3).
+ *
+ * Freshness reads one rule (`isFreshQuote`): never the quiet card, never a
+ * value restored from disk, never older than {@link QUOTE_STALE_MS}, and,
+ * where a floor applies, answered since it.
  */
 
-import {jsonToLex, type JsonValue, lexToJson} from '@atproto/lex'
 import {type QueryClient, useQuery} from '@tanstack/react-query'
 
-import {logger} from '#/logger'
-import {STALE} from '#/state/queries'
-import {createQueryKey} from '#/state/queries/util'
 import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
-import {readPrivatePost} from '#/horizon/private/links'
-import {type app} from '#/lexicons'
+import {readPrivatePostViewsAnswered} from '#/horizon/private/links'
+import {gatherQuoteRead, watchQuotes} from '#/horizon/private/quotes/batch'
+import {
+  isFreshQuote,
+  isFreshQuoteState,
+  privateQuoteQueryKey,
+  QUOTE_GC_MS,
+  QUOTE_STALE_MS,
+  type QuoteData,
+  quoteFromRead,
+} from '#/horizon/private/quotes/verdicts'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {isPrismConfirmed} from '#/horizon/routing/health'
+import {isPrivateMember} from '#/horizon/routing/membership'
+
+export {
+  fromQuoteData,
+  isQuoteView,
+  isUnavailableQuote,
+  privateQuoteQueryKey,
+  QUOTE_GC_MS,
+  QUOTE_STALE_MS,
+  type QuoteData,
+  toQuoteData,
+} from '#/horizon/private/quotes/verdicts'
 
 /**
- * How long a quote read is used before it is read again.
+ * The quote's own read, for a quote no page fetch filled, judged by
+ * `quoteFromRead`. While the account is not confirmed it goes through the
+ * gather, so late slots read together.
  */
-export const QUOTE_STALE_MS = STALE.MINUTES.FIVE
-
-/**
- * How long an unused quote stays in the cache, and on disk.
- */
-export const QUOTE_GC_MS = 24 * 60 * 60 * 1000
-
-/**
- * A quoted private post as cached: JSON, or `null` when it is not viewable.
- */
-export type QuoteData = JsonValue | null
-
-/**
- * The persisted query key of the quoted private post at `uri`. Version 2
- * drops quotes cached with a video on the video service's CDN, from before a
- * private video played from its author's PDS. Version 3 drops quotes cached
- * with a quoted private post of their own left unconverted (no spoilers or
- * content warning).
- */
-export function privateQuoteQueryKey(uri: string) {
-  return createQueryKey('horizon-private-quote', {uri}, {persistedVersion: 3})
-}
-
-/**
- * A read post as cached.
- */
-export function toQuoteData(
-  post: app.bsky.feed.defs.PostView | undefined,
-): QuoteData {
-  if (!post) return null
-  try {
-    return lexToJson(post)
-  } catch (error) {
-    logger.warn('private quote not cacheable', {safeMessage: error})
-    return null
+async function fetchQuote(
+  uri: string,
+  previous: () => QuoteData | undefined,
+): Promise<QuoteData> {
+  const clients = getCurrentClients()
+  if (!clients || !isPrivateMember(clients.did)) return null
+  watchQuotes()
+  if (!isPrismConfirmed(clients.did)) {
+    return gatherQuoteRead(clients.did, uri, previous)
   }
+  const read = await readPrivatePostViewsAnswered(clients, [uri])
+  return quoteFromRead(uri, read, previous(), clients.queryClient)
 }
 
-/**
- * A cached quote as a post view, or `undefined` when it is not viewable.
- */
-export function fromQuoteData(
-  data: QuoteData | undefined,
-): app.bsky.feed.defs.PostView | undefined {
-  if (!data) return undefined
-  return jsonToLex(data) as unknown as app.bsky.feed.defs.PostView
-}
-
-/**
- * The quote's own read, for a quote no page fetch filled.
- */
-async function fetchQuote(uri: string): Promise<QuoteData> {
-  return toQuoteData(await readPrivatePost(uri))
+function previousOf(queryClient: QueryClient | undefined, uri: string) {
+  return () => queryClient?.getQueryData<QuoteData>(privateQuoteQueryKey(uri))
 }
 
 /**
@@ -85,7 +76,8 @@ async function fetchQuote(uri: string): Promise<QuoteData> {
 export function privateQuoteQueryOptions(uri: string) {
   return {
     queryKey: privateQuoteQueryKey(uri),
-    queryFn: () => fetchQuote(uri),
+    queryFn: () =>
+      fetchQuote(uri, previousOf(getCurrentClients()?.queryClient, uri)),
     staleTime: QUOTE_STALE_MS,
     gcTime: QUOTE_GC_MS,
   }
@@ -93,32 +85,35 @@ export function privateQuoteQueryOptions(uri: string) {
 
 /**
  * The quoted private post at `uri`, from the cache when a page fetch filled
- * it, else read on its own. Only enabled for a member.
+ * it, else read on its own. Only enabled for a member. `floor` is the slot's
+ * (4.1): a quote not answered since it is stale, so the slot reads it.
  */
-export function usePrivateQuoteQuery(uri: string, enabled: boolean) {
+export function usePrivateQuoteQuery(
+  uri: string,
+  enabled: boolean,
+  floor?: number,
+) {
   return useQuery({
     ...privateQuoteQueryOptions(uri),
     // Retried while prism is busy, never over a kept copy (busy design 5).
-    queryFn: context => keepOverData(context, () => fetchQuote(uri)),
+    queryFn: context =>
+      keepOverData(context, () => fetchQuote(uri, previousOf(context.client, uri))),
     ...PRIVATE_RETRY,
+    staleTime: query =>
+      isFreshQuoteState(query.state, uri, {floor}) ? QUOTE_STALE_MS : 0,
     enabled,
-    select: fromQuoteData,
   })
 }
 
 /**
- * Whether the cache holds a fresh read of the quote at `uri`.
+ * Whether the cache holds a fresh read of the quote at `uri` (6.3): see
+ * `isFreshQuote`; `floor` is an unconfirmed page fetch's start.
  */
 export function hasFreshQuote(
   queryClient: QueryClient,
   uri: string,
   now = Date.now(),
+  floor?: number,
 ): boolean {
-  const state = queryClient.getQueryState(privateQuoteQueryKey(uri))
-  return (
-    !!state &&
-    state.data !== undefined &&
-    !state.isInvalidated &&
-    now - state.dataUpdatedAt < QUOTE_STALE_MS
-  )
+  return isFreshQuote(queryClient, uri, {now, floor})
 }

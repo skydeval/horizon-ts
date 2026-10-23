@@ -67,6 +67,7 @@ import {
   PrivateParentUnavailableError,
   PrivateReplyRefusedError,
 } from '#/horizon/private/api/reply-anchor'
+import {recheckReplyBlock} from '#/horizon/private/api/reply-block'
 import {
   requestRecordCaughtUp,
   requestRecordQuietly,
@@ -288,6 +289,16 @@ async function postThroughLocus(
     composeSpoilers,
     spoilerMode,
     opts.onStateChange,
+  )
+
+  /*
+   * The reply block check again when uploads made the plan's verdict stale
+   * (PR2-L1): a refusal leaves the composer open with its text, nothing
+   * written. A fresh verdict reads nothing, so a text reply waits no longer.
+   */
+  await recheckReplyBlock(
+    {did, pdsClient: opts.pdsClient, appviewClient: opts.appviewClient},
+    plan.blockCheck,
   )
 
   /*

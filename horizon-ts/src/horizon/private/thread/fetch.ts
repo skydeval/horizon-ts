@@ -18,6 +18,7 @@
 
 import {type Client, XrpcResponseError} from '@atproto/lex'
 import {AtUri, type AtUriString, type HandleString} from '@atproto/syntax'
+import {type QueryClient, type QueryKey} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
 import {
@@ -36,8 +37,24 @@ import {
   gatesServedForRoot,
   threadGateEvaluation,
 } from '#/horizon/private/api/gates'
-import {getPrivatePostThread} from '#/horizon/private/api/reads'
+import {
+  type AnswerContext,
+  answerOfError,
+  getPrivatePostThreadAnswered,
+} from '#/horizon/private/api/reads'
 import {resyncPublicThreadMute} from '#/horizon/private/api/thread-mute'
+import {
+  isPrismUnavailable,
+  leadErrorOf,
+  PrivateSuspectMissError,
+  retryAfterMs,
+} from '#/horizon/private/api/transient'
+import {
+  findCachedPrivatePostView,
+  hold,
+  isOwnPrivateUri,
+  noteMiss,
+} from '#/horizon/private/known'
 import {countsServed} from '#/horizon/private/render/controls'
 import {privatePagingServed} from '#/horizon/private/server-support'
 import {getPendingPost, getPendingPosts} from '#/horizon/private/store'
@@ -47,6 +64,7 @@ import {
 } from '#/horizon/private/thread/continuation'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {requireCurrentClients} from '#/horizon/routing/current-clients'
+import {getPrismHealth} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {type app, com} from '#/lexicons'
 
@@ -220,6 +238,46 @@ function notFoundItem(uri: string, depth: number): ThreadItem {
   }
 }
 
+/**
+ * A not-found item's value as Horizon marks it (prism busy design 6.2): the
+ * quiet look ("Couldn't load right now") rather than the audience stand-in,
+ * and, while `horizonPending`, the thread skeleton. The marks ride on the
+ * stock value, which the traversal passes through as it is.
+ */
+export type UnavailableItemValue = {
+  $type: 'app.bsky.unspecced.defs#threadItemNotFound'
+  horizonUnavailable: true
+  horizonPending?: boolean
+}
+
+/** Whether a not-found item's value carries Horizon's quiet mark. */
+export function isUnavailableValue(
+  value: unknown,
+): value is UnavailableItemValue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as {horizonUnavailable?: unknown}).horizonUnavailable === true
+  )
+}
+
+/**
+ * The quiet item in a post's place (6.1, 6.2): another author's post prism
+ * could not answer for now, or one a gated load hides.
+ */
+export function unavailableItem(
+  uri: string,
+  depth: number,
+  {pending = false}: {pending?: boolean} = {},
+): ThreadItem {
+  const value: UnavailableItemValue = {
+    $type: 'app.bsky.unspecced.defs#threadItemNotFound',
+    horizonUnavailable: true,
+    ...(pending ? {horizonPending: true} : {}),
+  }
+  return {uri: uri as AtUriString, depth, value}
+}
+
 export function postItem(
   post: app.bsky.feed.defs.PostView,
   depth: number,
@@ -250,6 +308,107 @@ export function postItem(
  */
 export function notFoundThread(anchor: string): PrivateThreadResult {
   return {thread: [notFoundItem(anchor, 0)], hasOtherReplies: false}
+}
+
+/**
+ * The answer for another author's thread prism cannot answer for now
+ * (6.1): the anchor as the quiet item, never the audience stand-in.
+ */
+export function unavailableThread(anchor: string): PrivateThreadResult {
+  return {thread: [unavailableItem(anchor, 0)], hasOtherReplies: false}
+}
+
+/** What the thread query hands the fetch to keep the reader's own posts. */
+export type ThreadQueryContext = {client: QueryClient; queryKey: QueryKey}
+
+function itemPostOf(item: ThreadItem): app.bsky.feed.defs.PostView | undefined {
+  return item.value.$type === 'app.bsky.unspecced.defs#threadItemPost'
+    ? (item.value as {post: app.bsky.feed.defs.PostView}).post
+    : undefined
+}
+
+/**
+ * The thread's previous data with another author's private posts left out
+ * (BR-5: another author's post an answer leaves out is never kept), or
+ * `undefined` when it does not hold the anchor.
+ */
+function previousOwnThread(
+  context: ThreadQueryContext | undefined,
+  anchorUri: string,
+  did: string,
+): PrivateThreadResult | undefined {
+  const previous = context?.client.getQueryData<PrivateThreadResult>(
+    context.queryKey,
+  )
+  if (!previous?.thread?.some(item => itemPostOf(item)?.uri === anchorUri)) {
+    return undefined
+  }
+  const thread: ThreadItem[] = []
+  let dropBelow: number | undefined
+  for (const item of previous.thread) {
+    if (dropBelow !== undefined && item.depth > dropBelow) continue
+    dropBelow = undefined
+    const uri = itemPostOf(item)?.uri
+    if (uri && isPrivatePostUri(uri) && !isOwnPrivateUri(uri, did)) {
+      if (item.depth > 0) dropBelow = item.depth
+      continue
+    }
+    thread.push(item)
+  }
+  return {
+    thread,
+    threadgate: previous.threadgate,
+    hasOtherReplies: previous.hasOtherReplies,
+  }
+}
+
+/**
+ * The anchor prism left out (6.1): a `NotFound`, or the named `Unavailable`
+ * (`signalled`), with no pending version of it. The reader's own anchor is
+ * kept (its previous data, or its cached view, labelled "Syncing" by the
+ * registry) and held, until its PDS says it is gone; with neither it fails as
+ * a suspect miss, retried on the suspect clock. Another author's is never
+ * kept: the quiet item when it is a suspect or the account is not healthy,
+ * else the audience stand-in.
+ */
+function missedAnchor(
+  anchorUri: string,
+  did: string,
+  miss: {answer: Pick<AnswerContext, 'did' | 'seq'>; signalled: boolean; retryAfterMs?: number},
+  context: ThreadQueryContext | undefined,
+): PrivateThreadResult {
+  const own = isOwnPrivateUri(anchorUri, did)
+  const verdict = noteMiss(miss.answer, anchorUri, {
+    signalled: miss.signalled,
+    retryAfterMs: miss.retryAfterMs,
+    skipPdsCheck: own && miss.signalled,
+  })
+  const keep = () => {
+    if (context) hold(context.queryKey, anchorUri, context.client, did)
+  }
+  if (own) {
+    if (verdict === 'real') return notFoundThread(anchorUri)
+    const previous = previousOwnThread(context, anchorUri, did)
+    if (previous) {
+      keep()
+      return previous
+    }
+    const cached = context
+      ? findCachedPrivatePostView(context.client, anchorUri)
+      : undefined
+    if (cached) {
+      keep()
+      return {thread: [postItem(cached, 0, {})], hasOtherReplies: false}
+    }
+    throw new PrivateSuspectMissError(undefined, {did, uri: anchorUri})
+  }
+  if (verdict === 'suspect') {
+    keep()
+    return unavailableThread(anchorUri)
+  }
+  return getPrismHealth(did).causes.size > 0
+    ? unavailableThread(anchorUri)
+    : notFoundThread(anchorUri)
 }
 
 function didOf(uri: string): string | undefined {
@@ -372,6 +531,43 @@ export function emitPrivateReplies(
 }
 
 /**
+ * The private parent the thread's chain stopped at (6.1, `:438-441`): prism
+ * leaves parents it cannot serve out, unchanged while degraded (DM-C10), so a
+ * degraded answer makes it `signalled`. The reader's own suspect parent is its
+ * cached view, tagged as from cache and labelled "Syncing", its `moreParents`
+ * from its record; another author's suspect is the quiet item; else the
+ * stock not-found item.
+ */
+function cutOffParent(
+  parentUri: string,
+  depth: number,
+  did: string,
+  answer: AnswerContext | undefined,
+  context: ThreadQueryContext | undefined,
+): ThreadItem {
+  if (!answer) return notFoundItem(parentUri, depth)
+  const verdict = noteMiss(answer, parentUri, {
+    signalled: answer.degraded,
+    retryAfterMs: answer.retryAfterMs,
+  })
+  if (verdict !== 'suspect') return notFoundItem(parentUri, depth)
+  if (context) hold(context.queryKey, parentUri, context.client, did)
+  if (!isOwnPrivateUri(parentUri, did)) return unavailableItem(parentUri, depth)
+  const cached = context
+    ? findCachedPrivatePostView(context.client, parentUri)
+    : undefined
+  // An own post never seen here: there is nothing to keep (design 15).
+  if (!cached) return unavailableItem(parentUri, depth)
+  const tagged = {
+    ...cached,
+    horizonFromCache: Date.now(),
+  } as app.bsky.feed.defs.PostView
+  return postItem(tagged, depth, {
+    moreParents: !!(cached.record as {reply?: unknown}).reply,
+  })
+}
+
+/**
  * The private thread at `anchor` as `getPostThreadV2` items: parents first
  * with negative depths, the anchor at 0, then replies depth-first.
  */
@@ -382,6 +578,7 @@ export async function fetchPrivateThreadV2(
     branchingFactor,
     sort,
   }: {below: number; branchingFactor?: number; sort?: string},
+  context?: ThreadQueryContext,
 ): Promise<PrivateThreadResult> {
   const clients = requireCurrentClients()
   // Every main read replaces the anchor's continuation.
@@ -390,20 +587,48 @@ export async function fetchPrivateThreadV2(
   const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
 
   let raw: RawThread | undefined
+  /** The answer that served the thread, which judges its cut-off parent. */
+  let answer: AnswerContext | undefined
+  let miss:
+    | {answer: Pick<AnswerContext, 'did' | 'seq'>; signalled: boolean; retryAfterMs?: number}
+    | undefined
   try {
-    const served = await getPrivatePostThread(clients.prismClient, {
+    const served = await getPrivatePostThreadAnswered(clients.prismClient, {
       uri: anchorUri,
       depth: Math.min(below, MAX_DEPTH),
       parentHeight: PARENT_HEIGHT,
     })
-    raw = fromServed(served)
+    answer = served.answer
+    raw = fromServed(served.thread)
   } catch (error) {
-    if (!(error instanceof XrpcResponseError) || error.error !== 'NotFound') {
+    /*
+     * A `NotFound`, or prism's named `Unavailable` (DMR-5), falls through to
+     * the pending version; anything else is rethrown for the retry rule (5).
+     * A waiter's error is read through its lead's.
+     */
+    const lead = leadErrorOf(error)
+    const named = isPrismUnavailable(error)
+    if (
+      !named &&
+      !(lead instanceof XrpcResponseError && lead.error === 'NotFound')
+    ) {
       throw error
+    }
+    miss = {
+      answer: answerOfError(lead) ?? {did: clients.did, seq: 0},
+      signalled: named,
+      retryAfterMs: named ? retryAfterMs(error) : undefined,
     }
   }
   raw ??= fromPending(anchorUri)
-  if (!raw) return notFoundThread(anchorUri)
+  if (!raw) {
+    return missedAnchor(
+      anchorUri,
+      clients.did,
+      miss ?? {answer: answer ?? {did: clients.did, seq: 0}, signalled: false},
+      context,
+    )
+  }
 
   // Every private post in the thread, for one author merge.
   const publicParent = raw.publicParent
@@ -438,7 +663,7 @@ export async function fetchPrivateThreadV2(
   } else if (topRefs) {
     const parentUri = topRefs.parent.uri
     if (isPrivatePostUri(parentUri)) {
-      above = notFoundItem(parentUri, aboveDepth)
+      above = cutOffParent(parentUri, aboveDepth, clients.did, answer, context)
     } else {
       const found = (
         await fetchPublicPosts(clients.appviewClient, [parentUri])

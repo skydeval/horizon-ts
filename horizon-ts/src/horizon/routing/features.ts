@@ -46,8 +46,8 @@ export const PRISM_FEATURES = [
   'private.anyPds',
   /*
    * Activity subscriptions for private posts (activity subscriptions design
-   * 2.8): the `subscribed-post` private reason, the private subscription
-   * methods and the `subscribedPost` preference key.
+   * section 3, PR-AS-6): the `subscribed-post` private reason, the private
+   * subscription methods and the `subscribedPost` preference key.
    */
   'private.activitySubscriptions',
   /*

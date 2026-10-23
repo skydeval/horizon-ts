@@ -12,6 +12,7 @@ export type OutboxFailure =
   | 'route'
   | 'parent-unavailable'
   | 'parent-busy'
+  | 'reply-blocked'
   | 'reply-refused'
   | 'parent-not-posted'
   | 'parent-partly'
@@ -35,6 +36,7 @@ const FAILURES: readonly OutboxFailure[] = [
   'route',
   'parent-unavailable',
   'parent-busy',
+  'reply-blocked',
   'reply-refused',
   'parent-not-posted',
   'parent-partly',
@@ -88,6 +90,9 @@ export function outboxFailureText(
       return t`You can’t reply to this post. It may have been deleted, or it is no longer visible to you.`
     case 'parent-busy':
       return t`Couldn’t reach the post you’re replying to. Try again in a moment.`
+    case 'reply-blocked':
+      // A block either way; it never says who blocked whom.
+      return t`You can’t reply to this post.`
     case 'reply-refused':
       return t`You can’t reply in this conversation. You may not be among the people who can see it.`
     case 'parent-not-posted':

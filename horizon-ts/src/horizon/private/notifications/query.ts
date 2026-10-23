@@ -94,7 +94,7 @@ function privateNotificationsQueryFn(
  * stock list moderates them, a notification already shown on an earlier
  * page left out. While prism lists `private.activitySubscriptions`, authors
  * the reader muted on Bluesky are left out too (activity subscriptions
- * design 2.6), for pages whose author merge failed.
+ * design 2.5), for pages whose author merge failed.
  */
 export function usePrivateNotificationsQuery({
   tab,
@@ -199,7 +199,7 @@ export function usePrivateUnreadCheck():
  * The private-only unread count the nav badge adds (Notif 5). While prism
  * lists `private.activitySubscriptions` it also counts new private posts from
  * accounts whose bell is on, and leaves out authors the reader muted on
- * Bluesky (activity subscriptions design 2.6); the cap applies after that.
+ * Bluesky (activity subscriptions design 2.5); the cap applies after that.
  */
 export function usePrivateOnlyUnreadCount(): number | undefined {
   const source = useEnabledSource()

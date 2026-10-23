@@ -1,8 +1,8 @@
 /*
- * The bell's visible side for the saver and the mirror (activity
- * subscriptions design 2.1, 2.2): the profile shadow, the stock cached list
- * of activity subscriptions, and the toasts, with the stock dialog's success
- * wording.
+ * The bell's visible side for the savers (activity subscriptions design
+ * 2.3): the public pair's cache (the profile shadow and the stock cached list
+ * of activity subscriptions), and the toasts a press ends with, the success
+ * one in the stock dialog's wording.
  */
 
 import {t} from '@lingui/core/macro'
@@ -15,14 +15,23 @@ import * as Toast from '#/components/Toast'
 import {
   type Flags,
   isOn,
+  readFlags,
 } from '#/horizon/private/activity-subscriptions/common'
-import {type BellUi} from '#/horizon/private/activity-subscriptions/saver'
+import {type ActivityToasts} from '#/horizon/private/activity-subscriptions/saver'
 import {type app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
 type ListData = InfiniteData<
   app.bsky.notification.listActivitySubscriptions.$OutputBody
 >
+
+/**
+ * The shadow's `activitySubscription` as `setBell` last wrote it, per query
+ * client (that is, per account) and subject. Only the bell writes that field
+ * of the shadow, and the shadow has no synchronous getter, so this is its
+ * current value.
+ */
+const written = new WeakMap<QueryClient, Map<string, Flags>>()
 
 /**
  * Set the bell for `subject`: the profile shadow, and the cached list (an
@@ -36,6 +45,12 @@ export function setBell(
   profile?: bsky.profile.AnyProfileView,
 ) {
   if (!queryClient) return
+  let bells = written.get(queryClient)
+  if (!bells) {
+    bells = new Map()
+    written.set(queryClient, bells)
+  }
+  bells.set(subject, flags)
   const activitySubscription = {post: flags.post, reply: flags.reply}
   updateProfileShadow(queryClient, subject, {activitySubscription})
   queryClient.setQueryData(
@@ -73,12 +88,27 @@ export function setBell(
   )
 }
 
-/** The bell's UI as the saver and the mirror use it. */
-export const bellUi: BellUi = {
-  setBell,
-  savedToast(handle, flags, before) {
+/**
+ * The public pair's cached truth for `subject` (2.3, `truth`): the shadow's
+ * current value, or else the profile's own `viewer.activitySubscription`
+ * (absent is off). Read inside the close callback before `setBell` writes
+ * the press, never from the dialog's render.
+ */
+export function readBellTruth(
+  queryClient: QueryClient | undefined,
+  subject: string,
+  profile?: bsky.profile.AnyProfileView,
+): Flags {
+  const shadowed = queryClient && written.get(queryClient)?.get(subject)
+  if (shadowed) return shadowed
+  return readFlags(profile?.viewer?.activitySubscription)
+}
+
+/** The toasts as the savers' press groups use them. */
+export const bellUi: ActivityToasts = {
+  savedToast(handle, after, before) {
     const name = sanitizeHandle(handle, '@')
-    if (!isOn(flags)) {
+    if (!isOn(after)) {
       Toast.show(t`You will no longer receive notifications for ${name}`, {
         type: 'success',
       })
@@ -96,12 +126,22 @@ export const bellUi: BellUi = {
       type: 'error',
     })
   },
-  mirrorPendingToast(flags) {
+  privateFailedToast(handle, limit) {
+    const name = sanitizeHandle(handle, '@')
     Toast.show(
-      isOn(flags)
-        ? t`Saved. Notifications for their private posts will start once Horizon reaches the server.`
-        : t`Saved. Their private posts may still notify you for a little while.`,
-      {type: 'info'},
+      limit
+        ? t`You’ve reached the limit for private notification subscriptions`
+        : t`Couldn’t save private notification settings for ${name}`,
+      {type: 'error'},
+    )
+  },
+  combinedFailedToast(handle, limit) {
+    const name = sanitizeHandle(handle, '@')
+    Toast.show(
+      limit
+        ? t`Couldn’t save notification settings for ${name}. You’ve reached the limit for private notification subscriptions`
+        : t`Couldn’t save notification settings for ${name}`,
+      {type: 'error'},
     )
   },
 }

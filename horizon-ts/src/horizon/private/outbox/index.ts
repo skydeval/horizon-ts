@@ -92,6 +92,11 @@ import {
   PrivateReplyRefusedError,
 } from '#/horizon/private/api/reply-anchor'
 import {
+  PrivateReplyBlockedError,
+  PrivateReplyCheckError,
+  recheckReplyBlock,
+} from '#/horizon/private/api/reply-block'
+import {
   requestRecordCaughtUp,
   requestRecordQuietly,
 } from '#/horizon/private/api/request-record'
@@ -1215,6 +1220,9 @@ function failureOf(error: unknown, entry: Entry): OutboxFailure {
     return 'parent-unavailable'
   }
   if (error instanceof PrivateParentBusyError) return 'parent-busy'
+  // The reply block check: a block, or a check that could not be made.
+  if (error instanceof PrivateReplyBlockedError) return 'reply-blocked'
+  if (error instanceof PrivateReplyCheckError) return 'parent-busy'
   if (error instanceof PrivateReplyRefusedError) return 'reply-refused'
   if (error instanceof PrivateAudienceMissingError) return 'audience-missing'
   if (error instanceof PrivateEncodeError) return 'encoder'
@@ -1441,11 +1449,18 @@ async function readPosts(
  * remap (prism busy design 9, BR17-N3): a miss prism left out
  * (`PrivateParentBusyError`) or any transient failure (a 503, `Reindexing`,
  * a network error, a call timeout, a waiter's error) is `parent-busy`; an own
- * post the PDS says is gone, prism's or the walk's refusal and a stop pass
- * through. `undefined` for anything else, which keeps each site's own path.
+ * post the PDS says is gone, prism's or the walk's refusal, the reply block
+ * check's two outcomes and a stop pass through. `undefined` for anything
+ * else, which keeps each site's own path.
  */
 function replyPlanningFailure(error: unknown): Error | undefined {
   if (error instanceof OutboxStoppedError) return error
+  if (
+    error instanceof PrivateReplyBlockedError ||
+    error instanceof PrivateReplyCheckError
+  ) {
+    return error
+  }
   if (
     error instanceof PrivateParentUnavailableError ||
     error instanceof PrivateReplyRefusedError ||
@@ -1500,7 +1515,12 @@ async function finishPlan(
         planFirstPost(
           clients.queryClient,
           clients,
-          {replyTo: replyToUri, appviewClient: clients.appviewClient},
+          {
+            replyTo: replyToUri,
+            appviewClient: clients.appviewClient,
+            // Every post a Finish posting writes replies to the member's own.
+            skipBlockCheck: true,
+          },
           entry.record.audience,
           encodePostingWriter(clients.pdsClient, entry.did),
         ),
@@ -1606,6 +1626,7 @@ async function runCompose(entry: Entry) {
               replyPlanningFailure(error) ?? new PrivateParentUnavailableError()
             )
           }
+          // A reply to a public post: `failureOf` maps the block check's.
           throw error
         }
       }
@@ -1652,12 +1673,17 @@ async function runCompose(entry: Entry) {
         now: new Date(entry.record.pressedAt + present.length),
       })
       const absentRkeys = absent.map(index => entry.record.rkeys[index])
-      const encoded = await encodeComposePosts(
-        did,
-        absentRkeys,
-        composed,
-        plan.reply,
-      )
+      /*
+       * The block check again, beside the encode, when uploads made the
+       * plan's verdict stale (PR2-L1); a refusal wins over an encode failure.
+       */
+      const [encodedResult, recheck] = await Promise.allSettled([
+        encodeComposePosts(did, absentRkeys, composed, plan.reply),
+        recheckReplyBlock(clients, plan.blockCheck),
+      ])
+      if (recheck.status === 'rejected') throw recheck.reason
+      if (encodedResult.status === 'rejected') throw encodedResult.reason
+      const encoded = encodedResult.value
 
       // 4.2 step 7: the gates, before any post; nothing is deleted on failure.
       clients = requireClients(did)

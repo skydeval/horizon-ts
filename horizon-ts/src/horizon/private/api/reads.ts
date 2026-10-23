@@ -47,6 +47,10 @@ import {
   PrivateWaiterError,
 } from '#/horizon/private/api/transient'
 import {noteServed, servedUrisOf} from '#/horizon/private/known'
+import {
+  noteQuoteVerdicts,
+  quoteVerdictsOf,
+} from '#/horizon/private/quotes/verdicts'
 import {getCurrentDid} from '#/horizon/routing/current-clients'
 import {
   getPrismHealth,
@@ -213,6 +217,8 @@ async function sendRead<T>(
     const answer = answerOf(did, method.nsid, seq, body)
     // Every private post view the answer hydrated is a serve (design 4).
     noteServed(answer, servedUrisOf(body))
+    // Its quotes' verdicts land in the quote cache before the page renders (6.3).
+    noteQuoteVerdicts(answer, quoteVerdictsOf(body))
     reportReadOutcome(did, {
       kind: 'answered',
       method: method.nsid,
@@ -531,6 +537,17 @@ export async function getPrivatePostThread(
   prism: Client,
   params: {uri: string; depth?: number; parentHeight?: number},
 ): Promise<PrivateThreadView> {
+  return (await getPrivatePostThreadAnswered(prism, params)).thread
+}
+
+/**
+ * {@link getPrivatePostThread} with its answer, for the thread adapter, which
+ * judges the parents the answer left out (design 6.1).
+ */
+export async function getPrivatePostThreadAnswered(
+  prism: Client,
+  params: {uri: string; depth?: number; parentHeight?: number},
+): Promise<{thread: PrivateThreadView; answer: AnswerContext}> {
   const request = {...params, uri: params.uri as AtUriString}
   const res = await reportedPrismCall(nearhorizon.privateGetPostThread, {
     params: request,
@@ -541,7 +558,10 @@ export async function getPrivatePostThread(
    * The schema types the thread as an object only (it is recursive); the
    * thread adapter checks each node.
    */
-  return res.body.thread as unknown as PrivateThreadView
+  return {
+    thread: res.body.thread as unknown as PrivateThreadView,
+    answer: res.answer,
+  }
 }
 
 /**

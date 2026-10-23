@@ -14,7 +14,11 @@ import {type ResolvedLink} from '#/lib/api/resolve'
 import {adaptPosts} from '#/horizon/private/adapt/feed-view'
 import {prefetchAuthorPds} from '#/horizon/private/adapt/pds'
 import {fetchPublicAuthors} from '#/horizon/private/adapt/profiles'
-import {getPrivatePosts} from '#/horizon/private/api/reads'
+import {
+  getPrivatePostsAnswered,
+  mergeAnswers,
+  type MergedAnswer,
+} from '#/horizon/private/api/reads'
 import {getPendingPost} from '#/horizon/private/store'
 import {
   isPrivatePostUri,
@@ -25,6 +29,7 @@ import {
   type CurrentClients,
   requireCurrentClients,
 } from '#/horizon/routing/current-clients'
+import {healthEnvironment} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
 import {type app, com} from '#/lexicons'
@@ -85,16 +90,35 @@ export async function readPrivatePostViews(
   clients: Pick<CurrentClients, 'prismClient' | 'appviewClient'>,
   uris: readonly string[],
 ): Promise<Map<string, app.bsky.feed.defs.PostView>> {
+  return (await readPrivatePostViewsAnswered(clients, uris)).views
+}
+
+/**
+ * {@link readPrivatePostViews} with the merged answer of its batches, for the
+ * quote reads, which judge what was left out (prism busy design 6.3).
+ */
+export async function readPrivatePostViewsAnswered(
+  clients: Pick<CurrentClients, 'prismClient' | 'appviewClient'>,
+  uris: readonly string[],
+): Promise<{
+  views: Map<string, app.bsky.feed.defs.PostView>
+  answer: MergedAnswer
+}> {
   const unique = Array.from(new Set(uris))
   const result = new Map<string, app.bsky.feed.defs.PostView>()
-  if (unique.length === 0) return result
+  if (unique.length === 0) {
+    return {views: result, answer: mergeAnswers([])}
+  }
   const dids = new Set(
     unique.map(authorDidOf).filter((did): did is string => !!did),
   )
   const authors = fetchPublicAuthors(clients.appviewClient, dids)
   // The embed builder's own lookup joins these (adapt/pds.ts).
   dids.forEach(prefetchAuthorPds)
-  const found = await getPrivatePosts(clients.prismClient, unique)
+  const {posts: found, answer} = await getPrivatePostsAnswered(
+    clients.prismClient,
+    unique,
+  )
   const {views} = await adaptPosts(
     found.map(view => ({view})),
     clients.appviewClient,
@@ -110,7 +134,7 @@ export async function readPrivatePostViews(
     const post = views.get(uri) ?? getPendingPost(uri)?.postView
     if (post) result.set(uri, post)
   }
-  return result
+  return {views: result, answer}
 }
 
 /**
@@ -130,6 +154,11 @@ export async function readPrivatePost(
  * The post query's read of a private post (Post 1). A handle authority is
  * resolved with `client`, as the stock `fetchPost` does. `undefined` is not
  * found, as the stock callers expect.
+ *
+ * The view carries its completion stamp, `horizonFetchedAt` (prism busy
+ * design 4.1), so every writer of the post query that reads prism (the query
+ * itself, `useGetPost`) stamps it, while `precachePost`'s copy has none and
+ * counts as old.
  */
 export async function fetchPrivatePost(
   client: Client,
@@ -137,7 +166,15 @@ export async function fetchPrivatePost(
 ): Promise<app.bsky.feed.defs.PostView | undefined> {
   const urip = new AtUri(uri)
   const did = await resolveDid(client, urip.host)
-  return readPrivatePost(`at://${did}/${urip.collection}/${urip.rkey}`)
+  const post = await readPrivatePost(
+    `at://${did}/${urip.collection}/${urip.rkey}`,
+  )
+  return post
+    ? ({
+        ...post,
+        horizonFetchedAt: healthEnvironment().now(),
+      } as app.bsky.feed.defs.PostView)
+    : undefined
 }
 
 /**

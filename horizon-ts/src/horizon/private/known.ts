@@ -510,6 +510,19 @@ export function suspectRefetchInterval(
   return Math.max(1_000, suspectRetryAt(did, uri) - now())
 }
 
+/**
+ * {@link suspectRefetchInterval} for a non-infinite query of the post at
+ * `uri` (a thread anchor, post 1), for the current account; `false` for a
+ * public post or a handle authority, which has no suspect.
+ */
+export function heldPostRefetchInterval(
+  uri: string | undefined,
+  did: string | undefined = getCurrentDid(),
+): number | false {
+  if (!did || !uri || !isPrivatePostUri(uri)) return false
+  return suspectRefetchInterval(did, uri)
+}
+
 function holdKey(queryKey: QueryKey, uri: string | undefined) {
   return `${JSON.stringify(queryKey)} ${uri ?? ''}`
 }
@@ -562,6 +575,15 @@ export function hold(
 /** The held queries of `did` (2.4). */
 export function heldQueries(did: string): Hold[] {
   return Array.from(registries.get(did)?.holds.values() ?? [])
+}
+
+/** Whether `did` holds the query at `queryKey`, for any URI (4.1's "held"). */
+export function isHeld(did: string, queryKey: QueryKey): boolean {
+  const key = JSON.stringify(queryKey)
+  for (const held of registries.get(did)?.holds.values() ?? []) {
+    if (JSON.stringify(held.queryKey) === key) return true
+  }
+  return false
 }
 
 /** Forget a hold (the catch-up refetched it). */

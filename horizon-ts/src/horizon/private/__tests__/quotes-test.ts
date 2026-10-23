@@ -23,7 +23,13 @@ import {
   clearCurrentClients,
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
+import {
+  nextAnswerSeq,
+  reportReadOutcome,
+  resetPrismHealth,
+} from '#/horizon/routing/health'
 import {type app} from '#/lexicons'
+import {resetKnown} from '../known'
 import {
   fromQuoteData,
   privateQuoteQueryKey,
@@ -41,6 +47,7 @@ import {
   withBookmarkQuotes,
   withPrivateQuotes,
 } from '../quotes/resolve'
+import {resetQuoteVerdicts} from '../quotes/verdicts'
 import {clearPrivateStores} from '../store'
 import {
   type Call,
@@ -157,6 +164,18 @@ beforeEach(() => {
   clearCurrentClients()
   mockMembership = 'member'
   mockResolvePds.mockClear()
+  // A confirmed account: page fetches are not gated (busy design 4.1).
+  resetPrismHealth()
+  resetKnown()
+  resetQuoteVerdicts()
+  reportReadOutcome(DID, {
+    kind: 'answered',
+    method: 'app.nearhorizon.private.getPosts',
+    seq: nextAnswerSeq(DID),
+    read: true,
+    degraded: false,
+    retryAfterMs: undefined,
+  })
 })
 
 describe('collecting the private quotes of a page', () => {

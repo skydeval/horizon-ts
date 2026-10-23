@@ -8,7 +8,7 @@
  * Both need a private source and prism listing
  * `private.notificationPreferences`.
  *
- * `subscribedPost` (activity subscriptions design 2.7) is a stock
+ * `subscribedPost` (activity subscriptions design 2.5) is a stock
  * `#preference`, `{list, push}` with no `include`: whether new private posts
  * from accounts whose bell is on show. A missing key reads as on, so a toggle
  * never snaps back on an older prism.

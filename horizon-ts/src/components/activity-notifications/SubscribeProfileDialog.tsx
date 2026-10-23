@@ -33,9 +33,9 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
-// HORIZON: the optimistic bell and the private-posts line (activity subscriptions design, Dlg 1 and Dlg 2)
+// HORIZON: the optimistic save and the private toggles (activity subscriptions design, Dlg 1 and Dlg 2)
 import {
-  ActivityDialogPrivateLine,
+  PrivateActivityToggles,
   useActivitySubscriptionSave,
 } from '#/horizon/private/activity-subscriptions/dialog'
 import {app} from '#/lexicons'
@@ -83,7 +83,7 @@ function DialogInner({
     profile.viewer?.activitySubscription,
   )
   const [state, setState] = useState(initialState)
-  // HORIZON: Dlg 1, the optimistic save and the prism mirror's hand-off
+  // HORIZON: Dlg 1, the optimistic save
   const horizonSave = useActivitySubscriptionSave(profile, initialState)
 
   const values = useMemo(() => {
@@ -132,8 +132,6 @@ function DialogInner({
       })
     },
     onSuccess: (_data, activitySubscription) => {
-      // HORIZON: Dlg 1, Bluesky's accepted flags go to the prism mirror
-      horizonSave.stockAnswered(activitySubscription, true)
       control.close(() => {
         updateProfileShadow(queryClient, profile.did, {
           activitySubscription,
@@ -189,26 +187,25 @@ function DialogInner({
         }
       })
     },
-    onError: (err, activitySubscription) => {
-      // HORIZON: Dlg 1, the prism mirror levels from Bluesky
-      horizonSave.stockAnswered(activitySubscription, false)
+    onError: err => {
       ax.logger.error('Could not save activity subscription', {message: err})
     },
   })
 
   const buttonProps: Omit<ButtonProps, 'children'> = useMemo(() => {
+    // HORIZON: Dlg 1, the private pair counts too
     const isDirty =
-      state.post !== initialState.post || state.reply !== initialState.reply
-    const hasAny = state.post || state.reply
+      state.post !== initialState.post ||
+      state.reply !== initialState.reply ||
+      horizonSave.privateDirty
+    const hasAny = state.post || state.reply || horizonSave.privateHasAny
 
     if (isDirty) {
       return {
         label: _(msg`Save changes`),
         color: hasAny ? 'primary' : 'negative',
-        // HORIZON: Dlg 1, the optimistic save unless its switch is off
-        onPress: () => {
-          if (!horizonSave.press(state)) saveChanges(state)
-        },
+        // HORIZON: Dlg 1, the optimistic save; the stock mutation is left unreached
+        onPress: () => horizonSave.press(state, horizonSave.privateState),
         disabled: isSaving,
       }
     } else {
@@ -243,8 +240,6 @@ function DialogInner({
           <Text style={[t.atoms.text_contrast_medium, a.text_md]}>
             <Trans>Get notified of this account’s activity</Trans>
           </Text>
-          {/* HORIZON: Dlg 2, the private-posts line (SQ-1) */}
-          <ActivityDialogPrivateLine />
         </View>
 
         {includeProfile && (
@@ -302,6 +297,9 @@ function DialogInner({
             </Toggle.Item>
           </View>
         </Toggle.Group>
+
+        {/* HORIZON: Dlg 2, "Private posts" and "Private replies" */}
+        <PrivateActivityToggles save={horizonSave} />
 
         {error && (
           <Admonition type="error">

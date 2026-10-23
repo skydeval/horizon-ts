@@ -2,44 +2,53 @@ import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 /*
  * The UI side of activity subscriptions: the Activity pill (T-16), the bell
- * dialog's optimistic save (T-1) and its kill switch (T-21), the dialog's
- * private-posts line (SQ-1), and the mute list (T-19). The design system is
- * replaced by plain stand-ins.
+ * dialog's optimistic save (T-1), the dialog's private-posts line (SQ-1),
+ * and the mute list (T-19). The design system is replaced by plain
+ * stand-ins.
  */
 
 // The suite mocks multiformats globally; the lex client needs the real one.
 jest.unmock('multiformats/cid')
 jest.unmock('multiformats/hashes/hasher')
-jest.mock('#/horizon/private/activity-subscriptions/dirty-store', () => ({}))
-
-const mockSetBell = jest.fn()
-jest.mock('#/horizon/private/activity-subscriptions/ui', () => ({
-  bellUi: {},
-  setBell: (...args: unknown[]) => mockSetBell(...args),
+jest.mock('#/components/Toast', () => ({show: () => {}}))
+jest.mock('#/state/cache/profile-shadow', () => ({
+  updateProfileShadow: () => {},
 }))
-const mockTabRef: {current: unknown} = {current: undefined}
-jest.mock('#/horizon/private/activity-subscriptions/tab', () => ({
-  ...jest.requireActual<object>('#/horizon/private/activity-subscriptions/tab'),
-  getActivityTab: () => mockTabRef.current,
+jest.mock('#/state/queries/activity-subscriptions', () => ({
+  RQKEY_getActivitySubscriptions: ['activity-subscriptions'],
 }))
 
-let mockOptimistic = true
-let mockDialogLine = true
-jest.mock('#/horizon/switches', () =>
-  Object.defineProperties(
-    {...jest.requireActual<object>('#/horizon/switches')},
-    {
-      OPTIMISTIC_ACTIVITY_SUBSCRIPTIONS: {
-        get: () => mockOptimistic,
-        enumerable: true,
-      },
-      ACTIVITY_DIALOG_PRIVATE_LINE: {
-        get: () => mockDialogLine,
-        enumerable: true,
-      },
-    },
+const mockSaversRef: {current: unknown} = {current: undefined}
+jest.mock('#/horizon/private/activity-subscriptions/saver', () => ({
+  ...jest.requireActual<object>(
+    '#/horizon/private/activity-subscriptions/saver',
   ),
-)
+  getActivitySavers: () => mockSaversRef.current,
+}))
+
+jest.mock('#/components/forms/Toggle', () => {
+  const {Text, View} = jest.requireActual<{
+    Text: React.ComponentType<{children?: React.ReactNode}>
+    View: React.ComponentType<{children?: React.ReactNode}>
+  }>('react-native')
+  return {
+    Group: (props: {
+      children?: React.ReactNode
+      values: string[]
+      disabled?: boolean
+    }) => (
+      <View>
+        <Text>{`group:${props.values.join(',')}:${props.disabled ? 'disabled' : 'enabled'}`}</Text>
+        {props.children}
+      </View>
+    ),
+    Item: (props: {children?: React.ReactNode}) => <View>{props.children}</View>,
+    LabelText: (props: {children?: React.ReactNode}) => (
+      <Text>{props.children}</Text>
+    ),
+    Switch: () => null,
+  }
+})
 
 const mockAppview: {client: unknown} = {client: undefined}
 jest.mock('#/state/session', () => ({
@@ -143,6 +152,7 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('#/alf', () => ({
   atoms: new Proxy({}, {get: () => ({})}),
   web: () => ({}),
+  platform: () => ({}),
   useTheme: () => ({
     atoms: new Proxy({}, {get: () => ({})}),
     palette: new Proxy({}, {get: () => '#000'}),
@@ -177,12 +187,30 @@ import {fakeClient} from '../../__tests__/fixtures'
 import {PrivateNotificationsContent} from '../../notifications/PrivateNotificationsContent'
 import {OFF} from '../common'
 import {
-  ActivityDialogPrivateLine,
+  nextPair,
+  PrivateActivityToggles,
   useActivitySubscriptionSave,
 } from '../dialog'
 import {countUnmuted, withoutMutedAuthors} from '../mute-filter'
 import {fetchMutedDids, mutedDidsQueryKey, useMutedDids} from '../muted'
-import {DID, harness, ON, settle, SUBJECT} from './harness'
+import {
+  privateActivitySubscriptionsKey,
+  usePrivateBellOn,
+} from '../private-state'
+import {readBellTruth} from '../ui'
+import {BOTH, DID, harness, ON, settle, SUBJECT, xrpcError} from './harness'
+
+const LIST = privateActivitySubscriptionsKey(DID)
+
+/** prism's list lands in the cache. */
+async function setList(queryClient: QueryClient, data: unknown) {
+  await act(async () => {
+    queryClient.setQueryData(LIST, data)
+    // TanStack notifies its observers on a timer.
+    await new Promise(resolve => setTimeout(resolve, 5))
+    await settle(2)
+  })
+}
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
@@ -196,23 +224,23 @@ function show(ui: React.ReactElement, queryClient = new QueryClient()) {
   })
 }
 
-function withQueryClient({children}: {children: React.ReactNode}) {
-  return (
-    <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
-  )
+function withClient(queryClient: QueryClient) {
+  return function Wrapper({children}: {children: React.ReactNode}) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    )
+  }
 }
 
 beforeEach(() => {
   mockPills.length = 0
   mockPrefetch.mockClear()
   mockSoftReset.mockClear()
-  mockSetBell.mockClear()
   mockMetric.mockClear()
   mockClose.length = 0
   mockActivity = false
   mockIsMember = true
-  mockOptimistic = true
-  mockDialogLine = true
+  mockSource = undefined
   mockFeatures = new Set(['private.notifications'])
 })
 
@@ -260,91 +288,147 @@ describe('T-16: the Activity pill', () => {
 })
 
 describe('T-1: the optimistic save (hook Dlg 1)', () => {
-  it('marks dirty and closes with no request; writes the bell in the close; toasts only after Bluesky accepts', async () => {
+  it('closes with no request; writes the bell in the close; toasts only after Bluesky accepts', async () => {
     const h = harness()
-    mockTabRef.current = h.tab
+    mockSaversRef.current = h.savers
     mockAppview.client = h.bluesky.client
     h.bluesky.state.putReply = 'hang'
     const profile = {did: SUBJECT, handle: 'subject.test'}
     const {result} = renderHook(
       () => useActivitySubscriptionSave(profile as never, OFF),
-      {wrapper: withQueryClient},
+      {wrapper: withClient(h.queryClient)},
     )
-    let handled = false
-    act(() => {
-      handled = result.current.press(ON)
-    })
-    expect(handled).toBe(true)
-    // Marked dirty at press, the dialog closing, no request yet.
-    expect(h.token()).toBeDefined()
+    act(() => result.current.press(ON))
+    // The dialog is closing; nothing is written or sent yet.
     expect(mockClose).toHaveLength(1)
-    expect(mockSetBell).not.toHaveBeenCalled()
+    expect(readBellTruth(h.queryClient, SUBJECT)).toEqual(OFF)
     await settle()
     expect(h.bluesky.calls).toEqual([])
     // The close ends: the bell and the list are written, then the put goes.
     act(() => mockClose[0]())
-    expect(mockSetBell).toHaveBeenCalledWith(
-      expect.anything(),
-      SUBJECT,
-      ON,
-      profile,
-    )
+    expect(readBellTruth(h.queryClient, SUBJECT)).toEqual(ON)
     expect(mockMetric).toHaveBeenCalledWith('activitySubscription:enable', {
       setting: 'posts',
     })
     await settle()
-    expect(h.blueskyPuts()).toEqual([ON])
-    expect(h.ui.savedToast).not.toHaveBeenCalled()
+    expect(h.bluesky.puts()).toEqual([ON])
+    expect(h.toasts.savedToast).not.toHaveBeenCalled()
     h.bluesky.held[0].resolve({status: 200, body: {}})
     await settle()
-    expect(h.ui.savedToast).toHaveBeenCalledWith('subject.test', ON, OFF)
+    expect(h.toasts.savedToast).toHaveBeenCalledWith('subject.test', ON, OFF)
+    expect(h.savers.bluesky.status(DID, SUBJECT)?.idle).toBe(true)
   })
 })
 
-describe('T-21: OPTIMISTIC_ACTIVITY_SUBSCRIPTIONS off', () => {
-  it('leaves the stock wait to the dialog, still marks dirty at press and mirrors the accepted flags', async () => {
-    mockOptimistic = false
+describe('T7-1: the four-toggle dialog (hooks Dlg 1 and Dlg 2)', () => {
+  const profile = {did: SUBJECT, handle: 'subject.test'} as never
+
+  function setup() {
     const h = harness()
-    mockTabRef.current = h.tab
+    mockSaversRef.current = h.savers
     mockAppview.client = h.bluesky.client
-    const profile = {did: SUBJECT, handle: 'subject.test'}
+    mockSource = {did: DID, prism: h.prism.client, appview: h.bluesky.client}
+    mockActivity = true
+    return h
+  }
+
+  function Toggles() {
+    const save = useActivitySubscriptionSave(profile, OFF)
+    return <PrivateActivityToggles save={save} />
+  }
+
+  it('shows the private pair for a member with the feature, and not otherwise', () => {
+    const h = setup()
+    h.queryClient.setQueryData(LIST, {})
+    expect(show(<Toggles />, h.queryClient).queryByText('Private posts')).toBeTruthy()
+    expect(show(<Toggles />, h.queryClient).queryByText('Private replies')).toBeTruthy()
+    mockActivity = false
+    expect(show(<Toggles />, h.queryClient).queryByText('Private posts')).toBeNull()
+    mockActivity = true
+    mockIsMember = false
+    expect(show(<Toggles />, h.queryClient).queryByText('Private posts')).toBeNull()
+  })
+
+  it('is disabled until prism’s list loads, seeded once, and a later fetch changes neither the state nor the seed', async () => {
+    const h = setup()
+    h.prism.state.listReply = xrpcError(500, 'InternalServerError')
+    const screen = show(<Toggles />, h.queryClient)
+    await act(() => settle())
+    expect(screen.getByText('group::disabled')).toBeTruthy()
     const {result} = renderHook(
-      () => useActivitySubscriptionSave(profile as never, OFF),
-      {wrapper: withQueryClient},
+      () => useActivitySubscriptionSave(profile, OFF),
+      {wrapper: withClient(h.queryClient)},
     )
-    let handled = true
-    act(() => {
-      handled = result.current.press(ON)
-    })
-    // The stock mutation runs: its spinner, disabled button and close.
-    expect(handled).toBe(false)
-    expect(mockClose).toEqual([])
-    expect(h.token()).toBeDefined()
-    expect(h.tab.saver.status(DID, SUBJECT)?.idle).toBe(false)
-    // The stock put was accepted.
-    act(() => result.current.stockAnswered(ON, true))
+    expect(result.current.privateReady).toBe(false)
+    await setList(h.queryClient, {[SUBJECT]: ON})
+    expect(result.current.privateReady).toBe(true)
+    expect(result.current.privateState).toEqual(ON)
+    expect(result.current.privateInitial).toEqual(ON)
+    expect(screen.getByText('group:post:enabled')).toBeTruthy()
+    await setList(h.queryClient, {[SUBJECT]: BOTH})
+    expect(result.current.privateState).toEqual(ON)
+    expect(result.current.privateInitial).toEqual(ON)
+    expect(result.current.privateDirty).toBe(false)
+  })
+
+  it('keeps reply-needs-post, and Save is dirty when the private pair changed', () => {
+    expect(nextPair(OFF, ['reply'])).toEqual(BOTH)
+    expect(nextPair(BOTH, ['reply'])).toEqual(OFF)
+    expect(nextPair(OFF, ['post'])).toEqual(ON)
+    const h = setup()
+    h.queryClient.setQueryData(LIST, {})
+    const {result} = renderHook(
+      () => useActivitySubscriptionSave(profile, OFF),
+      {wrapper: withClient(h.queryClient)},
+    )
+    expect(result.current.privateDirty).toBe(false)
+    act(() => result.current.setPrivate(['reply']))
+    expect(result.current.privateState).toEqual(BOTH)
+    expect(result.current.privateDirty).toBe(true)
+    expect(result.current.privateHasAny).toBe(true)
+  })
+
+  it('a private-only Save closes with no request and sends only to prism', async () => {
+    const h = setup()
+    h.queryClient.setQueryData(LIST, {})
+    const {result} = renderHook(
+      () => useActivitySubscriptionSave(profile, OFF),
+      {wrapper: withClient(h.queryClient)},
+    )
+    act(() => result.current.setPrivate(['post']))
+    act(() => result.current.press(OFF, result.current.privateState))
+    await settle()
+    expect(h.prism.calls).toEqual([])
+    act(() => mockClose[0]())
+    expect(h.queryClient.getQueryData(LIST)).toEqual({[SUBJECT]: ON})
     await settle()
     expect(h.prism.puts()).toEqual([
       {subject: SUBJECT, activitySubscription: ON},
     ])
-    expect(h.token()).toBeUndefined()
+    expect(h.bluesky.calls).toEqual([])
+    // No public change: no stock metric.
+    expect(mockMetric).not.toHaveBeenCalled()
+    expect(h.toasts.savedToast).toHaveBeenCalledWith('subject.test', ON, OFF)
   })
 })
 
-describe('the dialog’s private-posts line (SQ-1, hook Dlg 2)', () => {
-  const line = 'Includes their private posts that you can see.'
-
-  it('shows for a member with the feature, and not otherwise', () => {
+describe('T7-7: the bell icon (hook Btn 1)', () => {
+  it('a private toggle alone lights it; all off, or not loaded, leaves it unlit', async () => {
+    const h = harness()
+    mockSaversRef.current = h.savers
+    mockSource = {did: DID, prism: h.prism.client, appview: h.bluesky.client}
     mockActivity = true
-    expect(show(<ActivityDialogPrivateLine />).queryByText(line)).toBeTruthy()
-    mockActivity = false
-    expect(show(<ActivityDialogPrivateLine />).queryByText(line)).toBeNull()
-    mockActivity = true
-    mockIsMember = false
-    expect(show(<ActivityDialogPrivateLine />).queryByText(line)).toBeNull()
-    mockIsMember = true
-    mockDialogLine = false
-    expect(show(<ActivityDialogPrivateLine />).queryByText(line)).toBeNull()
+    h.prism.state.listReply = xrpcError(500, 'InternalServerError')
+    const {result} = renderHook(() => usePrivateBellOn(SUBJECT), {
+      wrapper: withClient(h.queryClient),
+    })
+    expect(result.current).toBe(false)
+    await setList(h.queryClient, {[SUBJECT]: ON})
+    expect(result.current).toBe(true)
+    await setList(h.queryClient, {[SUBJECT]: {post: false, reply: true}})
+    expect(result.current).toBe(true)
+    await setList(h.queryClient, {})
+    expect(result.current).toBe(false)
   })
 })
 

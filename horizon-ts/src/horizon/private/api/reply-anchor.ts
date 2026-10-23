@@ -91,9 +91,7 @@ export class PrivateReplyRefusedError extends Error {
  */
 export class PrivateParentBusyError extends Error {
   constructor() {
-    super(
-      t`Couldn’t reach the post you’re replying to. Try again in a moment.`,
-    )
+    super(t`Couldn’t reach the post you’re replying to. Try again in a moment.`)
     this.name = 'PrivateParentBusyError'
   }
 }
@@ -152,6 +150,8 @@ type PlacedPost = {
   view: app.bsky.feed.defs.PostView | undefined
   /** Read from the writer's own PDS just now. */
   fromPds?: true
+  /** Served by prism in this read (the reply block check reads it). */
+  servedByPrism?: true
 }
 
 /**
@@ -160,9 +160,7 @@ type PlacedPost = {
  * (the writer's own post, and their PDS says `RecordNotFound`).
  */
 type PostRead =
-  | {kind: 'found'; post: PlacedPost}
-  | {kind: 'miss'}
-  | {kind: 'absent'}
+  {kind: 'found'; post: PlacedPost} | {kind: 'miss'} | {kind: 'absent'}
 
 /**
  * The writer's own record as a placed post, its view from the cache when one
@@ -176,9 +174,7 @@ function ownPlaced(
 ): PlacedPost {
   let view: PlacedPost['view']
   try {
-    view = queryClient
-      ? findCachedPrivatePostView(queryClient, uri)
-      : undefined
+    view = queryClient ? findCachedPrivatePostView(queryClient, uri) : undefined
   } catch (error) {
     logger.warn('own parent view lookup failed', {uri, safeMessage: error})
   }
@@ -238,6 +234,7 @@ async function readPrivatePost(
       ref: {uri: found.uri, cid: found.cid},
       fields: placementFields(found.record),
       view: toPostView(found),
+      servedByPrism: true,
     },
   }
 }
@@ -321,6 +318,11 @@ export type PrivateReplyPlace = {
   reply: {root: StrongRef; parent: StrongRef}
   parentView: app.bsky.feed.defs.PostView | undefined
   anchor: ReplyAnchor
+  /**
+   * prism served the parent in this placement, so its read rule related the
+   * writer and the parent's author (`reply-block.ts`).
+   */
+  parentServedByPrism: boolean
 }
 
 /**
@@ -533,5 +535,6 @@ export async function placePrivateReply(
     reply,
     parentView: parent.view,
     anchor: {kind, uri: anchorUri, authorDid, audienceUri},
+    parentServedByPrism: parent.servedByPrism === true,
   }
 }

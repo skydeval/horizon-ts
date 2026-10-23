@@ -86,3 +86,26 @@ export function fakeClient(
   )
   return {client, calls}
 }
+
+/**
+ * An AppView's `getRelationships` answer for `call`: one relationship per
+ * DID asked, with `fields` (block fields, say) on each. `undefined` for any
+ * other call, so a fake AppView can answer the rest itself.
+ */
+export function relationshipsReply(
+  call: Call,
+  fields: Record<string, unknown> = {},
+): Reply | undefined {
+  if (call.nsid !== 'app.bsky.graph.getRelationships') return undefined
+  return {
+    status: 200,
+    body: {
+      actor: call.params.get('actor'),
+      relationships: call.params.getAll('others').map(did => ({
+        $type: 'app.bsky.graph.defs#relationship',
+        did,
+        ...fields,
+      })),
+    },
+  }
+}

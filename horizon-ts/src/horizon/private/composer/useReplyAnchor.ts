@@ -8,8 +8,15 @@
 import {useQuery} from '@tanstack/react-query'
 
 import {STALE} from '#/state/queries'
-import {placePrivateReply} from '#/horizon/private/api/reply-anchor'
-import {keepOverData, PRIVATE_RETRY} from '#/horizon/private/api/transient'
+import {
+  placePrivateReply,
+  PrivateParentBusyError,
+} from '#/horizon/private/api/reply-anchor'
+import {
+  keepOverData,
+  PRIVATE_RETRY,
+  PrivateSuspectMissError,
+} from '#/horizon/private/api/transient'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 
@@ -31,15 +38,28 @@ export function useReplyAnchor(
       keepOverData(context, async () => {
         const clients = getCurrentClients()
         if (!clients || !replyToUri) return null
-        const place = await placePrivateReply(
-          {
-            did: clients.did,
-            pdsClient: clients.pdsClient,
-            prismClient: clients.prismClient,
-          },
-          replyToUri,
-        )
-        return {uri: place.anchor.uri, audienceUri: place.anchor.audienceUri}
+        try {
+          const place = await placePrivateReply(
+            {
+              did: clients.did,
+              pdsClient: clients.pdsClient,
+              prismClient: clients.prismClient,
+            },
+            replyToUri,
+          )
+          return {uri: place.anchor.uri, audienceUri: place.anchor.audienceUri}
+        } catch (error) {
+          /*
+           * A post prism left out says nothing yet (busy design 6): the label
+           * keeps what it showed, and with nothing it is read again through
+           * the throttle, as a suspect miss is. The reply itself is placed
+           * again at publish time.
+           */
+          if (error instanceof PrivateParentBusyError) {
+            throw new PrivateSuspectMissError()
+          }
+          throw error
+        }
       }),
   })
   return enabled ? (data ?? undefined) : undefined

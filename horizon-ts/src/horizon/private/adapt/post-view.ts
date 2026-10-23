@@ -22,6 +22,7 @@ import {
   privateSelfLabelValues,
   toBskyRecord,
 } from '#/horizon/private/adapt/record'
+import {isViewUnavailable} from '#/horizon/private/api/degraded'
 import {privateGatesServed} from '#/horizon/private/server-support'
 import {type ServedAudience, setPrivatePostFacts} from '#/horizon/private/store'
 import {isAudienceUri} from '#/horizon/private/uri'
@@ -211,6 +212,23 @@ function isObject(value: unknown): value is Record<string, unknown> {
  * record, or a value that does not convert, is returned as it is.
  */
 function convertedQuoteRecord(record: unknown, depth: number): unknown {
+  /*
+   * prism's `#viewUnavailable` (prism busy design 6.3, DMR-3) is the stock
+   * `#viewNotFound`, so the stock parser gives `post_not_found` and
+   * `PrivateQuote` mounts (an unknown type would render nothing). Its
+   * `retryAfter` stays as a Horizon-only key; the verdict was written from
+   * the answer it came in (`quotes/verdicts.ts`).
+   */
+  if (isViewUnavailable(record)) {
+    return {
+      $type: 'app.bsky.embed.record#viewNotFound',
+      uri: record.uri,
+      notFound: true,
+      ...(typeof record.retryAfter === 'number'
+        ? {retryAfter: record.retryAfter}
+        : {}),
+    }
+  }
   if (
     !isObject(record) ||
     record.$type !== 'app.bsky.embed.record#viewRecord'

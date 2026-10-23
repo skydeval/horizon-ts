@@ -104,6 +104,7 @@ import {
   OTHER_AUDIENCE,
   OTHER_DID,
   privateUri,
+  relationshipsReply,
   type Reply,
 } from './fixtures'
 
@@ -392,7 +393,11 @@ beforeEach(async () => {
   direct = fakeClient(DID, prismHandler)
   mockPrismClient = prism.client
   mockDirectClient = direct.client
-  appview = fakeClient(DID, () => ({status: 500, body: {}})).client
+  // No block with anyone (the reply block check); everything else fails.
+  appview = fakeClient(
+    DID,
+    call => relationshipsReply(call) ?? {status: 500, body: {}},
+  ).client
   encodes = 0
   mockEncode.mockReset()
   mockEncode.mockImplementation(fieldsFor)

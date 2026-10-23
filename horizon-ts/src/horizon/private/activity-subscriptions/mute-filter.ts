@@ -1,5 +1,5 @@
 /*
- * The client mute filter's pure part (activity subscriptions design 2.6):
+ * The client mute filter's pure part (activity subscriptions design 2.5):
  * leaving muted authors out of the private list and the nav badge's
  * private-only count. Imports no session or React module; the mute list is
  * read in `muted.ts`.

@@ -243,43 +243,17 @@ export const PRIVATE_POSTING_DEFAULTS: boolean = true
 export const PRIVATE_NOTIFICATION_SETTINGS: boolean = true
 
 /**
- * Activity subscriptions for private posts (activity subscriptions design,
- * AS-8): while prism lists `private.activitySubscriptions`, the bell's
- * choices are mirrored into prism and copied from Bluesky's list hourly, and
- * Private notifications gain the Activity pill, the "Activity from others"
- * settings row, the dialog's private-posts line and the client mute filter.
- * `false`: no prism call for subscriptions, two pills, five settings rows and
- * no mute filter beyond the stock one. Guards Horizon code only; the
- * optimistic bell has its own switch.
+ * Activity subscriptions for private posts (activity subscriptions design
+ * 2.5, the gate): while prism lists `private.activitySubscriptions`, a
+ * member's bell dialog adds "Private posts" and "Private replies", which
+ * write only to prism (the bell icon lit by any of the four), and Private
+ * notifications gain the Activity pill, the "Activity from others" settings
+ * row and the client mute filter. `false`: no prism call for subscriptions,
+ * two toggles, two pills, five settings rows and no mute filter beyond the
+ * stock one. Guards Horizon code only; the public toggles' optimistic save
+ * runs either way.
  */
 export const PRIVATE_ACTIVITY_SUBSCRIPTIONS: boolean = true
-
-/**
- * The bell's Save closes the dialog at once and shows the new state, saving
- * to Bluesky in the background (activity subscriptions design 2.1, hook Dlg
- * 1). `false` restores the stock wait: the spinner, the disabled button and
- * the close on success. Either way the subject is marked for the prism
- * mirror at press and Bluesky's accepted flags are handed to it.
- */
-export const OPTIMISTIC_ACTIVITY_SUBSCRIPTIONS: boolean = true
-
-/**
- * The hourly reconcile also removes from prism the subscriptions that
- * Bluesky's list lacks (activity subscriptions design 2.3, step 6). Off until
- * live check L-18 fixes when Bluesky's `viewer.activitySubscription` "reads
- * off" (present as both flags false, or absent); that rule is to be written
- * here when this is turned on (AS-B12). Until then a bell turned off in
- * another client stays on in prism (R-12).
- */
-export const ACTIVITY_SUBSCRIPTION_REMOVALS: boolean = false
-
-/**
- * The bell's dialog shows "Includes their private posts that you can see."
- * under its subtitle for a member while prism lists
- * `private.activitySubscriptions` (activity subscriptions design SQ-1, hook
- * Dlg 2). `false` drops the line.
- */
-export const ACTIVITY_DIALOG_PRIVATE_LINE: boolean = true
 
 /**
  * The profile Media tab as a grid of square thumbnails (change list item 6,
@@ -289,3 +263,19 @@ export const ACTIVITY_DIALOG_PRIVATE_LINE: boolean = true
  * corner lock. `false` restores the stock list of posts.
  */
 export const MEDIA_GRID: boolean = true
+
+/**
+ * The reply block check (`private/api/reply-block.ts`; skydeval,
+ * 2026-10-23): before a private reply to another author's post is written,
+ * Horizon asks the public AppView (`getRelationships`) for public and list
+ * blocks either way between the member and that author, and reads private
+ * blocks from prism's serve or the two `tools.kryphocron.graph.block`
+ * listings. A block fails the reply as `reply-blocked` with nothing
+ * written; a check that cannot be made fails it as `parent-busy`. Public
+ * replies are untouched: stock's `resolveReply` already refuses a blocker's
+ * post. Once prism lists its list-block fix (feature id to come), the check
+ * can be limited to the paths that skip prism's parent read. `false`: no
+ * check, and a private reply to a list-blocked author is written as before.
+ * Guards Horizon code only.
+ */
+export const REPLY_BLOCK_CHECK: boolean = true

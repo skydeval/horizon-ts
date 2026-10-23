@@ -9,6 +9,7 @@ import {useDialogControl} from '#/components/Dialog'
 import {BellPlus_Stroke2_Corner0_Rounded as BellPlusIcon} from '#/components/icons/BellPlus'
 import {BellRinging_Filled_Corner0_Rounded as BellRingingIcon} from '#/components/icons/BellRinging'
 import * as Tooltip from '#/components/Tooltip'
+import {usePrivateBellOn} from '#/horizon/private/activity-subscriptions/private-state' // HORIZON: Btn 1
 import {useActivitySubscriptionsNudged} from '#/storage/hooks/activity-subscriptions-nudged'
 import type * as bsky from '#/types/bsky'
 import {SubscribeProfileDialog} from './SubscribeProfileDialog'
@@ -60,9 +61,11 @@ export function SubscribeProfileButton({
     ],
   })
 
+  const privateOn = usePrivateBellOn(profile.did) // HORIZON: Btn 1, any of the four toggles lights the icon
   const isSubscribed =
     profile.viewer?.activitySubscription?.post ||
-    profile.viewer?.activitySubscription?.reply
+    profile.viewer?.activitySubscription?.reply ||
+    privateOn // HORIZON: Btn 1
 
   const Icon = isSubscribed ? BellRingingIcon : BellPlusIcon
 

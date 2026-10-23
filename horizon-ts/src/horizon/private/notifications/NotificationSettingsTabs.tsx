@@ -10,7 +10,7 @@
  * Without the feature they are shown disabled with a note, and nothing is
  * stored. While prism lists `private.activitySubscriptions` a sixth row,
  * "Activity from others", follows Reposts (activity subscriptions design
- * 2.7): one switch for new private posts from accounts whose bell is on.
+ * 2.5): one switch for new private posts from accounts whose bell is on.
  */
 
 import {View} from 'react-native'

@@ -1,8 +1,9 @@
 import {describe, expect, it, jest} from '@jest/globals'
 
 /*
- * T-22: the client lexicon accepts prism's answers (the prism handoff,
- * section 2 and 6).
+ * T7-9: the client lexicon has Bluesky's shapes for prism's store (activity
+ * subscriptions design section 3, PR-AS-1; the prism handoff, section 2),
+ * and the API reads them.
  */
 
 // The suite mocks multiformats globally; the lex client needs the real one.
@@ -13,7 +14,11 @@ import {XrpcResponseError} from '@atproto/lex'
 
 import {nearhorizon} from '#/horizon/lexicons'
 import {DID, fakeClient, type Reply} from '../../__tests__/fixtures'
-import {classifyPrismError} from '../api'
+import {
+  classifyPrismError,
+  listPrismSubscriptions,
+  putPrismSubscription,
+} from '../api'
 
 const SUBJECT = 'did:plc:subjectccccccccccccccccc'
 
@@ -30,72 +35,62 @@ const five = {
   repost: preference,
 }
 
-describe('T-22: the client lexicon', () => {
-  it('accepts the put’s answers, with and without flags, and sends ifNotChangedSince', async () => {
+describe('T7-9: the client lexicon', () => {
+  it('the put has no ifNotChangedSince and no Conflict, and returns the accepted flags', async () => {
+    expect(nearhorizon.privatePutActivitySubscription.errors).not.toContain(
+      'Conflict',
+    )
     const on = prism({
       status: 200,
       body: {subject: SUBJECT, activitySubscription: {post: true, reply: false}},
     })
-    const res = await on.client.call(
-      nearhorizon.privatePutActivitySubscription,
-      {
-        subject: SUBJECT,
-        activitySubscription: {post: true, reply: false},
-        ifNotChangedSince: '2026-10-22T11:55:00.000Z',
-      },
-    )
-    expect(res.activitySubscription).toEqual({post: true, reply: false})
+    expect(
+      await putPrismSubscription(on.client, SUBJECT, {post: true, reply: false}),
+    ).toEqual({post: true, reply: false})
     expect(on.calls[0].body).toEqual({
       subject: SUBJECT,
       activitySubscription: {post: true, reply: false},
-      ifNotChangedSince: '2026-10-22T11:55:00.000Z',
     })
 
+    // No flags after an off: off.
     const off = prism({status: 200, body: {subject: SUBJECT}})
-    const offRes = await off.client.call(
-      nearhorizon.privatePutActivitySubscription,
-      {subject: SUBJECT, activitySubscription: {post: false, reply: false}},
-    )
-    expect(offRes.activitySubscription).toBeUndefined()
+    expect(
+      await putPrismSubscription(off.client, SUBJECT, {post: false, reply: false}),
+    ).toEqual({post: false, reply: false})
   })
 
-  it('accepts the list with updatedAt and asOf', async () => {
-    const {client} = prism({
+  it('the list items are {subject, activitySubscription}, with no asOf', async () => {
+    const {client, calls} = prism({
       status: 200,
       body: {
-        asOf: '2026-10-22T12:00:00.000Z',
         cursor: 'next',
         subscriptions: [
-          {
-            subject: SUBJECT,
-            activitySubscription: {post: true, reply: true},
-            updatedAt: '2026-10-22T11:00:00.000Z',
-          },
+          {subject: SUBJECT, activitySubscription: {post: true, reply: true}},
         ],
       },
     })
-    const res = await client.call(
-      nearhorizon.privateListActivitySubscriptions,
-      {limit: 100},
-    )
-    expect(res.asOf).toBe('2026-10-22T12:00:00.000Z')
-    expect(res.subscriptions[0].updatedAt).toBe('2026-10-22T11:00:00.000Z')
+    const page = await listPrismSubscriptions(client, {limit: 100})
+    expect(page).toEqual({
+      rows: [{subject: SUBJECT, flags: {post: true, reply: true}}],
+      cursor: 'next',
+    })
+    expect(calls[0].params.get('limit')).toBe('100')
   })
 
-  it('answers Conflict and LimitReached as named errors', async () => {
-    for (const name of ['Conflict', 'LimitReached'] as const) {
-      const {client} = prism({status: 400, body: {error: name, message: name}})
-      const error = await client
-        .call(nearhorizon.privatePutActivitySubscription, {
-          subject: SUBJECT,
-          activitySubscription: {post: true, reply: false},
-        })
-        .catch((e: unknown) => e)
-      expect(error).toBeInstanceOf(XrpcResponseError)
-      expect(classifyPrismError(error)).toBe(
-        name === 'Conflict' ? 'conflict' : 'limit',
-      )
-    }
+  it('answers LimitReached as a named error, worded as the limit', async () => {
+    const {client} = prism({
+      status: 400,
+      body: {error: 'LimitReached', message: 'LimitReached'},
+    })
+    const error = await client
+      .call(nearhorizon.privatePutActivitySubscription, {
+        subject: SUBJECT,
+        activitySubscription: {post: true, reply: false},
+      })
+      .catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(XrpcResponseError)
+    expect(classifyPrismError(error)).toBe('limit')
+    expect(classifyPrismError(new Error('offline'))).toBe('other')
   })
 
   it('accepts preferences with and without subscribedPost', async () => {

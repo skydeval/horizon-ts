@@ -37,8 +37,17 @@ import {
   keepOverData,
   privateRetryFor,
 } from '#/horizon/private/api/transient'
+// HORIZON: a held private anchor is read again on the suspect clock
+import {heldPostRefetchInterval} from '#/horizon/private/known'
 // HORIZON: the private posts a thread quotes arrive with it
 import {resolveThreadQuotes} from '#/horizon/private/quotes/resolve'
+// HORIZON: the thread while prism is busy: the load gate, the wait cap, the quiet row
+import {
+  gateOtherReplies,
+  threadStamp,
+  useThreadBusy,
+  withQuietRow,
+} from '#/horizon/private/thread/busy'
 // HORIZON: a private thread is read through prism
 import {fetchPrivateThreadV2} from '#/horizon/private/thread/fetch'
 // HORIZON: private branches under a public anchor, and private replies past the first read
@@ -58,7 +67,9 @@ export * from '#/state/queries/usePostThread/types'
 export function usePostThread({anchor}: {anchor?: string}) {
   const qc = useQueryClient()
   const client = useAppviewClient()
-  const {hasSession} = useSession()
+  // HORIZON: the reader, for the further replies' load gate
+  const {hasSession, currentAccount} = useSession()
+  const currentDid = currentAccount?.did
   const {gtPhone} = useBreakpoints()
   const moderationOpts = useModerationOpts()
   const mergeThreadgateHiddenReplies = useMergeThreadgateHiddenReplies()
@@ -94,12 +105,16 @@ export function usePostThread({anchor}: {anchor?: string}) {
       // HORIZON: a private thread is read through prism; a public one with its private branches (start)
       const data = isPrivateRead(anchor)
         ? await keepOverData(ctx, () =>
-            fetchPrivateThreadV2(anchor!, {
-              below,
-              branchingFactor:
-                view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
-              sort,
-            }),
+            fetchPrivateThreadV2(
+              anchor!,
+              {
+                below,
+                branchingFactor:
+                  view === 'linear' ? LINEAR_VIEW_BF : TREE_VIEW_BF,
+                sort,
+              },
+              ctx,
+            ),
           )
         : await withPrivateBranches(
             anchor!,
@@ -117,6 +132,7 @@ export function usePostThread({anchor}: {anchor?: string}) {
                 below,
                 sort: sort,
               }),
+            ctx,
           )
       // HORIZON: a private thread is read through prism; a public one with its private branches (end)
       // HORIZON: the private posts a thread quotes arrive with it
@@ -169,6 +185,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
         thread: data.thread || [],
         threadgate: data.threadgate,
         hasOtherReplies: !!ctx.meta.hasOtherReplies,
+        // HORIZON: the thread's completion stamp, which the load gate reads
+        ...threadStamp(),
       } as UsePostThreadQueryResult
 
       const record = getThreadgateRecord(result.threadgate)
@@ -180,6 +198,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     },
     // HORIZON: a private thread is retried while prism is busy
     ...privateRetryFor(isPrivateRead(anchor)),
+    // HORIZON: a held private anchor is read again on the suspect clock
+    refetchInterval: () => heldPostRefetchInterval(anchor),
     placeholderData() {
       if (!anchor) return
       const placeholder = getThreadPlaceholder(qc, anchor)
@@ -200,7 +220,10 @@ export function usePostThread({anchor}: {anchor?: string}) {
     },
   })
 
-  const thread = useMemo(() => query.data?.thread || [], [query.data?.thread])
+  // HORIZON: the thread while prism is busy: gated items, the wait cap, kept errors
+  const busy = useThreadBusy({anchor, queryKey: postThreadQueryKey, query})
+  // HORIZON: the thread while prism is busy: gated items
+  const thread = busy.thread
   const threadgate = useMemo(
     () => query.data?.threadgate,
     [query.data?.threadgate],
@@ -234,12 +257,15 @@ export function usePostThread({anchor}: {anchor?: string}) {
   const additionalItemsQuery = useQuery({
     enabled: additionalQueryEnabled,
     queryKey: postThreadOtherQueryKey,
-    async queryFn() {
+    async queryFn(ctx) {
       // HORIZON: private replies past the first read continue here (start)
-      return await fetchOtherReplies(anchor!, () =>
-        client.call(app.bsky.unspecced.getPostThreadOtherV2, {
-          anchor: anchor! as AtUriString,
-        }),
+      return await fetchOtherReplies(
+        anchor!,
+        () =>
+          client.call(app.bsky.unspecced.getPostThreadOtherV2, {
+            anchor: anchor! as AtUriString,
+          }),
+        ctx,
       )
       // HORIZON: private replies past the first read continue here (end)
     },
@@ -253,16 +279,16 @@ export function usePostThread({anchor}: {anchor?: string}) {
           item: 'reply',
         }),
       )
-    } else if (additionalItemsQuery.isError) {
-      /*
-       * We could insert an special error component in here, but since these
-       * are optional additional replies, it's not critical that they're shown
-       * atm.
-       */
-      return []
+      // HORIZON: a failed refetch over data renders its data, not nothing (busy design 6.1)
     } else if (additionalItemsQuery.data?.thread) {
       const {threadItems} = sortAndAnnotateThreadItems(
-        additionalItemsQuery.data.thread,
+        // HORIZON: the further replies are gated against the thread's load
+        gateOtherReplies(
+          additionalItemsQuery.data.thread,
+          currentDid,
+          additionalItemsQuery.data.horizonFetchedAt,
+          busy.loadSince,
+        ),
         {
           view,
           skipModerationHandling: true,
@@ -283,6 +309,9 @@ export function usePostThread({anchor}: {anchor?: string}) {
     mergeThreadgateHiddenReplies,
     moderationOpts,
     threadgate?.record,
+    // HORIZON: the further replies are gated against the thread's load
+    currentDid,
+    busy.loadSince,
   ])
 
   /**
@@ -331,21 +360,30 @@ export function usePostThread({anchor}: {anchor?: string}) {
    * replies" or the reply composer.
    */
   const items = useMemo(() => {
-    return buildThread({
-      threadItems,
-      otherThreadItems,
-      serverOtherThreadItems,
-      isLoading: query.isPlaceholderData,
-      hasSession,
-      hasOtherThreadItems,
-      otherItemsVisible,
-      showOtherItems: () => setOtherItemsVisible(true),
-    })
+    // HORIZON: the quiet row below a kept placeholder anchor (busy design 6.1)
+    return withQuietRow(
+      buildThread({
+        threadItems,
+        otherThreadItems,
+        serverOtherThreadItems,
+        // HORIZON: no skeletons past the wait cap (busy design 5)
+        isLoading: busy.isLoading,
+        hasSession,
+        hasOtherThreadItems,
+        otherItemsVisible,
+        showOtherItems: () => setOtherItemsVisible(true),
+      }),
+      anchor,
+      busy.quietRow,
+    )
   }, [
     threadItems,
     otherThreadItems,
     serverOtherThreadItems,
-    query.isPlaceholderData,
+    // HORIZON: no skeletons past the wait cap; the quiet row
+    busy.isLoading,
+    busy.quietRow,
+    anchor,
     hasSession,
     hasOtherThreadItems,
     otherItemsVisible,
@@ -365,7 +403,10 @@ export function usePostThread({anchor}: {anchor?: string}) {
          */
         isFetching: query.isFetching,
         isPlaceholderData: query.isPlaceholderData,
-        error: query.error,
+        // HORIZON: a transient private failure over something to show is no error (busy design 6.1)
+        error: busy.error as typeof query.error,
+        // HORIZON: items the load gate hid, for the catching-up note
+        horizonHidden: busy.hidden,
         /*
          * Other state
          */
@@ -402,5 +443,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     items,
     postThreadQueryKey,
     postThreadOtherQueryKey,
+    // HORIZON: the thread while prism is busy
+    busy.error,
+    busy.hidden,
   ])
 }

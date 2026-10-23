@@ -59,8 +59,10 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
 // HORIZON: a private post the reader may not view shows the stand-in
 import {isPrivateDisplay} from '#/horizon/private/render/controls'
+// HORIZON: the catching-up note where the load gate hid a private item
+import {CatchingUpNote} from '#/horizon/private/status/CatchingUpNote'
 // HORIZON: a private post the reader may not view shows the stand-in
-import {StandIn} from '#/horizon/private/render/StandIn'
+import {PrivateThreadNotFound} from '#/horizon/private/thread/PrivateThreadNotFound'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -519,9 +521,12 @@ export function PostThread({uri}: {uri: string}) {
       } else if (item.type === 'threadPostBlocked') {
         return <ThreadItemPostTombstone type="blocked" />
       } else if (item.type === 'threadPostNotFound') {
-        // HORIZON: a private post the reader may not view shows the stand-in
+        // HORIZON: a private post the reader may not view shows the stand-in; one prism cannot answer for now, the quiet row
         return isPrivateDisplay(item.uri) ? (
-          <StandIn variant="thread" />
+          <PrivateThreadNotFound
+            item={item}
+            queryKey={thread.context.postThreadQueryKey}
+          />
         ) : (
           <ThreadItemPostTombstone type="not-found" />
         )
@@ -588,6 +593,8 @@ export function PostThread({uri}: {uri: string}) {
       ) : (
         <AnalyticsOnlyFeedFeedbackProvider
           feedDescriptor={feedFeedback.feedDescriptor}>
+          {/* HORIZON: the catching-up note where the load gate hid a private item */}
+          <CatchingUpNote hidden={thread.state.horizonHidden} />
           <List
             ref={listRef}
             data={deferredSlices}

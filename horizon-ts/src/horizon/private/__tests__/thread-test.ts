@@ -341,9 +341,9 @@ describe('fetchPrivateThreadV2', () => {
     ).toEqual(['3kroot', '3kparent', '3kanchor', '3kr1', '3kr1a', '3kr2'])
   })
 
-  it('gives one not-found anchor when prism answers NotFound', async () => {
+  it('gives one not-found anchor when prism answers NotFound for another author, healthy', async () => {
     serve(undefined)
-    const uri = privateUri('3kgone')
+    const uri = privateUri('3kgone', OTHER_DID)
     const res = await fetchPrivateThreadV2(uri, {below: 4})
     expect(res.thread).toEqual([
       {
@@ -495,8 +495,8 @@ describe('fetchPrivateThreadV2', () => {
     })
   })
 
-  it('marks a private parent prism did not serve as not found', async () => {
-    const gone = {uri: privateUri('3kgone')}
+  it("marks another author's private parent prism did not serve, healthy, as not found", async () => {
+    const gone = {uri: privateUri('3kgone', OTHER_DID)}
     const anchor = privateView('3kanchor', {
       reply: replyTo(gone as never, gone),
     })

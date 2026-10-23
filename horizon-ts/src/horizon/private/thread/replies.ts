@@ -15,12 +15,20 @@
  *   other-replies call when that has something too.
  */
 
+import {type QueryClient, type QueryKey} from '@tanstack/react-query'
+
 import {logger} from '#/logger'
 import {readReplyRefs} from '#/horizon/private/adapt/feed-view'
 import {getPrivateReplies} from '#/horizon/private/api/reads'
 import {resyncPublicThreadMute} from '#/horizon/private/api/thread-mute'
+import {
+  hasDataForPage,
+  isTransientPrismError,
+  keepError,
+} from '#/horizon/private/api/transient'
 import {withDeadline} from '#/horizon/private/feed/merge-core'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
+import {hold} from '#/horizon/private/known'
 import {privatePagingServed} from '#/horizon/private/server-support'
 import {
   clearReplyContinuation,
@@ -37,10 +45,33 @@ import {
   type TreeNode,
 } from '#/horizon/private/thread/fetch'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {healthEnvironment} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
+
+/**
+ * The query a read runs in (prism busy design 5, 6.1): a transient failure of
+ * the private half is rethrown over data the query has, which keeps it, and
+ * with none the read goes on without it, held for the lift and the catch-up.
+ */
+export type RepliesQueryContext = {client: QueryClient; queryKey: QueryKey}
+
+/**
+ * The private half's transient failure (`error`) in the query `context`:
+ * rethrown, marked kept and held, when the query has data; else held, and
+ * the read goes on. A permanent failure, or one outside a query, is left out,
+ * as before.
+ */
+function keepOrHold(context: RepliesQueryContext | undefined, error: unknown) {
+  if (!context || !isTransientPrismError(error)) return
+  hold(context.queryKey, undefined, context.client)
+  if (hasDataForPage(context.client, context)) {
+    keepError(error)
+    throw error
+  }
+}
 
 type ThreadOutput = app.bsky.unspecced.getPostThreadV2.$OutputBody
 type ThreadItem = app.bsky.unspecced.getPostThreadV2.ThreadItem
@@ -145,8 +176,11 @@ export function spliceSubtrees(
  * The stock answer for a public anchor with the anchor's private branches
  * spliced in after it (Thread 1). `fetchStock` is the stock call; it alone
  * runs, with no prism request, for a signed-out reader, a non-member, while
- * `PRIVATE_READING` is off, or while prism does not page replies. Never
- * throws but as `fetchStock` does.
+ * `PRIVATE_READING` is off, or while prism does not page replies. Throws as
+ * `fetchStock` does, and, in a query that has data, on the private half's
+ * transient failure, so the query keeps its data, its branches included
+ * (prism busy design 5, 6.1); with none, that failure gives the stock thread
+ * alone, held. A permanent failure leaves the branches out, as before.
  */
 export async function withPrivateBranches(
   anchor: string,
@@ -156,6 +190,7 @@ export async function withPrivateBranches(
     sort,
   }: {below: number; branchingFactor?: number; sort?: string},
   fetchStock: () => Promise<ThreadOutput>,
+  context?: RepliesQueryContext,
 ): Promise<ThreadOutput> {
   const clients = PRIVATE_READING ? getCurrentClients() : undefined
   if (!clients || !isPrivateMember(clients.did) || !privatePagingServed()) {
@@ -179,9 +214,11 @@ export async function withPrivateBranches(
     BRANCH_DEADLINE_MS,
   ).catch((error: unknown) => {
     logger.warn('private branches unavailable', {safeMessage: error})
-    return undefined
+    return {failed: error}
   })
-  const [stock, found] = await Promise.all([fetchStock(), privatePart])
+  const [stock, part] = await Promise.all([fetchStock(), privatePart])
+  if ('failed' in part) keepOrHold(context, part.failed)
+  const found = 'failed' in part ? undefined : part
 
   const nodes = (found?.items ?? [])
     .map(toTreeNode)
@@ -265,11 +302,20 @@ export async function withPrivateBranches(
  * a failure giving none) and the private replies past the continuation's
  * cursor, page after page up to {@link MAX_OTHER_REPLY_PAGES}, the direct
  * replies already shown left out.
+ *
+ * The answer carries its own completion stamp, `horizonFetchedAt`, which the
+ * load gate judges apart from the thread's (prism busy design 6.1, BR13-L3).
+ * In a query that has data, the private half's transient failure is rethrown,
+ * so the query keeps its data, the reader's own replies included; with none
+ * (a first tap in an outage) the stock part and the private pages read before
+ * the failure are returned, and the query is held for the lift and the
+ * catch-up (BR14-L3).
  */
 export async function fetchOtherReplies(
   anchor: string,
   fetchStockOther: () => Promise<OtherOutput>,
-): Promise<OtherOutput> {
+  context?: RepliesQueryContext,
+): Promise<OtherOutput & {horizonFetchedAt?: number}> {
   const continuation = PRIVATE_READING
     ? getReplyContinuation(anchor)
     : undefined
@@ -311,6 +357,7 @@ export async function fetchOtherReplies(
       }
     } catch (error) {
       logger.warn('other private replies unavailable', {safeMessage: error})
+      keepOrHold(context, error)
     }
     if (nodes.length === 0) return []
     const views = await adaptTree(nodes, clients.appviewClient, uri =>
@@ -329,5 +376,8 @@ export async function fetchOtherReplies(
    * private items carry none.
    */
   const asOther = privateItems as unknown as OtherOutput['thread']
-  return {thread: [...stock.thread, ...asOther]}
+  return {
+    thread: [...stock.thread, ...asOther],
+    horizonFetchedAt: healthEnvironment().now(),
+  }
 }

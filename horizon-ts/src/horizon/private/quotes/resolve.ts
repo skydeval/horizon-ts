@@ -18,23 +18,28 @@
 
 import {type QueryClient} from '@tanstack/react-query'
 
-import {readPrivatePostViews} from '#/horizon/private/links'
+import {PrivateWaiterError} from '#/horizon/private/api/transient'
+import {gateUris} from '#/horizon/private/known'
+import {readPrivatePostViewsAnswered} from '#/horizon/private/links'
+import {watchQuotes} from '#/horizon/private/quotes/batch'
 import {
   hasFreshQuote,
   privateQuoteQueryKey,
   privateQuoteQueryOptions,
   QUOTE_GC_MS,
-  toQuoteData,
+  type QuoteData,
 } from '#/horizon/private/quotes/cache'
 import {
   feedItemPosts,
   privateQuoteUris,
   threadItemPosts,
 } from '#/horizon/private/quotes/collect'
+import {quoteFromRead} from '#/horizon/private/quotes/verdicts'
 import {
   type CurrentClients,
   getCurrentClients,
 } from '#/horizon/routing/current-clients'
+import {healthEnvironment, isPrismConfirmed} from '#/horizon/routing/health'
 import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
 import {type app} from '#/lexicons'
@@ -82,12 +87,24 @@ async function settleWithin(promises: Promise<unknown>[], ms: number) {
 export async function resolvePrivateQuotes(
   posts: Iterable<app.bsky.feed.defs.PostView | undefined>,
   context: QuoteResolutionContext | undefined = currentContext(),
+  start: number = healthEnvironment().now(),
 ): Promise<void> {
   if (!PRIVATE_READING || !context) return
   const {clients, queryClient, deadlineMs = QUOTE_DEADLINE_MS} = context
   if (!isPrivateMember(clients.did)) return
   const uris = privateQuoteUris(posts)
   if (uris.length === 0) return
+  watchQuotes()
+
+  /*
+   * A page fetch that began while the account was not confirmed is a gated
+   * load (4.1): its quotes' slots are floored at the fetch's own start, so
+   * verdicts its own answer wrote count, and every quote not answered since
+   * is stale (one batched read for the page).
+   */
+  const gated = !isPrismConfirmed(clients.did)
+  if (gated) gateUris(clients.did, uris, start)
+  const floor = gated ? start : undefined
 
   const now = Date.now()
   const waits: Promise<unknown>[] = []
@@ -102,19 +119,34 @@ export async function resolvePrivateQuotes(
         waits.push(queryClient.fetchQuery(privateQuoteQueryOptions(uri)))
       continue
     }
-    if (hasFreshQuote(queryClient, uri, now)) continue
+    if (hasFreshQuote(queryClient, uri, now, floor)) continue
     toRead.push(uri)
     if (hasData) held.add(uri)
   }
 
   if (toRead.length > 0) {
-    const read = readPrivatePostViews(clients, toRead)
+    const read = readPrivatePostViewsAnswered(clients, toRead)
     // Each quote's query reports the failure; the page goes on.
     read.catch(() => {})
     for (const uri of toRead) {
+      const key = privateQuoteQueryKey(uri)
       const fetched = queryClient.fetchQuery({
-        queryKey: privateQuoteQueryKey(uri),
-        queryFn: async () => toQuoteData((await read).get(uri)),
+        queryKey: key,
+        queryFn: async () => {
+          let answered: Awaited<typeof read>
+          try {
+            answered = await read
+          } catch (error) {
+            // Each quote's query gets its own error (BR12-N7).
+            throw new PrivateWaiterError(error)
+          }
+          return quoteFromRead(
+            uri,
+            answered,
+            queryClient.getQueryData<QuoteData>(key),
+            queryClient,
+          )
+        },
         staleTime: 0,
         gcTime: QUOTE_GC_MS,
       })
@@ -173,8 +205,10 @@ export function withPrivateQuotes<A extends FeedFetcher>(api: A): A {
     get(target, prop) {
       if (prop === 'fetch') {
         return async (...args: never[]) => {
+          // The page fetch's own start floors its quotes (4.1, BR14-N3).
+          const start = healthEnvironment().now()
           const res = await target.fetch(...args)
-          await resolvePrivateQuotes(feedItemPosts(res.feed))
+          await resolvePrivateQuotes(feedItemPosts(res.feed), undefined, start)
           return res
         }
       }

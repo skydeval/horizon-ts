@@ -30,6 +30,7 @@ import {ListFooter} from '#/components/Lists'
 import {Loader} from '#/components/Loader'
 import * as ProfileCard from '#/components/ProfileCard'
 import {Text} from '#/components/Typography'
+import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state' // HORIZON: Set 1
 import type * as bsky from '#/types/bsky'
 import * as SettingsList from '../components/SettingsList'
 import {ItemTextWithSubtitle} from './components/ItemTextWithSubtitle'
@@ -46,6 +47,7 @@ export function ActivityNotificationSettingsScreen({}: Props) {
   const {data: preferences, isError: isPreferencesError} =
     useNotificationSettingsQuery()
   const moderationOpts = useModerationOpts()
+  usePrivateActivityPrefetch() // HORIZON: Set 1, pre-warm the private toggles (activity subscriptions design 2.2)
 
   const {
     data: subscriptions,

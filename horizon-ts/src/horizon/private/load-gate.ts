@@ -52,8 +52,51 @@ import {
  */
 export const SLOT_JOIN_MS = 2_000
 
+/**
+ * How long a private query with nothing cached shows its skeleton, from its
+ * first fetch, before the quiet "Couldn't load right now" row with Try again
+ * while its retries go on (design 5).
+ */
+export const EMPTY_WAIT_MS = 30_000
+
 function now(): number {
   return healthEnvironment().now()
+}
+
+/**
+ * A fetch's completion stamp (4.1): the data it writes counts as fetched now.
+ * Read on health's clock, as the gate's own times are.
+ */
+export function fetchStamp(): number {
+  return now()
+}
+
+/**
+ * Whether a query that has nothing to show (`waiting`) has waited
+ * {@link EMPTY_WAIT_MS} since it began to, so its surface shows the quiet row
+ * instead of the skeleton (design 5). Resets once it has something.
+ */
+export function useEmptyWaitCapped(waiting: boolean): boolean {
+  const [since, setSince] = useState<number | undefined>(undefined)
+  const [capped, setCapped] = useState(false)
+  useEffect(() => {
+    if (!waiting) {
+      setSince(undefined)
+      setCapped(false)
+      return
+    }
+    const start = since ?? now()
+    if (since === undefined) setSince(start)
+    const left = start + EMPTY_WAIT_MS - now()
+    if (left <= 0) {
+      setCapped(true)
+      return
+    }
+    const env = healthEnvironment()
+    const timer = env.setTimeout(() => setCapped(true), left)
+    return () => env.clearTimeout(timer)
+  }, [waiting, since])
+  return waiting && capped
 }
 
 /** One row as the gate judges it: the private post it shows. */
@@ -305,12 +348,33 @@ export function useLoadGate<D = unknown>(
   return {loadSince, restart, hidden, trimmed}
 }
 
-/** URIs of the slots mounted now, with how many of each (for the lift's quote read). */
-const mountedSlots = new Map<string, number>()
+/** One mounted slot's current floor. */
+type SlotHandle = {floor: number | undefined}
+
+/** The slots mounted now, by URI (for the lift's quote read). */
+const mountedSlots = new Map<string, Set<SlotHandle>>()
 
 /** The URIs of every mounted slot (4.1: the lift reads those not answered since their floor). */
 export function mountedSlotUris(): string[] {
   return Array.from(mountedSlots.keys())
+}
+
+/**
+ * Every mounted gated slot with its highest floor (4.1, Recovery): the lift
+ * reads those not answered since it in one batch.
+ */
+export function mountedGatedSlots(): {uri: string; floor: number}[] {
+  const out: {uri: string; floor: number}[] = []
+  mountedSlots.forEach((handles, uri) => {
+    let floor: number | undefined
+    handles.forEach(handle => {
+      if (handle.floor !== undefined) {
+        floor = floor === undefined ? handle.floor : Math.max(floor, handle.floor)
+      }
+    })
+    if (floor !== undefined) out.push({uri, floor})
+  })
+  return out
 }
 
 function maxDefined(...values: (number | undefined)[]): number | undefined {
@@ -347,15 +411,25 @@ export function useSlotFloor(uri: string): number | undefined {
       setHighest(live)
     }
   }, [live, highest])
+  const floor = maxDefined(base, highest, live)
+  const [handle] = useState<SlotHandle>(() => ({floor}))
   useEffect(() => {
-    mountedSlots.set(uri, (mountedSlots.get(uri) ?? 0) + 1)
-    return () => {
-      const count = (mountedSlots.get(uri) ?? 1) - 1
-      if (count > 0) mountedSlots.set(uri, count)
-      else mountedSlots.delete(uri)
+    handle.floor = floor
+  }, [handle, floor])
+  useEffect(() => {
+    let handles = mountedSlots.get(uri)
+    if (!handles) {
+      handles = new Set()
+      mountedSlots.set(uri, handles)
     }
-  }, [uri])
-  return maxDefined(base, highest, live)
+    handles.add(handle)
+    return () => {
+      const current = mountedSlots.get(uri)
+      current?.delete(handle)
+      if (current?.size === 0) mountedSlots.delete(uri)
+    }
+  }, [uri, handle])
+  return floor
 }
 
 /**

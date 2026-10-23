@@ -38,6 +38,20 @@ let mockPrismClient: unknown
 jest.mock('#/horizon/routing/prism', () => ({
   getPrismClient: () => mockPrismClient,
 }))
+// Another author's PDS, for the reply block check's private block listing.
+let mockOtherPdsClient: unknown
+jest.mock('#/horizon/private/api/gates', () => {
+  const actual = jest.requireActual<{
+    gatePdsClient: (did: string) => Promise<unknown>
+  }>('#/horizon/private/api/gates')
+  return {
+    ...actual,
+    gatePdsClient: (did: string) =>
+      mockOtherPdsClient
+        ? Promise.resolve(mockOtherPdsClient)
+        : actual.gatePdsClient(did),
+  }
+})
 
 import {type Client} from '@atproto/lex'
 import {i18n} from '@lingui/core'
@@ -61,6 +75,11 @@ import {
 import {resetPrismHealth} from '#/horizon/routing/health'
 import {repoRouteForDid, resetWriteRoutes} from '#/horizon/routing/write-route'
 import {PrivateAudienceMissingError} from '../api/audiences'
+import {
+  PrivateReplyBlockedError,
+  PrivateReplyCheckError,
+  REPLY_BLOCK_TIMING,
+} from '../api/reply-block'
 import {PrivateRouteUnavailableError} from '../api/writer'
 import {
   deletePrivatePost,
@@ -83,6 +102,7 @@ import {
   OTHER_AUDIENCE,
   OTHER_DID,
   privateUri,
+  relationshipsReply,
   type Reply,
 } from './fixtures'
 
@@ -218,6 +238,8 @@ let prismHandler: (call: Call) => Reply
 let pds: ReturnType<typeof fakePds>
 let prism: ReturnType<typeof fakeClient>
 let appview: Client
+/** The AppView's answer to anything but `getRelationships`. */
+let appviewHandler: (call: Call) => Reply
 
 function draft(text: string) {
   return {
@@ -328,7 +350,13 @@ beforeEach(() => {
       : prismHandler(call),
   )
   mockPrismClient = prism.client
-  appview = fakeClient(DID, () => ({status: 500, body: {}})).client
+  appviewHandler = call => relationshipsReply(call) ?? {status: 500, body: {}}
+  appview = fakeClient(DID, call => appviewHandler(call)).client
+  mockOtherPdsClient = fakeClient(OTHER_DID, () => ({
+    status: 200,
+    body: {records: []},
+  })).client
+  REPLY_BLOCK_TIMING.freshMs = 2_000
   // The jest setup's locus origin: the locus writers (2K T-12).
   publishPds('https://pds.example')
   resetWriteRoutes()
@@ -820,9 +848,7 @@ describe('postPrivate: where a reply goes (A-12, A-13)', () => {
     expect(record?.reply.root).toEqual({uri: PUBLIC_ROOT, cid: recordCids[4]})
     // Only the writer's own record was read from a PDS.
     const reads = pds.calls.filter(c => c.nsid === 'com.atproto.repo.getRecord')
-    expect(reads.map(c => c.params.get('repo'))).toEqual(
-      reads.map(() => DID),
-    )
+    expect(reads.map(c => c.params.get('repo'))).toEqual(reads.map(() => DID))
   })
 
   it('the writer’s own branch hop gone from their PDS is parent-unavailable, never reply-refused (BR18-N3)', async () => {
@@ -1465,5 +1491,112 @@ describe('the write routes (2K-1)', () => {
       ),
     ).toEqual([])
     expect(pds.repo.size).toBe(0)
+  })
+})
+
+describe('postPrivate: the reply block check on the locus route', () => {
+  const PARENT = privateUri('3kblocked222', OTHER_DID)
+  const BLOCK_URI = `at://${OTHER_DID}/app.bsky.graph.block/3kblock22222`
+  const LIMITS = {threadgate: [{type: 'mention'}]}
+
+  function writesAny() {
+    return nsids(pds.calls).filter(
+      n =>
+        n === 'tools.kryphocron.feed.createPostPrivate' ||
+        n === 'tools.kryphocron.actor.participatePrivate' ||
+        n === 'com.atproto.repo.createRecord' ||
+        n === 'com.atproto.repo.putRecord' ||
+        n === 'tools.kryphocron.policy.manageAudience',
+    )
+  }
+
+  beforeEach(() => {
+    servePrism([
+      served(PARENT, OTHER_DID, recordCids[3], {audienceList: OTHER_AUDIENCE}),
+    ])
+    mockResolveEmbed.mockClear()
+  })
+
+  it('a parent whose author blocked the member: the composer shows “You can’t reply to this post.”, and no upload, gate or post is written', async () => {
+    appviewHandler = () => ({status: 500, body: {}})
+    appview = fakeClient(
+      DID,
+      call =>
+        relationshipsReply(call, {blockedBy: BLOCK_URI}) ??
+        appviewHandler(call),
+    ).client
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, LIMITS),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect((error as Error).message).toBe('You can’t reply to this post.')
+    expect(mockResolveEmbed).not.toHaveBeenCalled()
+    expect(writesAny()).toEqual([])
+  })
+
+  it('a check that cannot be made shows the neutral text and writes nothing', async () => {
+    appview = fakeClient(DID, () => ({status: 500, body: {}})).client
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, LIMITS),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyCheckError)
+    expect((error as Error).message).toBe(
+      'Couldn’t reach the post you’re replying to. Try again in a moment.',
+    )
+    expect(writesAny()).toEqual([])
+  })
+
+  it('a block made during the uploads is caught before the first gate or post (PR2-L1)', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    let blocked = false
+    mockResolveEmbed.mockImplementation(() => {
+      blocked = true
+      return Promise.resolve(undefined)
+    })
+    appview = fakeClient(
+      DID,
+      call =>
+        relationshipsReply(call, blocked ? {blockingByList: BLOCK_URI} : {}) ??
+        appviewHandler(call),
+    ).client
+    const error = await postPrivate(
+      new QueryClient(),
+      opts(['reply'], PARENT, LIMITS),
+    ).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(PrivateReplyBlockedError)
+    expect(mockResolveEmbed).toHaveBeenCalled()
+    expect(writesAny()).toEqual([])
+    mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+  })
+
+  it('the thread root’s author blocked, the parent’s not: the reply is written', async () => {
+    const rootUri = privateUri(
+      '3krootblk222',
+      'did:plc:thirdcccccccccccccccccccc',
+    )
+    const replyUri = privateUri('3kreplyok222', OTHER_DID)
+    servePrism([
+      served(rootUri, 'did:plc:thirdcccccccccccccccccccc', recordCids[4], {
+        audienceList: OTHER_AUDIENCE,
+      }),
+      served(replyUri, OTHER_DID, recordCids[3], {
+        audienceList: OTHER_AUDIENCE,
+        reply: {
+          root: {uri: rootUri, cid: recordCids[4]},
+          parent: {uri: rootUri, cid: recordCids[4]},
+        },
+      }),
+    ])
+    appview = fakeClient(DID, call =>
+      call.params.getAll('others').includes('did:plc:thirdcccccccccccccccccccc')
+        ? (relationshipsReply(call, {blockedBy: BLOCK_URI}) as Reply)
+        : (relationshipsReply(call) ?? appviewHandler(call)),
+    ).client
+    await postPrivate(new QueryClient(), opts(['reply'], replyUri))
+    expect(nsids(pds.calls)).toContain(
+      'tools.kryphocron.actor.participatePrivate',
+    )
   })
 })

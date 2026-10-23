@@ -22,6 +22,8 @@ import {IS_ANDROID} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
 // HORIZON: a private post carries a lock at the right end of its meta row
 import {PrivateHeaderLock} from '#/horizon/private/render/PrivateBadge'
+// HORIZON: the reader's own private post prism has not served yet reads "Syncing"
+import {SyncingMetaLabel} from '#/horizon/private/render/SyncingLabel'
 import {type app} from '#/lexicons'
 import {TimeElapsed} from './TimeElapsed'
 import {PreviewableUserAvatar} from './UserAvatar'
@@ -170,6 +172,8 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
             </MaybeLinkText>
           )}
         </TimeElapsed>
+        {/* HORIZON: the reader's own private post prism has not served yet reads "Syncing" */}
+        <SyncingMetaLabel authorDid={author.did} postHref={opts.postHref} />
       </View>
       {/* HORIZON: a private post carries a lock at the right end of its meta row */}
       <PrivateHeaderLock postHref={opts.postHref} compact={opts.showAvatar} />

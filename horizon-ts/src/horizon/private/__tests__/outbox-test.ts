@@ -98,6 +98,7 @@ import {
   readLocal,
   writeLocal,
 } from '#/horizon/session/local-store'
+import {REPLY_BLOCK_TIMING} from '../api/reply-block'
 import {PrivateRouteUnavailableError} from '../api/writer'
 import {postPrivate, stopPrivateConfirmations} from '../api/writes'
 import {PUBLIC_COMPOSE, setComposeVisibility} from '../composer/state'
@@ -140,7 +141,14 @@ import {
   savePrivatePostGates,
 } from '../settings/save-gates'
 import {clearPrivateStores, getPendingPost, pendingPhase} from '../store'
-import {type Call, DID, fakeClient, OTHER_DID, type Reply} from './fixtures'
+import {
+  type Call,
+  DID,
+  fakeClient,
+  OTHER_DID,
+  relationshipsReply,
+  type Reply,
+} from './fixtures'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
@@ -270,6 +278,8 @@ let pds: ReturnType<typeof fakePds>
 let prism: ReturnType<typeof fakeClient>
 let direct: ReturnType<typeof fakeClient>
 let appview: ReturnType<typeof fakeClient>
+/** The AppView's `getRelationships` answer; the default is no block. */
+let relationships: (call: Call) => Reply | undefined
 let queryClient: QueryClient
 let notices: OutboxNotice[]
 let unsubscribeNotices: () => void
@@ -436,7 +446,12 @@ beforeEach(async () => {
   pds = fakePds()
   prism = fakeClient(DID, () => ({status: 200, body: {status: 'indexed'}}))
   direct = fakeClient(DID, () => ({status: 200, body: {posts: []}}))
-  appview = fakeClient(DID, () => ({status: 200, body: {}}))
+  relationships = call => relationshipsReply(call)
+  appview = fakeClient(
+    DID,
+    call => relationships(call) ?? {status: 200, body: {}},
+  )
+  REPLY_BLOCK_TIMING.freshMs = 2_000
   mockPrismClient = prism.client
   mockDirectClient = direct.client
   mockFailChecked = undefined
@@ -1226,7 +1241,10 @@ describe('a reply prism cannot place (busy design 9, T-11)', () => {
   })
 
   it.each([
-    ['503 Reindexing', {status: 503, body: {error: 'Reindexing', retryAfter: 30}}],
+    [
+      '503 Reindexing',
+      {status: 503, body: {error: 'Reindexing', retryAfter: 30}},
+    ],
     ['a 500', {status: 500, body: {error: 'InternalServerError'}}],
     ['a network failure', new TypeError('Network request failed')],
   ] as [string, Reply][])(
@@ -1558,5 +1576,151 @@ describe('an account removed from the device (K8-N3, K9-N7)', () => {
     await forgetRemovedAccount(removed)
     expect(readOutboxRecord(removed, 'keptone')).toBeUndefined()
     expect(readLocal(`horizon:draft-visibility:${removed}`)).toBeUndefined()
+  })
+})
+
+describe('the reply block check (reply design 2, skydeval 2026-10-23)', () => {
+  const PARENT = `at://${OTHER_DID}/${PP}/3kblockpar22`
+  const OTHER_AUDIENCE = `at://${OTHER_DID}/${AUD}/3kotheraud22`
+  const BLOCK_URI = `at://${OTHER_DID}/app.bsky.graph.block/3kblock22222`
+  const BLOCKED = 'You can’t reply to this post.'
+  const BUSY =
+    'Couldn’t reach the post you’re replying to. Try again in a moment.'
+
+  function servePrism() {
+    prism = fakeClient(DID, call =>
+      call.nsid === 'app.nearhorizon.private.getPosts'
+        ? {
+            status: 200,
+            body: {
+              posts: [
+                {
+                  uri: PARENT,
+                  cid: cids[38],
+                  author: {did: OTHER_DID, handle: 'bob.test'},
+                  record: {
+                    $type: PP,
+                    text: 'parent',
+                    createdAt: '2026-10-15T12:00:00.000Z',
+                    audienceList: OTHER_AUDIENCE,
+                  },
+                  indexedAt: '2026-10-15T12:00:00.000Z',
+                  labels: [],
+                },
+              ],
+            },
+          }
+        : {status: 200, body: {status: 'indexed'}},
+    )
+    mockPrismClient = prism.client
+    publish()
+  }
+
+  function anyWrites() {
+    return pds.calls.filter(
+      c =>
+        c.nsid === 'com.atproto.repo.createRecord' ||
+        c.nsid === 'com.atproto.repo.putRecord',
+    )
+  }
+
+  function actionsOf(record: OutboxRecord) {
+    return outboxEntryActions(
+      {record, holdsCapture: true, runningHere: false, runningElsewhere: false},
+      getWriteRoute(DID),
+      {inUnsent: true},
+    )
+  }
+
+  beforeEach(() => {
+    resetPrismHealth()
+    resetKnown()
+    servePrism()
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'parent'},
+      locked: true,
+    })
+    mockResolveEmbed.mockClear()
+  })
+
+  it.each([
+    ['blocks the member', {blockedBy: BLOCK_URI}],
+    ['is blocked by the member', {blocking: BLOCK_URI}],
+    ['list-blocks the member', {blockedByList: BLOCK_URI}],
+    ['is list-blocked by the member', {blockingByList: BLOCK_URI}],
+  ])(
+    'a parent whose author %s fails at once as reply-blocked: no upload, gate or post, with Retry, Edit and Discard',
+    async (_name, fields) => {
+      relationships = call => relationshipsReply(call, fields)
+      await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+      const record = only()
+      expect(record).toMatchObject({
+        state: 'failed',
+        failure: 'reply-blocked',
+        present: [],
+      })
+      expect(anyWrites()).toEqual([])
+      expect(mockResolveEmbed).not.toHaveBeenCalled()
+      const actions = actionsOf(record)
+      expect(actions.detail).toBe(BLOCKED)
+      expect(actions.retry).toEqual({finish: false, disabled: false})
+      expect(actions.edit).toBe(true)
+      expect(actions.discard).toBe(true)
+      // The record round-trips with its failure kept.
+      expect(readOutboxRecord(DID, record.id)?.failure).toBe('reply-blocked')
+    },
+  )
+
+  it('a check that cannot be made fails as parent-busy with nothing written; Retry posts once the AppView answers', async () => {
+    relationships = () => ({status: 502, body: {error: 'UpstreamFailure'}})
+    await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+    const record = only()
+    expect(record).toMatchObject({state: 'failed', failure: 'parent-busy'})
+    expect(actionsOf(record).detail).toBe(BUSY)
+    expect(anyWrites()).toEqual([])
+
+    relationships = call => relationshipsReply(call)
+    await retryOutboxEntry(seen(record))
+    await whenOutboxIdle()
+    await settle()
+    expect(records()).toEqual([])
+    expect(postWrites()).toHaveLength(1)
+  })
+
+  it('a block made during the uploads is reply-blocked, with no gate or post written (PR2-L1)', async () => {
+    REPLY_BLOCK_TIMING.freshMs = 0
+    let uploaded = false
+    mockResolveEmbed.mockImplementation(() => {
+      uploaded = true
+      return Promise.resolve(undefined)
+    })
+    relationships = call =>
+      relationshipsReply(call, uploaded ? {blockedBy: BLOCK_URI} : {})
+    await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
+    expect(only()).toMatchObject({state: 'failed', failure: 'reply-blocked'})
+    expect(uploaded).toBe(true)
+    expect(anyWrites()).toEqual([])
+    mockResolveEmbed.mockImplementation(() => Promise.resolve(undefined))
+  })
+
+  it('a reply to the member’s own post asks the AppView nothing', async () => {
+    relationships = () => ({status: 500, body: {}})
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'everyone'},
+      locked: false,
+    })
+    const first = await press(opts(['mine']))
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'parent'},
+      locked: true,
+    })
+    await press(opts(['reply to mine'], {replyTo: first.uris[0]}))
+    expect(records()).toEqual([])
+    expect(nsids(appview.calls)).not.toContain(
+      'app.bsky.graph.getRelationships',
+    )
   })
 })
