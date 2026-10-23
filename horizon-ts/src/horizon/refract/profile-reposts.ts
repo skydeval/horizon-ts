@@ -3,9 +3,7 @@
  * (refract client design 4.1, "Feed tabs"). Bluesky's `getAuthorFeed` drops
  * a repost whose subject it can't hydrate, so anyone's repost of a restored
  * post counts on the post but is missing from the reposter's Posts and
- * Replies tabs. prism has no read that gives it: `refract.getAuthorFeed`
- * serves restored actors only, and `refract.getTimeline` restored
- * originators only.
+ * Replies tabs.
  *
  * - Only `author|<owner>|<filter>`, for the tabs stock shows reposts on, on
  *   any profile the reader views (their own or another account's) while
@@ -13,25 +11,30 @@
  *   (`author-feed.ts`).
  * - Every stock page passes through as it is. Its time window runs from the
  *   previous page's oldest item (the top page: now) down to its own oldest
- *   item (the last page: the start). The owner's `app.bsky.feed.repost`
- *   records are read from the owner's repo (`listRecords`, newest first),
- *   kept on this API instance and read further as the feed pages, at most
- *   {@link PROFILE_REPOST_PAGES_PER_LOAD} record pages per feed page. The top
- *   page reads its first record page alongside stock. The reader's own repo
+ *   item (the last page: the start). The owner's reposts are read newest
+ *   first, kept on this API instance and read further as the feed pages, at
+ *   most {@link PROFILE_REPOST_PAGES_PER_LOAD} pages per feed page. The top
+ *   page reads its first page alongside stock.
+ * - **Where they come from.** prism's `refract.getAuthorReposts {actor}`
+ *   (50 a page): feed items whose post prism already rendered and whose
+ *   reason is a `reasonRepost` by the owner, placed by the reason's
+ *   `indexedAt` and deduped by repost URI. prism names no feature for it, so
+ *   only a refusal (the method isn't served: 404, 501, `MethodNotImplemented`)
+ *   turns on the old path for the session: the owner's `app.bsky.feed.repost`
+ *   records from their repo (`listRecords`, 100 a page), each subject read
+ *   from the restored-post store, else from one `fill`. The reader's own repo
  *   is read with their PDS client; another owner's without a session, from
  *   the PDS their DID document names (repo records are public).
- * - Record pages are shared while a read runs and kept for
+ * - Pages are shared while a read runs and kept for
  *   {@link PROFILE_REPOST_CACHE_MS} (another owner's) so the Posts and
- *   Replies tabs, and a quick return to the profile, read the repo once. The
- *   reader's own pages are only shared in flight, so an unrepost shows on the
- *   next load.
- * - A record stock already shows (its `reason.uri`, or a repost item of its
- *   subject) is left alone. For the rest, a subject whose author may be
- *   restored is read from the restored-post store, else from one `fill`.
- *   Positive posts are inserted by time as stock repost items, `reason` a
- *   `reasonRepost` by the owner. Anything else stays dropped, as stock has
- *   it.
- * - A failure, or a repo read or `fill` slower than
+ *   Replies tabs, and a quick return to the profile, read once. The reader's
+ *   own pages are only shared in flight, so an unrepost shows on the next
+ *   load.
+ * - A repost stock already shows (its `reason.uri`, or a repost item of its
+ *   subject) is left alone. The rest are inserted by time as repost items,
+ *   `reason` a `reasonRepost` by the owner. Anything else stays dropped, as
+ *   stock has it.
+ * - A failure, or a read or `fill` slower than
  *   {@link PROFILE_REPOST_DEADLINE_MS}, leaves the page as stock sent it.
  * - An unrepost deletes the record, so the next load from the top no longer
  *   shows it.
@@ -41,13 +44,17 @@
  * under restored posts are the owner's own posts too.
  */
 
+import {XrpcResponseError} from '@atproto/lex'
 import {type AtIdentifierString} from '@atproto/syntax'
 
 import {type FeedAPI, type FeedAPIResponse} from '#/lib/api/feed/types'
 import {createLexClient} from '#/lib/lexClient'
+import {logger} from '#/logger'
 import {networkAwareFetch} from '#/state/session/network'
 import {authorPdsUrl} from '#/horizon/private/adapt/pds'
+import {refractCall} from '#/horizon/refract/api'
 import {askFill, isDefinitelyNotRestored} from '#/horizon/refract/fill'
+import {REFRACT_METHODS} from '#/horizon/refract/lexicon'
 import {peekRestoredPost} from '#/horizon/refract/store'
 import {
   getCurrentClients,
@@ -72,8 +79,11 @@ const REPOST_FILTERS = new Set([
   'posts_no_replies',
 ])
 
-/** Repost records read per page of the owner's repo. */
+/** Repost records read per page of the owner's repo (the fallback). */
 export const PROFILE_REPOST_RECORDS_LIMIT = 100
+
+/** Reposts read per `refract.getAuthorReposts` page. */
+export const PROFILE_REPOST_PRISM_LIMIT = 50
 
 /** The most record pages one feed page reads. */
 export const PROFILE_REPOST_PAGES_PER_LOAD = 3
@@ -87,13 +97,18 @@ export const PROFILE_REPOST_CACHE_MS = 60_000
 /** The most record pages kept at once. */
 const CACHE_MAX = 100
 
-/** One page of the owner's repost records, newest first. */
+/**
+ * One page of the owner's reposts, newest first: repo records (the fallback)
+ * or prism's ready feed items.
+ */
 export type RepostRecordPage = {
   records: {uri: string; cid?: string; value: unknown}[]
+  /** prism's items, each a `reasonRepost` by the owner. */
+  items?: FeedViewPost[]
   cursor?: string
 }
 
-/** Reads one page of the owner's repost records from `cursor`. */
+/** Reads one page of the owner's reposts from `cursor`. */
 export type ListRepostRecords = (
   cursor: string | undefined,
 ) => Promise<RepostRecordPage>
@@ -109,6 +124,8 @@ type RepostRecord = {
   subject: string
   createdAt: string
   time: number
+  /** prism's item, ready to show; repo records have none. */
+  item?: FeedViewPost
 }
 
 function timeOf(value: unknown): number {
@@ -146,6 +163,27 @@ function readRecord(record: {
     subject,
     createdAt: value!.createdAt as string,
     time,
+  }
+}
+
+/** prism's item as a record, if it is a readable repost by `owner`. */
+function readItem(item: FeedViewPost, owner: string): RepostRecord | undefined {
+  const reason = item?.reason as
+    | {$type?: unknown; uri?: unknown; cid?: unknown; indexedAt?: unknown}
+    | undefined
+  if (!bsky.isType(app.bsky.feed.defs.reasonRepost, reason)) return undefined
+  const by = (reason as {by?: {did?: unknown}}).by
+  if (by?.did !== owner) return undefined
+  const uri = item.post?.uri
+  const time = timeOf(reason.indexedAt)
+  if (typeof uri !== 'string' || Number.isNaN(time)) return undefined
+  return {
+    uri: typeof reason.uri === 'string' ? reason.uri : `${uri}|${owner}`,
+    cid: typeof reason.cid === 'string' ? reason.cid : undefined,
+    subject: uri,
+    createdAt: reason.indexedAt,
+    time,
+    item,
   }
 }
 
@@ -229,8 +267,11 @@ export class ProfileRepostsFeedAPI implements FeedAPI {
         this.list(asked),
         PROFILE_REPOST_DEADLINE_MS,
       )
-      for (const raw of page.records) {
-        const record = readRecord(raw)
+      const read = [
+        ...page.records.map(readRecord),
+        ...(page.items ?? []).map(item => readItem(item, this.did)),
+      ]
+      for (const record of read) {
         if (!record) continue
         this.records.push(record)
         if (record.time < this.listedLow) this.listedLow = record.time
@@ -349,24 +390,29 @@ export class ProfileRepostsFeedAPI implements FeedAPI {
       if (!isPostUri(record.subject)) return false
       const author = authorOf(record.subject)
       if (!author || author === this.did) return false
-      return !isDefinitelyNotRestored(author)
+      // prism's items are restored by its own word.
+      return !!record.item || !isDefinitelyNotRestored(author)
     })
     if (candidates.length === 0) return res
 
-    const posts = await this.resolve(
-      Array.from(new Set(candidates.map(record => record.subject))),
-    )
-    if (posts.size === 0) return res
+    const ask = candidates.filter(record => !record.item)
+    const posts =
+      ask.length > 0
+        ? await this.resolve(
+            Array.from(new Set(ask.map(record => record.subject))),
+          )
+        : new Map<string, PostView>()
+    if (posts.size === 0 && ask.length === candidates.length) return res
 
     const by = this.byProfile(res.feed)
     const feed = [...res.feed]
     const shown = new Set<string>()
     for (const record of candidates) {
-      const post = posts.get(record.subject)
+      const post = record.item?.post ?? posts.get(record.subject)
       if (!post || shown.has(record.subject)) continue
       shown.add(record.subject)
       this.stockSubjects.add(record.subject)
-      const item: FeedViewPost = {
+      const item: FeedViewPost = record.item ?? {
         post,
         reason: {
           $type: 'app.bsky.feed.defs#reasonRepost',
@@ -456,15 +502,59 @@ export function sharedRepostPages(
   }
 }
 
-/** Test-only: forget kept record pages. */
+/*
+ * Whether prism refused `refract.getAuthorReposts` this session. prism lists
+ * no feature for it, so a refusal is the only sign it isn't served; the repo
+ * read then stands in until the app restarts.
+ */
+let authorRepostsRefused = false
+
+/** Whether `error` says prism doesn't serve the method at all. */
+export function isMethodRefusal(error: unknown): boolean {
+  if (!(error instanceof XrpcResponseError)) return false
+  if (
+    error.error === 'MethodNotImplemented' ||
+    error.error === 'NotImplemented' ||
+    error.error === 'XRPCNotSupported'
+  ) {
+    return true
+  }
+  return error.status === 404 || error.status === 501
+}
+
+/** Whether profiles read reposts from repos (prism refused the method). */
+export function profileRepostsFromRepo(): boolean {
+  return authorRepostsRefused
+}
+
+/** Test-only: forget kept pages and a refusal. */
 export function resetProfileRepostCache() {
   pageCache.clear()
+  authorRepostsRefused = false
+}
+
+/** One `refract.getAuthorReposts` page for `did`. */
+async function prismRepostPage(
+  did: string,
+  cursor: string | undefined,
+): Promise<RepostRecordPage> {
+  const {body} = await refractCall<{feed?: unknown; cursor?: unknown}>(
+    REFRACT_METHODS.getAuthorReposts,
+    {actor: did, limit: PROFILE_REPOST_PRISM_LIMIT, cursor},
+    {foreground: true},
+  )
+  return {
+    records: [],
+    items: Array.isArray(body.feed) ? (body.feed as FeedViewPost[]) : [],
+    cursor: typeof body.cursor === 'string' ? body.cursor : undefined,
+  }
 }
 
 /**
  * The Posts or Replies tab of `did` with the owner's reposts of restored
- * posts, or `api` as it is for any other tab. The reader's own repo is read
- * with their PDS client, any other owner's without a session.
+ * posts, or `api` as it is for any other tab. Read from prism; after a
+ * refusal, from the owner's repo: the reader's own with their PDS client, any
+ * other owner's without a session.
  */
 export function profileRepostsFeedApi(
   did: string,
@@ -476,8 +566,8 @@ export function profileRepostsFeedApi(
   if (!did.startsWith('did:')) return api
   const own = did === getCurrentDid()
   const ownPds = own ? getCurrentPdsClient() : undefined
-  if (own && !ownPds) return api
-  const read: ListRepostRecords = async cursor => {
+  const fromRepo: ListRepostRecords = async cursor => {
+    if (own && !ownPds) throw new Error('No PDS client for the reader')
     const client = ownPds ?? (await clientFor(did))
     const res = await client.call(com.atproto.repo.listRecords, {
       repo: did as AtIdentifierString,
@@ -486,6 +576,21 @@ export function profileRepostsFeedApi(
       cursor,
     })
     return {records: res.records, cursor: res.cursor}
+  }
+  const read: ListRepostRecords = async cursor => {
+    if (!authorRepostsRefused) {
+      try {
+        return await prismRepostPage(did, cursor)
+      } catch (error) {
+        // A cursor is prism's, which the repo can't continue.
+        if (!isMethodRefusal(error) || cursor !== undefined) throw error
+        authorRepostsRefused = true
+        logger.info(
+          'refract: reposts read from repos, prism refused the method',
+        )
+      }
+    }
+    return fromRepo(cursor)
   }
   return new ProfileRepostsFeedAPI(
     api,

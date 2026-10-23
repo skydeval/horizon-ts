@@ -38,6 +38,7 @@ import {
 import {isOwnAbsent, isOwnPrivateUri, noteMiss} from '#/horizon/private/known'
 import {getPendingPost} from '#/horizon/private/store'
 import {isPrivatePostUri} from '#/horizon/private/uri'
+import {fromRefract} from '#/horizon/refract/marker'
 import {getCurrentDid} from '#/horizon/routing/current-clients'
 import {type app} from '#/lexicons'
 
@@ -437,14 +438,22 @@ export function carryStagedPrivate<
 }
 
 /**
- * The newest public row loaded: the first public row of the first page, top
+ * A stock row: neither private nor merged in from Refract (refract feeds
+ * design 9), so the AppView's own peek and boundaries know it.
+ */
+function isStockRow(item: FeedViewPost) {
+  return !isPrivatePostUri(item.post.uri) && !fromRefract(item.post)
+}
+
+/**
+ * The newest stock row loaded: the first stock row of the first page, top
  * down, that has one (3.2, FP3-N3), for the merged peek's `isCurrent`.
  */
 export function newestPublicRow(
   pages: readonly {feed: readonly FeedViewPost[]}[],
 ): FeedViewPost | undefined {
   for (const page of pages) {
-    const row = page.feed.find(item => !isPrivatePostUri(item.post.uri))
+    const row = page.feed.find(isStockRow)
     if (row) return row
   }
   return undefined
@@ -464,8 +473,8 @@ function boundaryRun(rows: readonly FeedViewPost[]): FeedViewPost[] {
  * `cursor` (the merge cursor into the gap) carries `resumesAtBoundary`
  * (3.4, FP3-N9): the public side resumed from `lower`'s `startCursor`, which
  * the AppView bounds on sort time alone, so those posts were skipped. They
- * are `lower`'s first public post and the ones after it with the same sort
- * time; with no public post in `lower`, the leading run of its cursor's
+ * are `lower`'s first stock post (not private, not from Refract) and the ones
+ * after it with the same sort time; with none in `lower`, the leading run of its cursor's
  * public buffer. They go in merge order, at the bottom when `upper` ends
  * above them. `upper` itself when there is nothing to carry.
  */
@@ -475,7 +484,7 @@ export function carryGapBoundary<T extends {feed: FeedViewPost[]}>(
   lower: {feed: readonly FeedViewPost[]; cursor?: string} | undefined,
 ): T {
   if (!lower || !resumesAtBoundary(cursor)) return upper
-  const publicRows = lower.feed.filter(item => !isPrivatePostUri(item.post.uri))
+  const publicRows = lower.feed.filter(isStockRow)
   let run: FeedViewPost[] = boundaryRun(publicRows)
   if (publicRows.length === 0) {
     if (!isMergeCursor(lower.cursor)) return upper

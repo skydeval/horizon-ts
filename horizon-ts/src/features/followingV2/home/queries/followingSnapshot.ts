@@ -3,6 +3,8 @@ import {hashKey} from '@tanstack/react-query'
 import {type PersistedClient} from '@tanstack/react-query-persist-client'
 
 import {IS_NATIVE} from '#/env'
+// HORIZON: restored rows never reach disk (refract feeds design 5)
+import {fromRefract, readRestored} from '#/horizon/refract/marker'
 import {type app} from '#/lexicons'
 import {type FeedPageUnselected, type PostFeedData} from './postFeed'
 
@@ -62,9 +64,34 @@ export function isFollowingSnapshotQuery(query: {queryHash: string}) {
  */
 export function saveFollowingSnapshot(client: PersistedClient) {
   return replaceFollowingData(client, state =>
-    selectFollowingSnapshot(state?.data as PostFeedData),
+    // HORIZON: restored rows never reach disk (refract feeds design 5)
+    selectFollowingSnapshot(withoutRestoredRows(state?.data as PostFeedData)),
   )
 }
+
+// HORIZON: restored rows never reach disk (refract feeds design 5) (start)
+/**
+ * `data` without the rows Refract merged in (stamped, or with a marker on the
+ * post's author or the repost's `by`), so a restore that ends never comes
+ * back from disk. A member's Following has its own key and is never saved;
+ * this is the backstop for one that falls back to the stock key.
+ */
+function withoutRestoredRows(data: PostFeedData): PostFeedData {
+  if (!data?.pages) return data
+  const isRestored = (item: app.bsky.feed.defs.FeedViewPost) =>
+    fromRefract(item.post) ||
+    !!readRestored(item.post?.author) ||
+    !!readRestored((item.reason as {by?: unknown} | undefined)?.by)
+  if (!data.pages.some(page => page.feed.some(isRestored))) return data
+  return {
+    ...data,
+    pages: data.pages.map(page => ({
+      ...page,
+      feed: page.feed.filter(item => !isRestored(item)),
+    })),
+  }
+}
+// HORIZON: restored rows never reach disk (refract feeds design 5) (end)
 
 /**
  * The client read back from disk, with the Following snapshot turned back into

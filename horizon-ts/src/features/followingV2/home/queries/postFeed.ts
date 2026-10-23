@@ -74,6 +74,8 @@ import {withPrivateKey} from '#/horizon/private/feed/keys'
 import {withPrivateTimeline} from '#/horizon/private/feed/timeline-merge'
 // HORIZON: private posts in Following
 import {usePrivateFeedSource} from '#/horizon/private/membership'
+// HORIZON: restored items in a member's Following (refract RF-B7)
+import {withRefractTimeline} from '#/horizon/refract/timeline'
 import {type app} from '#/lexicons'
 
 type ActorDid = string
@@ -452,21 +454,24 @@ export function usePostFeedFetcher(feedDesc: FeedDescriptor) {
    */
   const fetchLimit = MIN_POSTS
 
-  // HORIZON: Following merges the member's private timeline (start)
+  // HORIZON: Following merges the member's private timeline, then restored items (refract RF-B7) (start)
   const createFeedApi = () =>
-    withPrivateTimeline(
+    withRefractTimeline(
       feedDesc,
-      privateSource,
-      createApi({
+      withPrivateTimeline(
         feedDesc,
-        client,
-        // Not in the query key because they don't change:
-        userInterests,
-        // Not in the query key. Reacting to it switching isn't important:
-        enableFollowingToDiscoverFallback,
-      }),
+        privateSource,
+        createApi({
+          feedDesc,
+          client,
+          // Not in the query key because they don't change:
+          userInterests,
+          // Not in the query key. Reacting to it switching isn't important:
+          enableFollowingToDiscoverFallback,
+        }),
+      ),
     )
-  // HORIZON: Following merges the member's private timeline (end)
+  // HORIZON: Following merges the member's private timeline, then restored items (refract RF-B7) (end)
 
   const fetchPage = async (
     pageParam: RQPageParam,

@@ -602,6 +602,35 @@ describe('through the persister', () => {
     expect(data.pages).toHaveLength(4)
   })
 
+  // HORIZON: restored rows never reach disk (refract feeds design 5)
+  it('writes the snapshot without restored rows', async () => {
+    const queryClient = createQueryClient()
+    const data = following(2)
+    const restored = item('restored')
+    ;(restored.post as {restored?: unknown}).restored = {
+      community: 'rfxcommunity',
+      tier: 1,
+    }
+    const repostOfRestored = item('reposted', {repostedAt: POSTED_AT})
+    ;(repostOfRestored.reason as {by: {restored?: unknown}}).by.restored = {
+      community: 'rfxcommunity',
+      tier: 1,
+    }
+    data.pages[0].feed = [restored, ...data.pages[0].feed, repostOfRestored]
+    queryClient.setQueryData(FOLLOWING_SNAPSHOT_QUERY_KEY, data)
+
+    const after: PersistedClient = JSON.parse(
+      await save(queryClient, withSnapshots()),
+    )
+
+    const snapshot = after.clientState.queries.find(
+      query => query.queryHash === hashKey(FOLLOWING_SNAPSHOT_QUERY_KEY),
+    )?.state.data as FollowingSnapshot
+    expect(rkeys(snapshot.pages[0])).toEqual(['p0'])
+    // The live cache keeps them.
+    expect(data.pages[0].feed).toHaveLength(3)
+  })
+
   it('leaves the Following query out when none of it can be kept', async () => {
     const queryClient = createQueryClient()
     const data = following(2)

@@ -73,5 +73,7 @@ function answerOf(
       return {body: {notifications: []}, proxied: false}
     case 'app.nearhorizon.refract.getUnreadCount':
       return {body: {count: 0}, proxied: false}
+    case 'app.nearhorizon.refract.getAuthorReposts':
+      return {body: {feed: []}, proxied: false}
   }
 }

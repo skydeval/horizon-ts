@@ -1,3 +1,4 @@
+import {XrpcResponseError} from '@atproto/lex'
 import {afterEach, beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 jest.mock('#/horizon/switches', () => ({
@@ -61,6 +62,7 @@ import {
   PROFILE_REPOST_CACHE_MS,
   PROFILE_REPOST_DEADLINE_MS,
   ProfileRepostsFeedAPI,
+  profileRepostsFromRepo,
   type RepostRecordPage,
   resetProfileRepostCache,
 } from '#/horizon/refract/profile-reposts'
@@ -70,8 +72,8 @@ import {
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
 import {answerPrismFeatures} from '#/horizon/routing/features'
-import {type app, com} from '#/lexicons'
-import {type Harness, setupRefract} from './harness'
+import {app, com} from '#/lexicons'
+import {type Harness, type SentCall, setupRefract} from './harness'
 
 /*
  * A profile owner's reposts of restored posts on their profile (refract
@@ -176,6 +178,211 @@ function uris(feed: FeedViewPost[]) {
     item.reason ? `repost:${item.post.uri}` : item.post.uri,
   )
 }
+
+function xrpcError(status: number, error: string) {
+  const body = {error, message: error}
+  return new XrpcResponseError(
+    app.bsky.actor.getProfile as never,
+    new Response(JSON.stringify(body), {
+      status,
+      headers: {'content-type': 'application/json'},
+    }),
+    {encoding: 'application/json', body} as never,
+  )
+}
+
+/** prism's item: a restored post reposted by `did` at `indexedAt`. */
+function prismRepost(
+  rkey: string,
+  repostRkey: string,
+  indexedAt: string,
+  did: string = RF_STOCK_DID,
+) {
+  return {
+    post: rfPost(rkey),
+    reason: {
+      $type: 'app.bsky.feed.defs#reasonRepost',
+      by: rfProfileBasic(did, {restored: false}),
+      uri: `at://${did}/app.bsky.feed.repost/${repostRkey}`,
+      cid: CID,
+      indexedAt,
+    },
+  }
+}
+
+function authorReposts(calls: SentCall[]) {
+  return calls.filter(
+    call => call.method === 'app.nearhorizon.refract.getAuthorReposts',
+  )
+}
+
+describe('reposts of restored posts from prism (getAuthorReposts)', () => {
+  it('puts another owner’s reposts in time order, by them, with no repo read and no fill', async () => {
+    h.respond(call =>
+      call.method === 'app.nearhorizon.refract.getAuthorReposts'
+        ? {
+            feed: [
+              prismRepost('rf2', 'r2', at(9, 30)),
+              prismRepost('rf1', 'r1', at(7, 30)),
+            ],
+            servedAs: 'member',
+          }
+        : {profiles: [], posts: [], pending: []},
+    )
+    const api = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const top = await settle(api.fetch({cursor: undefined, limit: 30}))
+    expect(uris(top.feed)).toEqual([
+      rfUri('p10', RF_STOCK_DID),
+      `repost:${rfUri('rf2')}`,
+      rfUri('p9', RF_STOCK_DID),
+    ])
+    expect(top.feed[1].reason).toMatchObject({
+      $type: 'app.bsky.feed.defs#reasonRepost',
+      by: {did: RF_STOCK_DID},
+      uri: `at://${RF_STOCK_DID}/app.bsky.feed.repost/r2`,
+      indexedAt: at(9, 30),
+    })
+    const next = await settle(api.fetch({cursor: top.cursor, limit: 30}))
+    expect(uris(next.feed)).toEqual([
+      rfUri('p8', RF_STOCK_DID),
+      `repost:${rfUri('rf1')}`,
+      rfUri('p7', RF_STOCK_DID),
+    ])
+    const sent = authorReposts(h.calls)
+    expect(sent).toHaveLength(1)
+    expect(sent[0].params).toMatchObject({actor: RF_STOCK_DID, limit: 50})
+    expect(mockAuthorPdsUrl).not.toHaveBeenCalled()
+    expect(mockOwnerCall).not.toHaveBeenCalled()
+    expect(h.fills()).toHaveLength(0)
+  })
+
+  it('reads the reader’s own reposts from prism too', async () => {
+    h.respond(() => ({
+      feed: [prismRepost('rf1', 'r1', at(9, 30), RF_READER_DID)],
+    }))
+    publishCurrentClients({
+      ...getCurrentClients()!,
+      pdsClient: {call: jest.fn()} as never,
+    })
+    const api = refractAuthorFeedApi(
+      `author|${RF_READER_DID}|posts_with_replies`,
+      stockFeed(),
+    )
+    const top = await settle(api.fetch({cursor: undefined, limit: 30}))
+    expect(uris(top.feed)).toEqual([
+      rfUri('p10', RF_READER_DID),
+      `repost:${rfUri('rf1')}`,
+      rfUri('p9', RF_READER_DID),
+    ])
+    expect(authorReposts(h.calls)[0].params).toMatchObject({
+      actor: RF_READER_DID,
+    })
+  })
+
+  it('skips a repost stock already shows, by repost URI', async () => {
+    h.respond(() => ({feed: [prismRepost('rf1', 'r1', at(9, 30))]}))
+    const stock = stockFeed(RF_STOCK_DID)
+    const page = (await stock.fetch({cursor: undefined, limit: 30})) as {
+      feed: FeedViewPost[]
+    }
+    page.feed.splice(1, 0, prismRepost('rf1', 'r1', at(9, 30)) as never)
+    const api = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stock,
+    )
+    const top = await settle(api.fetch({cursor: undefined, limit: 30}))
+    expect(top.feed).toHaveLength(3)
+  })
+
+  it('shares one read between the Posts and Replies tabs', async () => {
+    h.respond(() => ({feed: [prismRepost('rf1', 'r1', at(9, 30))]}))
+    const posts = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_and_author_threads`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const replies = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const [a, b] = await settle(
+      Promise.all([
+        posts.fetch({cursor: undefined, limit: 30}),
+        replies.fetch({cursor: undefined, limit: 30}),
+      ]),
+    )
+    expect(uris(a.feed)).toContain(`repost:${rfUri('rf1')}`)
+    expect(uris(b.feed)).toContain(`repost:${rfUri('rf1')}`)
+    expect(authorReposts(h.calls)).toHaveLength(1)
+  })
+
+  it('a prism error leaves stock’s page and does not read the repo', async () => {
+    h.respond(() => {
+      throw xrpcError(503, 'Unavailable')
+    })
+    const api = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const top = await settle(api.fetch({cursor: undefined, limit: 30}))
+    expect(uris(top.feed)).toEqual([
+      rfUri('p10', RF_STOCK_DID),
+      rfUri('p9', RF_STOCK_DID),
+    ])
+    expect(top.cursor).toBe('c1')
+    expect(mockOwnerCall).not.toHaveBeenCalled()
+    expect(profileRepostsFromRepo()).toBe(false)
+  })
+
+  it('a read that hangs gives stock’s page at the 3 s cap, not before', async () => {
+    h.respond(() => new Promise(() => {}))
+    const api = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const done: {page?: Awaited<ReturnType<FeedAPI['fetch']>>} = {}
+    void api.fetch({cursor: undefined, limit: 30}).then(page => {
+      done.page = page
+    })
+    await jest.advanceTimersByTimeAsync(PROFILE_REPOST_DEADLINE_MS - 10)
+    expect(done.page).toBeUndefined()
+    await jest.advanceTimersByTimeAsync(20)
+    expect(done.page?.feed).toHaveLength(2)
+  })
+
+  it('a refusal turns on the repo read for the session; later loads skip prism', async () => {
+    putRestoredPost(rfPost('rf1') as never)
+    h.respond(call => {
+      if (call.method === 'app.nearhorizon.refract.getAuthorReposts') {
+        throw xrpcError(404, 'MethodNotImplemented')
+      }
+      return {profiles: [], posts: [], pending: []}
+    })
+    mockOwnerCall.mockImplementation(() =>
+      Promise.resolve({
+        records: [repostRecord('r1', rfUri('rf1'), at(9, 30), RF_STOCK_DID)],
+      }),
+    )
+    const first = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_with_replies`,
+      stockFeed(RF_STOCK_DID),
+    )
+    const top = await settle(first.fetch({cursor: undefined, limit: 30}))
+    expect(uris(top.feed)).toContain(`repost:${rfUri('rf1')}`)
+    expect(profileRepostsFromRepo()).toBe(true)
+    // A later load goes straight to the repo.
+    jest.setSystemTime(Date.now() + PROFILE_REPOST_CACHE_MS + 1)
+    const again = refractAuthorFeedApi(
+      `author|${RF_STOCK_DID}|posts_and_author_threads`,
+      stockFeed(RF_STOCK_DID),
+    )
+    await settle(again.fetch({cursor: undefined, limit: 30}))
+    expect(authorReposts(h.calls)).toHaveLength(1)
+    expect(mockOwnerCall).toHaveBeenCalledTimes(2)
+  })
+})
 
 describe('own reposts of restored posts', () => {
   it('puts a repost of a restored post into the own feed in time order', async () => {
@@ -320,7 +527,17 @@ describe('own reposts of restored posts', () => {
   })
 })
 
-describe('another account’s reposts of restored posts', () => {
+describe('another account’s reposts of restored posts, from the repo after a refusal', () => {
+  beforeEach(() => {
+    // A prism that doesn't serve `getAuthorReposts`.
+    h.respond(call => {
+      if (call.method === 'app.nearhorizon.refract.getAuthorReposts') {
+        throw xrpcError(501, 'MethodNotImplemented')
+      }
+      return {profiles: [], posts: [], pending: []}
+    })
+  })
+
   function ownerAnswers(records: ReturnType<typeof repostRecord>[]) {
     mockOwnerCall.mockImplementation((method, params) => {
       if (method !== com.atproto.repo.listRecords) {

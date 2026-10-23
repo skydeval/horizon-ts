@@ -5,6 +5,9 @@
  * when prism stored the post, often a backfill long after it was written, so
  * every older restored post would read as backdated. A view with the
  * restored marker gets no badge; every other view keeps stock's rule.
+ *
+ * prism fixed the cause on 2026-10-24 (`1697dac`: `indexedAt` is the earlier
+ * of `createdAt` and its write time); the skip stays, harmless.
  */
 
 import {readRestored} from '#/horizon/refract/marker'

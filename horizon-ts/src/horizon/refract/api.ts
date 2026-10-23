@@ -121,9 +121,14 @@ export function classifyRefractError(error: unknown): RefractErrorKind {
       case 'AccountDeactivated':
         return 'restore-ended'
       case 'InvalidRequest':
+      // A prism that doesn't serve the method: a refusal, not a busy server.
+      case 'MethodNotImplemented':
+      case 'NotImplemented':
+      case 'XRPCNotSupported':
         return 'invalid'
     }
     if (error.status === 401) return 'auth'
+    if (error.status === 501) return 'invalid'
     if (error.status === 429 || error.status >= 500) return 'transient'
     if (error.status >= 400) return 'invalid'
     return 'transient'
@@ -169,6 +174,7 @@ const SCHEMAS: Record<RefractMethod, unknown> = {
   [lexicon.REFRACT_METHODS.getTimeline]: lexicon.getTimeline,
   [lexicon.REFRACT_METHODS.listNotifications]: lexicon.listNotifications,
   [lexicon.REFRACT_METHODS.getUnreadCount]: lexicon.getUnreadCount,
+  [lexicon.REFRACT_METHODS.getAuthorReposts]: lexicon.getAuthorReposts,
 }
 
 function callWith(
@@ -424,7 +430,9 @@ export async function refractCall<T>(
       noteFailure(did, error)
     } else if (
       kind === 'invalid' &&
-      method !== 'app.nearhorizon.refract.getAuthorFeed'
+      method !== 'app.nearhorizon.refract.getAuthorFeed' &&
+      // Its `InvalidRequest` is an actor not found, and a refusal (404) from a prism without it.
+      method !== 'app.nearhorizon.refract.getAuthorReposts'
     ) {
       if (!invalidLogged) {
         invalidLogged = true

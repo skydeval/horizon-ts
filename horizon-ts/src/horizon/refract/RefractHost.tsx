@@ -23,6 +23,10 @@ import {
   markAllEntriesStale,
   markVisitorEntriesStale,
 } from '#/horizon/refract/store'
+import {
+  prewarmRefractTimeline,
+  refractTimelineActive,
+} from '#/horizon/refract/timeline'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {
   getDirectPrismToken,
@@ -103,6 +107,19 @@ export function RefractHost() {
       }
     })
   }, [active])
+
+  // Following's restored items, warm before the feed asks (RF-B7).
+  const timeline = useSyncExternalStore(subscribeRefractGate, () =>
+    refractTimelineActive(),
+  )
+  useEffect(() => {
+    if (!timeline) return
+    prewarmRefractTimeline()
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') prewarmRefractTimeline()
+    })
+    return () => subscription.remove()
+  }, [timeline])
 
   useEffect(() => {
     watchVisitorForm(restoredVisitorForm, () => {

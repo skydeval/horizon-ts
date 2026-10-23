@@ -118,7 +118,26 @@ export const getUnreadCount = l.query(
   ERRORS,
 )
 
-/** The seven methods' NSIDs, which share prism's one rate-limit family. */
+/**
+ * Any account's reposts of restored posts, newest first, each with a
+ * `reasonRepost` by the actor (prism's refract-reposts design 3.2).
+ */
+export const getAuthorReposts = l.query(
+  'app.nearhorizon.refract.getAuthorReposts',
+  l.params({
+    actor: l.string({format: 'at-identifier'}),
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+  }),
+  l.jsonPayload({
+    feed: l.array(l.lexMap()),
+    cursor: l.optional(l.string()),
+    ...answerFields,
+  }),
+  [...ERRORS, 'AccountTakedown', 'AccountDeactivated', 'InvalidRequest'],
+)
+
+/** The methods' NSIDs, which share prism's one rate-limit family. */
 export const REFRACT_METHODS = {
   fill: 'app.nearhorizon.refract.fill',
   getAuthorFeed: 'app.nearhorizon.refract.getAuthorFeed',
@@ -127,6 +146,7 @@ export const REFRACT_METHODS = {
   getTimeline: 'app.nearhorizon.refract.getTimeline',
   listNotifications: 'app.nearhorizon.refract.listNotifications',
   getUnreadCount: 'app.nearhorizon.refract.getUnreadCount',
+  getAuthorReposts: 'app.nearhorizon.refract.getAuthorReposts',
 } as const
 
 export type RefractMethod =
