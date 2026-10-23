@@ -52,6 +52,8 @@ import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {postSegment} from '#/horizon/private/uri'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
+// HORIZON: Thread Lens: a press starts the reply's lens read
+import {useLensPrewarm} from '#/horizon/thread-lens/prewarm'
 import {type app} from '#/lexicons'
 
 /**
@@ -271,6 +273,8 @@ const ThreadItemTreePostInner = memo(function ThreadItemTreePostInner({
 }): React.ReactNode {
   const {openComposer} = useOpenComposer()
   const {currentAccount} = useSession()
+  // HORIZON: Thread Lens: a press starts the reply's lens read
+  const prewarmLens = useLensPrewarm()
 
   const post = item.value.post
   const record = item.value.post.record
@@ -342,6 +346,8 @@ const ThreadItemTreePostInner = memo(function ThreadItemTreePostInner({
         <PostHider
           testID={`postThreadItem-by-${post.author.handle}`}
           href={postHref}
+          // HORIZON: Thread Lens: a press starts the reply's lens read
+          onPressIn={() => prewarmLens(post)}
           disabled={overrides?.moderation === true}
           modui={moderation.ui('contentList')}
           iconSize={42}

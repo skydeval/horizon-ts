@@ -4,7 +4,7 @@
  * sign-in window,
  * the password dialog, the membership probe and its notice, the write
  * routes' PDS cross-check, the private outbox and the direct `getPosts`
- * token's prefetch, the appearance
+ * token's prefetch, the Thread Lens `getThread` token's prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
  * the "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, the notice for a resume that
@@ -32,6 +32,7 @@ import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
 import {WriteRouteResolver} from '#/horizon/routing/WriteRouteResolver'
 import {OAuthBusyNotice} from '#/horizon/session/oauth-busy-notice'
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
+import {ThreadLensTokenPrefetch} from '#/horizon/thread-lens/TokenPrefetch'
 
 /**
  * Another tab changed the public AppView: reload when this tab is next
@@ -81,6 +82,7 @@ export function HorizonHost() {
       <WriteRouteResolver />
       <DirectPrismPrefetch />
       <RefractHost />
+      <ThreadLensTokenPrefetch />
       <OutboxHost />
       <AppearanceSync />
       <OtherAppSpoilersSync />

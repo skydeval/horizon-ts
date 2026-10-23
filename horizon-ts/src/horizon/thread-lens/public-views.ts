@@ -102,23 +102,140 @@ export function publicOutcomeOf(
   return {kind: 'gap', gap: 'content-stripped'}
 }
 
+/*
+ * The early views (speed pass, 2026-10-23): a read started early (the
+ * press-in pre-warm, or the anchor and its cached parents at the start of a
+ * read, `fetch.ts`) puts its `getPosts` here, in flight, and the pass after
+ * `getThread` takes each view from it once instead of asking again, so the
+ * pass only fetches what it lacks. Nothing the pass fetches itself is kept:
+ * every read (a refresh included) gets views asked for during that read or
+ * its press, never an earlier read's. An early request that failed is
+ * dropped and its URIs are fetched by the pass itself, strictly (6.4); one
+ * nothing takes is dropped after {@link LENS_VIEW_POOL_MS}.
+ *
+ * Only URIs the AppView itself already served as posts are warmed early
+ * (the anchor and its parents found in the stock caches), never a URI known
+ * only from prism, so no gap URI reaches the AppView (U-5).
+ */
+
+/** How long an early view waits to be taken. */
+export const LENS_VIEW_POOL_MS = 15_000
+
+type Pooled = {
+  did: string
+  at: number
+  view: Promise<PostView | undefined>
+}
+
+const pool = new Map<string, Pooled>()
+
+/** Tests: forget every early view. */
+export function resetLensViewPool() {
+  pool.clear()
+}
+
+function pooled(did: string, uri: string, now: number) {
+  const entry = pool.get(uri)
+  if (!entry) return undefined
+  if (entry.did !== did || now - entry.at > LENS_VIEW_POOL_MS) {
+    pool.delete(uri)
+    return undefined
+  }
+  return entry
+}
+
+/**
+ * Start the public views of `uris` for `did` now, unless an early view of
+ * each is already waiting. For URIs the AppView already served as posts
+ * only (see above).
+ */
+export function warmPublicViews(
+  appview: Client,
+  did: string,
+  uris: Iterable<string>,
+) {
+  const now = Date.now()
+  const missing = Array.from(new Set(uris)).filter(
+    uri => !pooled(did, uri, now),
+  )
+  if (missing.length === 0) return
+  const batch = fetchPublicPosts(appview, missing, {strict: true})
+  for (const uri of missing) {
+    const entry: Pooled = {did, at: now, view: batch.then(map => map.get(uri))}
+    entry.view.catch(() => {
+      if (pool.get(uri) === entry) pool.delete(uri)
+    })
+    pool.set(uri, entry)
+  }
+}
+
+/** The early view of `uri` for `did`, taken once. */
+function takeEarly(did: string, uri: string, now: number) {
+  const entry = pooled(did, uri, now)
+  if (entry) pool.delete(uri)
+  return entry?.view
+}
+
+/**
+ * The seam for prism's hydrated lens answer (`threadLens.hydrated`, prism
+ * chainlink #878; not live, nothing built against it): once prism lists the
+ * feature, a post node whose view is hydrated (and, for a member, carries
+ * known viewer state) renders from prism's view and skips the AppView. Until
+ * then every post node goes to the pass.
+ */
+export function hydratedViewOf(_node: CheckedPost): PostView | undefined {
+  return undefined
+}
+
 /**
  * The public-view pass over the post nodes of `checked` whose URI is in
- * `uris` (`postUrisToRead`). Throws when any `getPosts` batch fails.
+ * `uris` (`postUrisToRead`). Throws when any `getPosts` batch fails. With
+ * `did`, the early views waiting for that account are taken first.
  */
 export async function readPublicViews(
   appview: Client,
   checked: readonly CheckedNode[],
   uris: readonly string[],
+  {did}: {did?: string} = {},
 ): Promise<Map<string, PublicOutcome>> {
   const outcomes = new Map<string, PublicOutcome>()
   if (uris.length === 0) return outcomes
   const wanted = new Set(uris)
   const posts = new Map<string, CheckedPost>()
   for (const node of checked) {
-    if (node.type === 'post' && wanted.has(node.uri)) posts.set(node.uri, node)
+    if (node.type !== 'post' || !wanted.has(node.uri)) continue
+    const hydrated = hydratedViewOf(node)
+    if (hydrated) {
+      outcomes.set(node.uri, publicOutcomeOf(node, hydrated))
+    } else {
+      posts.set(node.uri, node)
+    }
   }
-  const views = await fetchPublicPosts(appview, posts.keys(), {strict: true})
+  const now = Date.now()
+  const early = new Map<string, Promise<PostView | undefined>>()
+  const missing: string[] = []
+  for (const uri of posts.keys()) {
+    const view = did ? takeEarly(did, uri, now) : undefined
+    if (view) early.set(uri, view)
+    else missing.push(uri)
+  }
+  const views = new Map<string, PostView | undefined>()
+  const retry: string[] = []
+  const [fetched] = await Promise.all([
+    fetchPublicPosts(appview, missing, {strict: true}),
+    ...Array.from(early, async ([uri, view]) => {
+      try {
+        views.set(uri, await view)
+      } catch {
+        retry.push(uri)
+      }
+    }),
+  ])
+  for (const uri of missing) views.set(uri, fetched.get(uri))
+  if (retry.length > 0) {
+    const again = await fetchPublicPosts(appview, retry, {strict: true})
+    for (const uri of retry) views.set(uri, again.get(uri))
+  }
   for (const [uri, node] of posts) {
     outcomes.set(uri, publicOutcomeOf(node, views.get(uri)))
   }

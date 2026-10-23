@@ -34,7 +34,10 @@ import {
   TREE_VIEW_BELOW,
   TREE_VIEW_BELOW_DESKTOP,
 } from '#/state/queries/usePostThread/const'
-import {createCacheMutator} from '#/state/queries/usePostThread/queryCache'
+import {
+  createCacheMutator,
+  getThreadPlaceholder,
+} from '#/state/queries/usePostThread/queryCache'
 import {
   type createPostThreadOtherQueryKey,
   createPostThreadQueryKey,
@@ -200,6 +203,7 @@ export function createThreadLens(
         }),
         readWith: {sort, below},
         placeholder: placeholder as {value: unknown} | undefined,
+        findPlaceholder: uri => getThreadPlaceholder(qc, uri),
         signal: ctx.signal,
       }),
     select: data =>

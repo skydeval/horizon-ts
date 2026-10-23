@@ -18,6 +18,7 @@
  * only for the key's account, and a lens-only anchor never falls back.
  */
 
+import {AtUri} from '@atproto/syntax'
 import {type QueryClient, type QueryKey} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
@@ -52,8 +53,12 @@ import {
   postUrisToRead,
   type PublicOutcome,
 } from '#/horizon/thread-lens/nodes'
+import {takeWarmLensThread} from '#/horizon/thread-lens/prewarm'
 import {readLensPrivatePart} from '#/horizon/thread-lens/private-part'
-import {readPublicViews} from '#/horizon/thread-lens/public-views'
+import {
+  readPublicViews,
+  warmPublicViews,
+} from '#/horizon/thread-lens/public-views'
 import {getLensGapKind, registerLensGaps} from '#/horizon/thread-lens/registry'
 import {
   enqueueLensTask,
@@ -72,6 +77,7 @@ import {
   stopKey,
   withMerged,
 } from '#/horizon/thread-lens/snapshot'
+import {lensTimingNow, noteLensStep} from '#/horizon/thread-lens/timing'
 import {type app} from '#/lexicons'
 
 type PostView = app.bsky.feed.defs.PostView
@@ -95,6 +101,11 @@ export type LensRunOptions = {
   readWith: {sort: string | undefined; below: number}
   /** The stock placeholder, whose `knownLikers` the anchor takes. */
   placeholder?: {value: unknown}
+  /**
+   * The stock placeholder search for another URI (`getThreadPlaceholder`),
+   * given by the thread query so this module stays free of the stock caches.
+   */
+  findPlaceholder?: (uri: string) => unknown
   signal?: AbortSignal
 }
 
@@ -206,6 +217,89 @@ async function resolveQuotes(did: string, views: readonly PostView[]) {
   await resolvePrivateQuotes(views)
 }
 
+/** The stock placeholder's post view, when it is a full public one. */
+function placeholderPost(placeholder: unknown): PostView | undefined {
+  const post = (placeholder as {value?: {post?: PostView}} | undefined)?.value
+    ?.post
+  if (!post || typeof post.uri !== 'string' || !post.cid) return undefined
+  return isPrivatePostUri(post.uri) ? undefined : post
+}
+
+function hostOf(uri: string): string | undefined {
+  try {
+    return new AtUri(uri).host
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * `anchor` with a DID authority without a request when the caches know it
+ * (speed pass): the stock placeholder's own URI (the post the screen opened
+ * from, whose URI the AppView gave in DID form), else the stock handle
+ * cache (`resolved-did`), else `resolveHandle` on the public AppView.
+ */
+export function knownLensAnchor(
+  qc: QueryClient,
+  anchor: string,
+  placeholder: unknown,
+): string | undefined {
+  let urip: AtUri
+  try {
+    urip = new AtUri(anchor)
+  } catch {
+    return undefined
+  }
+  if (urip.host.startsWith('did:')) return anchor
+  const post = placeholderPost(placeholder)
+  if (post) {
+    try {
+      const held = new AtUri(post.uri)
+      if (
+        held.host.startsWith('did:') &&
+        held.collection === urip.collection &&
+        held.rkey === urip.rkey
+      ) {
+        return post.uri
+      }
+    } catch {}
+  }
+  const did = qc.getQueryData<string>(['resolved-did', urip.host])
+  if (typeof did === 'string' && did.startsWith('did:')) {
+    return `at://${did}/${urip.collection}/${urip.rkey}`
+  }
+  return undefined
+}
+
+/**
+ * The public URIs warmed at the start of a read, beside `getThread`
+ * (speed pass): the anchor and its reply parent and root, each only when
+ * the stock caches hold the AppView's own view of it (so the AppView has
+ * served it as a post; U-5), and never for a lens-only anchor.
+ */
+function earlyPublicUris(
+  params: LensKeyParams,
+  anchorUri: string,
+  options: LensRunOptions,
+): string[] {
+  if (isLensOnly(params)) return []
+  const post = placeholderPost(options.placeholder)
+  if (!post || post.uri !== anchorUri) return []
+  const uris: string[] = [anchorUri]
+  const reply = (
+    post.record as {reply?: {parent?: {uri?: unknown}; root?: {uri?: unknown}}}
+  ).reply
+  for (const ref of [reply?.parent?.uri, reply?.root?.uri]) {
+    if (typeof ref !== 'string' || isPrivatePostUri(ref)) continue
+    if (uris.includes(ref) || !hostOf(ref)?.startsWith('did:')) continue
+    if (getLensGapKind(params.did, ref) !== undefined) continue
+    if (placeholderPost(options.findPlaceholder?.(ref))?.uri === ref) {
+      uris.push(ref)
+    }
+  }
+  return uris
+}
+
 /** A first lens read: the lens, the public-view pass, the private part. */
 async function readLens(
   params: LensKeyParams,
@@ -220,12 +314,26 @@ async function readLens(
   if (!clients || clients.did !== did) {
     throw new Error('Thread Lens: the key is not the current account')
   }
-  const anchorUri = await resolveAnchor(clients.appviewClient, params.anchor)
-  const answer = await getLensThread(
-    clients.prismClient,
+  const started = lensTimingNow()
+  const anchorUri =
+    knownLensAnchor(options.qc, params.anchor, options.placeholder) ??
+    (await resolveAnchor(clients.appviewClient, params.anchor))
+  // The anchor's public views start now, beside `getThread` (speed pass).
+  warmPublicViews(
+    clients.appviewClient,
     did,
-    lensThreadBody({kind: 'first', anchor: anchorUri, depth}),
-    options.signal,
+    earlyPublicUris(params, anchorUri, options),
+  )
+  const body = lensThreadBody({kind: 'first', anchor: anchorUri, depth})
+  // The press-in pre-warm's answer when one is in flight for this read.
+  const warm = takeWarmLensThread(did, body)
+  const ask = () =>
+    getLensThread(clients.prismClient, did, body, options.signal)
+  const answer = warm ? await warm.catch(ask) : await ask()
+  noteLensStep(
+    params.anchor,
+    warm ? 'getThread (pre-warmed)' : 'getThread',
+    started,
   )
   const checked = checkLensNodes(answer.nodes)
   const anchorNode = checked.find(node => node.uri === answer.anchor)
@@ -239,6 +347,7 @@ async function readLens(
     clients.appviewClient,
     checked,
     postUrisToRead(EMPTY_BASE, checked),
+    {did},
   )
   /*
    * The private part (5.5): beside the public-view pass, only for a post
@@ -274,12 +383,14 @@ async function readLens(
         })
       : Promise.resolve(undefined)
   const outcomes = await publicPass
+  noteLensStep(params.anchor, 'public views', started)
   const merged = mergeLensNodes(EMPTY_BASE, checked, {
     request: {kind: 'first'},
     bridging: answer.bridging,
     outcomes,
   })
   const part = await privatePart
+  noteLensStep(params.anchor, 'private branches', started)
   const nodes = new Map(merged.nodes)
   const newViews = [...merged.newViews]
   // Discarded when the public-view pass made the anchor a gap (R2-Q3).
@@ -291,6 +402,7 @@ async function readLens(
   }
   const gaps = merged.gaps.filter(([uri]) => nodes.get(uri)?.kind === 'gap')
   await resolveQuotes(did, newViews)
+  noteLensStep(params.anchor, 'private quotes', started)
   copyKnownLikers(nodes.get(answer.anchor), options.placeholder)
   const snapshot = firstSnapshot({
     runId,

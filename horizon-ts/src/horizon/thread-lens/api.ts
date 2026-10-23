@@ -3,8 +3,9 @@
  * per-account stores they write: the refusal record (3.2) and the 429 wait
  * (11.5).
  *
- * Both calls go through the bundle's prism client (the account's PDS with
- * `atproto-proxy` set to prism), never directly, and through
+ * Both calls go to prism directly with a per-method service token when they
+ * can, else through the bundle's prism client (the account's PDS with
+ * `atproto-proxy` set to prism; `direct.ts`), and always through
  * `reportedPrismCall`, so their outcome is reported to health and membership
  * as for any prism read. Every write here (the refusal record, the wait, the
  * membership report) is for the DID of the key the call was made for, never
@@ -29,6 +30,11 @@ import {type AtUriString} from '@atproto/syntax'
 import {nearhorizon} from '#/horizon/lexicons'
 import {reportedPrismCall} from '#/horizon/private/api/reads'
 import {leadErrorOf, retryAfterMs} from '#/horizon/private/api/transient'
+import {
+  LENS_GET_THREAD_LXM,
+  LENS_RESOLVE_LXM,
+  sendLensCall,
+} from '#/horizon/thread-lens/direct'
 
 /** The wait after a 429 that names none (11.5). */
 export const LENS_RATE_LIMIT_FALLBACK_MS = 10_000
@@ -407,9 +413,11 @@ export async function getLensThread(
       params: input,
       signal,
       send: callSignal =>
-        prism.call(nearhorizon.threadLensGetThread, input, {
-          signal: callSignal,
-        }),
+        sendLensCall(prism, did, LENS_GET_THREAD_LXM, callSignal, client =>
+          client.call(nearhorizon.threadLensGetThread, input, {
+            signal: callSignal,
+          }),
+        ),
     })
     return res.body
   } catch (error) {
@@ -439,7 +447,11 @@ export async function resolveLens(
       params: input,
       signal,
       send: callSignal =>
-        prism.call(nearhorizon.threadLensResolve, input, {signal: callSignal}),
+        sendLensCall(prism, did, LENS_RESOLVE_LXM, callSignal, client =>
+          client.call(nearhorizon.threadLensResolve, input, {
+            signal: callSignal,
+          }),
+        ),
     })
     return res.body
   } catch (error) {

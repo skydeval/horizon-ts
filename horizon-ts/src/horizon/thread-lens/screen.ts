@@ -30,7 +30,13 @@
  * cache subscription in an effect.
  */
 
-import {useContext, useEffect, useState, useSyncExternalStore} from 'react'
+import {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import {NavigationContext} from '@react-navigation/native'
 import {hashKey, onlineManager, useQueryClient} from '@tanstack/react-query'
 
@@ -42,12 +48,52 @@ import {isLensWaiting, useLensWaiting} from '#/horizon/thread-lens/api'
 import {useIsLensOnlyAnchor} from '#/horizon/thread-lens/availability'
 import {useLensGapMark} from '#/horizon/thread-lens/mark'
 import {LENS_ROOT} from '#/horizon/thread-lens/snapshot'
+import {
+  lensTimingOn,
+  lensTimingStart,
+  noteLensMilestone,
+} from '#/horizon/thread-lens/timing'
 
 /** What the hook reads of the stock thread answer. */
 type ThreadLike = {
   context: {postThreadQueryKey: readonly unknown[]}
-  state: {lens: LensState; isFetching: boolean}
+  state: {lens: LensState; isFetching: boolean; isPlaceholderData?: boolean}
   actions: {refetch: () => unknown}
+  /** The built items, for the timing log's first paint. */
+  data?: {items: readonly {type: string; depth?: number}[]}
+}
+
+/**
+ * The timing log's screen milestones (`timing.ts`): the first paint with
+ * the anchor post, and the first answer that is not placeholder data.
+ */
+function useLensTimingLog(anchor: string | undefined, thread: ThreadLike) {
+  const [start] = useState(() => lensTimingStart(anchor))
+  const painted = useRef(false)
+  const answered = useRef(false)
+  const hasAnchor = !!thread.data?.items.some(
+    item => item.type === 'threadPost' && item.depth === 0,
+  )
+  const kind = thread.state.lens.kind
+  const isLensKey = thread.context.postThreadQueryKey[0] === LENS_ROOT
+  const settled = isLensKey
+    ? kind !== 'placeholder'
+    : thread.state.isPlaceholderData === false
+  useEffect(() => {
+    if (!anchor || !lensTimingOn()) return
+    if (hasAnchor && !painted.current) {
+      painted.current = true
+      noteLensMilestone(anchor, 'first paint', start)
+    }
+    if (settled && !answered.current) {
+      answered.current = true
+      noteLensMilestone(
+        anchor,
+        isLensKey ? `lens answer (${kind})` : 'stock answer',
+        start,
+      )
+    }
+  }, [anchor, hasAnchor, settled, kind, isLensKey, start])
 }
 
 /** Whether the screen is focused, kept current; `true` outside a navigator. */
@@ -87,6 +133,7 @@ export function useThreadLensScreen({
   const lensOnly = useIsLensOnlyAnchor(did, anchor, marked)
   const waiting = useLensWaiting(did)
   const focused = useScreenFocused()
+  useLensTimingLog(anchor, thread)
 
   const lens = thread.state.lens
   const fetching = thread.state.isFetching

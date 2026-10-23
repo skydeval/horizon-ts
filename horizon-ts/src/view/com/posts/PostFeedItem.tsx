@@ -60,6 +60,8 @@ import {proxiesPostLinks} from '#/horizon/private/render/controls'
 import {postSegment} from '#/horizon/private/uri'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
+// HORIZON: Thread Lens: a press starts the thread's lens read
+import {prewarmLensThread} from '#/horizon/thread-lens/prewarm'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {PostFeedReason} from './PostFeedReason'
@@ -360,6 +362,8 @@ let FeedItemInner = ({
         noFeedback
         accessible={false}
         onBeforePress={onBeforePress}
+        // HORIZON: Thread Lens: a press starts the thread's lens read
+        onPressIn={() => prewarmLensThread(queryClient, post)}
         dataSet={{feedContext}}
         onPointerEnter={() => {
           setHover(true)

@@ -41,6 +41,7 @@ import {
   retryLensGaps,
   runLens,
 } from '#/horizon/thread-lens/fetch'
+import {resetLensViewPool} from '#/horizon/thread-lens/public-views'
 import {
   getLensGapKind,
   registerLensGaps,
@@ -204,6 +205,7 @@ beforeEach(() => {
   resetLensQueues()
   resetThreadMuteResync()
   setLensTaskStartSpy(undefined)
+  resetLensViewPool()
 })
 
 describe('the first read (5, 6, 7.1)', () => {
