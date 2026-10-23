@@ -15,6 +15,10 @@ jest.mock('#/horizon/private/activity-subscriptions/ui', () => ({
   setBell: () => {},
 }))
 
+import {getPrismHealth} from '#/horizon/routing/health'
+import {getMembership, resetMembership} from '#/horizon/routing/membership'
+import {membershipStorageKey} from '#/horizon/routing/membership-record'
+import {writeLocal} from '#/horizon/session/local-store'
 import {GRACE_MS, MOUNT_DELAY_MS, OFF} from '../common'
 import {
   BOTH,
@@ -353,6 +357,29 @@ describe('T-7: transient prism failures', () => {
     h.prism.state.putReply = new Error('offline')
     await h.clock.advance(15_000)
     expect(h.token()).toBeDefined()
+  })
+
+  it('Reindexing is transient, sets catching-up and leaves the account a member (FU-3)', async () => {
+    writeLocal(
+      membershipStorageKey(DID),
+      JSON.stringify({v: 2, state: 'member', features: ['private']}),
+    )
+    resetMembership()
+    try {
+      h.prism.state.putReply = {
+        status: 503,
+        body: {error: 'Reindexing', message: 'Reindexing', retryAfter: 30},
+      }
+      h.press(ON)
+      await settle()
+      expect(h.token()).toBeDefined()
+      expect(h.ui.mirrorPendingToast).toHaveBeenCalledWith(ON)
+      expect(getPrismHealth(DID).causes.has('catching-up')).toBe(true)
+      expect(getMembership(DID)).toBe('member')
+    } finally {
+      writeLocal(membershipStorageKey(DID), undefined)
+      resetMembership()
+    }
   })
 
   it('a leftover key shows no toast', async () => {

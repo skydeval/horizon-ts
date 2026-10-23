@@ -10,7 +10,54 @@ import {l} from '@atproto/lex'
 
 import {app, com} from '#/lexicons'
 
-const NOT_MEMBER_ERRORS = ['NotEnrolled', 'NotReady'] as const
+/**
+ * The account-level errors every private method declares. `Reindexing`
+ * (`private.reindexing`, prism busy design 7): a member being re-indexed
+ * after an interruption, a 503 with `retryAfter` in the body; it never moves
+ * membership (BR-1), unlike `NotReady` from the probe.
+ */
+const NOT_MEMBER_ERRORS = ['NotEnrolled', 'NotReady', 'Reindexing'] as const
+
+/**
+ * `app.nearhorizon.private.defs#unavailablePost` (`private.degraded`): one
+ * of the reader's own private posts an answer read and could not serve yet.
+ * `reason` is `syncing` or `indexing`; others may come.
+ */
+export const unavailablePost = l.object({
+  uri: l.string({format: 'at-uri'}),
+  reason: l.string<{knownValues: ['syncing', 'indexing']}>(),
+})
+
+export type UnavailablePost = l.InferOutput<typeof unavailablePost>
+
+/**
+ * `app.nearhorizon.private.defs#viewUnavailable` (`private.degraded`): a
+ * quoted private post prism cannot show yet, in a post view's
+ * `embed.record`, in place of `app.bsky.embed.record#viewNotFound`. Not a
+ * statement that the post is gone.
+ */
+export const viewUnavailable = l.object({
+  uri: l.string({format: 'at-uri'}),
+  unavailable: l.boolean(),
+  retryAfter: l.integer(),
+})
+
+export const VIEW_UNAVAILABLE_TYPE =
+  'app.nearhorizon.private.defs#viewUnavailable'
+
+/**
+ * The top-level fields of the eleven listed answers (`private.degraded`,
+ * prism busy design 7): `degraded` (true while prism is behind, never
+ * `false`), `retryAfter` (seconds, with `degraded`) and `unavailable` (the
+ * reader's own posts it could not serve yet, `#unavailablePost`). Each item
+ * of `unavailable` is a map, checked where it is read (`api/degraded.ts`),
+ * and `retryAfter` takes any integer, so one odd value never fails a page.
+ */
+const answerSignals = {
+  degraded: l.optional(l.boolean()),
+  retryAfter: l.optional(l.integer()),
+  unavailable: l.optional(l.array(l.lexMap())),
+}
 
 /**
  * `app.nearhorizon.private.defs#privatePostView`, its base fields. The
@@ -63,7 +110,7 @@ export const privateGetPosts = l.query(
   l.params({
     uris: l.array(l.string({format: 'at-uri'}), {minLength: 1, maxLength: 25}),
   }),
-  l.jsonPayload({posts: l.array(privatePostView)}),
+  l.jsonPayload({posts: l.array(privatePostView), ...answerSignals}),
   NOT_MEMBER_ERRORS,
 )
 
@@ -80,6 +127,7 @@ export const privateGetTimeline = l.query(
   l.jsonPayload({
     feed: l.array(privatePostView),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -113,6 +161,7 @@ export const privateGetAuthorFeed = l.query(
   l.jsonPayload({
     feed: l.array(privatePostView),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -128,8 +177,8 @@ export const privateGetPostThread = l.query(
     depth: l.optional(l.integer({minimum: 0, maximum: 10})),
     parentHeight: l.optional(l.integer({minimum: 0, maximum: 30})),
   }),
-  l.jsonPayload({thread: l.lexMap()}),
-  ['NotFound', ...NOT_MEMBER_ERRORS],
+  l.jsonPayload({thread: l.lexMap(), ...answerSignals}),
+  ['NotFound', 'Unavailable', ...NOT_MEMBER_ERRORS],
 )
 
 /**
@@ -180,26 +229,33 @@ export const privateGetBookmarks = l.query(
       }),
     ),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
 
 /**
  * `app.nearhorizon.actor.getMembership`: the requester's status (`member`,
- * `indexing`, `notEligible`; others may come) and the private-tier feature
- * families prism serves, whatever the status. Enrolls an eligible caller. A
- * body that does not match (a non-string feature, say) fails as a whole.
- * `permissions` (fast reads) is a map whose values are checked where they
- * are read (`privateIndexed`, 2K design PA-1a), so an unknown or odd value
- * never fails the answer; an older prism sends none.
+ * `indexing`, `reindexing`, `notEligible`; others may come) and the
+ * private-tier feature families prism serves, whatever the status. Enrolls
+ * an eligible caller. A body that does not match (a non-string feature, say)
+ * fails as a whole. `permissions` (fast reads) is a map whose values are
+ * checked where they are read (`privateIndexed`, 2K design PA-1a), so an
+ * unknown or odd value never fails the answer; an older prism sends none.
+ * `reindexing` (`private.reindexing`): a member re-indexed after an
+ * interruption, with a member's permissions; `validForSecs` (and
+ * `Retry-After`) is then the retry interval (prism busy design 2.3).
  */
 export const getMembership = l.query(
   'app.nearhorizon.actor.getMembership',
   l.params(),
   l.jsonPayload({
-    status: l.string(),
+    status: l.string<{
+      knownValues: ['member', 'indexing', 'reindexing', 'notEligible']
+    }>(),
     features: l.array(l.string()),
     permissions: l.optional(l.lexMap()),
+    validForSecs: l.optional(l.integer()),
   }),
   ['RateLimitExceeded'],
 )
@@ -240,6 +296,7 @@ export const privateListNotifications = l.query(
     notifications: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
     seenAt: l.optional(l.string({format: 'datetime'})),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -396,6 +453,7 @@ export const privateSearchPosts = l.query(
   l.jsonPayload({
     posts: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -417,6 +475,7 @@ export const privateGetLikes = l.query(
     uri: l.string({format: 'at-uri'}),
     likes: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -432,6 +491,7 @@ export const privateGetRepostedBy = l.query(
     uri: l.string({format: 'at-uri'}),
     repostedBy: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   NOT_MEMBER_ERRORS,
 )
@@ -448,6 +508,7 @@ export const privateGetQuotes = l.query(
     uri: l.string({format: 'at-uri'}),
     posts: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   ['InvalidRequest', ...NOT_MEMBER_ERRORS],
 )
@@ -468,6 +529,7 @@ export const privateGetReplies = l.query(
   l.jsonPayload({
     replies: l.array(l.lexMap()),
     cursor: l.optional(l.string()),
+    ...answerSignals,
   }),
   ['InvalidRequest', ...NOT_MEMBER_ERRORS],
 )

@@ -24,7 +24,7 @@ import {nearhorizon} from '#/horizon/lexicons'
 import {adaptPosts, type PrivateSource} from '#/horizon/private/adapt/feed-view'
 import {
   getPrivateBookmarks,
-  reportedPrismCall,
+  reportedPrismWrite,
 } from '#/horizon/private/api/reads'
 import {fetchUntilItems} from '#/horizon/private/feed/paging'
 import {resolvePrivateQuotes} from '#/horizon/private/quotes/resolve'
@@ -114,12 +114,13 @@ export async function createPrivateBookmark(
   prism: Client,
   {uri, cid}: {uri: string; cid: string},
 ): Promise<void> {
-  await reportedPrismCall(() =>
-    prism.call(nearhorizon.privateCreateBookmark, {
-      uri: uri as AtUriString,
-      cid,
-    }),
-  )
+  await reportedPrismWrite(nearhorizon.privateCreateBookmark, {
+    send: () =>
+      prism.call(nearhorizon.privateCreateBookmark, {
+        uri: uri as AtUriString,
+        cid,
+      }),
+  })
 }
 
 /**
@@ -129,9 +130,10 @@ export async function deletePrivateBookmark(
   prism: Client,
   {uri}: {uri: string},
 ): Promise<void> {
-  await reportedPrismCall(() =>
-    prism.call(nearhorizon.privateDeleteBookmark, {uri: uri as AtUriString}),
-  )
+  await reportedPrismWrite(nearhorizon.privateDeleteBookmark, {
+    send: () =>
+      prism.call(nearhorizon.privateDeleteBookmark, {uri: uri as AtUriString}),
+  })
 }
 
 /**

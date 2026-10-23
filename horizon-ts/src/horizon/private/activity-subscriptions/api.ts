@@ -19,6 +19,11 @@ import {
   type Flags,
   readFlags,
 } from '#/horizon/private/activity-subscriptions/common'
+import {
+  reportedPrismCall,
+  reportedPrismWrite,
+} from '#/horizon/private/api/reads'
+import {leadErrorOf} from '#/horizon/private/api/transient'
 import {app} from '#/lexicons'
 
 /** Bluesky's put of the bell (the stock dialog's request). */
@@ -88,7 +93,9 @@ export async function listBlueskySubscriptions(
 }
 
 /**
- * prism's private put. `ifNotChangedSince` only from the reconcile.
+ * prism's private put. `ifNotChangedSince` only from the reconcile. A write
+ * (prism busy design 2.2, FU-3): it goes at once, and its outcome is reported
+ * to health and membership for the client's own account.
  */
 export async function putPrismSubscription(
   prism: Client,
@@ -96,27 +103,42 @@ export async function putPrismSubscription(
   flags: Flags,
   ifNotChangedSince?: string,
 ): Promise<void> {
-  await prism.call(nearhorizon.privatePutActivitySubscription, {
-    subject: subject as DidString,
-    activitySubscription: {post: flags.post, reply: flags.reply},
-    ...(ifNotChangedSince
-      ? {ifNotChangedSince: ifNotChangedSince as DatetimeString}
-      : {}),
+  await reportedPrismWrite(nearhorizon.privatePutActivitySubscription, {
+    did: prism.did,
+    send: () =>
+      prism.call(nearhorizon.privatePutActivitySubscription, {
+        subject: subject as DidString,
+        activitySubscription: {post: flags.post, reply: flags.reply},
+        ...(ifNotChangedSince
+          ? {ifNotChangedSince: ifNotChangedSince as DatetimeString}
+          : {}),
+      }),
   })
 }
 
 /** One prism row as listed. */
 export type PrismRow = {subject: string; flags: Flags; updatedAt: string}
 
-/** One page of prism's private list; `asOf` is the database's time. */
+/**
+ * One page of prism's private list; `asOf` is the database's time. A read
+ * (prism busy design 2, FU-3): through the throttle, with the call deadline.
+ */
 export async function listPrismSubscriptions(
   prism: Client,
   {limit, cursor}: {limit: number; cursor?: string},
 ): Promise<{asOf: string; rows: PrismRow[]; cursor?: string}> {
-  const res = await prism.call(nearhorizon.privateListActivitySubscriptions, {
-    limit,
-    cursor,
-  })
+  const params = {limit, cursor}
+  const {body: res} = await reportedPrismCall(
+    nearhorizon.privateListActivitySubscriptions,
+    {
+      did: prism.did,
+      params,
+      send: signal =>
+        prism.call(nearhorizon.privateListActivitySubscriptions, params, {
+          signal,
+        }),
+    },
+  )
   return {
     asOf: res.asOf,
     rows: res.subscriptions.map(row => ({
@@ -134,15 +156,23 @@ export async function listPrismSubscriptions(
  * - `not-enrolled`: `NotEnrolled`;
  * - `conflict`: `Conflict` (the reconcile's compare-and-set refused);
  * - `limit`: `LimitReached` (the cap of active rows);
- * - `transient`: anything else, `NotReady`, 5xx, 429 and network failures
- *   among them.
+ * - `transient`: anything else. That is every error the shared classifier
+ *   (`classifyPrismCall`, prism busy design 3) calls transient (`NotReady`,
+ *   `Reindexing`, 5xx, 429, network, the call deadline) and, unlike it, the
+ *   permanent errors no rule here names (a 501, an auth error), which the
+ *   press's retry sequence bounds (activity subscriptions log D-6).
+ *
+ * A waiter's error (`PrivateWaiterError`, when a list read waited behind the
+ * account's lead call) is read through its `cause`, the lead's, as the
+ * shared classifier reads it.
  */
 export type PrismFailure =
   'invalid' | 'not-enrolled' | 'conflict' | 'limit' | 'transient'
 
 export function classifyPrismError(error: unknown): PrismFailure {
-  if (error instanceof XrpcResponseError) {
-    switch (error.error) {
+  const lead = leadErrorOf(error)
+  if (lead instanceof XrpcResponseError) {
+    switch (lead.error) {
       case 'InvalidRequest':
         return 'invalid'
       case 'NotEnrolled':
@@ -168,8 +198,12 @@ export function wasAnswered(error: unknown): boolean {
   )
 }
 
-/** A failure name for logs: the XRPC error, or the error class. */
+/**
+ * A failure name for logs: the XRPC error, or the error class; a waiter's,
+ * its lead's.
+ */
 export function failureName(error: unknown): string {
-  if (error instanceof XrpcResponseError) return error.error
-  return error instanceof Error ? error.name : typeof error
+  const lead = leadErrorOf(error)
+  if (lead instanceof XrpcResponseError) return lead.error
+  return lead instanceof Error ? lead.name : typeof lead
 }

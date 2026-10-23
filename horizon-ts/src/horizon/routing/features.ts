@@ -50,6 +50,18 @@ export const PRISM_FEATURES = [
    * methods and the `subscribedPost` preference key.
    */
   'private.activitySubscriptions',
+  /*
+   * prism's degraded mode (prism busy design 7, BD-1): `degraded`,
+   * `retryAfter` and `unavailable` on the eleven listed answers,
+   * `getPostThread`'s `503 Unavailable`, `#viewUnavailable` quotes. Only the
+   * clearing of the `degraded` cause by a fresh answer is gated on it (2.1).
+   */
+  'private.degraded',
+  /*
+   * Re-indexing a ready member (prism busy design 7, BD-2): `503 Reindexing`
+   * and `getMembership`'s `reindexing`, read by name; it gates nothing.
+   */
+  'private.reindexing',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

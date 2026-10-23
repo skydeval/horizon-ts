@@ -355,24 +355,70 @@ describe('the posting route (2K 2.1, PA-1a, T-1)', () => {
     })
   })
 
-  it('NotReady and NotEnrolled from a read (membership, no features) are none', async () => {
+  it('T-3: a read’s NotReady or Reindexing answers nothing and never moves the route; NotEnrolled from a read is none', async () => {
     publish(DID, STOCK)
-    reportPrismError(
-      DID,
-      await readError({status: 400, body: {error: 'NotReady'}}),
-    )
-    expect(answerCurrent(DID)).toEqual({membership: true, features: false})
-    expect(getWriteRoute(DID)).toMatchObject({
-      postingRoute: 'none',
-      indexing: true,
+    for (const reply of [
+      {status: 400, body: {error: 'NotReady'}},
+      {status: 503, body: {error: 'Reindexing', retryAfter: 30}},
+    ]) {
+      reportPrismError(DID, await readError(reply))
+      expect(answerCurrent(DID)).toEqual({membership: false, features: false})
+      expect(getWriteRoute(DID).postingRoute).toBe('checking')
+    }
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
     })
+    for (const reply of [
+      {status: 400, body: {error: 'NotReady'}},
+      {status: 503, body: {error: 'Reindexing', retryAfter: 30}},
+    ]) {
+      reportPrismError(DID, await readError(reply))
+      expect(getMembership(DID)).toBe('member')
+      expect(getWriteRoute(DID)).toMatchObject({
+        postingRoute: 'encode',
+        indexing: false,
+      })
+    }
     reportPrismError(
       DID,
       await readError({status: 400, body: {error: 'NotEnrolled'}}),
     )
+    expect(answerCurrent(DID)).toEqual({membership: true, features: true})
     expect(getWriteRoute(DID)).toMatchObject({
       postingRoute: 'none',
       indexing: false,
+    })
+  })
+
+  it('T-4: a probe answering reindexing is encode at once, on a fresh device too (DMR-6)', async () => {
+    publish(DID, STOCK)
+    expect(getWriteRoute(DID).postingRoute).toBe('checking')
+    await answerMembership({
+      status: 'reindexing',
+      features: ['private', 'private.anyPds', 'private.reindexing'],
+      permissions: {privateRead: true, privateIndexed: true, threadLens: true},
+      validForSecs: 30,
+    })
+    expect(answerCurrent(DID)).toEqual({membership: true, features: true})
+    expect(getWriteRoute(DID)).toEqual({
+      repoRoute: 'stock',
+      postingRoute: 'encode',
+      reason: undefined,
+      indexing: false,
+    })
+  })
+
+  it('the probe’s own indexing is still none with the indexing wording', async () => {
+    publish(DID, STOCK)
+    await answerMembership({
+      status: 'member',
+      features: ['private', 'private.anyPds'],
+    })
+    await answerMembership({status: 'indexing', features: ['private']})
+    expect(getWriteRoute(DID)).toMatchObject({
+      postingRoute: 'none',
+      indexing: true,
     })
   })
 

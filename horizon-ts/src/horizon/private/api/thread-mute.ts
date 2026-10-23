@@ -18,7 +18,7 @@
 import {type AtUriString} from '@atproto/syntax'
 
 import {logger} from '#/logger'
-import {reportedPrismCall} from '#/horizon/private/api/reads'
+import {reportedPrismWrite} from '#/horizon/private/api/reads'
 import {privateInteractionsServed} from '#/horizon/private/server-support'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {
@@ -40,11 +40,15 @@ export async function muteThreadOnPrism(
 ): Promise<{}> {
   const prism = requireCurrentClients().prismClient
   const root = rootUri as AtUriString
-  await reportedPrismCall(() =>
-    mute
-      ? prism.call(app.bsky.graph.muteThread, {root})
-      : prism.call(app.bsky.graph.unmuteThread, {root}),
-  )
+  if (mute) {
+    await reportedPrismWrite(app.bsky.graph.muteThread.main, {
+      send: () => prism.call(app.bsky.graph.muteThread, {root}),
+    })
+  } else {
+    await reportedPrismWrite(app.bsky.graph.unmuteThread.main, {
+      send: () => prism.call(app.bsky.graph.unmuteThread, {root}),
+    })
+  }
   return {}
 }
 

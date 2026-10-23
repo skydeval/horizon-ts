@@ -21,6 +21,13 @@ import {
 
 import {logger} from '#/logger'
 import {nearhorizon} from '#/horizon/lexicons'
+import {devPrismFault} from '#/horizon/private/api/dev-fault'
+import {
+  parseRetryAfter,
+  PRISM_HINT_FALLBACK_MS,
+  retryAfterMs,
+  secondsToMs,
+} from '#/horizon/private/api/transient'
 import {
   answerPrismFeatures,
   featuresAnswered,
@@ -29,6 +36,7 @@ import {
   type PrismFeatureList,
   servesFeature,
 } from '#/horizon/routing/features'
+import {reportProbeStatus} from '#/horizon/routing/health'
 import {
   type AnsweredMembershipState,
   readMembershipRecord,
@@ -49,9 +57,9 @@ export {membershipStorageKey} from '#/horizon/routing/membership-record'
 export type MembershipState = 'unknown' | 'indexing' | 'member' | 'not-member'
 
 /**
- * The client's own retry schedule, used when the response carries no
- * `Retry-After` (aurora-locus's proxy does not forward it). After the last
- * entry, every {@link RETRY_STEADY_MS}.
+ * The client's own retry schedule: the fallback for an answer with no hint
+ * (no body `retryAfter`, no `Retry-After`; a stock PDS proxy strips both).
+ * After the last entry, every {@link RETRY_STEADY_MS}.
  */
 export const RETRY_SCHEDULE_MS: readonly number[] = [
   5_000, 10_000, 20_000, 40_000,
@@ -70,9 +78,15 @@ export const MAX_UNKNOWN_ATTEMPTS = 10
 
 /**
  * A recheck (`requestMembershipRecheck`) asks again only when the probe's
- * last answer is at least this old.
+ * last answer is at least this old, unless forced.
  */
 export const MEMBERSHIP_RECHECK_MIN_MS = 60_000
+
+/**
+ * A forced recheck (a call's `NotReady` or `Reindexing`, prism busy design
+ * 2.1) waits at least this long.
+ */
+export const FORCED_RECHECK_MIN_MS = 2_000
 
 const states = new Map<string, MembershipState>()
 /** Accounts whose state prism answered in this run. */
@@ -86,7 +100,7 @@ const privateIndexed = new Map<string, boolean>()
 const listeners = new Set<() => void>()
 const enteredIndexingListeners = new Set<(did: string) => void>()
 /** One more ask, per account with a running probe. */
-const rechecks = new Map<string, () => void>()
+const rechecks = new Map<string, (options?: RecheckOptions) => void>()
 
 /**
  * The state held for `did`, loading the persisted record on first use (its
@@ -167,8 +181,8 @@ export function isPrivateMember(did: string | undefined): did is string {
  * posting route (2K design PA-1a), per facet: `membership` (the state) and
  * `features` (the feature list). The two differ: a `getMembership` answer
  * with an unknown status records features without a state, and a
- * `NotEnrolled` or `NotReady` from a private read answers a state without
- * features. The only test of "answered"; today each facet is "answered by
+ * `NotEnrolled` from a private read answers a state without features (a
+ * read's `NotReady` or `Reindexing` answers nothing, prism busy BR-1). The only test of "answered"; today each facet is "answered by
  * prism in this run". Fast reads (chainlink #5) adds a persisted answer still
  * inside its validity here, and nowhere else.
  */
@@ -251,10 +265,12 @@ export function resetMembership() {
 }
 
 /**
- * What a prism answer means for membership: `member` on success, `indexing`
- * for `NotReady`, `not-member` for `NotEnrolled`, and `undefined` (no
- * change, retry) for anything else, including network failures, 5xx and
- * proxy errors. Matched on the XRPC error name, not the status.
+ * What a probe's answer means for membership: `member` on success,
+ * `indexing` for `NotReady`, `not-member` for `NotEnrolled`, and `undefined`
+ * (no change, retry) for anything else, including `Reindexing` (never
+ * `indexing`, prism busy design 2.3), network failures, 5xx and proxy
+ * errors. Matched on the XRPC error name, not the status. A private call's
+ * `NotReady` never moves the state (BR-1); see {@link reportPrismError}.
  */
 export function membershipFromError(
   error: unknown,
@@ -278,38 +294,57 @@ function isMethodNotImplemented(error: unknown) {
   )
 }
 
+/** A call's `NotReady` or `Reindexing`: the account, not the content. */
+function isCatchingUpError(error: unknown) {
+  return (
+    error instanceof XrpcResponseError &&
+    (error.error === 'NotReady' || error.error === 'Reindexing')
+  )
+}
+
 /**
- * A private or Thread Lens call answered with an error that may move the
- * state (`NotEnrolled`, `NotReady`), or with 501 `MethodNotImplemented`,
- * which asks the probe to read the feature list again.
+ * A private or Thread Lens call's failure, for membership (prism busy design
+ * BR-1, 2.1):
+ * - `NotEnrolled` moves the state to `not-member`;
+ * - `NotReady` and `Reindexing` never move it: they force one more probe, at
+ *   prism's hint (at least {@link FORCED_RECHECK_MIN_MS}; a hintless
+ *   `Reindexing` waits 30 s, a hintless `NotReady` the first step of
+ *   {@link RETRY_SCHEDULE_MS}), and only the probe's answer moves the state,
+ *   with the toast;
+ * - 501 `MethodNotImplemented` asks the probe to read the feature list again.
  */
 export function reportPrismError(did: string, error: unknown) {
-  const next = membershipFromError(error)
-  if (next) setState(did, next)
+  if (isCatchingUpError(error)) {
+    const hint = retryAfterMs(error) ?? RETRY_SCHEDULE_MS[0]
+    requestMembershipRecheck(did, {
+      force: true,
+      atMs: Math.max(hint, FORCED_RECHECK_MIN_MS),
+    })
+    return
+  }
+  if (membershipFromError(error) === 'not-member') setState(did, 'not-member')
   if (isMethodNotImplemented(error)) requestMembershipRecheck(did)
 }
 
 /**
+ * How a recheck asks. `force` (a call's `NotReady` or `Reindexing`) skips
+ * {@link MEMBERSHIP_RECHECK_MIN_MS}, stays single-flight (nothing while an
+ * ask is in flight) and moves a later pending retry earlier; `atMs` is how
+ * long from now it asks.
+ */
+export type RecheckOptions = {force?: boolean; atMs?: number}
+
+/**
  * Ask `did`'s running probe once more (2H design 3.4), when it is not
  * cancelled, has no retry pending and last answered at least
- * {@link MEMBERSHIP_RECHECK_MIN_MS} ago. Without a running probe, nothing.
+ * {@link MEMBERSHIP_RECHECK_MIN_MS} ago; or, forced, as
+ * {@link RecheckOptions} says. Without a running probe, nothing.
  */
-export function requestMembershipRecheck(did: string) {
-  rechecks.get(did)?.()
-}
-
-function parseRetryAfter(value: string | null): number | undefined {
-  if (!value) return undefined
-  const seconds = Number(value)
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000
-  const date = Date.parse(value)
-  if (Number.isFinite(date)) return Math.max(0, date - Date.now())
-  return undefined
-}
-
-function retryAfterMs(error: unknown): number | undefined {
-  if (!(error instanceof XrpcResponseError)) return undefined
-  return parseRetryAfter(error.headers.get('retry-after'))
+export function requestMembershipRecheck(
+  did: string,
+  options?: RecheckOptions,
+) {
+  rechecks.get(did)?.(options)
 }
 
 /**
@@ -369,6 +404,8 @@ function isMembershipQueryAbsent(error: unknown) {
 /**
  * What one ask learned.
  * - `state`: an answer naming a state, with the features answered with it.
+ *   `reindexing` is an answered `member` (prism busy design 2.3), polled
+ *   again like `indexing`.
  * - `features`: a `getMembership` answer with a status Horizon does not
  *   know: features recorded, retried as an unanswered attempt.
  */
@@ -380,6 +417,8 @@ type ProbeOutcome =
       /** `permissions.privateIndexed`, when the answer carried it. */
       indexed?: boolean
       retryMs?: number
+      /** The status was `reindexing`. */
+      reindexing?: boolean
     }
   | {kind: 'features'; features: PrismFeatureList; retryMs?: number}
 
@@ -392,7 +431,10 @@ type ProbeOutcome =
  * private-tier features and enrolls an eligible account. `member` ends the
  * probe for this run, `indexing` retries after the response's `Retry-After`
  * (else the client schedule), `notEligible` stops until the next start; an
- * unknown status or a 429 retries as an unanswered attempt.
+ * unknown status or a 429 retries as an unanswered attempt. `reindexing`
+ * (prism busy design 2.3) is an answered `member` that sets health's
+ * `catching-up` and polls at `Retry-After`, else `validForSecs` (else 30 s),
+ * with no cap; any other answered status clears `catching-up`.
  *
  * Where that method is absent (404 or 501), or with `MEMBERSHIP_QUERY` off,
  * the probe is the Phase 2 one for the rest of this run, with no features:
@@ -401,7 +443,8 @@ type ProbeOutcome =
  * `MEMBERSHIP_PROBE_FALLBACK` is on, `app.nearhorizon.private.getTimeline`,
  * which never enrolls (P-10).
  *
- * While the probe runs, `requestMembershipRecheck` asks once more (3.4).
+ * While the probe runs, `requestMembershipRecheck` asks once more (3.4), or,
+ * forced by a call's `NotReady` or `Reindexing`, at that call's hint.
  */
 export function startMembershipProbe(
   did: string,
@@ -450,12 +493,36 @@ export function startMembershipProbe(
       if (cancelled) throw error
       return askLegacy()
     }
-    const {status, features, permissions} = res.body
-    const retryMs = parseRetryAfter(res.headers.get('retry-after'))
+    const {status, features, permissions, validForSecs} = res.body
+    // The development fault switch (L-0): the probe answers `reindexing`.
+    const fault = devPrismFault()
+    const faulted = fault === 'reindexing' || fault === 'reindexing-bare'
+    const retryMs = faulted
+      ? undefined
+      : parseRetryAfter(res.headers.get('retry-after'))
     const indexed =
       typeof permissions?.privateIndexed === 'boolean'
         ? permissions.privateIndexed
         : undefined
+    if (status === 'reindexing' || faulted) {
+      /*
+       * A member being re-indexed (prism busy design 2.3): an answered
+       * `member`, polled again at `Retry-After`, else `validForSecs`.
+       */
+      const valid = faulted
+        ? fault === 'reindexing'
+          ? 30
+          : undefined
+        : validForSecs
+      return {
+        kind: 'state',
+        state: 'member',
+        features,
+        indexed,
+        retryMs: retryMs ?? secondsToMs(valid),
+        reindexing: true,
+      }
+    }
     if (status === 'member') {
       return {kind: 'state', state: 'member', features, indexed}
     }
@@ -468,7 +535,11 @@ export function startMembershipProbe(
     return {kind: 'features', features, retryMs}
   }
 
+  /** When the pending timer fires. */
+  let timerAt = 0
+
   const schedule = (ms: number) => {
+    timerAt = now() + ms
     timer = env.setTimeout(() => {
       timer = undefined
       run()
@@ -505,7 +576,16 @@ export function startMembershipProbe(
           retryUnanswered(outcome.retryMs)
           return
         }
+        reportProbeStatus(
+          did,
+          outcome.reindexing ? 'reindexing' : outcome.state,
+        )
         setState(did, outcome.state, outcome.features, outcome.indexed)
+        if (outcome.reindexing) {
+          // A state outcome: the unanswered cap never applies.
+          schedule(outcome.retryMs ?? PRISM_HINT_FALLBACK_MS)
+          return
+        }
         if (outcome.state === 'indexing') {
           schedule(outcome.retryMs ?? scheduleDelay())
         }
@@ -516,6 +596,7 @@ export function startMembershipProbe(
         const next = membershipFromError(error)
         if (next) {
           lastAnswerAt = now()
+          if (next !== 'unknown') reportProbeStatus(did, next)
           setState(did, next, legacy ? null : undefined)
         }
         if (next === 'not-member') return
@@ -528,7 +609,22 @@ export function startMembershipProbe(
     )
   }
 
-  const recheck = () => {
+  const recheck = (options?: RecheckOptions) => {
+    if (options?.force) {
+      // Single-flight: an ask in flight answers this too.
+      if (cancelled || inFlight) return
+      const ms = Math.max(0, options.atMs ?? 0)
+      if (timer !== undefined) {
+        // Only ever earlier.
+        if (timerAt <= now() + ms) return
+        env.clearTimeout(timer)
+        timer = undefined
+      }
+      waitingForVisible = false
+      attempt = 0
+      schedule(ms)
+      return
+    }
     if (cancelled || inFlight || timer !== undefined) return
     if (lastAnswerAt !== undefined) {
       if (now() - lastAnswerAt < MEMBERSHIP_RECHECK_MIN_MS) return

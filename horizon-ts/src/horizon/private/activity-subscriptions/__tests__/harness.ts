@@ -6,6 +6,7 @@
 
 import {jest} from '@jest/globals'
 
+import {resetPrismHealth} from '#/horizon/routing/health'
 import {type Call, fakeClient, type Reply} from '../../__tests__/fixtures'
 import {
   dirtyKey,
@@ -311,6 +312,8 @@ export function harness({
   prism?: ReturnType<typeof fakePrism>
   did?: string
 } = {}) {
+  // prism's calls report to health (FU-3); each tab starts healthy.
+  resetPrismHealth()
   const ui = fakeUi()
   const checks = new Set<() => void>()
   const env = {

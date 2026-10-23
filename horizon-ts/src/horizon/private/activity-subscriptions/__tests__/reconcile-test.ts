@@ -14,6 +14,10 @@ jest.mock('#/horizon/private/activity-subscriptions/ui', () => ({
   setBell: () => {},
 }))
 
+import {getPrismHealth} from '#/horizon/routing/health'
+import {getMembership, resetMembership} from '#/horizon/routing/membership'
+import {membershipStorageKey} from '#/horizon/routing/membership-record'
+import {writeLocal} from '#/horizon/session/local-store'
 import {type Reply} from '../../__tests__/fixtures'
 import {GRACE_MS, MOUNT_DELAY_MS, OFF, RECONCILE_INTERVAL_MS} from '../common'
 import {startActivitySync,type SyncEnvironment} from '../tab'
@@ -321,6 +325,30 @@ describe('T-15: gating', () => {
     expect(h.prism.puts()).toEqual([])
     expect(h.profileReads()).toBe(0)
     expect(h.token()).toBe('a-key')
+  })
+
+  it('Reindexing on the list read stops the run, sets catching-up and leaves the account a member (FU-3)', async () => {
+    writeLocal(
+      membershipStorageKey(DID),
+      JSON.stringify({v: 2, state: 'member', features: ['private']}),
+    )
+    resetMembership()
+    try {
+      h.bluesky.bells.set(SUBJECT, ON)
+      h.prism.state.listReply = {
+        status: 503,
+        body: {error: 'Reindexing', message: 'Reindexing', retryAfter: 30},
+      }
+      const result = await h.tab.reconcile.run(clients())
+      expect(result).toMatchObject({complete: false, stopped: 'prism-read'})
+      expect(h.prism.puts()).toEqual([])
+      expect(h.shared.store.readReconciled(DID)).toBeUndefined()
+      expect(getPrismHealth(DID).causes.has('catching-up')).toBe(true)
+      expect(getMembership(DID)).toBe('member')
+    } finally {
+      writeLocal(membershipStorageKey(DID), undefined)
+      resetMembership()
+    }
   })
 
   it('NotEnrolled clears reconciled:<did>', async () => {

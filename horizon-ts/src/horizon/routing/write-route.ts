@@ -73,7 +73,10 @@ export type WriteRoutes = {
   repoRoute: RepoRoute
   postingRoute: PrivateWriteRoute
   reason: PostingRouteReason | undefined
-  /** Membership answered `indexing` in this run (the note's wording, PA-3). */
+  /**
+   * The probe answered `indexing` in this run (the note's wording, PA-3);
+   * never `reindexing`, and never a private call's `NotReady`.
+   */
   indexing: boolean
 }
 
@@ -192,6 +195,12 @@ const CHECKING: PostingAnswer = {
  * `privateIndexed: true` while an account is `indexing`, so it never grants
  * posting on its own. `encoderAvailable()` is a capability test; a failed
  * load of the encoder never moves the route.
+ *
+ * While prism re-indexes a member (prism busy design 2.3), the probe's
+ * `reindexing` is an answered `member` with a member's permissions, so the
+ * route is `encode` at once, and a private call's `NotReady` or `Reindexing`
+ * answers nothing (BR-1): neither ever sends the route back to `checking` or
+ * to the `indexing` note. Only the probe's own `indexing` does.
  */
 export function resolvePostingRoute(
   did: string | undefined,

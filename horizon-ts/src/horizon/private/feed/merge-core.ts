@@ -23,6 +23,7 @@ import {
   pendingAsInput,
   repostReasonOf,
 } from '#/horizon/private/adapt/feed-view'
+import {PrivateDeadlineError} from '#/horizon/private/api/transient'
 import {type MergeState} from '#/horizon/private/feed/cursor'
 import {type PendingPost} from '#/horizon/private/store'
 import {app} from '#/lexicons'
@@ -95,13 +96,15 @@ export function compareKeys(a: SortKey, b: SortKey): number {
 }
 
 /**
- * `promise`, or a rejection after `ms`.
+ * `promise`, or a rejection after `ms` with a `PrivateDeadlineError`
+ * (transient, prism busy design 3). Only the page stops waiting: nothing is
+ * reported, and the call goes on to its own deadline.
  */
 export function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error('private feed deadline passed')),
+      () => reject(new PrivateDeadlineError('private feed deadline passed')),
       ms,
     )
   })

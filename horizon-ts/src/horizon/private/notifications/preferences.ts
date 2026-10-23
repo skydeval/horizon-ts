@@ -19,7 +19,10 @@ import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 
 import {STALE} from '#/state/queries'
 import {nearhorizon} from '#/horizon/lexicons'
-import {reportedPrismCall} from '#/horizon/private/api/reads'
+import {
+  reportedPrismCall,
+  reportedPrismWrite,
+} from '#/horizon/private/api/reads'
 import {
   PRIVATE_NOTIFICATIONS_ROOT,
   PRIVATE_UNREAD_OWN_ROOT,
@@ -111,10 +114,15 @@ function readPreferences(
 export async function getPrivateNotificationPreferences(
   prism: Client,
 ): Promise<PrivateNotificationPreferences> {
-  const res = await reportedPrismCall(() =>
-    prism.call(nearhorizon.privateGetNotificationPreferences, {}),
+  const res = await reportedPrismCall(
+    nearhorizon.privateGetNotificationPreferences,
+    {
+      params: {},
+      send: signal =>
+        prism.call(nearhorizon.privateGetNotificationPreferences, {}, {signal}),
+    },
   )
-  return readPreferences(res.preferences)
+  return readPreferences(res.body.preferences)
 }
 
 /**
@@ -124,13 +132,17 @@ export async function putPrivateNotificationPreference(
   prism: Client,
   {reason, preference}: PrivateNotificationPreferenceWrite,
 ): Promise<PrivateNotificationPreferences> {
-  const res = await reportedPrismCall(() =>
-    prism.call(
-      nearhorizon.privatePutNotificationPreferences,
-      reason === 'subscribedPost'
-        ? {subscribedPost: {list: preference.list, push: preference.push}}
-        : {[reason]: preference},
-    ),
+  const res = await reportedPrismWrite(
+    nearhorizon.privatePutNotificationPreferences,
+    {
+      send: () =>
+        prism.call(
+          nearhorizon.privatePutNotificationPreferences,
+          reason === 'subscribedPost'
+            ? {subscribedPost: {list: preference.list, push: preference.push}}
+            : {[reason]: preference},
+        ),
+    },
   )
   return readPreferences(res.preferences)
 }
