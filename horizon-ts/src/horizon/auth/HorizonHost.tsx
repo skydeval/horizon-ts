@@ -7,7 +7,8 @@
  * token's prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
  * the "spoilers from other apps" choice, the launch-time
- * check for a sign-in that never came back, and the cross-tab reload after an
+ * check for a sign-in that never came back, the notice for a resume that
+ * found its OAuth session busy in another tab, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
  * every account change.
  */
@@ -28,6 +29,7 @@ import {
 } from '#/horizon/routing/MembershipNotice'
 import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
 import {WriteRouteResolver} from '#/horizon/routing/WriteRouteResolver'
+import {OAuthBusyNotice} from '#/horizon/session/oauth-busy-notice'
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
 
 /**
@@ -71,6 +73,7 @@ export function HorizonHost() {
     <>
       <CurrentClientsPublisher />
       <StalledSignInCheck />
+      <OAuthBusyNotice />
       <AppViewChangeReload />
       <MembershipProbe />
       <MembershipNotice />

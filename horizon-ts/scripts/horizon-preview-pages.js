@@ -96,7 +96,16 @@ const PAGES_REDIRECTS = '/* /index.html 200\n'
  * Cloudflare Pages' `_headers`.
  * - Every path: no sniffing, no framing (the sign-in form should not be
  *   framed by another site), a referrer policy that sends no paths to other
- *   sites, and no indexing of a preview.
+ *   sites, no indexing of a preview, and `Cache-Control: no-store`. The
+ *   last is for the app's document: `/`, `/index.html` and every deep path
+ *   (the single-page fallback answers those with `index.html`, and a rule
+ *   matches the requested path). A `no-store` document is kept out of the
+ *   back/forward cache, where a frozen Horizon page can hold the OAuth
+ *   library's session lock and hang every other page's sign-in.
+ * - Each more specific block below starts with `! Cache-Control`, which
+ *   detaches the `no-store` before its own value is set (Pages joins a
+ *   header set by two matching rules with a comma otherwise). `/assets/*`
+ *   only detaches it, keeping Pages' default caching for those files.
  * - The client document: readable from any origin and revalidated on every
  *   fetch, so a changed document is seen at once.
  * - Metro's content-hashed bundle: cached for good.
@@ -111,16 +120,23 @@ const PAGES_HEADERS = `/*
   Content-Security-Policy: frame-ancestors 'self'
   Referrer-Policy: strict-origin-when-cross-origin
   X-Robots-Tag: noindex
+  Cache-Control: no-store
 
 /oauth-client-metadata.json
   Access-Control-Allow-Origin: *
+  ! Cache-Control
   Cache-Control: no-cache
 
 /_expo/static/*
+  ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable
+
+/assets/*
+  ! Cache-Control
 
 /assets/vendor/kryphocron-web/*
   Content-Type: application/wasm
+  ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable
 `
 

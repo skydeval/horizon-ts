@@ -14,6 +14,10 @@ import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
 // HORIZON: an OAuth account has no accessJwt; ask the kind-aware predicate
 import {isSignedInAccount} from '#/horizon/session/accounts'
+// HORIZON: a switch that found the OAuth session busy in another tab
+import {OAuthSessionBusyError} from '#/horizon/session/auth-errors'
+// HORIZON: a switch that found the OAuth session busy in another tab
+import {oauthBusyMessage} from '#/horizon/session/oauth-busy-notice'
 import {FormContainer} from './FormContainer'
 
 export const ChooseAccountForm = ({
@@ -59,8 +63,13 @@ export const ChooseAccountForm = ({
         logger.warn('choose account: initSession failed', {
           message: err instanceof Error ? err.message : String(err),
         })
-        // Move to login form.
-        onSelectAccount(account)
+        // HORIZON: a session busy in another tab is not signed out; say so and stay here to retry
+        if (err instanceof OAuthSessionBusyError) {
+          Toast.show(oauthBusyMessage(), {type: 'warning'})
+        } else {
+          // Move to login form.
+          onSelectAccount(account)
+        }
       }
       setPendingDid(null)
     },

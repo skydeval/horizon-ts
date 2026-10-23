@@ -14,7 +14,9 @@ import {openInPlaceSignIn} from '#/horizon/auth/InPlaceSignIn'
 // HORIZON: kind-aware session check and the in-place sign-in window
 import {isSignedInAccount} from '#/horizon/session/accounts'
 // HORIZON: kind-aware session check and the in-place sign-in window
-import {isAuthError} from '#/horizon/session/auth-errors'
+import {isAuthError, OAuthSessionBusyError} from '#/horizon/session/auth-errors'
+// HORIZON: a switch that found the OAuth session busy in another tab
+import {oauthBusyMessage} from '#/horizon/session/oauth-busy-notice'
 // HORIZON: kind-aware session check and the in-place sign-in window
 import {IN_PLACE_SIGN_IN} from '#/horizon/switches'
 
@@ -63,7 +65,11 @@ export function useAccountSwitcher() {
           message: e.message,
         })
         // HORIZON: an ended session opens the in-place sign-in window; a network failure keeps the stock path
-        if (IN_PLACE_SIGN_IN && isAuthError(e)) {
+        if (e instanceof OAuthSessionBusyError) {
+          // HORIZON: a session busy in another tab is not signed out; stay, undo the URL push, say so
+          if (IS_WEB) history.back()
+          Toast.show(oauthBusyMessage(), {type: 'warning'})
+        } else if (IN_PLACE_SIGN_IN && isAuthError(e)) {
           openInPlaceSignIn(account, {undoUrlPush: IS_WEB})
         } else {
           requestSwitchToAccount({requestedAccount: account.did})

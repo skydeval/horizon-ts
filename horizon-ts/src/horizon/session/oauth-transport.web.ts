@@ -9,7 +9,12 @@ import {type Agent} from '@atproto/lex'
 import {type OAuthSession} from '@atproto/oauth-client-browser'
 
 import {logger} from '#/logger'
-import {isAuthError, isTokenRefusal} from '#/horizon/session/auth-errors'
+import {
+  isAuthError,
+  isTokenRefusal,
+  OAuthSessionBusyError,
+} from '#/horizon/session/auth-errors'
+import {bounded, OAUTH_WAIT_MS} from '#/horizon/session/bounded'
 import {getOAuthClient} from '#/horizon/session/oauth-client'
 import {reportOAuthSessionLost} from '#/horizon/session/session-death'
 
@@ -34,15 +39,27 @@ const restoreChains = new Map<string, Promise<unknown>>()
  * - `'auto'`: refresh only when the access token has (nearly) expired.
  * - `true`: force a refresh.
  *
- * The refresh is never wrapped in a timeout: refresh tokens are single-use,
- * and abandoning an exchange in flight can lose the session.
+ * A restore waits for the one before it, but at most `OAUTH_WAIT_MS`: one
+ * stuck on the library's lock (held by a frozen document) must not queue
+ * every later restore behind it forever. Moving on cannot start a second
+ * refresh: the library reads and refreshes only inside its exclusive Web Lock
+ * (see `oauth-lock.ts`), so the next restore waits there and then reads what
+ * the earlier one stored. Nothing here cancels a restore: callers may stop
+ * waiting (`bounded`), but an exchange in flight still completes and is
+ * stored, so a single-use refresh token is never lost.
  */
 export function restoreOAuthSession(
   did: string,
   refresh: boolean | 'auto',
 ): Promise<OAuthSession> {
   const client = getOAuthClient()
-  const result = (restoreChains.get(did) ?? Promise.resolve()).then(() =>
+  const previous = restoreChains.get(did)
+  const turn = previous
+    ? bounded(previous, OAUTH_WAIT_MS, () => new OAuthSessionBusyError()).catch(
+        () => {},
+      )
+    : Promise.resolve()
+  const result = turn.then(() =>
     client.restore(did, refresh === 'auto' ? undefined : refresh),
   )
   const chain = result.catch(() => {})
@@ -63,10 +80,11 @@ type ProbeState = {
 const probes = new Map<string, ProbeState>()
 
 /**
- * Forget the 401 probe bookkeeping (tests).
+ * Forget the 401 probe bookkeeping and the restore queue (tests).
  */
 export function resetOAuthTransportProbes() {
   probes.clear()
+  restoreChains.clear()
 }
 
 async function readXrpcError(response: Response): Promise<string | undefined> {
@@ -137,6 +155,36 @@ async function onPdsUnauthorized(
 }
 
 /**
+ * Resolves when the page is shown again, while it is going into the
+ * back/forward cache; undefined otherwise.
+ */
+let pageShown: Promise<void> | undefined
+let showPage: (() => void) | undefined
+
+/**
+ * Once the page is leaving for the back/forward cache, new requests wait for
+ * it to be shown again before they restore: a restore started now could take
+ * the library's lock and then be frozen holding it, which stalls every other
+ * Horizon page's restore of this account (the back/forward-cache sign-in
+ * hang). Requests already past their restore are not affected.
+ */
+function watchPageCache() {
+  if (typeof window === 'undefined' || !window.addEventListener) return
+  window.addEventListener('pagehide', event => {
+    if (!event.persisted || pageShown) return
+    pageShown = new Promise(resolve => {
+      showPage = resolve
+    })
+  })
+  window.addEventListener('pageshow', () => {
+    showPage?.()
+    pageShown = undefined
+    showPage = undefined
+  })
+}
+watchPageCache()
+
+/**
  * Build the transport for `did`. Each request restores the session from the
  * shared store first, so a tab always signs with the DPoP key the store holds
  * now (a re-authorization in another tab is honoured), then hands the request
@@ -153,6 +201,12 @@ export function createOAuthTransport(
     async fetchHandler(path, init) {
       if (lifecycle.killed) {
         throw new Error('session disposed')
+      }
+      if (pageShown) {
+        await pageShown
+        if (lifecycle.killed) {
+          throw new Error('session disposed')
+        }
       }
       let session: OAuthSession
       try {

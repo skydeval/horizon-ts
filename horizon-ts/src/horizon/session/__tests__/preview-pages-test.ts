@@ -67,6 +67,40 @@ describe('preview build packaging', () => {
     expect(block).toContain('Cache-Control: no-cache')
   })
 
+  it('the app document is never stored, so it stays out of the back/forward cache', () => {
+    const blocks = PAGES_HEADERS.split('\n\n')
+    // `/`, `/index.html` and every deep path the fallback answers match `/*`.
+    const every = blocks.find(b => b.startsWith('/*\n'))
+    expect(every).toContain('Cache-Control: no-store')
+    expect(blocks[0]).toBe(every)
+    // Every other block is for files, never for the app's routes.
+    const others = blocks.slice(1).map(b => b.split('\n')[0])
+    expect(others).toEqual([
+      '/oauth-client-metadata.json',
+      '/_expo/static/*',
+      '/assets/*',
+      '/assets/vendor/kryphocron-web/*',
+    ])
+  })
+
+  it('files keep their own caching, with the no-store detached first', () => {
+    const blocks = PAGES_HEADERS.split('\n\n').slice(1)
+    for (const block of blocks) {
+      const lines = block.split('\n').map(line => line.trim())
+      const detach = lines.indexOf('! Cache-Control')
+      expect(detach).toBeGreaterThan(0)
+      const set = lines.findIndex(line => line.startsWith('Cache-Control:'))
+      if (set !== -1) expect(set).toBeGreaterThan(detach)
+      expect(block).not.toContain('no-store')
+    }
+    const hashed = blocks.find(b => b.startsWith('/_expo/static/*\n'))
+    expect(hashed).toContain(
+      'Cache-Control: public, max-age=31536000, immutable',
+    )
+    const assets = blocks.find(b => b.startsWith('/assets/*\n'))
+    expect(assets?.trim().split('\n')).toHaveLength(2)
+  })
+
   it('the private post encoder is served as WebAssembly and cached for good', () => {
     const block = PAGES_HEADERS.split('\n\n').find(b =>
       b.startsWith('/assets/vendor/kryphocron-web/*\n'),
