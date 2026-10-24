@@ -19,7 +19,7 @@
 // Registers the toast for refused choices.
 import './toasts'
 
-import {ActivityIndicator, View} from 'react-native'
+import {ActivityIndicator, StyleSheet, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {sanitizeHandle} from '#/lib/strings/handles'
@@ -74,7 +74,7 @@ export function PostingAsControl({
 }
 
 /** The posting account's avatar, or its single chosen member's. */
-function PostingAvatar() {
+function PostingAvatar({inTrigger = false}: {inTrigger?: boolean}) {
   const s = usePostingState()
   const {data: profile} = useProfileQuery({did: s.did})
   const single =
@@ -90,7 +90,8 @@ function PostingAvatar() {
       avatar={avatar}
       size={42}
       type={profile?.associated?.labeler ? 'labeler' : 'user'}
-      style={[a.mt_xs]}
+      // In the trigger the slot carries the stock top margin.
+      style={inTrigger ? undefined : [a.mt_xs]}
     />
   )
 }
@@ -118,24 +119,53 @@ function PostingMenu({
   const atCap = s.members.length >= MAX_FRONTERS
   const isCurrent = !isPostingAsOther(s)
 
+  const label = l`Posting as @${handle}, change account or members`
+
   return (
-    <>
+    /*
+     * The slot is the stock avatar's exact footprint (42x42 below `mt_xs`),
+     * so the text input beside it keeps its place. The 44x44 trigger is laid
+     * over it and the chevron is a badge on the avatar's corner, neither
+     * taking room in the row.
+     */
+    <View testID="composerPostingAsSlot" style={[a.mt_xs, styles.slot]}>
       <Menu.Root>
-        <Menu.Trigger label={l`Posting as @${handle}`}>
-          {({props}) => (
+        <Menu.Trigger label={label}>
+          {({props, state}) => (
             <Button
               {...props}
               testID="composerPostingAsButton"
-              label={l`Posting as @${handle}`}
+              label={label}
               accessibilityHint={l`Opens a menu to choose who this post is from`}
-              style={[a.mt_xs, a.p_0, a.bg_transparent]}>
-              <View style={[a.flex_row, a.align_end]}>
-                <PostingAvatar />
+              style={[a.rounded_full, a.bg_transparent, styles.target]}>
+              <PostingAvatar inTrigger />
+              <View
+                testID="composerPostingAsChevron"
+                pointerEvents="none"
+                style={[
+                  a.align_center,
+                  a.justify_center,
+                  a.rounded_full,
+                  a.border,
+                  t.atoms.bg,
+                  t.atoms.border_contrast_low,
+                  styles.badge,
+                ]}>
                 <TinyChevronIcon
                   size="xs"
-                  style={[t.atoms.text_contrast_medium, {marginLeft: -4}]}
+                  style={[t.atoms.text_contrast_medium]}
                 />
               </View>
+              {state.focused ? (
+                <View
+                  pointerEvents="none"
+                  style={[
+                    a.rounded_full,
+                    styles.ring,
+                    {borderColor: t.palette.primary_500},
+                  ]}
+                />
+              ) : null}
             </Button>
           )}
         </Menu.Trigger>
@@ -213,9 +243,47 @@ function PostingMenu({
       {isCurrent && s.currentDid && PLURAL_EDITING ? (
         <FrontSwitcherDialog control={frontControl} did={s.currentDid} />
       ) : null}
-    </>
+    </View>
   )
 }
+
+const AVATAR = 42
+const TARGET = 44
+
+const styles = StyleSheet.create({
+  slot: {
+    position: 'relative',
+    flexShrink: 0,
+    width: AVATAR,
+    height: AVATAR,
+  },
+  /** Centred on the avatar, one point past each edge, out of the flow. */
+  target: {
+    position: 'absolute',
+    top: (AVATAR - TARGET) / 2,
+    left: (AVATAR - TARGET) / 2,
+    width: TARGET,
+    height: TARGET,
+    padding: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+  },
+  badge: {
+    position: 'absolute',
+    right: -1,
+    bottom: -1,
+    width: 16,
+    height: 16,
+  },
+  ring: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 2,
+  },
+})
 
 function MemberItem({
   member,
