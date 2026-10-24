@@ -18,7 +18,7 @@
 #   silonew-dev.sh logs                   follow the log
 set -euo pipefail
 
-NODE_VERSION="24.21.0"
+NODE_VERSION="24.22.1"
 PNPM_VERSION="11.28.5"
 BASE="$HOME/horizon"
 APP="$BASE/horizon-ts"

@@ -24,7 +24,7 @@
 # an earlier `npx wrangler login`. The token is never printed.
 set -euo pipefail
 
-NODE_VERSION="24.21.0"
+NODE_VERSION="24.22.1"
 BASE="$HOME/horizon"
 APP="$BASE/horizon-ts"
 NODE_DIR="$HOME/.local/node-v$NODE_VERSION"
