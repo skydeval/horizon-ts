@@ -40,7 +40,8 @@ export function RepostButtonMenu({
 
   return hasSession ? (
     <EventStopper onKeyDown={false}>
-      <Menu.Root>
+      {/* HORIZON: the page keeps scrolling while this menu is open on web */}
+      <Menu.Root modal={false}>
         <Menu.Trigger label={l`Repost or quote post`}>
           {({props}) => (
             <PostControlButton

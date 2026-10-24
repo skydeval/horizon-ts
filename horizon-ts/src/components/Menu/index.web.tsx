@@ -1,4 +1,11 @@
-import {forwardRef, useCallback, useId, useMemo, useState} from 'react'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react'
 import {Pressable, type StyleProp, type TextStyle, View} from 'react-native'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
@@ -55,8 +62,17 @@ export function useMenuControl(): Dialog.DialogControlProps {
 export function Root({
   children,
   control,
+  modal = true,
 }: React.PropsWithChildren<{
   control?: Dialog.DialogControlProps
+  /**
+   * Radix's modal mode locks page scroll (react-remove-scroll hides the
+   * window scrollbar and swallows wheel and touch scrolling outside the
+   * menu). Pass `false` to leave the page scrollable; the menu then closes
+   * when the window scrolls, and still closes on Escape or an outside click.
+   * Ignored on native.
+   */
+  modal?: boolean
 }>) {
   const {_} = useLingui()
   const defaultControl = useMenuControl()
@@ -77,6 +93,16 @@ export function Root({
     [context.control],
   )
 
+  const isOpen = context.control.isOpen
+  const close = context.control.close
+  useEffect(() => {
+    if (modal || !isOpen) return
+    // Element scroll events don't bubble to window, so a menu scrolling its own items stays open.
+    const onScroll = () => close()
+    window.addEventListener('scroll', onScroll, {passive: true})
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [modal, isOpen, close])
+
   return (
     <Context.Provider value={context}>
       {context.control.isOpen && (
@@ -93,7 +119,8 @@ export function Root({
       )}
       <DropdownMenu.Root
         open={context.control.isOpen}
-        onOpenChange={onOpenChange}>
+        onOpenChange={onOpenChange}
+        modal={modal}>
         {children}
       </DropdownMenu.Root>
     </Context.Provider>

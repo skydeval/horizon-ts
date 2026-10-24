@@ -50,6 +50,8 @@ export function Root({
   control,
 }: React.PropsWithChildren<{
   control?: Dialog.DialogControlProps
+  /** Web only, see the web `Root`. */
+  modal?: boolean
 }>) {
   const defaultControl = Dialog.useDialogControl()
   const context = useMemo<ContextType>(
