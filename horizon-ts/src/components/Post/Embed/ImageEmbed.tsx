@@ -1,5 +1,5 @@
 import {useRef} from 'react'
-import {InteractionManager, View} from 'react-native'
+import {View} from 'react-native'
 import {type AnimatedRef} from 'react-native-reanimated'
 import {Image} from 'expo-image'
 
@@ -110,7 +110,7 @@ export function ImageEmbed({
       // HORIZON: covered images are left out of the lightbox (end)
     }
     const onPressIn = (_: number) => {
-      InteractionManager.runAfterInteractions(() => {
+      setImmediate(() => {
         void Image.prefetch(
           items.map(i => i.uri),
           'memory',

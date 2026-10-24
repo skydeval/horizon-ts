@@ -218,6 +218,22 @@ export function useMediaSpoilerCell(
 }
 
 /**
+ * A gallery slide's label while its image is covered: the cover's label in
+ * place of the alt text, or undefined when the slide is not covered. For the
+ * gallery, which names its slides above the cells.
+ */
+export function useMediaSpoilerSlideLabel(): (
+  thumb: string,
+) => string | undefined {
+  const scope = useMediaSpoilerScope()
+  const {coverLabel} = useMediaSpoilerCell(undefined)
+  return thumb =>
+    scope && scope.flaggedThumb(thumb) && scope.coveredThumb(thumb)
+      ? coverLabel
+      : undefined
+}
+
+/**
  * The video's autoplay is held: item 0 of the scope is flagged, covered or
  * revealed (6.5). Hooks MS 32 and MS 34.
  */

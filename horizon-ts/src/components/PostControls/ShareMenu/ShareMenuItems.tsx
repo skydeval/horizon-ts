@@ -75,7 +75,7 @@ let ShareMenuItems = ({
   }
 
   const onCopyLink = async () => {
-    ax.metric('share:press:copyLink', {})
+    ax.metric('share:press:copyLink', {uri: postUri})
     const url = toShareUrl(href)
     if (IS_IOS) {
       // iOS only
