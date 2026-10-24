@@ -39,8 +39,13 @@ const DEFAULTS: Record<Features, unknown> = {
   [Features.AtmosphereScreenEnable]: false,
   // Bluesky beta, on in Horizon: "Redesigned notifications"
   [Features.NotificationsV2Enable]: true,
-  // Profile links, public default true (read 2026-10-24); see docs/internal/notes/upstream-profile-links-audit.md
-  [Features.ProfileLinksEnable]: true,
+  /*
+   * Profile links: Bluesky's public default is true (read 2026-10-24), but
+   * off in Horizon until the link editor stops fetching payment pages (the
+   * title of an unrecognised PayPal URL is saved into the public record).
+   * See docs/internal/notes/upstream-profile-links-audit.md.
+   */
+  [Features.ProfileLinksEnable]: false,
   [Features.StarterPacksConfig]: {limit: 150},
   [Features.TrendingDiscoverValues]: {topics: 5, accounts: 15, videos: 30},
   [Features.TrendingExploreTopicsCountValue]: 5,
