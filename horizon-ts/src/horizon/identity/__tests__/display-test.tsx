@@ -336,11 +336,10 @@ afterEach(() => {
 })
 
 describe('the author line (ID-1, ID-2, 6.3, 6.5)', () => {
-  it('names two fronters with one & that is never read, the label in words, and no pronouns', async () => {
+  it('names two fronters as "Wren & Sparrow", the label in words, and no pronouns', async () => {
     meta(postWith([SPARROW, WREN]))
     await advance()
-    expectText(nameLink(), 'Wren, Sparrow&')
-    expect(screen.getByText('&').props.accessible).toBe(false)
+    expectText(nameLink(), 'Wren & Sparrow')
     expect(plain(nameLink().props.accessibilityLabel)).toBe(
       'Wren, she/her and Sparrow, of The Flock, @flock.example',
     )
@@ -351,7 +350,7 @@ describe('the author line (ID-1, ID-2, 6.3, 6.5)', () => {
   it('gives one fronter its pronouns in the account`s place, after the handle', async () => {
     meta(postWith([WREN]))
     await advance()
-    expectText(nameLink(), 'Wren&')
+    expectText(nameLink(), 'Wren')
     expectText(screen.getByTestId('authorPronouns'), 'she/her')
     expect(plain(nameLink().props.accessibilityLabel)).toBe(
       'Wren, of The Flock, @flock.example, she/her',
@@ -367,7 +366,7 @@ describe('the author line (ID-1, ID-2, 6.3, 6.5)', () => {
     expect(plain(nameLink().props.accessibilityLabel)).toBe('View profile')
     world.unknown.clear()
     await advance(31_000)
-    expectText(nameLink(), 'Wren, Sparrow&')
+    expectText(nameLink(), 'Wren & Sparrow')
   })
 
   it('shows the account with no & when no named member is left', async () => {
@@ -397,7 +396,7 @@ describe('the author line (ID-1, ID-2, 6.3, 6.5)', () => {
   it('keeps stock caches clean: pressing the name caches the account`s own profile (PP-14)', async () => {
     meta(postWith([WREN]))
     await advance()
-    expectText(nameLink(), 'Wren&')
+    expectText(nameLink(), 'Wren')
     fireEvent.press(nameLink())
     expect(mockCached).toHaveLength(1)
     expect(mockCached[0]).toBe(author)

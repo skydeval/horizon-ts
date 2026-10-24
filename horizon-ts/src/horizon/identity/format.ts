@@ -13,8 +13,21 @@ import {type Pronouns} from '#/horizon/identity/parse'
 /** The separator between sets: space, U+00B7 MIDDLE DOT, space. */
 export const SET_SEPARATOR = ' · '
 
-/** The marker after fronters' names on posts and the profile header. */
-export const FRONTERS_MARKER = '&'
+/**
+ * The separator before the last of several fronters' names: "Wren & Sparrow",
+ * "Wren, Sparrow & Robin" (skydeval, 2026-10-25, replacing the trailing `&`
+ * marker).
+ */
+export const FRONTERS_LAST_SEPARATOR = ' & '
+
+/**
+ * The separator before fronter `index` of `count`: none before the first,
+ * {@link FRONTERS_LAST_SEPARATOR} before the last, ", " otherwise.
+ */
+export function fronterSeparator(index: number, count: number): string {
+  if (index === 0) return ''
+  return index === count - 1 ? FRONTERS_LAST_SEPARATOR : ', '
+}
 
 /** One set: its forms, trimmed for display, joined with `/`. */
 export function formatSet(forms: readonly string[]): string {
@@ -47,14 +60,14 @@ export function formatPronouns(
 }
 
 /**
- * Fronters' names for an author line or header: joined with ", ", then the
- * `&` marker after the last (6.2, 6.3). Blank names are left out; none left
- * gives `''`.
+ * Fronters' names for an author line or header: "Wren", "Wren & Sparrow",
+ * "Wren, Sparrow & Robin". Blank names are left out; none left gives `''`.
  */
 export function formatFronterNames(names: readonly string[]): string {
   const kept = names.map(name => name.trim()).filter(name => name.length > 0)
-  if (kept.length === 0) return ''
-  return `${kept.join(', ')}${FRONTERS_MARKER}`
+  return kept
+    .map((name, i) => `${fronterSeparator(i, kept.length)}${name}`)
+    .join('')
 }
 
 /** A member's label: its emoji, when set, then its name. */

@@ -14,7 +14,7 @@
  */
 
 import {Fragment} from 'react'
-import {Text as RNText, View} from 'react-native'
+import {View} from 'react-native'
 import {moderateProfile, type ModerationUI} from '@bsky/sdk/moderation'
 import {type I18n} from '@lingui/core'
 import {msg} from '@lingui/core/macro'
@@ -25,7 +25,7 @@ import {sanitizeDisplayName} from '#/lib/strings/display-names'
 import {sanitizeHandle} from '#/lib/strings/handles'
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {atoms as a, native, web} from '#/alf'
-import {formatSets, FRONTERS_MARKER} from '#/horizon/identity/format'
+import {formatSets, fronterSeparator} from '#/horizon/identity/format'
 import {type PostFronter, usePostFronters} from '#/horizon/identity/hooks'
 import {PRONOUNS} from '#/horizon/switches'
 
@@ -98,12 +98,11 @@ export function FronterName({
     <>
       {fronters.map((fronter, i) => (
         <Fragment key={fronter.rkey}>
-          {i > 0 ? ', ' : null}
+          {fronterSeparator(i, fronters.length) || null}
           <MemberSwatch color={fronter.member.color} />
           {forceLTR(memberName(fronter))}
         </Fragment>
       ))}
-      <RNText accessible={false}>{FRONTERS_MARKER}</RNText>
     </>
   )
 }

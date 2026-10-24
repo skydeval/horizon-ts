@@ -337,7 +337,7 @@ describe('the profile header (ID-17, ID-17a, 6.2)', () => {
     header()
     await advance()
     expect(textOf(screen.getByTestId('profileHeaderDisplayName'))).toBe(
-      'Wren& ',
+      'Wren ',
     )
     expect(textOf(screen.getByTestId('profilePronouns'))).toBe('she/her')
     expect(textOf(screen.getByTestId('pluralBadge'))).toBe(
@@ -359,7 +359,7 @@ describe('the profile header (ID-17, ID-17a, 6.2)', () => {
     header()
     await advance()
     expect(textOf(screen.getByTestId('profileHeaderDisplayName'))).toBe(
-      'Wren, Sparrow& ',
+      'Wren & Sparrow ',
     )
     expect(textOf(screen.getByTestId('profilePronouns'))).toBe('it/its')
     const indicator = screen.getByTestId('frontIndicator')

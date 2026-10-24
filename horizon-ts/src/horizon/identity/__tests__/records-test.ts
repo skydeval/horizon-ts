@@ -237,8 +237,11 @@ describe('format', () => {
   })
 
   it('names fronters with ", " and one & after the last', () => {
-    expect(formatFronterNames(['Wren', 'Sparrow'])).toBe('Wren, Sparrow&')
-    expect(formatFronterNames(['Wren'])).toBe('Wren&')
+    expect(formatFronterNames(['Wren', 'Sparrow'])).toBe('Wren & Sparrow')
+    expect(formatFronterNames(['Wren', 'Sparrow', 'Robin'])).toBe(
+      'Wren, Sparrow & Robin',
+    )
+    expect(formatFronterNames(['Wren'])).toBe('Wren')
     expect(formatFronterNames([' '])).toBe('')
     expect(formatMemberLabel({displayName: 'Wren', emoji: '\u{1F426}'})).toBe(
       '\u{1F426} Wren',
