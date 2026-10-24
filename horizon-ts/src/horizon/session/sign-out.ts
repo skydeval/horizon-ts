@@ -12,6 +12,7 @@ import {networkAwareFetch} from '#/state/session/network'
 import {sessionAccountToSessionData} from '#/state/session/session-data'
 import {type SessionAccount} from '#/state/session/types'
 import {IS_NATIVE} from '#/env'
+import {clearMuteCache} from '#/horizon/mutes/cache'
 import {isOauthAccount, isOAuthSignedOut} from '#/horizon/session/accounts'
 import {isAuthError} from '#/horizon/session/auth-errors'
 import {
@@ -124,6 +125,8 @@ export async function horizonSignOut(accounts: SessionAccount[]) {
     clearLensRegistry(dids)
     clearLensRefusals(dids)
     clearLensWaits(dids)
+    // The reader's mutes kept on the device for the lens (`mutes/cache.ts`).
+    clearMuteCache(dids)
   }
   await Promise.all(
     accounts.map(async account => {

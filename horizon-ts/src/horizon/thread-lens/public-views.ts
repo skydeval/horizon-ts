@@ -18,15 +18,27 @@
  *   the lens answer carries every labeler the call named, a post's labels
  *   and its author's are prism's, the lens answer's; the pass's own labels
  *   are added after them only where prism's lack them (see
- *   {@link withLensLabels}). The pass still runs for every reader: mutes,
- *   bookmarks and the viewer state prism does not hold come only from it.
+ *   {@link withLensLabels}).
+ * - Members skip it (2026-10-25): with an answer served as `member`, the
+ *   reader's labels applied and the reader's mutes whole on the device
+ *   (`mutes/cache.ts`), a post node whose prism view is whole
+ *   ({@link isHydratedSafe}) renders from that view with the device's
+ *   mutes applied ({@link hydratedViewOf}), and only the rest go to
+ *   `getPosts`. Visitors, and members without those, keep the pass for
+ *   every post.
  */
 
 import {type Client} from '@atproto/lex'
 import {AtUri} from '@atproto/syntax'
+import {type QueryClient} from '@tanstack/react-query'
 
+import {getMuteCache, type MuteLookup} from '#/horizon/mutes/cache'
 import {fetchPublicPosts} from '#/horizon/private/adapt/feed-view'
 import {readRestored} from '#/horizon/refract/marker'
+import {
+  noteEmbeddingChecked,
+  noteEmbeddingUnchecked,
+} from '#/horizon/thread-lens/embedding'
 import {
   type CheckedNode,
   type CheckedPost,
@@ -197,6 +209,8 @@ type Pooled = {
   did: string
   at: number
   view: Promise<PostView | undefined>
+  /** Set once the request answered. */
+  answered?: {view: PostView | undefined}
 }
 
 const pool = new Map<string, Pooled>()
@@ -234,9 +248,14 @@ export function warmPublicViews(
   const batch = fetchPublicPosts(appview, missing, {strict: true})
   for (const uri of missing) {
     const entry: Pooled = {did, at: now, view: batch.then(map => map.get(uri))}
-    entry.view.catch(() => {
-      if (pool.get(uri) === entry) pool.delete(uri)
-    })
+    entry.view.then(
+      view => {
+        entry.answered = {view}
+      },
+      () => {
+        if (pool.get(uri) === entry) pool.delete(uri)
+      },
+    )
     pool.set(uri, entry)
   }
 }
@@ -249,20 +268,155 @@ function takeEarly(did: string, uri: string, now: number) {
 }
 
 /**
- * The seam for skipping the pass on prism's hydrated view
- * (`threadLens.hydrated`, live; `threadLens.labelers`, live). Still empty,
- * for every reader, members included: with labels and a member's like,
- * repost, counts and `replyDisabled` in the lens answer, what only the pass
- * gives is the reader's mutes (`author.viewer.muted`, `mutedByList`: the
- * AppView's private state, which prism does not hold, and which Horizon has
- * no complete local copy of; `refract/relations.ts` reads at most 10 pages
- * and keeps them an hour), `viewer.bookmarked`, and `embeddingDisabled`
- * where prism stores no postgate. A view returned here renders as it is, so
- * filling the seam also needs those, and a labels read for the posts whose
- * lens labels can be prism's only (log, 2026-10-24).
+ * The early view of `uri` for `did` when it has already answered, taken
+ * once; a member's post that can skip the pass waits for nothing.
  */
-export function hydratedViewOf(_node: CheckedPost): PostView | undefined {
-  return undefined
+function takeAnswered(did: string, uri: string, now: number) {
+  const entry = pooled(did, uri, now)
+  if (!entry?.answered) return undefined
+  pool.delete(uri)
+  return entry.answered
+}
+
+/**
+ * What lets a member's lens posts skip the pass (2026-10-25): the answer was
+ * served as `member` with every labeler the call named applied, and the
+ * device holds the reader's whole mute set. `bookmarked` says whether the
+ * stock bookmarks cache holds a URI, as far as it was read.
+ */
+export type LensHydration = {
+  mutes: MuteLookup
+  bookmarked?: (uri: string) => boolean
+}
+
+/**
+ * The hydration for an answer served as `servedAs`, with `readerLabels`,
+ * for `did`; `undefined` (the pass for every post) for a visitor, an answer
+ * whose labels are not the reader's, or with no whole mute set on the device.
+ */
+export function lensHydrationOf(
+  did: string,
+  {
+    servedAs,
+    readerLabels,
+  }: {servedAs: string | undefined; readerLabels: boolean},
+  bookmarked?: (uri: string) => boolean,
+): LensHydration | undefined {
+  if (servedAs !== 'member' || !readerLabels) return undefined
+  const mutes = getMuteCache(did)
+  if (!mutes || mutes.did !== did) return undefined
+  return {mutes, ...(bookmarked ? {bookmarked} : {})}
+}
+
+/** The embeds whose posts' views are the pass's only (prism's edge 2). */
+const RECORD_EMBEDS = new Set([
+  'app.bsky.embed.record#view',
+  'app.bsky.embed.recordWithMedia#view',
+])
+
+/** Embeds that carry no post, so no labels or viewer state of their own. */
+const MEDIA_EMBEDS = new Set([
+  'app.bsky.embed.images#view',
+  'app.bsky.embed.external#view',
+  'app.bsky.embed.video#view',
+])
+
+/**
+ * Whether prism's view of `node` is whole enough to render for a member
+ * without the pass. Kept to the pass:
+ * - a post with no counts (prism built it from its record, so its labels and
+ *   its author's can be prism's only: edge 1);
+ * - a post with a record embed (the quoted post's labels and author state
+ *   are prism's only: edge 2), or an embed of an unknown kind;
+ * - a post whose `viewer.replyDisabled` prism could not decide (its root not
+ *   a post node of the answer): the pass's is the AppView's;
+ * - a post marked restored (the restored rule compares with the AppView);
+ * - a view missing what renders (cid, record, time, author).
+ * A post by an account prism hosts and a post whose labels read prism could
+ * not finish are not marked by prism, so they skip with prism's labels (no
+ * per-node marker yet; log, 2026-10-25).
+ */
+export function isHydratedSafe(node: CheckedPost): boolean {
+  const post = node.post
+  if (readRestored(post)) return false
+  const author = post.author
+  if (
+    typeof post.cid !== 'string' ||
+    typeof post.indexedAt !== 'string' ||
+    !isObject(post.record) ||
+    !isObject(author) ||
+    typeof author.did !== 'string' ||
+    typeof author.handle !== 'string'
+  ) {
+    return false
+  }
+  for (const count of ['likeCount', 'repostCount', 'replyCount']) {
+    if (typeof post[count] !== 'number') return false
+  }
+  if (post.embed !== undefined) {
+    const type = isObject(post.embed) ? post.embed.$type : undefined
+    if (typeof type !== 'string' || RECORD_EMBEDS.has(type)) return false
+    if (!MEDIA_EMBEDS.has(type)) return false
+  }
+  const viewer = isObject(post.viewer) ? post.viewer : {}
+  return typeof viewer.replyDisabled === 'boolean'
+}
+
+/**
+ * prism's view of a member's post node with the reader's own state the
+ * pass would have given, when it can skip the pass ({@link isHydratedSafe});
+ * otherwise `undefined`.
+ * - `author.viewer.muted` and `mutedByList` from the device's mute set,
+ *   replacing prism's (which knows only mutes made through prism), so
+ *   stock moderation hides and names them as on the stock thread.
+ * - `viewer.bookmarked` when the stock bookmarks cache holds the post; a
+ *   bookmark it has not read shows as not saved until the reader taps it.
+ * - `embeddingDisabled`, when prism did not send it, is left out and the
+ *   URI noted, so quoting it reads its postgate again at send
+ *   (`embedding.ts`).
+ * Labels are the lens answer's (prism's own and the reader's labelers').
+ */
+export function hydratedViewOf(
+  node: CheckedPost,
+  hydration: LensHydration | undefined,
+): PostView | undefined {
+  if (!hydration || !isHydratedSafe(node)) return undefined
+  const post = node.post as unknown as PostView
+  const mute = hydration.mutes.stateOf(post.author.did)
+  const authorViewer = {...post.author.viewer, muted: mute.muted}
+  if (mute.mutedByList) authorViewer.mutedByList = mute.mutedByList
+  else delete authorViewer.mutedByList
+  const viewer = {...post.viewer}
+  if (hydration.bookmarked?.(post.uri)) viewer.bookmarked = true
+  if (typeof viewer.embeddingDisabled === 'boolean') {
+    noteEmbeddingChecked(post.uri)
+  } else {
+    noteEmbeddingUnchecked(post.uri)
+  }
+  return {
+    ...post,
+    author: {...post.author, viewer: authorViewer},
+    viewer,
+  }
+}
+
+/**
+ * Whether the stock bookmarks cache (`useBookmarksQuery`, root `bookmarks`)
+ * holds `uri`, as far as its pages were read. Read from the query client
+ * by key, so this module stays free of the stock module and its session
+ * import.
+ */
+export function bookmarkedInCache(qc: QueryClient, uri: string): boolean {
+  for (const [, data] of qc.getQueriesData<{
+    pages?: {bookmarks?: {subject?: {uri?: unknown}}[]}[]
+  }>({queryKey: ['bookmarks']})) {
+    for (const page of data?.pages ?? []) {
+      if (page.bookmarks?.some(bookmark => bookmark.subject?.uri === uri)) {
+        return true
+      }
+    }
+  }
+  return false
 }
 
 /**
@@ -270,28 +424,42 @@ export function hydratedViewOf(_node: CheckedPost): PostView | undefined {
  * `uris` (`postUrisToRead`). Throws when any `getPosts` batch fails. With
  * `did`, the early views waiting for that account are taken first. With
  * `lensLabels` (the answer's `readerLabels`), the views take the lens
- * answer's labels.
+ * answer's labels. With `hydration` (a member, {@link lensHydrationOf}),
+ * a post node prism's view can stand for ({@link hydratedViewOf}) skips
+ * the pass: it takes its early view only when that has already answered,
+ * else prism's view; no `getPosts` is sent for it.
  */
 export async function readPublicViews(
   appview: Client,
   checked: readonly CheckedNode[],
   uris: readonly string[],
-  {did, lensLabels = false}: {did?: string; lensLabels?: boolean} = {},
+  {
+    did,
+    lensLabels = false,
+    hydration,
+  }: {did?: string; lensLabels?: boolean; hydration?: LensHydration} = {},
 ): Promise<Map<string, PublicOutcome>> {
   const outcomes = new Map<string, PublicOutcome>()
   if (uris.length === 0) return outcomes
   const wanted = new Set(uris)
   const posts = new Map<string, CheckedPost>()
+  const now = Date.now()
   for (const node of checked) {
     if (node.type !== 'post' || !wanted.has(node.uri)) continue
-    const hydrated = hydratedViewOf(node)
-    if (hydrated) {
-      outcomes.set(node.uri, publicOutcomeOf(node, hydrated))
-    } else {
+    const hydrated = hydratedViewOf(node, hydration)
+    if (!hydrated) {
       posts.set(node.uri, node)
+      continue
+    }
+    const early = did ? takeAnswered(did, node.uri, now) : undefined
+    if (early) {
+      // The AppView's own view, already here: as the pass would have it.
+      if (early.view) noteEmbeddingChecked(node.uri)
+      outcomes.set(node.uri, publicOutcomeOf(node, early.view, {lensLabels}))
+    } else {
+      outcomes.set(node.uri, publicOutcomeOf(node, hydrated))
     }
   }
-  const now = Date.now()
   const early = new Map<string, Promise<PostView | undefined>>()
   const missing: string[] = []
   for (const uri of posts.keys()) {
@@ -317,6 +485,7 @@ export async function readPublicViews(
     for (const uri of retry) views.set(uri, again.get(uri))
   }
   for (const [uri, node] of posts) {
+    if (views.get(uri)) noteEmbeddingChecked(uri)
     outcomes.set(uri, publicOutcomeOf(node, views.get(uri), {lensLabels}))
   }
   return outcomes

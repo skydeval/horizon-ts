@@ -56,6 +56,8 @@ import {
 import {takeWarmLensThread} from '#/horizon/thread-lens/prewarm'
 import {readLensPrivatePart} from '#/horizon/thread-lens/private-part'
 import {
+  bookmarkedInCache,
+  lensHydrationOf,
   readPublicViews,
   warmPublicViews,
 } from '#/horizon/thread-lens/public-views'
@@ -343,11 +345,20 @@ async function readLens(
     })
     throw new LensMalformedError()
   }
+  const lensLabels = answer.readerLabels === true
   const publicPass = readPublicViews(
     clients.appviewClient,
     checked,
     postUrisToRead(EMPTY_BASE, checked),
-    {did, lensLabels: answer.readerLabels === true},
+    {
+      did,
+      lensLabels,
+      hydration: lensHydrationOf(
+        did,
+        {servedAs: answer.servedAs, readerLabels: lensLabels},
+        uri => bookmarkedInCache(options.qc, uri),
+      ),
+    },
   )
   /*
    * The private part (5.5): beside the public-view pass, only for a post
@@ -495,13 +506,15 @@ export async function runLens(
 
 /**
  * The public-view pass and the private quotes for a later response;
- * `lensLabels` when every response read carries the reader's labels.
+ * `lensLabels` when every response read carries the reader's labels, and
+ * `servedAs` `member` when every one was served to a member.
  */
 async function readLater(
+  qc: QueryClient,
   did: string,
   snapshot: LensSnapshot,
   checked: readonly CheckedNode[],
-  lensLabels: boolean,
+  {lensLabels, servedAs}: {lensLabels: boolean; servedAs: string | undefined},
 ) {
   const clients = getCurrentClients()
   if (!clients || clients.did !== did) return undefined
@@ -509,7 +522,14 @@ async function readLater(
     clients.appviewClient,
     checked,
     postUrisToRead(snapshot, checked),
-    {lensLabels},
+    {
+      lensLabels,
+      hydration: lensHydrationOf(
+        did,
+        {servedAs, readerLabels: lensLabels},
+        uri => bookmarkedInCache(qc, uri),
+      ),
+    },
   )
   const views: PostView[] = []
   for (const outcome of outcomes.values()) {
@@ -529,6 +549,7 @@ function errorOutcome(did: string, error: unknown): LensTaskOutcome {
 
 /** The task for one `getThread` continuation (9.2). */
 function continuation(
+  qc: QueryClient,
   params: LensKeyParams,
   uri: string,
   kind: 'replies' | 'parents',
@@ -582,12 +603,10 @@ function continuation(
     const checked = checkLensNodes(answer.nodes)
     let outcomes: Map<string, PublicOutcome> | undefined
     try {
-      outcomes = await readLater(
-        params.did,
-        snapshot,
-        checked,
-        answer.readerLabels === true,
-      )
+      outcomes = await readLater(qc, params.did, snapshot, checked, {
+        lensLabels: answer.readerLabels === true,
+        servedAs: answer.servedAs,
+      })
     } catch (error) {
       return errorOutcome(params.did, error)
     }
@@ -644,7 +663,7 @@ export function loadMoreLensReplies(
   if (!params) return false
   return enqueueLensTask(qc, queueId, {
     uri,
-    run: continuation(params, uri, 'replies', Math.max(1, below - depth)),
+    run: continuation(qc, params, uri, 'replies', Math.max(1, below - depth)),
   })
 }
 
@@ -662,7 +681,7 @@ export function loadEarlierLensPosts(
   if (!params) return false
   return enqueueLensTask(qc, queueId, {
     uri,
-    run: continuation(params, uri, 'parents', 0),
+    run: continuation(qc, params, uri, 'parents', 0),
   })
 }
 
@@ -701,6 +720,7 @@ export function retryLensGaps(
         checked: CheckedNode[]
         bridging: string
         readerLabels: boolean
+        servedAs: string | undefined
       }[] = []
       try {
         for (let i = 0; i < uris.length; i += LENS_RESOLVE_BATCH) {
@@ -713,6 +733,7 @@ export function retryLensGaps(
             checked: checkLensNodes(answer.items),
             bridging: answer.bridging,
             readerLabels: answer.readerLabels === true,
+            servedAs: answer.servedAs,
           })
         }
       } catch (error) {
@@ -721,12 +742,12 @@ export function retryLensGaps(
       const all = batches.flatMap(batch => batch.checked)
       let outcomes: Map<string, PublicOutcome> | undefined
       try {
-        outcomes = await readLater(
-          params.did,
-          snapshot,
-          all,
-          batches.every(batch => batch.readerLabels),
-        )
+        outcomes = await readLater(qc, params.did, snapshot, all, {
+          lensLabels: batches.every(batch => batch.readerLabels),
+          servedAs: batches.every(batch => batch.servedAs === 'member')
+            ? 'member'
+            : undefined,
+        })
       } catch (error) {
         return errorOutcome(params.did, error)
       }

@@ -124,19 +124,22 @@ export function lensThreadBody(request: LensReadRequest): LensThreadBody {
  * A `getThread` answer, its nodes unchecked. `readerLabels`: its post views
  * carry the labels of every labeler the call named (`labelers.ts`), read
  * from the response header and kept on the body so a waiter that takes a
- * lead's answer (`reportedPrismCall`) has it too.
+ * lead's answer (`reportedPrismCall`) has it too. `servedAs`: whose viewer
+ * state the views carry (prism `threadLens.hydrated`), `member` or `visitor`.
  */
 export type LensThreadAnswer = {
   anchor: string
   nodes: unknown[]
   bridging: string
+  servedAs?: string
   readerLabels?: boolean
 }
 
-/** A `resolve` answer, its items unchecked; `readerLabels` as above. */
+/** A `resolve` answer, its items unchecked; the flags as above. */
 export type LensResolveAnswer = {
   items: unknown[]
   bridging: string
+  servedAs?: string
   readerLabels?: boolean
 }
 

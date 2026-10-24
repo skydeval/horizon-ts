@@ -14,6 +14,8 @@ import {until} from '#/lib/async/until'
 import {type ImageMeta} from '#/state/gallery'
 import {STALE} from '#/state/queries'
 import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
+// HORIZON: list mutes made here change the device's copy, which Thread Lens applies
+import {withListMuteNoted} from '#/horizon/mutes/track'
 import {app, com} from '#/lexicons'
 import {FEED_INFO_RQKEY_ROOT} from './feed'
 import {invalidate as invalidateMyLists} from './my-lists'
@@ -360,11 +362,14 @@ export function useListMuteMutation() {
   const appviewClient = useAppviewClient()
   return useMutation<void, Error, {uri: string; mute: boolean}>({
     mutationFn: async ({uri, mute}) => {
-      if (mute) {
-        await appviewClient.call(muteActorList, {list: uri as AtUriString})
-      } else {
-        await appviewClient.call(unmuteActorList, {list: uri as AtUriString})
-      }
+      // HORIZON: the device's mute copy, which Thread Lens applies, changes at once
+      await withListMuteNoted(uri, mute, appviewClient, async () => {
+        if (mute) {
+          await appviewClient.call(muteActorList, {list: uri as AtUriString})
+        } else {
+          await appviewClient.call(unmuteActorList, {list: uri as AtUriString})
+        }
+      })
 
       await whenAppViewReady(appviewClient, uri, v => {
         return Boolean(v?.list.viewer?.muted) === mute

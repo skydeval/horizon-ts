@@ -41,6 +41,8 @@ import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {useAnalytics} from '#/analytics'
 import {type Metrics, toClout} from '#/analytics/metrics'
+// HORIZON: mutes made here change the device's copy, which Thread Lens applies
+import {withAccountMuteNoted} from '#/horizon/mutes/track'
 // HORIZON: a restored account's profile is read from prism when stock fails
 import {refractProfileQuery} from '#/horizon/refract/profile'
 // HORIZON: this session's mutes apply to restored accounts' views
@@ -569,7 +571,10 @@ function useProfileMuteMutation() {
   const appviewClient = useAppviewClient()
   return useMutation({
     mutationFn: async ({did}: {did: DidString}) => {
-      await appviewClient.call(muteActor, {actor: did})
+      // HORIZON: the device's mute copy, which Thread Lens applies, changes at once
+      await withAccountMuteNoted(did, true, () =>
+        appviewClient.call(muteActor, {actor: did}),
+      )
     },
     onSuccess() {
       void queryClient.invalidateQueries({queryKey: RQKEY_MY_MUTED()})
@@ -598,7 +603,10 @@ function useProfileUnmuteMutation() {
   const appviewClient = useAppviewClient()
   return useMutation({
     mutationFn: async ({did}: {did: DidString}) => {
-      await appviewClient.call(unmuteActor, {actor: did})
+      // HORIZON: the device's mute copy, which Thread Lens applies, changes at once
+      await withAccountMuteNoted(did, false, () =>
+        appviewClient.call(unmuteActor, {actor: did}),
+      )
     },
     onSuccess() {
       void queryClient.invalidateQueries({queryKey: RQKEY_MY_MUTED()})

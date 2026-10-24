@@ -417,7 +417,7 @@ describe('labels from the lens answer', () => {
 })
 
 describe('the pass is still needed', () => {
-  it('for a member: mutes and bookmarks come only from the AppView', async () => {
+  it('for a member without the mutes on the device: mutes and bookmarks come from the AppView', async () => {
     listFeature(true)
     const root = view('3kroot2222222')
     const publicAnchor = view('3kanchor22222', {

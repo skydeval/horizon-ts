@@ -617,7 +617,9 @@ export const privateGetReplies = l.query(
  * node is checked where it is read (`thread-lens/nodes.ts`), so one
  * malformed node never fails a response. `bridging` and `gap` are open
  * sets, so plain strings. `truncated` is optional: nothing reads it, and a
- * response without it should not fail as a whole.
+ * response without it should not fail as a whole. `servedAs` (`member` or
+ * `visitor`, prism `threadLens.hydrated`) is optional and open for the same
+ * reason; only `member` lets a member skip the public-view pass.
  */
 
 /** The errors both Thread Lens methods declare. */
@@ -647,6 +649,7 @@ export const threadLensGetThread = l.procedure(
     nodes: l.array(l.lexMap()),
     truncated: l.optional(l.boolean()),
     bridging: l.string(),
+    servedAs: l.optional(l.string()),
   }),
   THREAD_LENS_ERRORS,
 )
@@ -664,6 +667,7 @@ export const threadLensResolve = l.procedure(
   l.jsonPayload({
     items: l.array(l.lexMap()),
     bridging: l.string(),
+    servedAs: l.optional(l.string()),
   }),
   THREAD_LENS_ERRORS,
 )

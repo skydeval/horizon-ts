@@ -10,9 +10,12 @@ import {purgeTemporaryImageFiles} from '#/state/gallery'
 import {
   precacheResolveLinkQuery,
   RQKEY_GIF_ROOT,
+  RQKEY_LINK,
   RQKEY_LINK_ROOT,
 } from '#/state/queries/resolve-link'
 import * as Toast from '#/components/Toast'
+// HORIZON: a lens post's postgate nobody checked is read again at send
+import {isEmbeddingUnchecked} from '#/horizon/thread-lens/embedding'
 import {type app} from '#/lexicons'
 
 export interface ComposerOptsPostRef {
@@ -83,6 +86,13 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
           },
           view: opts.quote,
         })
+        // HORIZON: a lens post's postgate nobody checked is read again at send
+        if (isEmbeddingUnchecked(opts.quote.uri)) {
+          void queryClient.invalidateQueries({
+            queryKey: RQKEY_LINK(appUrl),
+            refetchType: 'none',
+          })
+        }
       }
     }
     const author = opts.replyTo?.author || opts.quote?.author
