@@ -14,6 +14,12 @@
  *   a readable `restored` marker renders from prism's view where the AppView
  *   leaves it out or returns it with Bluesky's `!takedown` or `!hide`. The
  *   block rows still come first. One reader of the marker, `readRestored`.
+ * - The reader's labels (prism `threadLens.labelers`, `labelers.ts`): when
+ *   the lens answer carries every labeler the call named, a post's labels
+ *   and its author's are prism's, the lens answer's; the pass's own labels
+ *   are added after them only where prism's lack them (see
+ *   {@link withLensLabels}). The pass still runs for every reader: mutes,
+ *   bookmarks and the viewer state prism does not hold come only from it.
  */
 
 import {type Client} from '@atproto/lex'
@@ -100,13 +106,59 @@ function blockOutcome(view: PostView): PublicOutcome | undefined {
   return undefined
 }
 
+type Label = Record<string, unknown>
+
+function labelsOf(value: unknown): Label[] {
+  return Array.isArray(value) ? value.filter(isObject) : []
+}
+
+/** prism's rule (`same_label`): the same `src`, `uri`, `val` and `neg`. */
+function sameLabel(a: Label, b: Label): boolean {
+  return (
+    a.src === b.src && a.uri === b.uri && a.val === b.val && !a.neg === !b.neg
+  )
+}
+
+/** `first`'s labels, then those of `then` not among them. */
+function mergedLabels(first: unknown, then: unknown): Label[] {
+  const out = [...labelsOf(first)]
+  for (const label of labelsOf(then)) {
+    if (!out.some(held => sameLabel(held, label))) out.push(label)
+  }
+  return out
+}
+
+/**
+ * The public view with the lens answer's labels on the post and its author
+ * (`threadLens.labelers`), then any of the view's own that prism's lack.
+ * prism's carry its own labels and the reader's labelers'; the view's are
+ * kept after them because some posts reach the lens answer with prism's
+ * labels only and nothing marks them (a post built from its record, an
+ * account prism hosts while public indexing is on, a labels read prism could
+ * not finish), and the pass's getPosts is sent with the reader's header
+ * anyway. A quoted post's labels are the view's embed, as before.
+ */
+export function withLensLabels(view: PostView, node: CheckedPost): PostView {
+  const author = isObject(node.post.author) ? node.post.author : {}
+  return {
+    ...view,
+    labels: mergedLabels(node.post.labels, view.labels),
+    author: {
+      ...view.author,
+      labels: mergedLabels(author.labels, view.author.labels),
+    },
+  } as PostView
+}
+
 /**
  * The outcome for one post node given the public AppView's answer (the
- * table of 6.3 and the restored exception).
+ * table of 6.3 and the restored exception). With `lensLabels`, a rendered
+ * public view takes the lens answer's labels ({@link withLensLabels}).
  */
 export function publicOutcomeOf(
   node: CheckedPost,
   view: PostView | undefined,
+  {lensLabels = false}: {lensLabels?: boolean} = {},
 ): PublicOutcome {
   if (view) {
     const block = blockOutcome(view)
@@ -116,7 +168,9 @@ export function publicOutcomeOf(
   if (restored && (!view || strippedUpstream(view))) {
     return {kind: 'restored', view: restored}
   }
-  if (view) return {kind: 'view', view}
+  if (view) {
+    return {kind: 'view', view: lensLabels ? withLensLabels(view, node) : view}
+  }
   return {kind: 'gap', gap: 'content-stripped'}
 }
 
@@ -195,11 +249,17 @@ function takeEarly(did: string, uri: string, now: number) {
 }
 
 /**
- * The seam for prism's hydrated lens answer (`threadLens.hydrated`, prism
- * chainlink #878; not live, nothing built against it): once prism lists the
- * feature, a post node whose view is hydrated (and, for a member, carries
- * known viewer state) renders from prism's view and skips the AppView. Until
- * then every post node goes to the pass.
+ * The seam for skipping the pass on prism's hydrated view
+ * (`threadLens.hydrated`, live; `threadLens.labelers`, live). Still empty,
+ * for every reader, members included: with labels and a member's like,
+ * repost, counts and `replyDisabled` in the lens answer, what only the pass
+ * gives is the reader's mutes (`author.viewer.muted`, `mutedByList`: the
+ * AppView's private state, which prism does not hold, and which Horizon has
+ * no complete local copy of; `refract/relations.ts` reads at most 10 pages
+ * and keeps them an hour), `viewer.bookmarked`, and `embeddingDisabled`
+ * where prism stores no postgate. A view returned here renders as it is, so
+ * filling the seam also needs those, and a labels read for the posts whose
+ * lens labels can be prism's only (log, 2026-10-24).
  */
 export function hydratedViewOf(_node: CheckedPost): PostView | undefined {
   return undefined
@@ -208,13 +268,15 @@ export function hydratedViewOf(_node: CheckedPost): PostView | undefined {
 /**
  * The public-view pass over the post nodes of `checked` whose URI is in
  * `uris` (`postUrisToRead`). Throws when any `getPosts` batch fails. With
- * `did`, the early views waiting for that account are taken first.
+ * `did`, the early views waiting for that account are taken first. With
+ * `lensLabels` (the answer's `readerLabels`), the views take the lens
+ * answer's labels.
  */
 export async function readPublicViews(
   appview: Client,
   checked: readonly CheckedNode[],
   uris: readonly string[],
-  {did}: {did?: string} = {},
+  {did, lensLabels = false}: {did?: string; lensLabels?: boolean} = {},
 ): Promise<Map<string, PublicOutcome>> {
   const outcomes = new Map<string, PublicOutcome>()
   if (uris.length === 0) return outcomes
@@ -255,7 +317,7 @@ export async function readPublicViews(
     for (const uri of retry) views.set(uri, again.get(uri))
   }
   for (const [uri, node] of posts) {
-    outcomes.set(uri, publicOutcomeOf(node, views.get(uri)))
+    outcomes.set(uri, publicOutcomeOf(node, views.get(uri), {lensLabels}))
   }
   return outcomes
 }

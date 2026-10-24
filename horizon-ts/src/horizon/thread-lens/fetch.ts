@@ -347,7 +347,7 @@ async function readLens(
     clients.appviewClient,
     checked,
     postUrisToRead(EMPTY_BASE, checked),
-    {did},
+    {did, lensLabels: answer.readerLabels === true},
   )
   /*
    * The private part (5.5): beside the public-view pass, only for a post
@@ -493,11 +493,15 @@ export async function runLens(
  * is still the run the task started on (9.1).
  */
 
-/** The public-view pass and the private quotes for a later response. */
+/**
+ * The public-view pass and the private quotes for a later response;
+ * `lensLabels` when every response read carries the reader's labels.
+ */
 async function readLater(
   did: string,
   snapshot: LensSnapshot,
   checked: readonly CheckedNode[],
+  lensLabels: boolean,
 ) {
   const clients = getCurrentClients()
   if (!clients || clients.did !== did) return undefined
@@ -505,6 +509,7 @@ async function readLater(
     clients.appviewClient,
     checked,
     postUrisToRead(snapshot, checked),
+    {lensLabels},
   )
   const views: PostView[] = []
   for (const outcome of outcomes.values()) {
@@ -577,7 +582,12 @@ function continuation(
     const checked = checkLensNodes(answer.nodes)
     let outcomes: Map<string, PublicOutcome> | undefined
     try {
-      outcomes = await readLater(params.did, snapshot, checked)
+      outcomes = await readLater(
+        params.did,
+        snapshot,
+        checked,
+        answer.readerLabels === true,
+      )
     } catch (error) {
       return errorOutcome(params.did, error)
     }
@@ -687,7 +697,11 @@ export function retryLensGaps(
         .map(node => node.uri)
       if (uris.length === 0) return {kind: 'none'}
       const before = snapshot.nodes.get(uri)
-      const batches: {checked: CheckedNode[]; bridging: string}[] = []
+      const batches: {
+        checked: CheckedNode[]
+        bridging: string
+        readerLabels: boolean
+      }[] = []
       try {
         for (let i = 0; i < uris.length; i += LENS_RESOLVE_BATCH) {
           const answer = await resolveLens(
@@ -698,6 +712,7 @@ export function retryLensGaps(
           batches.push({
             checked: checkLensNodes(answer.items),
             bridging: answer.bridging,
+            readerLabels: answer.readerLabels === true,
           })
         }
       } catch (error) {
@@ -706,7 +721,12 @@ export function retryLensGaps(
       const all = batches.flatMap(batch => batch.checked)
       let outcomes: Map<string, PublicOutcome> | undefined
       try {
-        outcomes = await readLater(params.did, snapshot, all)
+        outcomes = await readLater(
+          params.did,
+          snapshot,
+          all,
+          batches.every(batch => batch.readerLabels),
+        )
       } catch (error) {
         return errorOutcome(params.did, error)
       }

@@ -10,7 +10,9 @@
  * as for any prism read. Every write here (the refusal record, the wait, the
  * membership report) is for the DID of the key the call was made for, never
  * `getCurrentDid()`, so a call of account A that answers after a switch to B
- * moves only A's stores (v8: R6-N3).
+ * moves only A's stores (v8: R6-N3). With `threadLens.labelers` listed,
+ * both calls carry the stock reads' `atproto-accept-labelers`, and the
+ * answer says whether prism applied every labeler named (`labelers.ts`).
  *
  * The wait: prism limits lens calls per account, so one "not before" time is
  * held per DID. Until it passes, a lens call fails at once with
@@ -35,6 +37,12 @@ import {
   LENS_RESOLVE_LXM,
   sendLensCall,
 } from '#/horizon/thread-lens/direct'
+import {
+  ACCEPT_LABELERS,
+  CONTENT_LABELERS,
+  lensLabelersHeader,
+  lensLabelsApplied,
+} from '#/horizon/thread-lens/labelers'
 
 /** The wait after a 429 that names none (11.5). */
 export const LENS_RATE_LIMIT_FALLBACK_MS = 10_000
@@ -112,15 +120,30 @@ export function lensThreadBody(request: LensReadRequest): LensThreadBody {
   }
 }
 
-/** A `getThread` answer, its nodes unchecked. */
+/**
+ * A `getThread` answer, its nodes unchecked. `readerLabels`: its post views
+ * carry the labels of every labeler the call named (`labelers.ts`), read
+ * from the response header and kept on the body so a waiter that takes a
+ * lead's answer (`reportedPrismCall`) has it too.
+ */
 export type LensThreadAnswer = {
   anchor: string
   nodes: unknown[]
   bridging: string
+  readerLabels?: boolean
 }
 
-/** A `resolve` answer, its items unchecked. */
-export type LensResolveAnswer = {items: unknown[]; bridging: string}
+/** A `resolve` answer, its items unchecked; `readerLabels` as above. */
+export type LensResolveAnswer = {
+  items: unknown[]
+  bridging: string
+  readerLabels?: boolean
+}
+
+/** The call options that send `labelers`, the header value, if any. */
+function labelersOptions(labelers: string | undefined) {
+  return labelers ? {headers: {[ACCEPT_LABELERS]: labelers}} : {}
+}
 
 /**
  * A lens call made during the account's wait (11.5): it asked prism
@@ -407,16 +430,32 @@ export async function getLensThread(
     ...body,
     anchor: body.anchor as AtUriString,
   }
+  const labelers = lensLabelersHeader(did)
   try {
     const res = await reportedPrismCall(nearhorizon.threadLensGetThread, {
       did,
       params: input,
       signal,
       send: callSignal =>
-        sendLensCall(prism, did, LENS_GET_THREAD_LXM, callSignal, client =>
-          client.call(nearhorizon.threadLensGetThread, input, {
-            signal: callSignal,
-          }),
+        sendLensCall(
+          prism,
+          did,
+          LENS_GET_THREAD_LXM,
+          callSignal,
+          async client => {
+            const answer = await client.xrpc(nearhorizon.threadLensGetThread, {
+              body: input,
+              signal: callSignal,
+              ...labelersOptions(labelers),
+            })
+            return {
+              ...answer.body,
+              readerLabels: lensLabelsApplied(
+                labelers,
+                answer.headers.get(CONTENT_LABELERS),
+              ),
+            }
+          },
         ),
     })
     return res.body
@@ -441,17 +480,27 @@ export async function resolveLens(
 ): Promise<LensResolveAnswer> {
   throwIfWaiting(did)
   const input = {uris: uris.slice(0, LENS_RESOLVE_BATCH) as AtUriString[]}
+  const labelers = lensLabelersHeader(did)
   try {
     const res = await reportedPrismCall(nearhorizon.threadLensResolve, {
       did,
       params: input,
       signal,
       send: callSignal =>
-        sendLensCall(prism, did, LENS_RESOLVE_LXM, callSignal, client =>
-          client.call(nearhorizon.threadLensResolve, input, {
+        sendLensCall(prism, did, LENS_RESOLVE_LXM, callSignal, async client => {
+          const answer = await client.xrpc(nearhorizon.threadLensResolve, {
+            body: input,
             signal: callSignal,
-          }),
-        ),
+            ...labelersOptions(labelers),
+          })
+          return {
+            ...answer.body,
+            readerLabels: lensLabelsApplied(
+              labelers,
+              answer.headers.get(CONTENT_LABELERS),
+            ),
+          }
+        }),
     })
     return res.body
   } catch (error) {

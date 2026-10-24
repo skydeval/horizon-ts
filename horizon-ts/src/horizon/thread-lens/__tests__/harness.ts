@@ -143,6 +143,8 @@ export type Call = {
   nsid: string
   params: URLSearchParams
   body: Record<string, unknown> | undefined
+  /** The request's headers, as the client sent them. */
+  headers: Headers
 }
 
 /** A fake server's reply: status, JSON body and headers, or a network error. */
@@ -170,7 +172,12 @@ export function server(
             unknown
           >
         }
-        const call = {nsid, params: url.searchParams, body}
+        const call = {
+          nsid,
+          params: url.searchParams,
+          body,
+          headers: new Headers(init.headers),
+        }
         calls.push(call)
         const reply = (await handler(call)) ?? {
           status: 501,

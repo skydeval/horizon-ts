@@ -91,6 +91,12 @@ export const PRISM_FEATURES = [
    */
   'threadLens',
   'threadLens.signedIn',
+  /*
+   * prism honours `atproto-accept-labelers` on the lens calls (prism #887):
+   * Horizon sends the stock reads' value and takes labels from the answer
+   * (`thread-lens/labelers.ts`).
+   */
+  'threadLens.labelers',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]
