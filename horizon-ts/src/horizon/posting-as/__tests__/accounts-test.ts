@@ -68,6 +68,7 @@ import {i18n} from '@lingui/core'
 import {QueryClient} from '@tanstack/react-query'
 
 import {type PostOpts} from '#/lib/api/index'
+import {buildAppviewClient} from '#/state/session/clients'
 import {type State} from '#/state/session/reducer'
 import {type SessionAccount} from '#/state/session/types'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
@@ -100,7 +101,7 @@ import {
   registerStoredAccountSink,
   updatedStoredAccount,
 } from '#/horizon/session/stored-account'
-import {com} from '#/lexicons'
+import {app, chat, com} from '#/lexicons'
 import {postingRoutesFor} from '../routes'
 import {
   acquireTemporaryClient,
@@ -304,6 +305,54 @@ describe('the temporary client (PP-16)', () => {
     releaseTemporaryClient(OTHER)
     expect(ownClientFor(OTHER)).toBeUndefined()
     expect(acquireTemporaryClient(OTHER, {identity: false})).toBe(held)
+  })
+
+  it('sends no per-install device or session id as the other account; the current account’s AppView client still does (SA-12)', async () => {
+    const sent: Headers[] = []
+    const ok = () =>
+      Promise.resolve(
+        new Response(JSON.stringify({}), {
+          status: 200,
+          headers: {'content-type': 'application/json'},
+        }),
+      )
+    mockFetch = (_input, init) => {
+      sent.push(new Headers(init?.headers))
+      return ok()
+    }
+    const clients = acquireTemporaryClient(OTHER, {identity: false})
+    await clients.appviewClient
+      .call(app.bsky.actor.getProfile, {actor: OTHER})
+      .catch(() => {})
+    await clients.chatClient
+      .call(chat.bsky.convo.listConvos, {})
+      .catch(() => {})
+    await clients.pdsClient
+      .call(com.atproto.server.getSession, {})
+      .catch(() => {})
+    releaseTemporaryClient(OTHER, {identity: false})
+    expect(sent).toHaveLength(3)
+    for (const headers of sent) {
+      expect(headers.get('authorization')).toMatch(/^Bearer /)
+      expect(headers.has('x-atproto-device-id')).toBe(false)
+      expect(headers.has('x-atproto-session-id')).toBe(false)
+    }
+
+    // The current account's own AppView client keeps them (SQ-10 decides that).
+    const own: Headers[] = []
+    const current = buildAppviewClient({
+      did: MAIN,
+      fetchHandler: (_path, init) => {
+        own.push(new Headers(init.headers))
+        return ok()
+      },
+    })
+    await current
+      .call(app.bsky.actor.getProfile, {actor: MAIN})
+      .catch(() => {})
+    expect(own).toHaveLength(1)
+    expect(own[0].get('x-atproto-device-id')).toBe('device-id-1')
+    expect(own[0].get('x-atproto-session-id')).toBe('session-id-1')
   })
 
   it('an account that cannot act is refused', () => {

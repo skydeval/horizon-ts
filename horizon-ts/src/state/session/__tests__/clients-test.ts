@@ -126,6 +126,20 @@ describe('buildAppviewClient', () => {
     expect(headers.get('x-atproto-session-id')).toBe('session-456')
   })
 
+  // HORIZON: another account's client sends no per-install ids (SA-12)
+  it('emits no device or session header for another account', async () => {
+    const client = buildAppviewClient(makeSession(fetchMock), {
+      deviceHeaders: false,
+    })
+
+    await client.call(app.bsky.actor.getProfile, {actor: HANDLE})
+
+    const headers = headersFor(fetchMock, 'app.bsky.actor.getProfile')
+    expect(headers.get('atproto-proxy')).toBe(BLUESKY_PROXY_HEADER.get())
+    expect(headers.get('x-atproto-device-id')).toBeNull()
+    expect(headers.get('x-atproto-session-id')).toBeNull()
+  })
+
   it('emits an account subscription exactly once', async () => {
     const client = buildAppviewClient(makeSession(fetchMock))
     client.setLabelers(['did:plc:labeler'])
@@ -268,6 +282,18 @@ describe('buildChatClient', () => {
     expect(headers.get('authorization')).toBe('Bearer access-jwt')
     expect(headers.get('x-atproto-device-id')).toBe('device-123')
     expect(headers.get('x-atproto-session-id')).toBe('session-456')
+  })
+
+  // HORIZON: another account's client sends no per-install ids (SA-12)
+  it('emits no device or session header for another account', async () => {
+    await buildChatClient(makeSession(fetchMock), {deviceHeaders: false})
+      .call(chat.bsky.convo.listConvos, {})
+      .catch(() => {})
+
+    const headers = headersFor(fetchMock, 'chat.bsky.convo.listConvos')
+    expect(headers.get('atproto-proxy')).toBe(CHAT_PROXY_SERVICE)
+    expect(headers.get('x-atproto-device-id')).toBeNull()
+    expect(headers.get('x-atproto-session-id')).toBeNull()
   })
 
   it('emits a global app labeler once, redacted', async () => {
