@@ -329,7 +329,7 @@ function MemberForm({
       </View>
       <View style={[a.mt_2xl, a.px_xl, a.gap_xl]}>
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-          <Trans>Images must be PNG or JPEG.</Trans>
+          <Trans>Images must be PNG, JPEG or WebP.</Trans>
         </Text>
         <LimitedField
           testID="memberDisplayNameInput"

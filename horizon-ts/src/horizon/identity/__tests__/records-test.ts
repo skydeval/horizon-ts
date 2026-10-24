@@ -93,9 +93,12 @@ describe('parsers', () => {
   })
 
   it('refuse over-limit display fields', () => {
-    // A 25-grapheme form, a 65-byte form, 13 forms, 11 sets: refused, never cut.
+    // A 25-grapheme form, a form over 240 bytes (10 graphemes of 25 bytes
+    // each), 13 forms, 11 sets: refused, never cut.
     expect(parsePronouns(records.pronouns([['a'.repeat(25)]]))).toBeNull()
-    expect(parsePronouns(records.pronouns([['€'.repeat(22)]]))).toBeNull()
+    expect(parsePronouns(records.pronouns([['👩‍👩‍👧‍👦'.repeat(10)]]))).toBeNull()
+    // 22 graphemes of 3 bytes each (66 bytes) fit since the limit was raised.
+    expect(parsePronouns(records.pronouns([['€'.repeat(22)]]))).not.toBeNull()
     expect(
       parsePronouns(records.pronouns([Array.from({length: 13}, () => 'x')])),
     ).toBeNull()
@@ -151,7 +154,7 @@ describe('parsers', () => {
     expect(member).not.toHaveProperty('externalUrl')
   })
 
-  it('read member images as PNG or JPEG blobs of at most 1,000,000 bytes', () => {
+  it('read member images as PNG, JPEG or WebP blobs of at most 1,000,000 bytes', () => {
     const blob = (mimeType: string, size = 1000) => ({
       $type: 'blob',
       ref: {$link: 'bafkreiavatar'},
@@ -166,7 +169,11 @@ describe('parsers', () => {
       size: 1000,
     })
     expect(
-      parseMember(records.member('Wren', {avatar: blob('image/webp')}))?.avatar,
+      parseMember(records.member('Wren', {avatar: blob('image/webp')}))?.avatar
+        ?.mimeType,
+    ).toBe('image/webp')
+    expect(
+      parseMember(records.member('Wren', {avatar: blob('image/gif')}))?.avatar,
     ).toBeUndefined()
     expect(
       parseMember(

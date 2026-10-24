@@ -46,6 +46,7 @@ import {
 import {
   type DisplayMode,
   type FrontMember,
+  MEMBER_IMAGE_TYPES,
   parseFront,
   parseMember,
   parsePronouns,
@@ -106,10 +107,10 @@ export class IdentityInvalidError extends Error {
   }
 }
 
-/** A member image that is not PNG or JPEG, or is too large. */
+/** A member image that is not PNG, JPEG or WebP, or is too large. */
 export class MemberImageError extends Error {
   constructor() {
-    super(t`Choose a PNG or JPEG image under 1 MB.`)
+    super(t`Choose a PNG, JPEG or WebP image under 1 MB.`)
     this.name = 'MemberImageError'
   }
 }
@@ -568,7 +569,7 @@ export function buildMemberRecord(
 }
 
 async function uploadImage(w: OwnWriter, image: PickedImage): Promise<unknown> {
-  if (image.mime !== 'image/png' && image.mime !== 'image/jpeg') {
+  if (!MEMBER_IMAGE_TYPES.includes(image.mime)) {
     throw new MemberImageError()
   }
   if (image.size !== undefined && image.size > MEMBER_IMAGE_MAX_BYTES) {

@@ -198,13 +198,21 @@ export function parseBlob(value: unknown): BlobInfo | undefined {
   return size === undefined ? {cid, mimeType} : {cid, mimeType, size}
 }
 
-/** A member image: PNG or JPEG, at most 1,000,000 bytes when sized. */
+/**
+ * The image types a member's avatar and banner accept: PNG, JPEG and (since
+ * 2026-10-25, skydeval) WebP.
+ */
+export const MEMBER_IMAGE_TYPES: readonly string[] = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]
+
+/** A member image of {@link MEMBER_IMAGE_TYPES}, at most 1,000,000 bytes when sized. */
 function memberImage(value: unknown): BlobInfo | undefined {
   const blob = parseBlob(value)
   if (!blob) return undefined
-  if (blob.mimeType !== 'image/png' && blob.mimeType !== 'image/jpeg') {
-    return undefined
-  }
+  if (!MEMBER_IMAGE_TYPES.includes(blob.mimeType)) return undefined
   if (blob.size !== undefined && blob.size > 1_000_000) return undefined
   return blob
 }
@@ -212,8 +220,9 @@ function memberImage(value: unknown): BlobInfo | undefined {
 /**
  * `app.nearhorizon.actor.pronouns`. `null` when it is not one or its sets
  * break the lexicon's limits (at most 10 sets of 1 to 12 forms, each at
- * most 24 graphemes and 64 bytes). A missing or unknown `displayMode` reads
- * as `all` (pronouns spec, normative rules).
+ * most 24 graphemes and 240 bytes; the byte limit was raised from 64 on
+ * 2026-10-25 so 24 graphemes of any script fit). A missing or unknown
+ * `displayMode` reads as `all` (pronouns spec, normative rules).
  */
 export function parsePronouns(value: unknown): Pronouns | null {
   const record = recordOf(value, PRONOUNS_COLLECTION)
@@ -223,7 +232,7 @@ export function parsePronouns(value: unknown): Pronouns | null {
     forms: 12,
     minForms: 1,
     graphemes: 24,
-    bytes: 64,
+    bytes: 240,
   })
   if (!sets) return null
   return {
@@ -256,8 +265,10 @@ export function parseSystem(value: unknown): PluralSystem | null {
 /**
  * `app.nearhorizon.plural.member`. `null` without a `displayName` within 64
  * graphemes (and not blank). Optional fields over their limits are
- * dropped; member pronouns follow the member lexicon (at most 6 sets of at
- * most 6 forms, each at most 24 graphemes and 240 bytes).
+ * dropped; member pronouns follow the member lexicon (at most 10 sets of at
+ * most 12 forms, each at most 24 graphemes and 240 bytes; raised from 6 and
+ * 6 on 2026-10-25 to match atproto-pronouns). Empty sets in older records
+ * are still read, and show nothing.
  */
 export function parseMember(value: unknown): PluralMember | null {
   const record = recordOf(value, PLURAL_MEMBER_COLLECTION)
@@ -289,8 +300,8 @@ export function parseMember(value: unknown): PluralMember | null {
       record.pronouns === undefined
         ? []
         : (pronounSets(record.pronouns, {
-            sets: 6,
-            forms: 6,
+            sets: 10,
+            forms: 12,
             minForms: 0,
             graphemes: 24,
             bytes: 240,

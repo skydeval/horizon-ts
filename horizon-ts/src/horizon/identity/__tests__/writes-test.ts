@@ -196,13 +196,17 @@ describe('pronouns editor writes', () => {
       form: long,
     })
     expect(rowsValid([row], ACCOUNT_PRONOUN_LIMITS)).toBe(false)
-    // 24 graphemes fit; 17 four-byte emoji are 68 bytes, over the 64.
+    // 24 graphemes fit, and so do 17 four-byte emoji (68 bytes) since the
+    // limit is 240 bytes; 10 family emoji (25 bytes each, 250) are over it.
     expect(
       rowProblem(editRow(newRow(), long.slice(0, 24)), ACCOUNT_PRONOUN_LIMITS),
     ).toBeNull()
     expect(
       rowProblem(editRow(newRow(), '🌿'.repeat(17)), ACCOUNT_PRONOUN_LIMITS),
-    ).toEqual({kind: 'formTooLong', form: '🌿'.repeat(17)})
+    ).toBeNull()
+    expect(
+      rowProblem(editRow(newRow(), '👩‍👩‍👧‍👦'.repeat(10)), ACCOUNT_PRONOUN_LIMITS),
+    ).toEqual({kind: 'formTooLong', form: '👩‍👩‍👧‍👦'.repeat(10)})
     await expect(
       savePronouns(
         w,
@@ -447,11 +451,11 @@ describe('member writes', () => {
     expect(record.avatar.ref.$link).toBe(cidOf(900))
   })
 
-  it('refuses a WebP image without uploading it', async () => {
+  it('refuses a GIF image without uploading it', async () => {
     jest.mocked(uploadBlob).mockClear()
     await expect(
       createMember(w, input(), {
-        avatar: {path: 'file:///a.webp', mime: 'image/webp', size: 10},
+        avatar: {path: 'file:///a.gif', mime: 'image/gif', size: 10},
       }),
     ).rejects.toBeInstanceOf(MemberImageError)
     expect(uploadBlob).not.toHaveBeenCalled()

@@ -36,24 +36,23 @@ export type PronounLimits = {
   bytes: number
 }
 
-/** `app.nearhorizon.actor.pronouns`: 10 sets of 1 to 12 forms. */
+/**
+ * `app.nearhorizon.actor.pronouns`: 10 sets of 1 to 12 forms, each at most
+ * 24 graphemes and 240 bytes (skydeval, 2026-10-25: both lexicons raised to
+ * the same limits, so 24 graphemes of any script fit).
+ */
 export const ACCOUNT_PRONOUN_LIMITS: PronounLimits = {
   sets: 10,
   forms: 12,
   graphemes: 24,
-  bytes: 64,
+  bytes: 240,
 }
 
 /**
- * A member's pronouns: the stricter of the member lexicon (6 sets of 6
- * forms, 240 bytes) and the pronouns spec (64 bytes), as 4.1 asks.
+ * A member's pronouns: the same limits as an account's, which the member
+ * lexicon now matches (skydeval, 2026-10-25).
  */
-export const MEMBER_PRONOUN_LIMITS: PronounLimits = {
-  sets: 6,
-  forms: 6,
-  graphemes: 24,
-  bytes: 64,
-}
+export const MEMBER_PRONOUN_LIMITS: PronounLimits = ACCOUNT_PRONOUN_LIMITS
 
 /**
  * The preset chips (7.1, 7.4). They are values written into the record, in
