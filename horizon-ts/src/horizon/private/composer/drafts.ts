@@ -183,15 +183,41 @@ function toDraftAudience(audience: ComposeAudience): DraftAudience {
 }
 
 /**
- * Called after every draft save, once the draft id is known: records the
- * compose's visibility for that id, `public`, or `private` with its
- * audience. A Public save is recorded too, never removed, because a draft
- * with no entry restores Private.
+ * The account and compose visibility a draft save started with, read by
+ * `captureDraftVisibility` before the save's first await.
  */
-export function recordDraftVisibility(draftId: string) {
+export type CapturedDraftVisibility = {
+  did: string
+  visibility: ComposeVisibility
+}
+
+/**
+ * Called when a draft save starts, before its first await: the signed-in
+ * account and the compose's visibility at that moment, or `undefined` with
+ * no account or Private posting off. The save's network hop can outlast the
+ * composer, which resets the compose to Public when it closes, and the
+ * account can change meanwhile, so neither is read when the save returns
+ * (Phase 5 review pass 8, P5R8-L1).
+ */
+export function captureDraftVisibility(): CapturedDraftVisibility | undefined {
   const did = getCurrentDid()
-  if (!PRIVATE_POSTING || !did) return
-  const current = getComposeVisibility()
+  if (!PRIVATE_POSTING || !did) return undefined
+  return {did, visibility: getComposeVisibility()}
+}
+
+/**
+ * Called after every draft save, once the draft id is known: records the
+ * visibility captured when the save started for that id, under the account
+ * it was captured for, `public`, or `private` with its audience. A Public
+ * save is recorded too, never removed, because a draft with no entry
+ * restores Private.
+ */
+export function recordDraftVisibility(
+  draftId: string,
+  captured: CapturedDraftVisibility | undefined,
+) {
+  if (!PRIVATE_POSTING || !captured) return
+  const {did, visibility: current} = captured
   const others = readEntries(did)
     .filter(read => read.entry.id !== draftId)
     .map(read => read.raw)

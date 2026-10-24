@@ -8,6 +8,7 @@ import {
 import {readLocal, writeLocal} from '#/horizon/session/local-store'
 import {
   applyDraftVisibility,
+  captureDraftVisibility,
   isPrivateDraft,
   MAX_DRAFT_ENTRIES,
   readDraftTable,
@@ -49,7 +50,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'list', uri: AUDIENCE},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(readDraftTable(DID)).toEqual([
       {
         id: 'draft-1',
@@ -66,15 +67,15 @@ describe('the draft visibility table', () => {
       audience: {kind: 'mode', mode: 'followers'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(readDraftTable(DID)).toEqual([{id: 'draft-1', visibility: 'public'}])
   })
 
   it('a draft saved Public restores Public with no tap', () => {
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     setComposeVisibility({
       visibility: 'private',
       audience: {kind: 'mode', mode: 'nobody'},
@@ -90,7 +91,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'mode', mode: 'nobody'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     setComposeVisibility(PUBLIC_COMPOSE)
     applyDraftVisibility('draft-1')
     expect(getComposeVisibility()).toEqual({
@@ -112,7 +113,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'list', uri: AUDIENCE},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     // What `forgetRemovedAccount` does to the table, or another device.
     writeLocal(`horizon:draft-visibility:${DID}`, undefined)
     setComposeVisibility(PUBLIC_COMPOSE)
@@ -126,7 +127,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'unpicked', why: 'unsaved'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(readDraftTable(DID)).toEqual([
       {id: 'draft-1', visibility: 'private', audience: {kind: 'unpicked'}},
     ])
@@ -146,7 +147,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'parent', uri: AUDIENCE},
       locked: true,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(readDraftTable(DID)).toEqual([
       {id: 'draft-1', visibility: 'private', audience: {kind: 'unpicked'}},
     ])
@@ -199,7 +200,7 @@ describe('the draft visibility table', () => {
     }
     writeLocal(`horizon:draft-visibility:${DID}`, JSON.stringify([newer]))
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(JSON.parse(readLocal(`horizon:draft-visibility:${DID}`)!)).toEqual([
       newer,
       {id: 'draft-1', visibility: 'public'},
@@ -213,7 +214,7 @@ describe('the draft visibility table', () => {
       locked: false,
     })
     for (let i = 0; i < MAX_DRAFT_ENTRIES + 5; i++) {
-      recordDraftVisibility(`draft-${i}`)
+      recordDraftVisibility(`draft-${i}`, captureDraftVisibility())
     }
     const table = readDraftTable(DID)
     expect(table).toHaveLength(MAX_DRAFT_ENTRIES)
@@ -227,9 +228,9 @@ describe('the draft visibility table', () => {
       audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
-    recordDraftVisibility('a')
-    recordDraftVisibility('b')
-    recordDraftVisibility('a')
+    recordDraftVisibility('a', captureDraftVisibility())
+    recordDraftVisibility('b', captureDraftVisibility())
+    recordDraftVisibility('a', captureDraftVisibility())
     expect(readDraftTable(DID).map(entry => entry.id)).toEqual(['b', 'a'])
   })
 
@@ -239,7 +240,7 @@ describe('the draft visibility table', () => {
       audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(readDraftTable('did:plc:someoneelseaaaaaaaaaaaaa')).toEqual([])
   })
 
@@ -250,7 +251,7 @@ describe('the draft visibility table', () => {
     applyDraftVisibility('draft-1')
     expect(getComposeVisibility()).toEqual(UNSAVED_RESTORE)
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-2')
+    recordDraftVisibility('draft-2', captureDraftVisibility())
     applyDraftVisibility('draft-1')
     expect(getComposeVisibility()).toEqual(UNSAVED_RESTORE)
     expect(isPrivateDraft('draft-1')).toBe(false)
@@ -271,9 +272,9 @@ describe('the drafts list lock (round 2 fix 3)', () => {
       audience: {kind: 'mode', mode: 'followers'},
       locked: false,
     })
-    recordDraftVisibility('draft-private')
+    recordDraftVisibility('draft-private', captureDraftVisibility())
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-public')
+    recordDraftVisibility('draft-public', captureDraftVisibility())
     expect(isPrivateDraft('draft-private')).toBe(true)
     expect(isPrivateDraft('draft-public')).toBe(false)
     expect(isPrivateDraft('draft-unknown')).toBe(false)
@@ -285,9 +286,9 @@ describe('the drafts list lock (round 2 fix 3)', () => {
       audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     expect(isPrivateDraft('draft-1')).toBe(false)
   })
 
@@ -297,7 +298,7 @@ describe('the drafts list lock (round 2 fix 3)', () => {
       audience: {kind: 'mode', mode: 'everyone'},
       locked: false,
     })
-    recordDraftVisibility('draft-1')
+    recordDraftVisibility('draft-1', captureDraftVisibility())
     clearCurrentClients()
     expect(isPrivateDraft('draft-1')).toBe(false)
   })

@@ -107,7 +107,11 @@ import {
 } from '#/horizon/routing/membership'
 import {resetWriteRoutes} from '#/horizon/routing/write-route'
 import {privateComposeAllows} from '../composer/blockers'
-import {applyDraftVisibility, recordDraftVisibility} from '../composer/drafts'
+import {
+  applyDraftVisibility,
+  captureDraftVisibility,
+  recordDraftVisibility,
+} from '../composer/drafts'
 import {usePrivateComposeSession} from '../composer/session'
 import {
   chooseComposeVisibility,
@@ -440,13 +444,13 @@ describe('a draft restored with no visibility entry on this device (P5R7-L1)', (
   it('a draft saved Public, or Private with an audience, restores with Post enabled', async () => {
     await member()
     setComposeVisibility(PUBLIC_COMPOSE)
-    recordDraftVisibility('public-draft')
+    recordDraftVisibility('public-draft', captureDraftVisibility())
     setComposeVisibility({
       visibility: 'private',
       audience: {kind: 'mode', mode: 'nobody'},
       locked: false,
     })
-    recordDraftVisibility('private-draft')
+    recordDraftVisibility('private-draft', captureDraftVisibility())
     const screen = show()
     act(() => applyDraftVisibility('public-draft'))
     expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)

@@ -13,7 +13,10 @@ import {getDeviceId} from '#/analytics/identifiers'
 // HORIZON: remember a draft's media spoilers and content warnings
 import {recordDraftSpoilers} from '#/horizon/media-spoilers/drafts'
 // HORIZON: remember whether a draft was saved Private
-import {recordDraftVisibility} from '#/horizon/private/composer/drafts'
+import {
+  captureDraftVisibility,
+  recordDraftVisibility,
+} from '#/horizon/private/composer/drafts'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {composerStateToDraft, draftViewToSummary} from './api'
@@ -142,6 +145,8 @@ export function useSaveDraftMutation() {
       localRefPaths: Map<string, string>
       originalLocalRefs: Set<string> | undefined
     }> => {
+      // HORIZON: capture the visibility and account before any await (P5R8-L1)
+      const visibility = captureDraftVisibility()
       // Convert composer state to server draft format
       const {draft: apiDraft, localRefPaths} = await composerStateToDraft(
         {appviewClient: client, chatClient},
@@ -178,7 +183,7 @@ export function useSaveDraftMutation() {
       }
 
       // HORIZON: remember whether this draft was saved Private, and its audience
-      recordDraftVisibility(draftId)
+      recordDraftVisibility(draftId, visibility)
       // HORIZON: remember this draft's media spoilers and content warnings
       recordDraftSpoilers(draftId, composerState.thread.posts)
 
