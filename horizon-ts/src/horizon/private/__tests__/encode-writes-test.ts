@@ -80,7 +80,10 @@ import {
   resetWriteRoutes,
 } from '#/horizon/routing/write-route'
 import {writeLocal} from '#/horizon/session/local-store'
-import {createListAudience} from '../api/audiences'
+import {
+  createListAudience,
+  PrivateAudienceUnpickedError,
+} from '../api/audiences'
 import {changePrivatePostAudience} from '../api/update-audience'
 import {
   PrivateAudienceChangeUnavailableError,
@@ -744,6 +747,26 @@ describe('change of audience on the encode route (8.1, before 2K-8)', () => {
       audience: {kind: 'mode', mode: 'followers'},
     }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(PrivateAudienceChangeUnavailableError)
+    expect(pds.calls).toEqual([])
+    expect(prism.calls).toEqual([])
+  })
+})
+
+describe('the encode route with no audience chosen (P5R7-L1)', () => {
+  it('refuses before the capture: no encoder load, no Unsent entry, no write', async () => {
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'unpicked', why: 'unsaved'},
+      locked: false,
+    })
+    const error = await postPrivate(queryClient, opts(['hello'])).catch(
+      (e: unknown) => e,
+    )
+    await whenOutboxIdle()
+    expect(error).toBeInstanceOf(PrivateAudienceUnpickedError)
+    expect(listOutboxRecords(DID)).toEqual([])
+    expect(mockLoadEncoder).not.toHaveBeenCalled()
+    expect(mockEncode).not.toHaveBeenCalled()
     expect(pds.calls).toEqual([])
     expect(prism.calls).toEqual([])
   })

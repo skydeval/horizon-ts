@@ -1,4 +1,5 @@
-import {TID} from '@atproto/common-web'
+// HORIZON: per-account TID clock import
+import {type TID} from '@atproto/common-web'
 import {type $Typed, type Client} from '@atproto/lex'
 import {
   type AtUriString,
@@ -45,6 +46,8 @@ import {routesPrivate} from '#/horizon/private/composer/state'
 import {refractReplyFallbackHook} from '#/horizon/refract/write-hooks'
 // HORIZON: a post with `||` spoilers is written with spoiler facets
 import {resolveSpoilerRT, resolvesSpoilers} from '#/horizon/spoilers/write'
+// HORIZON: per-account TID clock import
+import {nextTid} from '#/horizon/tid-clock'
 import {app, chat, com} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {createGIFDescription} from '../gif-alt-text'
@@ -137,7 +140,8 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
     // The sorting behavior for multiple posts sharing the same createdAt time is
     // undefined, so what we'll do here is increment the time by 1 for every post
     now.setMilliseconds(now.getMilliseconds() + 1)
-    tid = TID.next(tid)
+    // HORIZON: per-account TID clock
+    tid = nextTid(did, tid)
     const rkey = tid.toString()
     const uri = `at://${did}/app.bsky.feed.post/${rkey}` as AtUriString
     uris.push(uri)

@@ -68,6 +68,17 @@ export class PrivateAudienceMissingError extends Error {
   }
 }
 
+/**
+ * A private write called with no audience chosen (`{kind: 'unpicked'}`).
+ * Thrown before anything is captured, saved, found, created or sent.
+ */
+export class PrivateAudienceUnpickedError extends Error {
+  constructor() {
+    super(t`Choose who can see this post.`)
+    this.name = 'PrivateAudienceUnpickedError'
+  }
+}
+
 const MAX_NAME_GRAPHEMES = 64
 const MAX_NAME_BYTES = 640
 

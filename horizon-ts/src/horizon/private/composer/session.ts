@@ -11,11 +11,13 @@ import {useLayoutEffect} from 'react'
 import {type ComposerOptsPostRef} from '#/state/shell/composer'
 import {
   applyLateComposeDefaults,
+  type ComposeAudience,
   initialComposeVisibility,
   PUBLIC_COMPOSE,
   setComposeReplyRef,
   setComposeVisibility,
   startComposeVisibility,
+  useComposeAudience,
   useIsPrivateCompose,
 } from '#/horizon/private/composer/state'
 import {usePrivateComposeDefaults} from '#/horizon/private/defaults/compose'
@@ -25,9 +27,9 @@ import {PRIVATE_POSTING} from '#/horizon/switches'
 /**
  * Owns the record for the composer's lifetime: sets it up on mount and resets
  * it to Public on unmount. Called once in `ComposePost`. Returns whether the
- * compose is private and the account's routes (`postingRoute`, for the
- * composer's `privateComposeAllows`, 2K design PA-26), re-rendering the
- * composer when either changes. A
+ * compose is private, its audience and the account's routes (`audience` and
+ * `postingRoute`, for the composer's `privateComposeAllows`, 2K design
+ * PA-26), re-rendering the composer when any of them changes. A
  * member's private posting defaults apply when the session starts and when
  * they arrive later, until the record is set otherwise (a choice in the
  * control, a restored draft). `quote` is the post the composer opened
@@ -36,7 +38,11 @@ import {PRIVATE_POSTING} from '#/horizon/switches'
 export function usePrivateComposeSession(
   replyTo: ComposerOptsPostRef | {uri: string} | undefined,
   quote?: {uri: string},
-): {isPrivate: boolean; postingRoute: WriteRoutes} {
+): {
+  isPrivate: boolean
+  audience: ComposeAudience
+  postingRoute: WriteRoutes
+} {
   const replyToUri = replyTo?.uri
   const quoteUri = quote?.uri
   const defaults = usePrivateComposeDefaults()
@@ -56,6 +62,7 @@ export function usePrivateComposeSession(
     applyLateComposeDefaults(replyToUri, defaults, quoteUri)
   }, [replyToUri, defaults, quoteUri])
   const isPrivate = useIsPrivateCompose()
+  const audience = useComposeAudience()
   const postingRoute = useWriteRoute()
-  return {isPrivate, postingRoute}
+  return {isPrivate, audience, postingRoute}
 }

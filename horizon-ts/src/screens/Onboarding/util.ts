@@ -1,4 +1,3 @@
-import {TID} from '@atproto/common-web'
 import {type $Typed, type Client} from '@atproto/lex'
 import {
   type AtIdentifierString,
@@ -8,6 +7,8 @@ import {
 import chunk from 'lodash.chunk'
 
 import {until} from '#/lib/async/until'
+// HORIZON: per-account TID clock import
+import {nextTidStr} from '#/horizon/tid-clock'
 import {app, com} from '#/lexicons'
 
 export async function bulkWriteFollows(
@@ -32,7 +33,8 @@ export async function bulkWriteFollows(
     followRecords.map(r => ({
       $type: 'com.atproto.repo.applyWrites#create',
       collection: 'app.bsky.graph.follow',
-      rkey: TID.nextStr(),
+      // HORIZON: per-account TID clock
+      rkey: nextTidStr(did),
       value: r,
     }))
 

@@ -142,6 +142,7 @@ function useAudienceText(
       listName(audiences?.find(entry => entry.uri === audience.uri)) ?? l`List`
     )
   }
+  if (audience.kind === 'unpicked') return l`Choose who can see this`
   return l`Same as the post you’re replying to`
 }
 
@@ -235,9 +236,11 @@ export function AudienceMenu({
   const summaryText = hasLimits
     ? l`Interaction limited`
     : l`Anyone can interact`
+  // While no audience is chosen, the trigger asks for one (P5R7-L1).
   const showsAudience =
+    (isPrivate && audience?.kind === 'unpicked') ||
     audienceTriggerReads({isPrivate, hasReplySection: !!threadgate}) ===
-    'audience'
+      'audience'
   const label = showsAudience ? audienceText : summaryText
   const accessibilityLabel = isPrivate
     ? threadgate

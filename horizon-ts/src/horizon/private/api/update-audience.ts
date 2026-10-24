@@ -25,6 +25,7 @@ import {
   type AudienceClients,
   findOrCreateStandingAudience,
   PrivateAudienceMissingError,
+  PrivateAudienceUnpickedError,
 } from '#/horizon/private/api/audiences'
 import {
   type PlacementFields,
@@ -132,6 +133,7 @@ async function resolveAudience(
     await assertOwnAudienceExists(queryClient, clients, audience.uri)
     return audience.uri
   }
+  if (audience.kind === 'unpicked') throw new PrivateAudienceUnpickedError()
   throw new PrivateAudienceMissingError()
 }
 

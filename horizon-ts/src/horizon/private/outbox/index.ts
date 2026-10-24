@@ -30,7 +30,7 @@
  * and classes, never private text.
  */
 
-import {TID} from '@atproto/common-web'
+import {type TID} from '@atproto/common-web'
 import {type Client, type UriString, XrpcResponseError} from '@atproto/lex'
 import {AtUri, type DidString, toDatetimeString} from '@atproto/syntax'
 import {RichText} from '@bsky/sdk/richtext'
@@ -173,6 +173,7 @@ import {
   writeLocal,
 } from '#/horizon/session/local-store'
 import {type SpoilerWriteMode, spoilerWriteMode} from '#/horizon/spoilers/write'
+import {nextTid} from '#/horizon/tid-clock'
 import {app, com} from '#/lexicons'
 
 export {type OutboxRecord} from '#/horizon/private/outbox/record'
@@ -725,10 +726,14 @@ function recordPostOf(post: PostDraft, spoilers: DraftPostSpoilers) {
   return record
 }
 
-function newRkeys(count: number): string[] {
+/**
+ * Fresh rkeys for a compose's posts, on `did`'s own TID clock. Exported for
+ * the per-account TID clock's tests.
+ */
+export function newRkeys(did: string, count: number): string[] {
   let tid: TID | undefined
   return Array.from({length: count}, () => {
-    tid = TID.next(tid)
+    tid = nextTid(did, tid)
     return tid.toString()
   })
 }
@@ -749,7 +754,7 @@ export async function pressEncodeCompose(
   // 1.2: a job never starts on `checking`.
   if (routes.postingRoute !== 'encode') throw new PrivateRouteUnavailableError()
   checkPlaintext(did, capture.thread)
-  const rkeys = newRkeys(capture.thread.posts.length)
+  const rkeys = newRkeys(did, capture.thread.posts.length)
   await readMedia(capture)
 
   // 1.5: an Edit's old entry first, then this entry's fresh lock.
@@ -848,6 +853,7 @@ function audienceUriKnown(
   const audience = record.audience
   if (audience.kind === 'list') return audience.uri
   if (audience.kind === 'parent') return audience.uri
+  if (audience.kind === 'unpicked') return undefined
   const cached = queryClient?.getQueryData<AudienceEntry[]>(
     audiencesQueryKey(did),
   )

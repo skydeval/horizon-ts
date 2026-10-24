@@ -1,6 +1,5 @@
 import {useCallback} from 'react'
 import {View} from 'react-native'
-import {TID} from '@atproto/common-web'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
@@ -16,6 +15,8 @@ import {ListSparkle_Stroke2_Corner0_Rounded as ListSparkle} from '#/components/i
 import {PlusLarge_Stroke2_Corner0_Rounded as Plus} from '#/components/icons/Plus'
 import {Link} from '#/components/Link'
 import {Text} from '#/components/Typography'
+// HORIZON: per-account TID clock import
+import {nextPreferenceId} from '#/horizon/tid-clock/preference-id'
 
 export function NoFeedsPinned({
   preferences,
@@ -50,12 +51,14 @@ export function NoFeedsPinned({
       {
         ...DISCOVER_SAVED_FEED,
         pinned: true,
-        id: TID.nextStr(),
+        // HORIZON: per-account TID clock
+        id: nextPreferenceId(),
       },
       {
         ...TIMELINE_SAVED_FEED,
         pinned: true,
-        id: TID.nextStr(),
+        // HORIZON: per-account TID clock
+        id: nextPreferenceId(),
       },
       ...remainingSavedFeeds,
     ]

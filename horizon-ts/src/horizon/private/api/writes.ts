@@ -29,7 +29,7 @@
  * an encoder's or server's message.
  */
 
-import {TID} from '@atproto/common-web'
+import {type TID} from '@atproto/common-web'
 import {type Client, XrpcResponseError} from '@atproto/lex'
 import {AtUri} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
@@ -41,7 +41,10 @@ import {logger} from '#/logger'
 import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
 import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
 import {toPostView} from '#/horizon/private/adapt/post-view'
-import {type AudienceClients} from '#/horizon/private/api/audiences'
+import {
+  type AudienceClients,
+  PrivateAudienceUnpickedError,
+} from '#/horizon/private/api/audiences'
 import {
   asThreadParent,
   authorView,
@@ -101,6 +104,7 @@ import {PP_COLLECTION} from '#/horizon/private/uri'
 import {getPrismClient} from '#/horizon/routing/prism'
 import {clientDid, getWriteRoute} from '#/horizon/routing/write-route'
 import {spoilerWriteMode} from '#/horizon/spoilers/write'
+import {nextTid} from '#/horizon/tid-clock'
 import {type app} from '#/lexicons'
 
 export {requestRecordQuietly}
@@ -222,6 +226,10 @@ export async function postPrivate(
   queryClient: QueryClient,
   opts: PostOpts,
 ): Promise<{uris: string[]}> {
+  // No audience chosen: refused before any capture, Unsent entry or send (P5R7-L1).
+  if (getComposeVisibility().audience.kind === 'unpicked') {
+    throw new PrivateAudienceUnpickedError()
+  }
   const did = opts.pdsClient.assertDid
   /*
    * Both writers, once (PA-20): a route that changes during the compose does
@@ -310,7 +318,7 @@ async function postThroughLocus(
    */
   let tid: TID | undefined
   const rkeys = thread.posts.map(() => {
-    tid = TID.next(tid)
+    tid = nextTid(did, tid)
     return tid.toString()
   })
   const postUris = rkeys.map(rkey => `at://${did}/${PP_COLLECTION}/${rkey}`)

@@ -10,10 +10,12 @@
  *
  * A private compose is also blocked while the account's posting route is
  * `checking` or `none` (2K design 8.1): a locked reply, or a private draft
- * restored, on an account that cannot post privately yet. The route always
- * comes in as an argument from a hook (PA-26): the composer calls these in
- * render, and React Compiler memoizes them on their arguments, so a store
- * read in here would keep a stale answer.
+ * restored, on an account that cannot post privately yet, and while its
+ * audience is unpicked (a draft restored with no visibility entry on this
+ * device, P5R7-L1). The route and the audience always come in as arguments
+ * from a hook (PA-26): the composer calls these in render, and React
+ * Compiler memoizes them on their arguments, so a store read in here would
+ * keep a stale answer.
  */
 
 import {t} from '@lingui/core/macro'
@@ -24,6 +26,7 @@ import {
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
 import {PRODUCT_NAME} from '#/horizon/branding'
+import {type ComposeAudience} from '#/horizon/private/composer/state'
 import {
   PRIVATE_GALLERY,
   PRIVATE_LANGS_LABELS,
@@ -68,6 +71,21 @@ export function privateRouteBlocker(routes: WriteRoutes): string | undefined {
   return privateRouteNote(routes)
 }
 
+/**
+ * The note for a private compose whose audience is unpicked, else
+ * `undefined`.
+ */
+export function unpickedAudienceNote(
+  audience: ComposeAudience,
+): string | undefined {
+  if (audience.kind !== 'unpicked') return undefined
+  if (audience.why === 'unsaved') {
+    return t`This draft’s visibility wasn’t saved on this device. Choose Public or who can see it.`
+  }
+  if (audience.why === 'draft') return t`Choose who can see this draft.`
+  return t`Choose who can see this post.`
+}
+
 function hasVideo(post: PostDraft) {
   return post.embed.media?.type === 'video'
 }
@@ -86,14 +104,22 @@ function hasSelfLabel(post: PostDraft) {
 
 /**
  * The first blocker message that applies to a private compose of `thread` on
- * `routes`, else `undefined`.
+ * `routes` with `audience`, else `undefined`. A draft whose visibility is
+ * unknown on this device says so before the route's note, since picking
+ * Public is the way out on any route.
  */
 export function privateComposeBlocker(
   thread: ThreadDraft,
   routes: WriteRoutes,
+  audience: ComposeAudience,
 ): string | undefined {
+  const unpicked = unpickedAudienceNote(audience)
+  if (audience.kind === 'unpicked' && audience.why === 'unsaved') {
+    return unpicked
+  }
   const route = privateRouteBlocker(routes)
   if (route) return route
+  if (unpicked) return unpicked
   if (!PRIVATE_VIDEO && thread.posts.some(hasVideo)) {
     return t`Private posts can’t include video yet.`
   }
@@ -111,14 +137,18 @@ export function privateComposeBlocker(
 
 /**
  * A term of the composer's `canPost`: always `true` for a public compose,
- * and for a private one only while no blocker applies.
+ * and for a private one only while no blocker applies (an unpicked audience
+ * included).
  */
 export function privateComposeAllows(
   thread: ThreadDraft,
   isPrivate: boolean,
   routes: WriteRoutes,
+  audience: ComposeAudience,
 ): boolean {
-  return !isPrivate || privateComposeBlocker(thread, routes) === undefined
+  return (
+    !isPrivate || privateComposeBlocker(thread, routes, audience) === undefined
+  )
 }
 
 /**

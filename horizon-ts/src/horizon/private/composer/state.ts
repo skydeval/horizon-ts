@@ -36,11 +36,25 @@ import {PRIVATE_POSTING} from '#/horizon/switches'
  * - `parent`: a reply to a private post, under the parent's audience, which
  *   is read from the parent at publish time. `uri` is the audience the
  *   parent names when it is known already, for display.
+ * - `unpicked`: no audience chosen yet. A private compose holding it cannot
+ *   be posted (`privateComposeAllows`, and `postPrivate` refuses it first)
+ *   until the user picks Public or an audience. `why` says which note the
+ *   composer shows (`blockers.ts`).
  */
 export type ComposeAudience =
   | {kind: 'mode'; mode: StandingMode}
   | {kind: 'list'; uri: string}
   | {kind: 'parent'; uri?: string}
+  | {kind: 'unpicked'; why?: UnpickedReason}
+
+/**
+ * Why a compose's audience is unpicked:
+ * - `unsaved`: a draft restored with no visibility entry on this device (or
+ *   an unreadable table), so whether it was Public or Private is unknown;
+ * - `draft`: a draft restored Private whose audience was not chosen or did
+ *   not parse.
+ */
+export type UnpickedReason = 'unsaved' | 'draft'
 
 export type ComposeVisibility = {
   visibility: 'public' | 'private'
@@ -105,6 +119,7 @@ function sameAudience(x: ComposeAudience, y: ComposeAudience): boolean {
   if (x.kind === 'mode' && y.kind === 'mode') return x.mode === y.mode
   if (x.kind === 'list' && y.kind === 'list') return x.uri === y.uri
   if (x.kind === 'parent' && y.kind === 'parent') return x.uri === y.uri
+  if (x.kind === 'unpicked' && y.kind === 'unpicked') return x.why === y.why
   return false
 }
 
@@ -143,6 +158,18 @@ export function applyLateComposeDefaults(
  */
 export function useComposeVisibility(): ComposeVisibility {
   return useSyncExternalStore(subscribe, getComposeVisibility)
+}
+
+function getComposeAudience(): ComposeAudience {
+  return state.audience
+}
+
+/**
+ * The compose's audience, kept current (for `privateComposeAllows`, which
+ * takes it as an argument, PA-26).
+ */
+export function useComposeAudience(): ComposeAudience {
+  return useSyncExternalStore(subscribe, getComposeAudience)
 }
 
 let composeReplyRef: ComposerOptsPostRef | undefined

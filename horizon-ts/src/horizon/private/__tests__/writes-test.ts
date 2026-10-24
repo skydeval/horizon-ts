@@ -39,6 +39,7 @@ jest.mock('#/horizon/routing/prism', () => ({
   getPrismClient: () => mockPrismClient,
 }))
 
+import {TID} from '@atproto/common-web'
 import {type Client} from '@atproto/lex'
 import {i18n} from '@lingui/core'
 import {QueryClient} from '@tanstack/react-query'
@@ -61,7 +62,11 @@ import {
 } from '#/horizon/routing/features'
 import {resetPrismHealth} from '#/horizon/routing/health'
 import {repoRouteForDid, resetWriteRoutes} from '#/horizon/routing/write-route'
-import {PrivateAudienceMissingError} from '../api/audiences'
+import {clockIdFor} from '#/horizon/tid-clock'
+import {
+  PrivateAudienceMissingError,
+  PrivateAudienceUnpickedError,
+} from '../api/audiences'
 import {
   PrivateReplyBlockedError,
   PrivateReplyCheckError,
@@ -1151,6 +1156,24 @@ describe('postPrivate: reply and quote limits (4.14)', () => {
     expect(pds.repo.size).toBe(0)
   })
 
+  it('posts and gates carry the account’s own TID clock id (per-account TID clock, Appendix A)', async () => {
+    const {uris} = await postPrivate(
+      new QueryClient(),
+      opts(['one', 'two'], undefined, LIMITS),
+    )
+    const rkeys = [
+      ...uris.map(uri => uri.split('/').pop() as string),
+      ...pds.calls
+        .filter(c => c.nsid === 'com.atproto.repo.createRecord')
+        .map(c => c.body?.rkey as string),
+    ]
+    expect(rkeys).toHaveLength(5)
+    for (const rkey of rkeys) {
+      expect(TID.fromStr(rkey).clockid()).toBe(clockIdFor(DID))
+    }
+    expect(clockIdFor(DID)).not.toBe(clockIdFor(OTHER_DID))
+  })
+
   it('writes no gate with Anyone and quotes on', async () => {
     await postPrivate(new QueryClient(), opts(['one', 'two']))
     expect(nsids(pds.calls)).not.toContain('com.atproto.repo.createRecord')
@@ -1644,7 +1667,10 @@ describe('postPrivate: the reply block check on the locus route', () => {
     servePrism([
       served(branchUri, thirdDid, recordCids[2], {
         audienceList: OTHER_AUDIENCE,
-        reply: {root: publicRef, parent: {uri: publicParent, cid: recordCids[4]}},
+        reply: {
+          root: publicRef,
+          parent: {uri: publicParent, cid: recordCids[4]},
+        },
       }),
       served(secondUri, OTHER_DID, recordCids[5], {
         audienceList: OTHER_AUDIENCE,
@@ -1851,11 +1877,7 @@ describe('postPrivate: the check before the post write on the locus route (RB-13
   })
 
   it.each([
-    [
-      'a block refusal wins',
-      {blockedBy: BLOCK_URI},
-      PrivateReplyBlockedError,
-    ],
+    ['a block refusal wins', {blockedBy: BLOCK_URI}, PrivateReplyBlockedError],
     [
       'a check that cannot be made leaves the gates’ own error',
       {status: 500, body: {error: 'InternalServerError'}},
@@ -1883,4 +1905,21 @@ describe('postPrivate: the check before the post write on the locus route (RB-13
       expect(unhandled).toEqual([])
     },
   )
+})
+
+describe('postPrivate with no audience chosen (P5R7-L1)', () => {
+  it('refuses first, before any read, create or send', async () => {
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'unpicked', why: 'unsaved'},
+      locked: false,
+    })
+    const error = await postPrivate(new QueryClient(), opts(['hello'])).catch(
+      (e: unknown) => e,
+    )
+    expect(error).toBeInstanceOf(PrivateAudienceUnpickedError)
+    expect((error as Error).message).toBe('Choose who can see this post.')
+    expect(pds.calls).toEqual([])
+    expect(prism.calls).toEqual([])
+  })
 })

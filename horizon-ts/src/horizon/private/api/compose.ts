@@ -48,6 +48,7 @@ import {
   type AudienceClients,
   findOrCreateStandingAudience,
   PrivateAudienceMissingError,
+  PrivateAudienceUnpickedError,
 } from '#/horizon/private/api/audiences'
 import {
   assembleEncodedRecord,
@@ -319,6 +320,8 @@ export async function planFirstPost(
       await assertOwnAudienceExists(queryClient, clients, audience.uri)
       return audience.uri
     }
+    // No audience chosen: never resolved to one (P5R7-L1).
+    if (audience.kind === 'unpicked') throw new PrivateAudienceUnpickedError()
     // A parent audience without a private parent: nothing to inherit.
     throw new PrivateAudienceMissingError()
   })()

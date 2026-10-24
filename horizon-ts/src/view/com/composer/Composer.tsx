@@ -332,7 +332,10 @@ export const ComposePost = ({
   const chatClient = useChatClient()
   const pdsClient = usePdsClient()
   // HORIZON: the composer owns the Public | Private record for its lifetime; a quote starts as the quoted post is
-  const {isPrivate, postingRoute} = usePrivateComposeSession(replyTo, initQuote)
+  const {isPrivate, audience, postingRoute} = usePrivateComposeSession(
+    replyTo,
+    initQuote,
+  )
   // HORIZON: the composer owns the media spoiler and content warning snapshot for its lifetime
   const composeSpoilers = useComposeSpoilerSession()
   const queryClient = useQueryClient()
@@ -755,7 +758,7 @@ export const ComposePost = ({
         loadedMedia,
         originalLocalRefs,
       })
-      // HORIZON: a draft saved Private comes back Private, with its audience
+      // HORIZON: a draft saved Private comes back Private, with its audience; one with no entry on this device comes back Private and unpicked
       applyDraftVisibility(draftSummary.id)
       // HORIZON: a draft's media spoilers and content warnings come back with it
       applyDraftSpoilers(draftSummary.id, posts)
@@ -1047,8 +1050,8 @@ export const ComposePost = ({
   )
 
   const canPost =
-    // HORIZON: Publish is disabled while a private-post blocker applies
-    privateComposeAllows(thread, isPrivate, postingRoute) &&
+    // HORIZON: Publish is disabled while a private-post blocker applies, an unpicked audience included
+    privateComposeAllows(thread, isPrivate, postingRoute, audience) &&
     !missingAltError &&
     !hasUnavailableChatInvite &&
     thread.posts.some(post => !isEmptyPost(post)) &&

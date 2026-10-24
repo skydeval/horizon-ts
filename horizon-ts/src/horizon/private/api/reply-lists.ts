@@ -5,7 +5,6 @@
  * curate lists in both visibilities.
  */
 
-import {TID} from '@atproto/common-web'
 import {type Client} from '@atproto/lex'
 import {type DidString, toDatetimeString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
@@ -16,6 +15,7 @@ import {
   AudienceNameInvalidError,
   normalizeMembers,
 } from '#/horizon/private/api/audiences'
+import {nextTid} from '#/horizon/tid-clock'
 import {com} from '#/lexicons'
 
 /** The stock list lexicon's name limit. */
@@ -75,7 +75,7 @@ export async function createReplyList(
     throw new AudienceNameInvalidError()
   }
   const now = toDatetimeString(new Date())
-  let tid = TID.next()
+  let tid = nextTid(did)
   const listRkey = tid.toString()
   const uri = `at://${did}/${LIST_COLLECTION}/${listRkey}`
   const writes: Create[] = [
@@ -92,7 +92,7 @@ export async function createReplyList(
     },
   ]
   for (const member of normalizeMembers(members, did)) {
-    tid = TID.next(tid)
+    tid = nextTid(did, tid)
     writes.push({
       $type: 'com.atproto.repo.applyWrites#create',
       collection: LISTITEM_COLLECTION,

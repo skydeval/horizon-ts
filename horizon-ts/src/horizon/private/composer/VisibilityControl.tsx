@@ -200,7 +200,11 @@ export function ComposerAudienceRow() {
   const inRow = state.showsVisibility && (!gtPhone || !COMPOSER_AUDIENCE_MENU)
   const blocker =
     PRIVATE_POSTING && state.isPrivate
-      ? privateComposeBlocker(state.context.thread, state.routes)
+      ? privateComposeBlocker(
+          state.context.thread,
+          state.routes,
+          state.compose.audience,
+        )
       : undefined
   const note =
     !blocker && state.inert && noteShown

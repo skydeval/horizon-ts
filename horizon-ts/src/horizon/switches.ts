@@ -327,6 +327,15 @@ export const REFRACT: boolean = true
 export const REFRACT_COMMUNITY_LABELER: boolean = true
 
 /**
+ * The per-account TID clock (Phase 5 design, Appendix A; `tid-clock/`): every
+ * client-made rkey and saved-feed id is minted with a random clock id and a
+ * counter of the account's own per page load, so accounts used in one page
+ * share neither. `false` makes `nextTid` and `nextTidStr` return stock's
+ * `TID.next` and `TID.nextStr`, for bisecting only.
+ */
+export const PER_ACCOUNT_TID_CLOCK: boolean = true
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading

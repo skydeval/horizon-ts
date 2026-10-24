@@ -1,5 +1,4 @@
 import {View} from 'react-native'
-import {TID} from '@atproto/common-web'
 import {type $Typed} from '@atproto/lex'
 import {AtUri, type AtUriString, toDatetimeString} from '@atproto/syntax'
 import {useLingui} from '@lingui/react/macro'
@@ -22,6 +21,8 @@ import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: per-account TID clock import
+import {nextTidStr} from '#/horizon/tid-clock'
 import {app, com} from '#/lexicons'
 import {CreateOrEditListDialog} from './CreateOrEditListDialog'
 
@@ -85,7 +86,8 @@ export function CreateListFromStarterPackDialog({
                 return {
                   $type: 'com.atproto.repo.applyWrites#create',
                   collection: 'app.bsky.graph.listitem',
-                  rkey: TID.nextStr(),
+                  // HORIZON: per-account TID clock
+                  rkey: nextTidStr(currentAccount.did),
                   value: listitemRecord,
                 }
               })

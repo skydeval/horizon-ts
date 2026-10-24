@@ -2,7 +2,6 @@ import {useState} from 'react'
 import {View} from 'react-native'
 import type Animated from 'react-native-reanimated'
 import {useAnimatedRef, useScrollOffset} from 'react-native-reanimated'
-import {TID} from '@atproto/common-web'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
@@ -42,6 +41,8 @@ import {InlineLinkText} from '#/components/Link'
 import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+// HORIZON: per-account TID clock import
+import {nextPreferenceId} from '#/horizon/tid-clock/preference-id'
 import {type app} from '#/lexicons'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'SavedFeeds'>
@@ -134,7 +135,8 @@ function SavedFeedsInner({
                 setCurrentFeeds(
                   RECOMMENDED_SAVED_FEEDS.map(f => ({
                     ...f,
-                    id: TID.nextStr(),
+                    // HORIZON: per-account TID clock
+                    id: nextPreferenceId(),
                   })),
                 )
               }
@@ -187,7 +189,8 @@ function SavedFeedsInner({
               onAddFeed={() =>
                 setCurrentFeeds(feeds => [
                   ...feeds,
-                  {...TIMELINE_SAVED_FEED, id: TID.next().toString()},
+                  // HORIZON: per-account TID clock
+                  {...TIMELINE_SAVED_FEED, id: nextPreferenceId()},
                 ])
               }
             />
@@ -325,7 +328,8 @@ function SavedFeedsA11y({
                 setCurrentFeeds(
                   RECOMMENDED_SAVED_FEEDS.map(f => ({
                     ...f,
-                    id: TID.nextStr(),
+                    // HORIZON: per-account TID clock
+                    id: nextPreferenceId(),
                   })),
                 )
               }
@@ -364,7 +368,8 @@ function SavedFeedsA11y({
               onAddFeed={() =>
                 setCurrentFeeds(feeds => [
                   ...feeds,
-                  {...TIMELINE_SAVED_FEED, id: TID.next().toString()},
+                  // HORIZON: per-account TID clock
+                  {...TIMELINE_SAVED_FEED, id: nextPreferenceId()},
                 ])
               }
             />

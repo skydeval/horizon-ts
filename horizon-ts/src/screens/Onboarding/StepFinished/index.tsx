@@ -1,6 +1,5 @@
 import {useCallback, useState} from 'react'
 import {View} from 'react-native'
-import {TID} from '@atproto/common-web'
 import {type Un$Typed} from '@atproto/lex'
 import {type AtUriString, toDatetimeString} from '@atproto/syntax'
 import {overwriteSavedFeeds, setInterestsPref, upsertProfile} from '@bsky/sdk'
@@ -44,6 +43,8 @@ import {ArrowRight_Stroke2_Corner0_Rounded as ArrowRight} from '#/components/ico
 import {Loader} from '#/components/Loader'
 import {useAnalytics} from '#/analytics'
 import {IS_WEB} from '#/env'
+// HORIZON: per-account TID clock import
+import {nextPreferenceId} from '#/horizon/tid-clock/preference-id'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {ValuePropositionPager} from './ValuePropositionPager'
@@ -120,15 +121,18 @@ export function StepFinished() {
           const feedsToSave: app.bsky.actor.defs.SavedFeed[] = [
             {
               ...DISCOVER_SAVED_FEED,
-              id: TID.nextStr(),
+              // HORIZON: per-account TID clock
+              id: nextPreferenceId(pdsClient.assertDid),
             },
             {
               ...TIMELINE_SAVED_FEED,
-              id: TID.nextStr(),
+              // HORIZON: per-account TID clock
+              id: nextPreferenceId(pdsClient.assertDid),
             },
             {
               ...VIDEO_SAVED_FEED,
-              id: TID.nextStr(),
+              // HORIZON: per-account TID clock
+              id: nextPreferenceId(pdsClient.assertDid),
             },
           ]
 
@@ -139,7 +143,8 @@ export function StepFinished() {
                 type: 'feed' as const,
                 value: f.uri,
                 pinned: true,
-                id: TID.nextStr(),
+                // HORIZON: per-account TID clock
+                id: nextPreferenceId(pdsClient.assertDid),
               })),
             )
           }

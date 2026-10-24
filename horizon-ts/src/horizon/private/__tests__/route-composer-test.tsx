@@ -107,8 +107,14 @@ import {
 } from '#/horizon/routing/membership'
 import {resetWriteRoutes} from '#/horizon/routing/write-route'
 import {privateComposeAllows} from '../composer/blockers'
+import {applyDraftVisibility, recordDraftVisibility} from '../composer/drafts'
 import {usePrivateComposeSession} from '../composer/session'
-import {getComposeVisibility, PUBLIC_COMPOSE} from '../composer/state'
+import {
+  chooseComposeVisibility,
+  getComposeVisibility,
+  PUBLIC_COMPOSE,
+  setComposeVisibility,
+} from '../composer/state'
 import {
   ComposerAudienceProvider,
   ComposerAudienceRow,
@@ -175,8 +181,8 @@ let canPost: boolean | undefined
  * into `privateComposeAllows` with a thread that never changes.
  */
 function Composer({replyTo}: {replyTo?: {uri: string}}) {
-  const {isPrivate, postingRoute} = usePrivateComposeSession(replyTo)
-  canPost = privateComposeAllows(thread, isPrivate, postingRoute)
+  const {isPrivate, audience, postingRoute} = usePrivateComposeSession(replyTo)
+  canPost = privateComposeAllows(thread, isPrivate, postingRoute, audience)
   return (
     <ComposerAudienceProvider
       replyTo={replyTo}
@@ -373,6 +379,86 @@ describe('Private on posting route encode (2K-3)', () => {
       'Private posting isn’t available for your account yet. Posting privately from your server isn’t available in this app yet.',
     )
     expect(mockPrewarm).not.toHaveBeenCalled()
+    screen.unmount()
+  })
+})
+
+describe('a draft restored with no visibility entry on this device (P5R7-L1)', () => {
+  const UNSAVED_NOTE =
+    'This draft’s visibility wasn’t saved on this device. Choose Public or who can see it.'
+
+  async function member() {
+    publish(LOCUS)
+    await answerMembership({status: 'member', features: ['private']})
+  }
+
+  it('comes back Private and unpicked: Post disabled, the note shown, Public offered', async () => {
+    await member()
+    const screen = show()
+    act(() => applyDraftVisibility('draft-from-another-device'))
+    expect(getComposeVisibility()).toEqual({
+      visibility: 'private',
+      audience: {kind: 'unpicked', why: 'unsaved'},
+      locked: false,
+    })
+    expect(canPost).toBe(false)
+    expect(screen.getByText(UNSAVED_NOTE)).toBeTruthy()
+    expect(mockItems.get('composerVisibilityPublic')).toBeDefined()
+    expect(mockRoot.props?.value).toBe('private')
+
+    // Picking Public enables Post and drops the note.
+    act(() => mockRoot.props?.onChange('public'))
+    expect(canPost).toBe(true)
+    expect(screen.queryByText(UNSAVED_NOTE)).toBeNull()
+    screen.unmount()
+  })
+
+  it('picking an audience enables Post', async () => {
+    await member()
+    const screen = show()
+    act(() => applyDraftVisibility('draft-from-another-device'))
+    expect(canPost).toBe(false)
+    act(() =>
+      chooseComposeVisibility({audience: {kind: 'mode', mode: 'followers'}}),
+    )
+    expect(getComposeVisibility().visibility).toBe('private')
+    expect(canPost).toBe(true)
+    expect(screen.queryByText(UNSAVED_NOTE)).toBeNull()
+    screen.unmount()
+  })
+
+  it('an unreadable table restores the same way', async () => {
+    await member()
+    mockLocal.set(`horizon:draft-visibility:${DID}`, '{not json')
+    const screen = show()
+    act(() => applyDraftVisibility('draft-1'))
+    expect(canPost).toBe(false)
+    expect(screen.getByText(UNSAVED_NOTE)).toBeTruthy()
+    screen.unmount()
+  })
+
+  it('a draft saved Public, or Private with an audience, restores with Post enabled', async () => {
+    await member()
+    setComposeVisibility(PUBLIC_COMPOSE)
+    recordDraftVisibility('public-draft')
+    setComposeVisibility({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'nobody'},
+      locked: false,
+    })
+    recordDraftVisibility('private-draft')
+    const screen = show()
+    act(() => applyDraftVisibility('public-draft'))
+    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    expect(canPost).toBe(true)
+    act(() => applyDraftVisibility('private-draft'))
+    expect(getComposeVisibility()).toEqual({
+      visibility: 'private',
+      audience: {kind: 'mode', mode: 'nobody'},
+      locked: false,
+    })
+    expect(canPost).toBe(true)
+    expect(screen.queryByText(UNSAVED_NOTE)).toBeNull()
     screen.unmount()
   })
 })

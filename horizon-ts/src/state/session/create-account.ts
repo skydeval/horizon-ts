@@ -1,4 +1,3 @@
-import {TID} from '@atproto/common-web'
 import {type Client} from '@atproto/lex'
 import {PasswordSession} from '@atproto/lex-password-session'
 import {toDatetimeString} from '@atproto/syntax'
@@ -21,6 +20,8 @@ import {
 } from '#/ageAssurance/data'
 import {unsafeGetAndComputeAgeAssurance} from '#/ageAssurance/state'
 import {features} from '#/analytics'
+// HORIZON: per-account TID clock import
+import {nextPreferenceId} from '#/horizon/tid-clock/preference-id'
 import {type app} from '#/lexicons'
 import {configureModerationForAccount} from './moderation'
 import {
@@ -200,11 +201,14 @@ function initializeProfile(
   )
 }
 
-function initializeSavedFeeds(client: Client) {
+// HORIZON: exported for the per-account TID clock's tests
+export function initializeSavedFeeds(client: Client) {
   return retryPostSignupTask('set initial feeds', 1, () =>
     client.call(overwriteSavedFeeds, [
-      {...DISCOVER_SAVED_FEED, id: TID.nextStr()},
-      {...TIMELINE_SAVED_FEED, id: TID.nextStr()},
+      // HORIZON: per-account TID clock
+      {...DISCOVER_SAVED_FEED, id: nextPreferenceId(client.assertDid)},
+      // HORIZON: per-account TID clock
+      {...TIMELINE_SAVED_FEED, id: nextPreferenceId(client.assertDid)},
     ]),
   )
 }
