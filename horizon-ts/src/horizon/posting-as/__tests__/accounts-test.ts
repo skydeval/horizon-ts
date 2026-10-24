@@ -285,6 +285,27 @@ describe('the temporary client (PP-16)', () => {
     expect(ownClientFor(OTHER)).toBeUndefined()
   })
 
+  it('an act-as hold shares the one client but leaves the account’s identity reads on prism (8.6, PP-20)', () => {
+    const actAs = acquireTemporaryClient(OTHER, {identity: false})
+    expect(actAs.pdsClient.assertDid).toBe(OTHER)
+    expect(ownClientFor(OTHER)).toBeUndefined()
+    // The composer choosing the same account shares the client and reads its own PDS.
+    const composer = acquireTemporaryClient(OTHER)
+    expect(composer).toBe(actAs)
+    expect(ownClientFor(OTHER)).toBe(composer.pdsClient)
+    // The act-as hold letting go keeps the composer's registration.
+    releaseTemporaryClient(OTHER, {identity: false})
+    expect(ownClientFor(OTHER)).toBe(composer.pdsClient)
+    releaseTemporaryClient(OTHER)
+    expect(ownClientFor(OTHER)).toBeUndefined()
+    // The composer letting go first ends the registration, not the act-as hold.
+    const held = acquireTemporaryClient(OTHER, {identity: false})
+    acquireTemporaryClient(OTHER)
+    releaseTemporaryClient(OTHER)
+    expect(ownClientFor(OTHER)).toBeUndefined()
+    expect(acquireTemporaryClient(OTHER, {identity: false})).toBe(held)
+  })
+
   it('an account that cannot act is refused', () => {
     const signedOut = {
       ...storedAccount(OTHER, LOCUS_URL, 'other.test'),

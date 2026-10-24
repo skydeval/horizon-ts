@@ -92,6 +92,12 @@ import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL} from '#/env'
+// HORIZON: posting as import
+import {
+  ActAsPostDialog,
+  ActAsPostMenuItems,
+  useActAsPost,
+} from '#/horizon/posting-as/ActAs'
 // HORIZON: menu items that govern public-only machinery are absent on private posts
 import {
   hidesDetachQuote,
@@ -165,6 +171,8 @@ let PostMenuItems = ({
   const postInteractionSettingsDialogControl = useDialogControl()
   const quotePostDetachConfirmControl = useDialogControl()
   const hideReplyConfirmControl = useDialogControl()
+  // HORIZON: posting as PA-6, PA-7: "Like as..." and "Repost as..." list the other signed-in accounts
+  const actAs = useActAsPost(post)
   const {mutateAsync: toggleReplyVisibility} =
     useToggleReplyVisibilityMutation()
 
@@ -551,6 +559,9 @@ let PostMenuItems = ({
           />
         )}
 
+        {/* HORIZON: posting as PA-6, PA-7: "Like as..." and "Repost as..." */}
+        {hasSession && <ActAsPostMenuItems actAs={actAs} />}
+
         {isAuthor && (
           <>
             <Menu.Group>
@@ -878,6 +889,8 @@ let PostMenuItems = ({
           </>
         )}
       </Menu.Outer>
+      {/* HORIZON: posting as PA-6, PA-7: the account list "Like as..." and "Repost as..." open */}
+      <ActAsPostDialog actAs={actAs} post={post} />
       <Prompt.Basic
         control={deletePromptControl}
         title={l`Delete this post?`}

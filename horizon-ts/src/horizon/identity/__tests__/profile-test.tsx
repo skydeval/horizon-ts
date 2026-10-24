@@ -21,6 +21,8 @@ jest.mock('#/state/session', () => ({
     currentAccount: mockIsMe
       ? {did: 'did:plc:authoraaaaaaaaaaaaaaaaaa'}
       : {did: 'did:plc:readeraaaaaaaaaaaaaaaaaa'},
+    // One account signed in: act as (5E) offers nothing.
+    accounts: [],
   }),
   useRequireAuth: () => (fn: () => unknown) => fn(),
 }))
@@ -297,10 +299,7 @@ beforeEach(() => {
     uriOf(AUTHOR, MEMBER, SPARROW),
     records.member('Sparrow', {pronouns: [{forms: ['they', 'them']}]}),
   )
-  world.records.set(
-    uriOf(AUTHOR, PRONOUNS),
-    records.pronouns([['it', 'its']]),
-  )
+  world.records.set(uriOf(AUTHOR, PRONOUNS), records.pronouns([['it', 'its']]))
 })
 
 afterEach(() => {
@@ -488,9 +487,9 @@ describe('the hover card (ID-19, P5R1-N3)', () => {
     )
     await advance()
     expect(textOf(screen.getByTestId('profilePronouns'))).toBe('it/its')
-    expect(screen.getByTestId('hoverFrontingNow').props.accessibilityLabel).toBe(
-      'Fronting now: Wren, she/her',
-    )
+    expect(
+      screen.getByTestId('hoverFrontingNow').props.accessibilityLabel,
+    ).toBe('Fronting now: Wren, she/her')
     expect(textOf(screen.getByTestId('pluralBadge'))).toContain('The Flock')
   })
 })

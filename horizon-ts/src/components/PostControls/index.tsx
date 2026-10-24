@@ -24,6 +24,8 @@ import {useFormatPostStatCount} from '#/components/PostControls/util'
 import * as Skele from '#/components/Skeleton'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
+// HORIZON: posting as import
+import {ActAsPostDialog, useActAsPost} from '#/horizon/posting-as/ActAs'
 // HORIZON: a private post's reply and quote limits are checked before the composer opens
 import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 // HORIZON: a sending or failed private post shows its status in place of the controls
@@ -105,6 +107,8 @@ let PostControls = ({
   const privateControls = privateControlsFor(post.uri)
   // HORIZON: a visitor-form restored view hides like, repost and quote
   const restoredActionsHidden = useRestoredActionsHidden(post)
+  // HORIZON: posting as PA-6: a long press on like lists the other signed-in accounts to like as
+  const likeAs = useActAsPost(post)
   const replyDisabled = post.viewer?.replyDisabled
   const {gtPhone} = useBreakpoints()
   const formatPostStatCount = useFormatPostStatCount()
@@ -300,6 +304,10 @@ let PostControls = ({
               active={Boolean(post.viewer?.like)}
               activeColor={t.palette.pink}
               onPress={() => requireAuth(() => onPressToggleLike())}
+              // HORIZON: posting as PA-6: a long press on like lists the other signed-in accounts to like as
+              onLongPress={
+                likeAs.available ? () => likeAs.open('like') : undefined
+              }
               label={
                 post.viewer?.like
                   ? l({
@@ -386,6 +394,8 @@ let PostControls = ({
           forceGoogleTranslate={forceGoogleTranslate}
         />
       </View>
+      {/* HORIZON: posting as PA-6: the account list a long press on like opens */}
+      <ActAsPostDialog actAs={likeAs} post={post} />
     </View>
   )
 }

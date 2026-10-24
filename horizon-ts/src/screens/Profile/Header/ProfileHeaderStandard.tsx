@@ -42,6 +42,8 @@ import {useActorStatus} from '#/features/liveNow'
 import {ProfileHeaderLinks} from '#/features/profileLinks'
 // HORIZON: identity import
 import {ProfileHeaderIdentity} from '#/horizon/identity/ProfileIdentity'
+// HORIZON: posting as import
+import {ActAsFollowDialog, useActAsProfile} from '#/horizon/posting-as/ActAs'
 // HORIZON: C-8, a restored view's community labeler for members
 import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
@@ -256,6 +258,8 @@ export function HeaderStandardButtons({
   )
   // HORIZON: a visitor-form restored view hides follow
   const restoredActionsHidden = useRestoredActionsHidden(profile)
+  // HORIZON: posting as PA-8: a long press on follow lists the other signed-in accounts to follow as
+  const followAs = useActAsProfile(profile.did)
   const [, queueUnblock] = useProfileBlockMutationQueue(profile)
   const editProfileControl = useDialogControl()
   const inviteFriendsControl = useDialogControl()
@@ -433,6 +437,10 @@ export function HeaderStandardButtons({
                 }
                 onPress={
                   profile.viewer?.following ? onPressUnfollow : onPressFollow
+                }
+                // HORIZON: posting as PA-8: a long press on follow lists the other signed-in accounts to follow as
+                onLongPress={
+                  followAs.available ? () => followAs.open('follow') : undefined
                 }>
                 {!profile.viewer?.following && <ButtonIcon icon={Plus} />}
                 <ButtonText>
@@ -449,6 +457,12 @@ export function HeaderStandardButtons({
         </>
       ) : null}
       <ProfileMenu profile={profile} />
+      {/* HORIZON: posting as PA-8: the account list a long press on follow opens */}
+      <ActAsFollowDialog
+        actAs={followAs}
+        did={profile.did}
+        handle={profile.handle}
+      />
 
       <Prompt.Basic
         control={unblockPromptControl}

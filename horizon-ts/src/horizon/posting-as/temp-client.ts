@@ -15,8 +15,10 @@
  * the stored session: it only stops its own requests. One client per
  * account, counted: the composer holds it while that account is chosen, and
  * a publish holds it until its front write and background work settle.
- * While a client exists its account's identity records are read from its own
- * PDS through it (`registerOwnIdentityClient`).
+ * While the composer holds a client its account's identity records are read
+ * from its own PDS through it (`registerOwnIdentityClient`); an act-as
+ * action (`act-as.ts`) holds the same client without that, so the account's
+ * records stay on prism for display (PP-20).
  */
 
 import {type Agent, type Client} from '@atproto/lex'
@@ -168,30 +170,46 @@ export function createTemporaryClient(account: SessionAccount): Built {
 type Entry = {
   built: Built
   refs: number
-  unregister: () => void
+  /** The holds that read the account's identity records through it. */
+  identityRefs: number
+  unregister: (() => void) | undefined
 }
+
+/** Whether a hold reads the account's identity records through the client. */
+export type TemporaryHold = {identity?: boolean}
 
 const entries = new Map<string, Entry>()
 
 /**
  * Hold `did`'s temporary client, making it when none is held. Call
- * {@link releaseTemporaryClient} once for every acquire.
+ * {@link releaseTemporaryClient} once for every acquire, with the same
+ * `identity`. One client per account whoever holds it, so a password
+ * session's tokens rotate in one place.
  */
-export function acquireTemporaryClient(did: string): PostingClients {
-  const held = entries.get(did)
-  if (held) {
-    held.refs++
-    return held.built.clients
+export function acquireTemporaryClient(
+  did: string,
+  {identity = true}: TemporaryHold = {},
+): PostingClients {
+  let held = entries.get(did)
+  if (!held) {
+    const account = storedAccountFor(did)
+    if (!account) throw new TemporaryClientUnavailableError(did)
+    held = {
+      built: createTemporaryClient(account),
+      refs: 0,
+      identityRefs: 0,
+      unregister: undefined,
+    }
+    entries.set(did, held)
   }
-  const account = storedAccountFor(did)
-  if (!account) throw new TemporaryClientUnavailableError(did)
-  const built = createTemporaryClient(account)
-  entries.set(did, {
-    built,
-    refs: 1,
-    unregister: registerOwnIdentityClient(did, built.clients.pdsClient),
-  })
-  return built.clients
+  held.refs++
+  if (identity && held.identityRefs++ === 0) {
+    held.unregister = registerOwnIdentityClient(
+      did,
+      held.built.clients.pdsClient,
+    )
+  }
+  return held.built.clients
 }
 
 /** `did`'s temporary client while one is held, else `undefined`. */
@@ -203,13 +221,20 @@ export function peekTemporaryClient(did: string): PostingClients | undefined {
  * Let go of one hold; the last one stops the client's requests and
  * unregisters its identity reads.
  */
-export function releaseTemporaryClient(did: string) {
+export function releaseTemporaryClient(
+  did: string,
+  {identity = true}: TemporaryHold = {},
+) {
   const held = entries.get(did)
   if (!held) return
   held.refs--
+  if (identity && held.identityRefs > 0 && --held.identityRefs === 0) {
+    held.unregister?.()
+    held.unregister = undefined
+  }
   if (held.refs > 0) return
   entries.delete(did)
-  held.unregister()
+  held.unregister?.()
   held.built.dispose()
 }
 
@@ -222,14 +247,14 @@ export function holdTemporaryClientUntil(
 ) {
   if (!entries.has(did)) return
   entries.get(did)!.refs++
-  void settled.finally(() => releaseTemporaryClient(did))
+  void settled.finally(() => releaseTemporaryClient(did, {identity: false}))
 }
 
 /** Test-only: drop every client. */
 export function resetTemporaryClients() {
   for (const [did, held] of entries) {
     entries.delete(did)
-    held.unregister()
+    held.unregister?.()
     held.built.dispose()
   }
 }

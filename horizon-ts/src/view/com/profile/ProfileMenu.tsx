@@ -65,6 +65,12 @@ import {
   ReportLinkDialog,
   useReportableProfileLinks,
 } from '#/features/profileLinks'
+// HORIZON: posting as import
+import {
+  ActAsFollowDialog,
+  ActAsFollowMenuItem,
+  useActAsProfile,
+} from '#/horizon/posting-as/ActAs'
 // HORIZON: a visitor-form restored view hides follow
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
@@ -101,6 +107,8 @@ let ProfileMenu = ({
   )
   // HORIZON: a visitor-form restored view hides follow
   const restoredActionsHidden = useRestoredActionsHidden(profile)
+  // HORIZON: posting as PA-8: "Follow as..." lists the other signed-in accounts
+  const followAs = useActAsProfile(profile.did)
 
   const blockPromptControl = Prompt.usePromptControl()
   const loggedOutWarningPromptControl = Prompt.usePromptControl()
@@ -377,6 +385,10 @@ let ProfileMenu = ({
                       )}
                   </>
                 )}
+                {/* HORIZON: posting as PA-8: "Follow as..." */}
+                {!restoredActionsHidden && (
+                  <ActAsFollowMenuItem actAs={followAs} />
+                )}
                 <Menu.Item
                   testID="profileHeaderDropdownStarterPackAddRemoveBtn"
                   label={l`Add to Starter Packs`}
@@ -577,6 +589,12 @@ let ProfileMenu = ({
           ) : null}
         </Menu.Outer>
       </Menu.Root>
+      {/* HORIZON: posting as PA-8: the account list "Follow as..." opens */}
+      <ActAsFollowDialog
+        actAs={followAs}
+        did={profile.did}
+        handle={profile.handle}
+      />
       <StarterPackDialog
         control={addToStarterPacksDialogControl}
         targetDid={profile.did}

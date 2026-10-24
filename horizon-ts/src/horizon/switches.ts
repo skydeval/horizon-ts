@@ -372,6 +372,17 @@ export const PLURAL_EDITING: boolean = true
 export const POSTING_AS: boolean = true
 
 /**
+ * Act as another signed-in account on like, repost and follow (Phase 5
+ * design 8.6, section 10; `posting-as/act-as.ts`): with more than one
+ * account signed in, a long press on the like and follow buttons, and
+ * "Like as...", "Repost as..." and "Follow as..." in the post and profile
+ * menus, open the account list; the action runs through that account's
+ * temporary client and leaves the current account's shadows alone.
+ * `false`: stock like, repost and follow.
+ */
+export const ACT_AS_CONTROLS: boolean = true
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading
