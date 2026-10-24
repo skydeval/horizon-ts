@@ -93,7 +93,7 @@ import {resetPrismHealth} from '#/horizon/routing/health'
 import {writeLocal} from '#/horizon/session/local-store'
 import {gapInfoOf} from '#/horizon/thread-lens/adapt'
 import {resetLensRefusals, resetLensWaits} from '#/horizon/thread-lens/api'
-import {THREAD_LENS_PREFERENCE_KEY} from '#/horizon/thread-lens/preference'
+import {threadLensPreferenceKey} from '#/horizon/thread-lens/preference'
 import {resetLensRegistry} from '#/horizon/thread-lens/registry'
 import {LENS_ROOT} from '#/horizon/thread-lens/snapshot'
 import {
@@ -199,7 +199,7 @@ beforeEach(() => {
   resetLensRefusals()
   resetLensWaits()
   resetLensRegistry()
-  writeLocal(THREAD_LENS_PREFERENCE_KEY, undefined)
+  writeLocal(threadLensPreferenceKey(READER), undefined)
   clearCurrentClients()
 })
 
@@ -230,7 +230,7 @@ describe('usePostThread with Thread Lens', () => {
   })
 
   it('reads the stock thread under the stock key with the lens off', async () => {
-    writeLocal(THREAD_LENS_PREFERENCE_KEY, '0')
+    writeLocal(threadLensPreferenceKey(READER), '0')
     const {result} = renderThread(ROOT.uri)
     await settle()
     expect(result.current.context.postThreadQueryKey[0]).toBe('post-thread-v2')

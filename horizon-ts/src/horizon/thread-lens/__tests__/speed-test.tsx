@@ -96,7 +96,7 @@ import {resetPrismHealth} from '#/horizon/routing/health'
 import {writeLocal} from '#/horizon/session/local-store'
 import {resetLensRefusals, resetLensWaits} from '#/horizon/thread-lens/api'
 import {installLensDirect, resetLensDirect} from '#/horizon/thread-lens/direct'
-import {THREAD_LENS_PREFERENCE_KEY} from '#/horizon/thread-lens/preference'
+import {threadLensPreferenceKey} from '#/horizon/thread-lens/preference'
 import {
   heldLensPrewarmCount,
   prewarmLensThread,
@@ -219,7 +219,7 @@ beforeEach(() => {
   })
   resetLensPrewarms()
   resetLensViewPool()
-  writeLocal(THREAD_LENS_PREFERENCE_KEY, undefined)
+  writeLocal(threadLensPreferenceKey(READER), undefined)
   clearCurrentClients()
 })
 
@@ -338,7 +338,7 @@ describe('Thread Lens press-in pre-warm', () => {
       ...ROOT,
       uri: `at://${AUTHOR}/tools.kryphocron.feed.postPrivate/3kpriv2222222`,
     })
-    writeLocal(THREAD_LENS_PREFERENCE_KEY, '0')
+    writeLocal(threadLensPreferenceKey(READER), '0')
     prewarmLensThread(qc, ROOT)
     await settle()
     expect(heldLensPrewarmCount()).toBe(0)

@@ -68,7 +68,7 @@ import {
   getThreadLensPreference,
   parseLensPreference,
   setThreadLensPreference,
-  THREAD_LENS_PREFERENCE_KEY,
+  threadLensPreferenceKey,
   useThreadLensPreference,
 } from '#/horizon/thread-lens/preference'
 import {
@@ -78,6 +78,8 @@ import {
 import {AUTHOR, OTHER_READER, privateUriOf, READER, uriOf} from './harness'
 
 const ANCHOR = uriOf('3kanchor22222')
+/** The old unkeyed device value, ignored since the value is per account. */
+const LEGACY_KEY = 'horizon:threadLens'
 const PRIVATE_ANCHOR = privateUriOf('3kprivanchor2')
 
 beforeEach(() => {
@@ -86,7 +88,9 @@ beforeEach(() => {
   resetLensRefusals()
   resetLensRegistry()
   resetLensAvailability()
-  writeLocal(THREAD_LENS_PREFERENCE_KEY, undefined)
+  writeLocal(threadLensPreferenceKey(READER), undefined)
+  writeLocal(threadLensPreferenceKey(OTHER_READER), undefined)
+  writeLocal(LEGACY_KEY, undefined)
 })
 
 describe('served (3.2)', () => {
@@ -170,35 +174,87 @@ describe('the device value (4.2)', () => {
     expect(getThreadLensPreference(READER)).toBe(true)
   })
 
-  it('reads 1, 0 and Horizon 1.0 values, and garbage as the default', () => {
+  it('reads 1, 0, true and false, and garbage as the default', () => {
     expect(parseLensPreference('1')).toBe(true)
     expect(parseLensPreference('0')).toBe(false)
     expect(parseLensPreference('true')).toBe(true)
     expect(parseLensPreference('false')).toBe(false)
     expect(parseLensPreference('yes')).toBeUndefined()
     setState(READER, 'member')
-    writeLocal(THREAD_LENS_PREFERENCE_KEY, 'false')
+    writeLocal(threadLensPreferenceKey(READER), 'false')
     expect(getThreadLensPreference(READER)).toBe(false)
-    writeLocal(THREAD_LENS_PREFERENCE_KEY, 'garbage')
+    writeLocal(threadLensPreferenceKey(READER), 'garbage')
     expect(getThreadLensPreference(READER)).toBe(true)
   })
 
-  it('writes the account default as no value, so other accounts keep theirs', () => {
+  it('ignores the old unkeyed device value', () => {
+    setState(READER, 'member')
+    setState(OTHER_READER, 'not-member')
+    writeLocal(LEGACY_KEY, '0')
+    expect(getThreadLensPreference(READER)).toBe(true)
+    writeLocal(LEGACY_KEY, '1')
+    expect(getThreadLensPreference(OTHER_READER)).toBe(false)
+  })
+
+  it('keeps one value per account, and writes the default as no value', () => {
     setState(READER, 'member')
     setState(OTHER_READER, 'not-member')
     setThreadLensPreference(READER, false)
-    expect(readLocal(THREAD_LENS_PREFERENCE_KEY)).toBe('0')
-    // A member's "0" leaves a non-member off.
+    expect(readLocal(threadLensPreferenceKey(READER))).toBe('0')
+    expect(readLocal(threadLensPreferenceKey(OTHER_READER))).toBeUndefined()
     expect(getThreadLensPreference(OTHER_READER)).toBe(false)
-    setThreadLensPreference(OTHER_READER, false)
-    expect(readLocal(THREAD_LENS_PREFERENCE_KEY)).toBeUndefined()
-    // check 18: N turns the lens off, M on the same device is on.
-    expect(getThreadLensPreference(READER)).toBe(true)
     setThreadLensPreference(OTHER_READER, true)
-    expect(readLocal(THREAD_LENS_PREFERENCE_KEY)).toBe('1')
-    expect(getThreadLensPreference(READER)).toBe(true)
+    expect(readLocal(threadLensPreferenceKey(OTHER_READER))).toBe('1')
+    // A's choice is untouched by B's.
+    expect(getThreadLensPreference(READER)).toBe(false)
+    setThreadLensPreference(OTHER_READER, false)
+    expect(readLocal(threadLensPreferenceKey(OTHER_READER))).toBeUndefined()
     setThreadLensPreference(READER, true)
-    expect(readLocal(THREAD_LENS_PREFERENCE_KEY)).toBeUndefined()
+    expect(readLocal(threadLensPreferenceKey(READER))).toBeUndefined()
+  })
+
+  it('check 18: A off, switch to B, B keeps its own value; back to A, still off', () => {
+    setState(READER, 'member')
+    setState(OTHER_READER, 'member')
+    const {result, rerender} = renderHook(
+      ({did}: {did?: string}) => useThreadLensPreference(did),
+      {initialProps: {did: READER}},
+    )
+    expect(result.current).toBe(true)
+    act(() => setThreadLensPreference(READER, false))
+    expect(result.current).toBe(false)
+    // B has never chosen: its default (on, as a member).
+    rerender({did: OTHER_READER})
+    expect(result.current).toBe(true)
+    // Back to A: still off.
+    rerender({did: READER})
+    expect(result.current).toBe(false)
+    // B with a choice of its own keeps it across switches, and A's writes
+    // do not reach it.
+    rerender({did: OTHER_READER})
+    act(() => setThreadLensPreference(OTHER_READER, false))
+    expect(result.current).toBe(false)
+    rerender({did: READER})
+    act(() => setThreadLensPreference(READER, true))
+    expect(result.current).toBe(true)
+    rerender({did: OTHER_READER})
+    expect(result.current).toBe(false)
+  })
+
+  it('check 18 for a non-member: B keeps its default off after A turns it on', () => {
+    setState(READER, 'not-member')
+    setState(OTHER_READER, 'not-member')
+    const {result, rerender} = renderHook(
+      ({did}: {did?: string}) => useThreadLensPreference(did),
+      {initialProps: {did: READER}},
+    )
+    expect(result.current).toBe(false)
+    act(() => setThreadLensPreference(READER, true))
+    expect(result.current).toBe(true)
+    rerender({did: OTHER_READER})
+    expect(result.current).toBe(false)
+    rerender({did: READER})
+    expect(result.current).toBe(true)
   })
 
   it('turns an unset value on when indexing becomes member, and follows writes', () => {
@@ -208,7 +264,10 @@ describe('the device value (4.2)', () => {
     act(() => setState(READER, 'member'))
     expect(result.current).toBe(true)
     // Another tab's write notifies the same way (`subscribeLocal`).
-    act(() => writeLocal(THREAD_LENS_PREFERENCE_KEY, '0'))
+    act(() => writeLocal(threadLensPreferenceKey(READER), '0'))
+    expect(result.current).toBe(false)
+    // Another account's write does not.
+    act(() => writeLocal(threadLensPreferenceKey(OTHER_READER), '1'))
     expect(result.current).toBe(false)
   })
 })

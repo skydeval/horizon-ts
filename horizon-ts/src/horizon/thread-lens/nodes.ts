@@ -123,6 +123,8 @@ export type PublicOutcome =
       kind: 'gap'
       gap: 'blocked-by-you' | 'blocking-you' | 'content-stripped'
       list?: ListViewBasic
+      /** The list's URI when the view named it without its list view. */
+      listUri?: string
     }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -395,7 +397,9 @@ function effectiveNode(
           gap: outcome.gap,
           ...(outcome.list
             ? {list: outcome.list, listUri: outcome.list.uri}
-            : {}),
+            : outcome.listUri
+              ? {listUri: outcome.listUri}
+              : {}),
           bridging,
         }
       default:

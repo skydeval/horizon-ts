@@ -350,6 +350,52 @@ describe('the composer note (8.5)', () => {
     })
     expect(lensReplyNoteHolds(qc, D1)).toBe(false)
   })
+
+  it('goes on past a cut chain in an older snapshot, never past a held post', () => {
+    const qc = new QueryClient()
+    const rootKey = KEY
+    const d1Key = lensQueryKey({...KEY[1], anchor: D1})
+    qc.setQueryData(
+      rootKey,
+      {
+        lens: snapshot([
+          post('3kroot2222222'),
+          gap(B1, 'blocking-you', ROOT),
+          post('3kc1222222222', B1),
+          post('3kd1222222222', C1),
+        ]),
+      },
+      {updatedAt: 1},
+    )
+    // D1's own screen, read later, holds C1 without its parent B1.
+    qc.setQueryData(
+      d1Key,
+      {
+        lens: snapshot([post('3kc1222222222', B1), post('3kd1222222222', C1)], {
+          anchor: {uri: D1, prismAnchor: D1},
+        }),
+      },
+      {updatedAt: 2},
+    )
+    expect(lensReplyNoteHolds(qc, D1)).toBe(true)
+    // A later read that holds B1 as a post (an unblock) decides alone.
+    qc.setQueryData(
+      d1Key,
+      {
+        lens: snapshot(
+          [
+            post('3kroot2222222'),
+            post('3kb1222222222', ROOT, BLOCKED),
+            post('3kc1222222222', B1),
+            post('3kd1222222222', C1),
+          ],
+          {anchor: {uri: D1, prismAnchor: D1}},
+        ),
+      },
+      {updatedAt: 3},
+    )
+    expect(lensReplyNoteHolds(qc, D1)).toBe(false)
+  })
 })
 
 describe('the screen hook (TH-6)', () => {

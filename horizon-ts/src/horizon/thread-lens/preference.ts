@@ -1,17 +1,21 @@
 /*
- * The Thread Lens device value (Phase 4 design 4.2, TL-16): one per device,
- * not per account, under `horizon:threadLens` in Horizon's own device keys,
- * which tell other tabs on web.
+ * The Thread Lens device value (Phase 4 design 4.2, TL-16), kept per account
+ * on the device (skydeval, after live check 18): one key per DID,
+ * `horizon:threadLens:<did>`, in Horizon's own device keys, which tell other
+ * tabs on web. Changing it for one account never changes what another
+ * account on the same device gets.
  *
- * Stored values are `"1"` and `"0"`; Horizon 1.0's `"true"` and `"false"`,
- * written to the same key on the same origin, read as the same. Anything
- * else, or no value, means the account's default: on for a `member`, off for
- * every other membership state. Writing the value that equals the current
- * account's default removes the key, so the only stored values are a
- * member's "off" and a non-member's "on", and neither changes what another
- * account on the device gets by default.
+ * Stored values are `"1"` and `"0"` (`"true"` and `"false"` read the same).
+ * Anything else, or no value, means the account's default: on for a
+ * `member`, off for every other membership state. Writing the value that
+ * equals the account's current default removes its key, so an `indexing`
+ * account that never chose still turns on by itself when it becomes
+ * `member`.
  *
- * Render-time readers subscribe (TL-34): the device key through
+ * The old unkeyed `horizon:threadLens` (one value for the whole device) is
+ * ignored: Horizon is pre-alpha, so it is not migrated.
+ *
+ * Render-time readers subscribe (TL-34): the account's key through
  * `subscribeLocal`, membership through `useMembership`.
  */
 
@@ -28,8 +32,10 @@ import {
   writeLocal,
 } from '#/horizon/session/local-store'
 
-/** The device key (4.2). */
-export const THREAD_LENS_PREFERENCE_KEY = 'horizon:threadLens'
+/** The device key of `did`'s value (4.2). */
+export function threadLensPreferenceKey(did: string): string {
+  return `horizon:threadLens:${did}`
+}
 
 /** The stored choice, if any: `"1"` / `"true"` on, `"0"` / `"false"` off. */
 export function parseLensPreference(
@@ -45,43 +51,46 @@ export function lensDefaultFor(state: MembershipState): boolean {
   return state === 'member'
 }
 
-/** The device's stored choice, if any. A plain read, for non-render code. */
-export function readLensPreference(): boolean | undefined {
-  return parseLensPreference(readLocal(THREAD_LENS_PREFERENCE_KEY))
+/** `did`'s stored choice on this device, if any. A plain read. */
+export function readLensPreference(did: string): boolean | undefined {
+  return parseLensPreference(readLocal(threadLensPreferenceKey(did)))
 }
 
 /** Whether the lens is on for `did` on this device. A plain read. */
 export function getThreadLensPreference(did: string | undefined): boolean {
   if (!did) return false
-  return readLensPreference() ?? lensDefaultFor(getMembership(did))
+  return readLensPreference(did) ?? lensDefaultFor(getMembership(did))
 }
 
 /**
- * Turn the lens on or off for this device, from `did`'s controls. The
- * account's own default is written as no value (4.2).
+ * Turn the lens on or off for `did` on this device. The account's own
+ * default is written as no value (4.2).
  */
 export function setThreadLensPreference(did: string | undefined, on: boolean) {
   if (!did) return
   const fallback = lensDefaultFor(getMembership(did))
   writeLocal(
-    THREAD_LENS_PREFERENCE_KEY,
+    threadLensPreferenceKey(did),
     on === fallback ? undefined : on ? '1' : '0',
   )
 }
 
-function subscribePreference(listener: () => void) {
-  return subscribeLocal(THREAD_LENS_PREFERENCE_KEY, listener)
+function noKey() {
+  return () => {}
 }
 
 /**
  * Whether the lens is on for `did` on this device, kept current: another
- * tab's write, either control, and `did`'s membership becoming `member`
- * (an `indexing` account's unset value turns on by itself) re-render.
+ * tab's write for `did`, either control, and `did`'s membership becoming
+ * `member` (an `indexing` account's unset value turns on by itself)
+ * re-render. An account switch re-reads under the new account's key.
  */
 export function useThreadLensPreference(did: string | undefined): boolean {
+  const key = did ? threadLensPreferenceKey(did) : undefined
   // Both reads run on every render (rules of hooks).
-  const stored = useSyncExternalStore(subscribePreference, () =>
-    parseLensPreference(readLocal(THREAD_LENS_PREFERENCE_KEY)),
+  const stored = useSyncExternalStore(
+    key ? listener => subscribeLocal(key, listener) : noKey,
+    () => (key ? parseLensPreference(readLocal(key)) : undefined),
   )
   const membership = useMembership(did)
   if (!did) return false

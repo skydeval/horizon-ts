@@ -17,6 +17,7 @@
  */
 
 import {type Client} from '@atproto/lex'
+import {AtUri} from '@atproto/syntax'
 
 import {fetchPublicPosts} from '#/horizon/private/adapt/feed-view'
 import {readRestored} from '#/horizon/refract/marker'
@@ -71,11 +72,28 @@ export function restoredViewOf(node: CheckedPost): PostView | undefined {
   return post as unknown as PostView
 }
 
-/** The block gap the public view's author state says, if any (6.3). */
+/** Whether `uri` is an `app.bsky.graph.list` AT-URI. */
+function isListUri(uri: string): boolean {
+  try {
+    return new AtUri(uri).collection === 'app.bsky.graph.list'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The block gap the public view's author state says, if any (6.3). A list
+ * block names its list (8.3): the list view when the AppView carried one,
+ * else the list URI stock puts in `blocking` for a block through a list
+ * (its list view can be missing when the AppView could not read the list).
+ */
 function blockOutcome(view: PostView): PublicOutcome | undefined {
   const viewer = view.author.viewer
   if (viewer?.blockingByList) {
     return {kind: 'gap', gap: 'blocked-by-you', list: viewer.blockingByList}
+  }
+  if (viewer?.blocking && isListUri(viewer.blocking)) {
+    return {kind: 'gap', gap: 'blocked-by-you', listUri: viewer.blocking}
   }
   if (viewer?.blocking) return {kind: 'gap', gap: 'blocked-by-you'}
   if (viewer?.blockedBy) return {kind: 'gap', gap: 'blocking-you'}
