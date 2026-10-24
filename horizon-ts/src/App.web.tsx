@@ -84,9 +84,13 @@ import {HorizonHost} from '#/horizon/auth/HorizonHost'
 import {redirectLocalhostToLoopbackIp} from '#/horizon/session/dev-origin'
 // HORIZON: Horizon's app-wide host, the callback-load check and the dev origin fix
 import {isOAuthCallbackLoad} from '#/horizon/session/oauth-callback'
+// HORIZON: the sdk's preference ids on each account's own clock (Phase 5, A)
+import {installSdkPreferenceIds} from '#/horizon/tid-clock/sdk-ids'
 import {Splash} from '#/Splash'
 import {Provider as HideBottomBarBorderProvider} from './lib/hooks/useHideBottomBarBorder'
 
+// HORIZON: before any account's preferences are read
+installSdkPreferenceIds()
 void identifyDevice(getDeviceId(), setupDeviceId)
 // HORIZON: keep local development on 127.0.0.1, where OAuth state lives
 redirectLocalhostToLoopbackIp()

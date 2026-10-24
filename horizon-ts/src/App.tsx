@@ -90,8 +90,12 @@ import * as Geo from '#/geolocation'
 import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 // HORIZON: the "spoilers from other apps" choice (change list 2)
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
+// HORIZON: the sdk's preference ids on each account's own clock (Phase 5, A)
+import {installSdkPreferenceIds} from '#/horizon/tid-clock/sdk-ids'
 import {Splash} from '#/Splash'
 
+// HORIZON: before any account's preferences are read
+installSdkPreferenceIds()
 void identifyDevice(getDeviceId(), setupDeviceId)
 
 void SplashScreen.preventAutoHideAsync()

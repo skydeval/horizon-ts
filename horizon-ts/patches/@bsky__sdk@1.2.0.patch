@@ -1,0 +1,195 @@
+diff --git a/dist/actions/preferences.js b/dist/actions/preferences.js
+index f59c5ba09e26f49a1439961a2ae8b34535efb616..24907cc9a10adebbc86a9649ce3738ca48b7fe33 100644
+--- a/dist/actions/preferences.js
++++ b/dist/actions/preferences.js
+@@ -127,7 +127,7 @@ export const getPreferences = async (client, input) => {
+         const uniqueMigratedSavedFeeds = new Map();
+         // Insert Following feed first (old agent.ts ~697-712)
+         uniqueMigratedSavedFeeds.set('timeline', {
+-            id: nextTid(),
++            id: nextTid(client),
+             type: 'timeline',
+             value: 'following',
+             pinned: true,
+@@ -138,7 +138,7 @@ export const getPreferences = async (client, input) => {
+             if (type === undefined || type === 'timeline')
+                 continue;
+             uniqueMigratedSavedFeeds.set(uri, {
+-                id: nextTid(),
++                id: nextTid(client),
+                 type,
+                 value: uri,
+                 pinned: true,
+@@ -151,7 +151,7 @@ export const getPreferences = async (client, input) => {
+                 if (type === undefined || type === 'timeline')
+                     continue;
+                 uniqueMigratedSavedFeeds.set(uri, {
+-                    id: nextTid(),
++                    id: nextTid(client),
+                     type,
+                     value: uri,
+                     pinned: false,
+@@ -168,7 +168,7 @@ export const getPreferences = async (client, input) => {
+         // No v1 either, add a default timeline feed
+         migratedSavedFeeds = [
+             {
+-                id: nextTid(),
++                id: nextTid(client),
+                 type: 'timeline',
+                 value: 'following',
+                 pinned: true,
+@@ -439,7 +439,7 @@ export const addSavedFeeds = async (client, feeds) => {
+         type,
+         value,
+         pinned,
+-        id: nextTid(),
++        id: nextTid(client),
+     }));
+     newFeeds.forEach(validateSavedFeed);
+     await updateSavedFeedsV2Prefs(client, (items) => [...items, ...newFeeds]);
+@@ -581,10 +581,10 @@ export const setInterestsPref = prefsUpdater(({ tags }) => (prefs) => {
+ /**
+  * Helper: backfill id for legacy muted words without id (old agent.ts:1626-1631)
+  */
+-function migrateLegacyMutedWordsItems(items) {
++function migrateLegacyMutedWordsItems(items, client) {
+     return items.map((item) => ({
+         ...item,
+-        id: item.id || nextTid(),
++        id: item.id || nextTid(client),
+     }));
+ }
+ /**
+@@ -600,14 +600,14 @@ function matchMutedWord(existingWord, newWord) {
+ /**
+  * Add a single muted word. (old agent.ts:1070-1112)
+  */
+-export const addMutedWord = prefsUpdater((mutedWord) => {
++export const addMutedWord = prefsUpdater((mutedWord, client) => {
+     const sanitizedValue = sanitizeMutedWordValue(mutedWord.value);
+     if (!sanitizedValue)
+         return null;
+     return (prefs) => {
+         let mutedWordsPrefEntry = prefs.find((p) => is$typedObject(p, mutedWordsPref.$type));
+         const newMutedWord = {
+-            id: nextTid(),
++            id: nextTid(client),
+             value: sanitizedValue,
+             targets: mutedWord.targets || [],
+             actorTarget: mutedWord.actorTarget || 'all',
+@@ -616,7 +616,7 @@ export const addMutedWord = prefsUpdater((mutedWord) => {
+         if (mutedWordsPrefEntry) {
+             mutedWordsPrefEntry.items.push(newMutedWord);
+             // Migrate any old muted words that don't have an id
+-            mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items);
++            mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items, client);
+         }
+         else {
+             mutedWordsPrefEntry = mutedWordsPref.$build({
+@@ -643,7 +643,7 @@ export const upsertMutedWords = async (client, words) => {
+ /**
+  * Update a muted word in user preferences. (old agent.ts:1136-1176)
+  */
+-export const updateMutedWord = prefsUpdater((mutedWord) => (prefs) => {
++export const updateMutedWord = prefsUpdater((mutedWord, client) => (prefs) => {
+     const mutedWordsPrefEntry = prefs.find((p) => is$typedObject(p, mutedWordsPref.$type));
+     if (mutedWordsPrefEntry) {
+         mutedWordsPrefEntry.items = mutedWordsPrefEntry.items.map((existingItem) => {
+@@ -654,7 +654,7 @@ export const updateMutedWord = prefsUpdater((mutedWord) => (prefs) => {
+                     ...mutedWord,
+                 };
+                 return {
+-                    id: existingItem.id || nextTid(),
++                    id: existingItem.id || nextTid(client),
+                     value: sanitizeMutedWordValue(updated.value) || existingItem.value,
+                     targets: updated.targets || [],
+                     actorTarget: updated.actorTarget || 'all',
+@@ -666,7 +666,7 @@ export const updateMutedWord = prefsUpdater((mutedWord) => (prefs) => {
+             }
+         });
+         // Migrate any old muted words that don't have an id
+-        mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items);
++        mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items, client);
+         return prefs
+             .filter((p) => p.$type !== mutedWordsPref.$type)
+             .concat(mutedWordsPref.$build(mutedWordsPrefEntry));
+@@ -676,7 +676,7 @@ export const updateMutedWord = prefsUpdater((mutedWord) => (prefs) => {
+ /**
+  * Remove a single muted word (old agent.ts:1182-1209)
+  */
+-export const removeMutedWord = prefsUpdater((mutedWord) => (prefs) => {
++export const removeMutedWord = prefsUpdater((mutedWord, client) => (prefs) => {
+     const mutedWordsPrefEntry = prefs.find((p) => is$typedObject(p, mutedWordsPref.$type));
+     if (!mutedWordsPrefEntry)
+         return prefs;
+@@ -688,7 +688,7 @@ export const removeMutedWord = prefsUpdater((mutedWord) => (prefs) => {
+         }
+     }
+     // Migrate any old muted words that don't have an id
+-    mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items);
++    mutedWordsPrefEntry.items = migrateLegacyMutedWordsItems(mutedWordsPrefEntry.items, client);
+     return prefs
+         .filter((p) => p.$type !== mutedWordsPref.$type)
+         .concat(mutedWordsPref.$build(mutedWordsPrefEntry));
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 306fa64b693734b186a78cbfe32c25745c2deb76..9ebe5f6f7f49e4c808445bc65988e0b2ed42120e 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -5,4 +5,5 @@ export * from './actions/records.js';
+ export * from './actions/graph.js';
+ export * from './actions/notifications.js';
+ export { DEFAULT_LABEL_SETTINGS } from './moderation/const/labels.js';
++export { setTidSource, type TidSource } from './tid.js';
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/index.js b/dist/index.js
+index 31956fd18d6b0741690c5de8db7e6a55e3b7055b..20269df89c896aedb19637ece4c71638c948c89b 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -5,4 +5,5 @@ export * from './actions/records.js';
+ export * from './actions/graph.js';
+ export * from './actions/notifications.js';
+ export { DEFAULT_LABEL_SETTINGS } from './moderation/const/labels.js';
++export { setTidSource } from './tid.js';
+ //# sourceMappingURL=index.js.map
+\ No newline at end of file
+diff --git a/dist/tid.d.ts b/dist/tid.d.ts
+index 105d9a4d3ff4921bccb5bb3c83ec540caddf67da..406078244fce500a5b9e070cf053240ce938f0bf 100644
+--- a/dist/tid.d.ts
++++ b/dist/tid.d.ts
+@@ -1,2 +1,6 @@
+-export declare function nextTid(): string;
++import type { Client } from '@atproto/lex';
++/** Horizon patch: mints a preference item id for `client`'s account. */
++export type TidSource = (client: Client | undefined) => string | undefined;
++export declare function setTidSource(source: TidSource | null): void;
++export declare function nextTid(client?: Client): string;
+ //# sourceMappingURL=tid.d.ts.map
+diff --git a/dist/tid.js b/dist/tid.js
+index c5e6ee54059eb0460e302cf44711fb9c279fb322..fb01a4e6cb4f20274dca5e82488913a271443190 100644
+--- a/dist/tid.js
++++ b/dist/tid.js
+@@ -17,7 +17,22 @@ function s32encode(i) {
+ let _tidLastTime = 0;
+ let _tidTimestampCount = 0;
+ let _tidClockid = null;
+-export function nextTid() {
++// Horizon patch: an app-set id source, asked with the client the id is for.
++let _tidSource = null;
++/**
++ * Sets the function that mints ids for preference items (saved feeds, muted
++ * words). It is called with the client the preferences belong to and returns
++ * a TID string, or undefined to use the built-in clock. Pass null to clear.
++ */
++export function setTidSource(source) {
++    _tidSource = typeof source === 'function' ? source : null;
++}
++export function nextTid(client) {
++    if (_tidSource !== null) {
++        const id = _tidSource(client);
++        if (typeof id === 'string')
++            return id;
++    }
+     const now = Math.max(Date.now(), _tidLastTime);
+     if (now === _tidLastTime) {
+         _tidTimestampCount++;

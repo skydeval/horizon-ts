@@ -90,7 +90,13 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 
 import {TID} from '@atproto/common-web'
-import {type Client} from '@atproto/lex'
+import {Client} from '@atproto/lex'
+import {
+  addMutedWord,
+  addSavedFeeds,
+  getPreferences,
+  setTidSource,
+} from '@bsky/sdk'
 import {RichText} from '@bsky/sdk/richtext'
 import {i18n} from '@lingui/core'
 import {QueryClient} from '@tanstack/react-query'
@@ -102,6 +108,10 @@ import {bulkWriteFollows} from '#/screens/Onboarding/util'
 import {createReplyList} from '#/horizon/private/api/reply-lists'
 import {newRkeys} from '#/horizon/private/outbox'
 import {clockIdFor} from '#/horizon/tid-clock'
+import {
+  installSdkPreferenceIds,
+  sdkPreferenceId,
+} from '#/horizon/tid-clock/sdk-ids'
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
 
@@ -136,12 +146,12 @@ function uFor(k: number, n: number) {
 
 /** Spy the crypto source to answer `next()` for each draw. */
 function spyCrypto(next: () => number) {
-  return jest
-    .spyOn(globalThis.crypto, 'getRandomValues')
-    .mockImplementation(((array: Uint32Array) => {
-      array[0] = next()
-      return array
-    }) as never)
+  return jest.spyOn(globalThis.crypto, 'getRandomValues').mockImplementation(((
+    array: Uint32Array,
+  ) => {
+    array[0] = next()
+    return array
+  }) as never)
 }
 
 function freezeNow(ms = NOW) {
@@ -249,7 +259,10 @@ describe('clockIdFor', () => {
     expect(freshClock().clockIdFor(A)).toBe(11)
     expect(freshClock().clockIdFor(B)).toBe(11)
 
-    const source = fs.readFileSync(path.join(__dirname, '..', 'index.ts'), 'utf8')
+    const source = fs.readFileSync(
+      path.join(__dirname, '..', 'index.ts'),
+      'utf8',
+    )
     expect(source).not.toMatch(/0x811c9dc5/i)
     expect(source).not.toMatch(/0x01000193/i)
     expect(source).not.toMatch(/fnv/i)
@@ -280,9 +293,7 @@ describe('nextTid', () => {
     const stock = require('@atproto/common-web') as {TID: typeof TID}
     const theirs = script.map(() => stock.TID.next())
     expect(now).toHaveBeenCalledTimes(script.length * 2)
-    expect(ours.map(t => t.timestamp())).toEqual(
-      theirs.map(t => t.timestamp()),
-    )
+    expect(ours.map(t => t.timestamp())).toEqual(theirs.map(t => t.timestamp()))
   })
 
   it('7. counters are independent across accounts and restart with the page', () => {
@@ -530,7 +541,183 @@ describe('sites (A.4)', () => {
   })
 })
 
+describe('sdk preference ids (patches/@bsky__sdk@1.2.0.patch)', () => {
+  const SAVED_V2 = 'app.bsky.actor.defs#savedFeedsPrefV2'
+  const MUTED = 'app.bsky.actor.defs#mutedWordsPref'
+
+  type Pref = {$type: string; items?: {id?: string; value: string}[]}
+
+  /**
+   * A real lex `Client` signed in as `did`, over a fake PDS that keeps the
+   * account's preferences and records each `putPreferences` body.
+   */
+  function fakePrefsPds(did: string, initial: Pref[] = []) {
+    let prefs: Pref[] = initial
+    const puts: Pref[][] = []
+    const respond = (body: unknown) =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: {'content-type': 'application/json'},
+      })
+    const client = new Client({
+      did: did as `did:${string}:${string}`,
+      fetchHandler: (path: string, init: RequestInit) => {
+        if (path.includes('app.bsky.actor.getPreferences')) {
+          return Promise.resolve(respond({preferences: prefs}))
+        }
+        if (path.includes('app.bsky.actor.putPreferences')) {
+          const body = JSON.parse(init.body as string) as {
+            preferences: Pref[]
+          }
+          prefs = body.preferences
+          puts.push(prefs)
+          return Promise.resolve(new Response(null, {status: 200}))
+        }
+        return Promise.reject(new Error('unexpected call'))
+      },
+    })
+    return {client, puts}
+  }
+
+  function itemIds(prefs: Pref[], $type: string): string[] {
+    const pref = prefs.find(p => p.$type === $type)
+    return (pref?.items ?? []).map(item => item.id ?? '')
+  }
+
+  function clockOf(id: string) {
+    return TID.fromStr(id).clockid()
+  }
+
+  afterEach(() => {
+    setTidSource(null)
+  })
+
+  it('15. after a switch in one page, the second account’s default saved feed is on its own clock', async () => {
+    installSdkPreferenceIds()
+    const a = fakePrefsPds(A)
+    const b = fakePrefsPds(B)
+
+    // Signed in as A, then switched to B, a fresh account: no saved feeds.
+    mockCurrentDid = A
+    await a.client.call(getPreferences)
+    mockCurrentDid = B
+    const prefsB = await b.client.call(getPreferences)
+
+    const [idA] = itemIds(a.puts[0], SAVED_V2)
+    const [idB] = itemIds(b.puts[0], SAVED_V2)
+    expect(idA).toMatch(RKEY)
+    expect(idB).toMatch(RKEY)
+    expect(clockOf(idA)).toBe(clockIdFor(A))
+    expect(clockOf(idB)).toBe(clockIdFor(B))
+    // Stock mints both on the page's one sdk clock.
+    expect(clockOf(idB)).not.toBe(clockOf(idA))
+    expect(prefsB.savedFeeds.map(f => f.id)).toEqual([idB])
+  })
+
+  it('15. on the client’s own account even while another is current', async () => {
+    installSdkPreferenceIds()
+    const b = fakePrefsPds(B)
+    // The posting-as shape: A is current, B's client reads its preferences.
+    mockCurrentDid = A
+    await b.client.call(getPreferences)
+    expect(clockOf(itemIds(b.puts[0], SAVED_V2)[0])).toBe(clockIdFor(B))
+  })
+
+  it('15. the v1 migration, addSavedFeeds and the muted words mint on the client’s account', async () => {
+    installSdkPreferenceIds()
+    const feed =
+      'at://did:plc:feedowneraaaaaaaaaaaaaa/app.bsky.feed.generator/cats'
+    const b = fakePrefsPds(B, [
+      {
+        $type: 'app.bsky.actor.defs#savedFeedsPref',
+        pinned: [feed],
+        saved: [feed],
+      } as Pref,
+      // A legacy muted word with no id, which the sdk backfills.
+      {$type: MUTED, items: [{value: 'old', targets: ['content']} as never]},
+    ])
+    mockCurrentDid = A
+
+    await b.client.call(getPreferences)
+    const migrated = itemIds(b.puts[0], SAVED_V2)
+    expect(migrated).toHaveLength(2)
+
+    const added = await b.client.call(addSavedFeeds, [
+      {type: 'feed', value: feed.replace('cats', 'dogs'), pinned: false},
+    ])
+    expect(added).toHaveLength(1)
+
+    await b.client.call(addMutedWord, {value: 'new', targets: ['content']})
+    const muted = itemIds(b.puts[b.puts.length - 1], MUTED)
+    expect(muted).toHaveLength(2)
+
+    const ids = [...migrated, added[0].id, ...muted]
+    for (const id of ids) {
+      expect(id).toMatch(RKEY)
+      expect(clockOf(id)).toBe(clockIdFor(B))
+    }
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('15. a client with no DID falls back to the sdk’s clock, not the current account’s', () => {
+    mockCurrentDid = A
+    expect(sdkPreferenceId(undefined)).toBeUndefined()
+    expect(
+      sdkPreferenceId(
+        new Client({fetchHandler: () => Promise.reject(new Error('offline'))}),
+      ),
+    ).toBeUndefined()
+    expect(clockOf(sdkPreferenceId(fakePrefsPds(B).client) ?? '')).toBe(
+      clockIdFor(B),
+    )
+  })
+})
+
 describe('guard', () => {
+  it('12. every id the sdk mints asks the source with its client, and the app installs it', () => {
+    const sdk = path.dirname(require.resolve('@bsky/sdk'))
+    const offenders: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          walk(full)
+        } else if (/\.js$/.test(entry.name)) {
+          const rel = path.relative(sdk, full)
+          const lines = fs.readFileSync(full, 'utf8').split('\n')
+          lines.forEach((line, i) => {
+            const where = `${rel}:${i + 1}`
+            // A mint with no client cannot be routed to an account.
+            if (/\bnextTid\(\s*\)/.test(line)) offenders.push(where)
+            // Any other TID clock in the sdk.
+            if (/\bTID\.next(Str)?\(|\bnextStr\(/.test(line)) {
+              offenders.push(where)
+            }
+            if (rel !== 'tid.js' && /Math\.random\(\)\s*\*\s*32\b/.test(line)) {
+              offenders.push(where)
+            }
+          })
+        }
+      }
+    }
+    walk(sdk)
+    expect(offenders).toEqual([])
+
+    // The patch is in: nextTid asks the source before its own clock.
+    const tid = fs.readFileSync(path.join(sdk, 'tid.js'), 'utf8')
+    expect(tid).toMatch(/export function setTidSource\(/)
+    expect(tid).toMatch(
+      /export function nextTid\(client\) \{\s*if \(_tidSource !== null\) \{\s*const id = _tidSource\(client\);/,
+    )
+
+    // Both app entries install the source at load.
+    const src = path.resolve(__dirname, '..', '..', '..')
+    for (const entry of ['App.tsx', 'App.web.tsx']) {
+      const text = fs.readFileSync(path.join(src, entry), 'utf8')
+      expect(text).toMatch(/^installSdkPreferenceIds\(\)$/m)
+    }
+  })
+
   it('12. no TID.next or TID.nextStr call outside src/horizon/tid-clock/', () => {
     const src = path.resolve(__dirname, '..', '..', '..')
     const clockDir = path.join(src, 'horizon', 'tid-clock') + path.sep
