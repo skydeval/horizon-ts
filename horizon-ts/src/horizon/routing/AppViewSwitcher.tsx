@@ -1,13 +1,13 @@
 /*
- * The app view switcher (Settings > App views): prism shown greyed out (always
- * connected), and the public app view, Bluesky's or a custom one.
+ * The AppView switcher (Settings > AppViews): prism shown greyed out (always
+ * connected), and the public AppView, Bluesky's or a custom one.
  *
  * Adapted from the Witchsky client (MIT),
  * src/screens/Login/components/AppServerDialog.tsx (the dialog and the quiet
- * App server button, here the App view button; validation is in
+ * App server button, here the AppView button; validation is in
  * `appview-validation.ts`). Applying a
  * change reloads the page; an OAuth account is not re-authorized, because
- * `transition:generic` covers any app view.
+ * `transition:generic` covers any AppView.
  */
 
 import {useState} from 'react'
@@ -24,15 +24,13 @@ import * as Dialog from '#/components/Dialog'
 import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import * as TextField from '#/components/forms/TextField'
 import {TinyChevronBottom_Stroke2_Corner0_Rounded as TinyChevronIcon} from '#/components/icons/Chevron'
-import {
-  Earth_Stroke2_Corner2_Rounded as EarthIcon,
-  Globe_Stroke2_Corner0_Rounded as GlobeIcon,
-} from '#/components/icons/Globe'
+import {Globe_Stroke2_Corner0_Rounded as GlobeIcon} from '#/components/icons/Globe'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
 import {openInPlaceSignIn} from '#/horizon/auth/in-place-store'
 import {PRODUCT_NAME} from '#/horizon/branding'
+import {Computer_Stroke2_Corner2_Rounded as ComputerIcon} from '#/horizon/icons/Computer'
 import {validatePublicAppview} from '#/horizon/routing/appview-validation'
 import {
   type PublicAppviewChoice,
@@ -117,32 +115,32 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
     }
     switch (result.reason) {
       case 'empty':
-        setError(l`Enter the address of an app view.`)
+        setError(l`Enter the address of an AppView.`)
         break
       case 'invalid':
         setError(l`That doesn’t look like a web address.`)
         break
       case 'prism':
         setError(
-          l`That’s ${PRODUCT_NAME}’s app view, which is always connected. Enter a public app view.`,
+          l`That’s ${PRODUCT_NAME}’s AppView, which is always connected. Enter a public AppView.`,
         )
         break
       case 'pds':
-        setError(l`This is a PDS, not an app view.`)
+        setError(l`This is a PDS, not an AppView.`)
         break
       case 'not-found':
         setError(
-          l`Couldn’t find an app view at this address. Check the address and try again.`,
+          l`Couldn’t find an AppView at this address. Check the address and try again.`,
         )
         break
     }
   }
 
   return (
-    <Dialog.ScrollableInner label={l`App views`} style={web({maxWidth: 420})}>
+    <Dialog.ScrollableInner label={l`AppViews`} style={web({maxWidth: 420})}>
       <View style={[a.gap_lg]}>
         <Text style={[a.text_2xl, a.font_bold]}>
-          <Trans>App views</Trans>
+          <Trans>AppViews</Trans>
         </Text>
 
         <View
@@ -157,7 +155,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
             {opacity: 0.6},
           ]}>
           <Text style={[a.text_md, a.font_semi_bold]}>
-            <Trans>{PRODUCT_NAME} app view</Trans>
+            <Trans>{PRODUCT_NAME} AppView</Trans>
           </Text>
           <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
             <Trans>Always connected. Powers {PRODUCT_NAME}’s features.</Trans>
@@ -166,11 +164,11 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
 
         <View style={[a.gap_sm]}>
           <Text style={[a.text_md, a.font_semi_bold]}>
-            <Trans>Public app view</Trans>
+            <Trans>Public AppView</Trans>
           </Text>
           <SegmentedControl.Root
             type="tabs"
-            label={l`Public app view`}
+            label={l`Public AppView`}
             value={preset}
             onChange={value => {
               setPreset(value)
@@ -192,13 +190,13 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
           {preset === 'custom' && (
             <View>
               <TextField.LabelText>
-                <Trans>App view address</Trans>
+                <Trans>AppView address</Trans>
               </TextField.LabelText>
               <TextField.Root isInvalid={!!error}>
                 <TextField.Icon icon={GlobeIcon} />
                 <Dialog.Input
                   testID="publicAppviewAddressInput"
-                  label={l`App view address`}
+                  label={l`AppView address`}
                   placeholder="api.example.com"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -217,7 +215,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
           <Text
             style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
             <Trans>
-              The public app view provides posts, feeds, profiles, search and
+              The public AppView provides posts, feeds, profiles, search and
               notifications. Changing it reloads the app.
             </Trans>
           </Text>
@@ -258,7 +256,7 @@ export function AppViewSwitcherDialog({
 }
 
 /**
- * The Settings row, **App views**.
+ * The Settings row, **AppViews**.
  */
 export function AppViewSettingsItem() {
   const {t: l} = useLingui()
@@ -266,11 +264,11 @@ export function AppViewSettingsItem() {
   return (
     <>
       <SettingsList.PressableItem
-        label={l`App views`}
+        label={l`AppViews`}
         onPress={() => control.open()}>
-        <SettingsList.ItemIcon icon={EarthIcon} />
+        <SettingsList.ItemIcon icon={ComputerIcon} />
         <SettingsList.ItemText>
-          <Trans>App views</Trans>
+          <Trans>AppViews</Trans>
         </SettingsList.ItemText>
         <SettingsList.Chevron />
       </SettingsList.PressableItem>
@@ -280,8 +278,8 @@ export function AppViewSettingsItem() {
 }
 
 /**
- * The quiet **App view** button under the OAuth tab of the sign-in form, so
- * signed-out visitors can change the public app view too.
+ * The quiet **AppView** button under the OAuth tab of the sign-in form, so
+ * signed-out visitors can change the public AppView too.
  */
 export function AppViewButton() {
   const t = useTheme()
@@ -291,8 +289,8 @@ export function AppViewButton() {
     <>
       <Button
         testID="appServerButton"
-        label={l`App view`}
-        accessibilityHint={l`Opens a dialog to choose the app view used for posts, feeds and profiles`}
+        label={l`AppView`}
+        accessibilityHint={l`Opens a dialog to choose the AppView used for posts, feeds and profiles`}
         size="small"
         color="secondary"
         variant="ghost"
@@ -301,7 +299,7 @@ export function AppViewButton() {
           control.open()
         }}>
         <ButtonText style={[t.atoms.text_contrast_medium, a.font_normal]}>
-          <Trans>App view</Trans>
+          <Trans>AppView</Trans>
         </ButtonText>
         <TinyChevronIcon width={8} style={[t.atoms.text_contrast_medium]} />
       </Button>
