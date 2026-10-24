@@ -51,6 +51,8 @@ export function LimitedField({
   multiline = false,
   required = false,
   testID,
+  accessory,
+  onSelectionChange,
 }: {
   label: string
   value: string
@@ -60,29 +62,49 @@ export function LimitedField({
   multiline?: boolean
   required?: boolean
   testID?: string
+  /** A control beside the input, such as the emoji field's picker button. */
+  accessory?: React.ReactNode
+  /** The input's selection as it changes, in UTF-16 offsets. */
+  onSelectionChange?: (selection: {start: number; end: number}) => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
   const over = countGraphemes(value) > max
+  const input = (
+    <TextField.Root isInvalid={over}>
+      <Dialog.Input
+        testID={testID}
+        label={label}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        multiline={multiline}
+        accessibilityHint={required ? l`Required` : undefined}
+        onSelectionChange={
+          onSelectionChange
+            ? e => onSelectionChange(e.nativeEvent.selection)
+            : undefined
+        }
+      />
+    </TextField.Root>
+  )
   return (
     <View>
       <View style={[a.flex_row, a.align_center, a.justify_between]}>
         <TextField.LabelText>{label}</TextField.LabelText>
         <LimitCounter value={value} max={max} />
       </View>
-      <TextField.Root isInvalid={over}>
-        <Dialog.Input
-          testID={testID}
-          label={label}
-          value={value}
-          onChangeText={onChange}
-          placeholder={placeholder}
-          multiline={multiline}
-          accessibilityHint={required ? l`Required` : undefined}
-        />
-      </TextField.Root>
+      {accessory ? (
+        <View style={[a.flex_row, a.align_center, a.gap_sm]}>
+          <View style={[a.flex_1]}>{input}</View>
+          {accessory}
+        </View>
+      ) : (
+        input
+      )}
       {over ? (
         <Text
+          accessibilityLiveRegion="polite"
           style={[
             a.text_sm,
             a.mt_xs,
