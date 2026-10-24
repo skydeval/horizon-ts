@@ -22,6 +22,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {HITSLOP_10} from '#/lib/constants'
 import {forceLTR} from '#/lib/strings/bidi'
 import {useSession} from '#/state/session'
+import {EditProfileDialog} from '#/screens/Profile/Header/EditProfileDialog'
 import {atoms as a, useTheme} from '#/alf'
 import {Button} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
@@ -39,12 +40,13 @@ import {
   type PostFronter,
   usePluralProfile,
 } from '#/horizon/identity/hooks'
-import {memberImageUrl} from '#/horizon/identity/images'
+import {useMemberImage} from '#/horizon/identity/images'
 import {MemberListDialog} from '#/horizon/identity/MemberListDialog'
 import {isEngaging, type PluralFront} from '#/horizon/identity/parse'
 import {PronounsText} from '#/horizon/identity/PronounsText'
 import {type ObserveMode} from '#/horizon/identity/schedule'
 import {PLURAL_EDITING, PRONOUNS} from '#/horizon/switches'
+import {type app} from '#/lexicons'
 
 /** Space, U+00B7 MIDDLE DOT, space: between the badge's parts. */
 const MIDDLE_DOT = ' \u00B7 '
@@ -115,22 +117,30 @@ export function PluralHeaderName({
  * The header's images (ID-18): with one engaging member, its avatar and
  * banner where it has them, else the account's; with several or none, the
  * account's. URLs only, which the stock props already take, so the
- * account's moderation applies to either (6.2).
+ * account's moderation applies to either (6.2). The error callbacks go to
+ * the images' `onError`: a member image the CDN fails on falls back to the
+ * own PDS for one's own member, else to the account's own image, never to
+ * another author's PDS (PP-12, live check L9).
  */
 export function usePluralHeaderImages(profile: {
   did: string
   avatar?: string
   banner?: string
-}): {avatar: string | undefined; banner: string | undefined} {
+}): {
+  avatar: string | undefined
+  banner: string | undefined
+  onAvatarError?: () => void
+  onBannerError?: () => void
+} {
   const {fronters} = useHeaderFronters(profile.did)
   const single = fronters?.length === 1 ? fronters[0].member : undefined
+  const avatar = useMemberImage(profile.did, single?.avatar, 'avatar')
+  const banner = useMemberImage(profile.did, single?.banner, 'banner')
   return {
-    avatar: single?.avatar
-      ? memberImageUrl(profile.did, single.avatar, 'avatar')
-      : profile.avatar,
-    banner: single?.banner
-      ? memberImageUrl(profile.did, single.banner, 'banner')
-      : profile.banner,
+    avatar: avatar?.uri ?? profile.avatar,
+    banner: banner?.uri ?? profile.banner,
+    ...(avatar ? {onAvatarError: avatar.onError} : {}),
+    ...(banner ? {onBannerError: banner.onError} : {}),
   }
 }
 
@@ -158,17 +168,21 @@ function useMemberCountText(profile: PluralProfile): string | undefined {
  * The system badge under the handle: the system's name, else its
  * collective noun, else "Plural system", and the member count. Pressing it
  * opens the member list, unless `pressable` is false (the hover card).
+ * `onEdit` (one's own system) gives the member list its "Edit" button.
  */
 export function PluralBadge({
   did,
   profile,
   moderation,
   pressable = true,
+  onEdit,
 }: {
   did: string
   profile: PluralProfile
   moderation: ModerationDecision
   pressable?: boolean
+  /** Opens Edit Profile on the Plurality tab; one's own system only. */
+  onEdit?: () => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -218,6 +232,7 @@ export function PluralBadge({
         did={did}
         profile={profile}
         moderation={moderation}
+        onEdit={onEdit}
       />
     </>
   )
@@ -319,11 +334,7 @@ export function FrontIndicator({
     return [memberName(fronter), pronouns, status].filter(Boolean).join(', ')
   })
   const label = [
-    nobody
-      ? l`Front: nobody fronting`
-      : state
-        ? l`Front: ${state}`
-        : l`Front`,
+    nobody ? l`Front: nobody fronting` : state ? l`Front: ${state}` : l`Front`,
     ...words,
     comment,
   ]
@@ -396,18 +407,21 @@ export function FrontIndicator({
 /**
  * Under the profile header's handle (ID-17): the pronouns (with one engaging
  * member, its pronouns in the account's place, 6.1), the system badge and
- * the front indicator.
+ * the front indicator. On one's own profile the member list's "Edit" opens
+ * Edit Profile on the Plurality tab, a second instance of the stock dialog
+ * with the account's own `profile` (PP-14).
  */
 export function ProfileHeaderIdentity({
   profile,
   moderation,
 }: {
-  profile: {did: string; pronouns?: string}
+  profile: app.bsky.actor.defs.ProfileViewDetailed
   moderation: ModerationDecision
 }) {
   const {profile: plural, fronters} = useHeaderFronters(profile.did)
   const {currentAccount} = useSession()
   const frontSwitcher = useDialogControl()
+  const editProfile = useDialogControl()
   // One's own front opens 5C's switcher (7.3); everyone else's is text.
   const own = PLURAL_EDITING && currentAccount?.did === profile.did
   const single = fronters?.length === 1 ? fronters[0] : undefined
@@ -432,6 +446,7 @@ export function ProfileHeaderIdentity({
             did={profile.did}
             profile={plural}
             moderation={moderation}
+            onEdit={own ? () => editProfile.open() : undefined}
           />
           <FrontIndicator
             profile={plural}
@@ -439,7 +454,14 @@ export function ProfileHeaderIdentity({
             onPress={own ? () => frontSwitcher.open() : undefined}
           />
           {own ? (
-            <FrontSwitcherDialog control={frontSwitcher} did={profile.did} />
+            <>
+              <FrontSwitcherDialog control={frontSwitcher} did={profile.did} />
+              <EditProfileDialog
+                profile={profile}
+                control={editProfile}
+                initialTab="plurality"
+              />
+            </>
           ) : null}
         </View>
       ) : null}

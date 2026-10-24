@@ -603,7 +603,9 @@ function QuoteCardPost({
               <UserAvatar
                 size={20}
                 // HORIZON: identity ID-16: the quoted post's single fronter's image, the account's otherwise
-                avatar={fronterAvatar ?? view.author.avatar}
+                avatar={fronterAvatar?.uri ?? view.author.avatar}
+                // HORIZON: identity ID-16: on a CDN failure, one's own member's PDS copy, else the account's image
+                onError={fronterAvatar?.onError}
                 moderation={moderation?.ui('avatar')}
                 type={view.author.associated?.labeler ? 'labeler' : 'user'}
               />

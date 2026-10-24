@@ -3,7 +3,8 @@
  * stock content, and "Plurality". Mounted by the stock dialog around its
  * body. The stock content stays mounted while the Plurality tab shows, so
  * nothing typed in it is lost. With `PLURAL_EDITING` off, or for another
- * account, the stock body alone.
+ * account, the stock body alone. `initialTab` picks the tab it opens on
+ * (the member list's "Edit" opens on Plurality, 6.2).
  */
 
 import {useState} from 'react'
@@ -16,18 +17,22 @@ import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import {PluralityTab} from '#/horizon/identity/edit/PluralityTab'
 import {PLURAL_EDITING} from '#/horizon/switches'
 
-type Tab = 'profile' | 'plurality'
+/** Edit Profile's tabs. */
+export type EditProfileTab = 'profile' | 'plurality'
 
 export function EditProfileTabs({
   profile,
+  initialTab = 'profile',
   children,
 }: {
   profile: {did: string}
+  /** The tab shown when the dialog opens (its contents mount per open). */
+  initialTab?: EditProfileTab
   children: React.ReactNode
 }) {
   const {t: l} = useLingui()
   const {currentAccount} = useSession()
-  const [tab, setTab] = useState<Tab>('profile')
+  const [tab, setTab] = useState<EditProfileTab>(initialTab)
   if (!PLURAL_EDITING || currentAccount?.did !== profile.did) {
     return <>{children}</>
   }

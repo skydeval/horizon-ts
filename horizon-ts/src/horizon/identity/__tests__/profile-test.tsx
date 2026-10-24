@@ -36,10 +36,21 @@ jest.mock('#/analytics/identifiers', () => ({
 jest.unmock('multiformats/cid')
 
 const mockEditProfiles: unknown[] = []
+/** Every Edit Profile dialog mounted, with its control and initial tab. */
+const mockEditDialogs: {
+  profile: unknown
+  control: unknown
+  initialTab?: string
+}[] = []
 const mockToasts: string[] = []
 jest.mock('#/screens/Profile/Header/EditProfileDialog', () => ({
-  EditProfileDialog: (props: {profile: unknown}) => {
+  EditProfileDialog: (props: {
+    profile: unknown
+    control: unknown
+    initialTab?: string
+  }) => {
     mockEditProfiles.push(props.profile)
+    mockEditDialogs.push(props)
     return null
   },
 }))
@@ -122,8 +133,13 @@ jest.mock('#/horizon/identity/edit/FrontSwitcherDialog', () => ({
     return null
   },
 }))
+/** The member lists mounted, with their "Edit" callback. */
+const mockMemberLists: {did: string; onEdit?: () => void}[] = []
 jest.mock('#/horizon/identity/MemberListDialog', () => ({
-  MemberListDialog: () => null,
+  MemberListDialog: (props: {did: string; onEdit?: () => void}) => {
+    mockMemberLists.push(props)
+    return null
+  },
 }))
 jest.mock('#/screens/Profile/Header/Shell', () => ({
   ProfileHeaderShell: (props: {children?: React.ReactNode}) => props.children,
@@ -186,7 +202,9 @@ import {type QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {act, fireEvent, render, screen} from '@testing-library/react-native'
 
 import {ProfileHeaderStandard} from '#/screens/Profile/Header/ProfileHeaderStandard'
+import * as switches from '#/horizon/switches'
 import {HoverCardIdentity} from '../HoverCardIdentity'
+import {resetMemberImageFailures} from '../images'
 import {usePluralHeaderImages} from '../ProfileIdentity'
 import {setIdentityRunStart} from '../queries'
 import {resetIdentityReads} from '../reads'
@@ -196,6 +214,7 @@ import {
   FRONT,
   MEMBER,
   newQueryClient,
+  pds,
   PRONOUNS,
   records,
   resetHarness,
@@ -280,9 +299,12 @@ beforeEach(() => {
   resetIdentitySchedule()
   setIdentityVisibility({isVisible: () => true, subscribe: () => () => {}})
   setIdentityRunStart(START)
+  resetMemberImageFailures()
   qc = newQueryClient()
   mockIsMe = false
   mockEditProfiles.length = 0
+  mockEditDialogs.length = 0
+  mockMemberLists.length = 0
   mockToasts.length = 0
   mockOpened.length = 0
   mockSwitchers.length = 0
@@ -304,6 +326,7 @@ beforeEach(() => {
 
 afterEach(() => {
   qc.clear()
+  jest.restoreAllMocks()
   jest.useRealTimers()
 })
 
@@ -436,6 +459,42 @@ describe('the front switcher from the indicator (6.2, 7.3, 5C)', () => {
   })
 })
 
+describe('the member list`s Edit (6.2, ID-20a)', () => {
+  it('on one`s own system opens Edit Profile on the Plurality tab, with the account`s profile', async () => {
+    mockIsMe = true
+    header()
+    await advance()
+    const list = mockMemberLists.at(-1)
+    expect(list?.did).toBe(AUTHOR)
+    expect(list?.onEdit).toBeInstanceOf(Function)
+    const plurality = mockEditDialogs.filter(d => d.initialTab === 'plurality')
+    expect(plurality.length).toBeGreaterThan(0)
+    expect(plurality.at(-1)?.profile).toBe(profile)
+    act(() => list?.onEdit?.())
+    expect(mockOpened).toContain(plurality.at(-1)?.control)
+    // The stock Edit Profile button's dialog still opens on Profile.
+    expect(mockEditDialogs.some(d => d.initialTab === undefined)).toBe(true)
+  })
+
+  it('on another account`s system offers no Edit and mounts no Plurality dialog', async () => {
+    header()
+    await advance()
+    expect(mockMemberLists.length).toBeGreaterThan(0)
+    expect(mockMemberLists.every(m => m.onEdit === undefined)).toBe(true)
+    expect(mockEditDialogs.some(d => d.initialTab === 'plurality')).toBe(false)
+  })
+
+  it('with PLURAL_EDITING off offers no Edit on one`s own system', async () => {
+    jest.replaceProperty(switches, 'PLURAL_EDITING', false)
+    mockIsMe = true
+    header()
+    await advance()
+    expect(mockMemberLists.length).toBeGreaterThan(0)
+    expect(mockMemberLists.every(m => m.onEdit === undefined)).toBe(true)
+    expect(mockEditDialogs.some(d => d.initialTab === 'plurality')).toBe(false)
+  })
+})
+
 describe('the header images (ID-18)', () => {
   it('one engaging member: its avatar and banner through the CDN; several: the account`s', async () => {
     world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN]))
@@ -452,6 +511,24 @@ describe('the header images (ID-18)', () => {
       avatar: profile.avatar,
       banner: profile.banner,
     })
+  })
+
+  it('another account`s member the CDN fails on: the account`s own avatar and banner, never its PDS (PP-12, L9)', async () => {
+    world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN]))
+    const {result} = renderImages()
+    await advance()
+    expect(result.current.avatar).toContain('cdn.bsky.app')
+    expect(result.current.banner).toContain('cdn.bsky.app')
+    act(() => result.current.onAvatarError?.())
+    expect(result.current.avatar).toBe(profile.avatar)
+    expect(result.current.banner).toContain(WREN_BANNER)
+    act(() => result.current.onBannerError?.())
+    expect(result.current).toEqual({
+      avatar: profile.avatar,
+      banner: profile.banner,
+    })
+    await advance()
+    expect(pds.calls).toHaveLength(0)
   })
 })
 

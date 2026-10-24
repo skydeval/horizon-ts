@@ -285,7 +285,7 @@ describe('useFronterAvatar (5.3, P5R2-N12)', () => {
       ),
     })
     await advance()
-    expect(result.current).toBe(
+    expect(result.current?.uri).toBe(
       `https://cdn.bsky.app/img/avatar_thumbnail/plain/${AUTHOR}/${cid}@jpeg`,
     )
   })

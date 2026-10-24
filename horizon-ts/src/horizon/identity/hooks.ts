@@ -15,8 +15,8 @@
  *   is a record and every named member has answered; a member answered
  *   none is left out, one still unknown holds the whole line (P5R2-N5).
  *   Never the front (U-6).
- * - `useFronterAvatar(profile)`: the single fronter's avatar, for the stock
- *   avatar's `avatar` prop.
+ * - `useFronterAvatar(profile)`: the single fronter's avatar and its error
+ *   callback, for the stock avatar's `avatar` and `onError` props.
  * - `usePluralProfile(did)`: system, member list, front and the engaging
  *   members.
  */
@@ -26,7 +26,7 @@ import {useQueries, useQueryClient} from '@tanstack/react-query'
 
 import {formatPronouns} from '#/horizon/identity/format'
 import {readFronters} from '#/horizon/identity/fronters'
-import {memberImageUrl} from '#/horizon/identity/images'
+import {type MemberImage, useMemberImage} from '#/horizon/identity/images'
 import {
   isEngaging,
   type PluralFront,
@@ -222,17 +222,20 @@ export function usePostFronters(
 }
 
 /**
- * The single fronter's avatar URL (CDN thumbnail) for the post in scope
- * when it is drawing `profile`, else `undefined`, so the stock avatar keeps
- * the account's image and its moderation applies to either (P5R1-L2).
+ * The single fronter's avatar (CDN thumbnail) for the post in scope when it
+ * is drawing `profile`, else `undefined`, so the stock avatar keeps the
+ * account's image and its moderation applies to either (P5R1-L2). Its
+ * `onError` goes to the image's error callback: on a CDN failure one's own
+ * member falls back to the own PDS, another account's member to the
+ * account's own avatar (`undefined`), never to that author's PDS (PP-12,
+ * live check L9).
  */
-export function useFronterAvatar(profile: {did: string}): string | undefined {
+export function useFronterAvatar(profile: {
+  did: string
+}): MemberImage | undefined {
   const fronters = usePostFronters(profile.did)
-  if (!fronters || fronters.length !== 1) return undefined
-  const avatar = fronters[0].member.avatar
-  return avatar
-    ? memberImageUrl(profile.did, avatar, 'avatar_thumbnail')
-    : undefined
+  const avatar = fronters?.length === 1 ? fronters[0].member.avatar : undefined
+  return useMemberImage(profile.did, avatar, 'avatar_thumbnail')
 }
 
 /** An account's plural profile (5.2). */

@@ -40,11 +40,15 @@ export function UserBanner({
   banner,
   moderation,
   onSelectNewBanner,
+  // HORIZON: identity ID-18: a member banner's fallback when it fails to load (5.5, L9)
+  onError,
 }: {
   type?: 'labeler' | 'default'
   banner?: string | null
   moderation?: ModerationUI
   onSelectNewBanner?: (img: PickerImage | null) => void
+  // HORIZON: identity ID-18: a member banner's fallback when it fails to load (5.5, L9)
+  onError?: () => void
 }) {
   const t = useTheme()
   const {_} = useLingui()
@@ -225,6 +229,8 @@ export function UserBanner({
       contentFit="cover"
       source={{uri: banner}}
       blurRadius={moderation?.blur ? 100 : 0}
+      // HORIZON: identity ID-18: a member banner's fallback when it fails to load (5.5, L9)
+      onError={onError}
       accessible={true}
       accessibilityIgnoresInvertColors
       useAppleWebpCodec

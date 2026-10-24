@@ -1,3 +1,4 @@
+import {Text} from 'react-native'
 import {afterEach, beforeEach, describe, expect, it, jest} from '@jest/globals'
 import {act, fireEvent, render} from '@testing-library/react-native'
 
@@ -425,5 +426,35 @@ describe('Edit Profile tabs (ID-20)', () => {
   it('is the stock body alone for another account', () => {
     const view = tabs('did:plc:otherbbbbbbbbbbbbbbbbbbb')
     expect(view.queryByTestId('editProfileTabPlurality')).toBeNull()
+  })
+
+  it('opens on Plurality when asked (the member list`s Edit, 6.2), the stock body still mounted', () => {
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <EditProfileTabs profile={{did: DID}} initialTab="plurality">
+          <Text testID="stockBody">stock</Text>
+        </EditProfileTabs>
+      </QueryClientProvider>,
+    )
+    expect(view.getByTestId('pluralityTabStub')).toBeTruthy()
+    // Mounted but hidden, so nothing typed on Profile is lost.
+    expect(
+      view.getByTestId('stockBody', {includeHiddenElements: true}),
+    ).toBeTruthy()
+    expect(view.queryByTestId('stockBody')).toBeNull()
+  })
+
+  it('asked for Plurality on another account, is the stock body alone', () => {
+    const view = render(
+      <QueryClientProvider client={qc}>
+        <EditProfileTabs
+          profile={{did: 'did:plc:otherbbbbbbbbbbbbbbbbbbb'}}
+          initialTab="plurality">
+          <Text testID="stockBody">stock</Text>
+        </EditProfileTabs>
+      </QueryClientProvider>,
+    )
+    expect(view.queryByTestId('pluralityTabStub')).toBeNull()
+    expect(view.getByTestId('stockBody')).toBeTruthy()
   })
 })

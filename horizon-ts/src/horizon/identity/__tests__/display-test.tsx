@@ -88,8 +88,10 @@ jest.mock('#/components/Link', () => {
       onPress?: () => void
       children?: React.ReactNode
     }) => (
-      <Pressable accessibilityLabel={props.label}
-      accessibilityHint="" onPress={props.onPress}>
+      <Pressable
+        accessibilityLabel={props.label}
+        accessibilityHint=""
+        onPress={props.onPress}>
         <View>{props.children}</View>
       </Pressable>
     ),
@@ -172,6 +174,7 @@ import {PostMeta} from '#/view/com/util/PostMeta'
 import {PreviewableUserAvatar} from '#/view/com/util/UserAvatar'
 import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
 import * as switches from '#/horizon/switches'
+import {resetMemberImageFailures} from '../images'
 import {setIdentityRunStart} from '../queries'
 import {resetIdentityReads} from '../reads'
 import {resetIdentitySchedule, setIdentityVisibility} from '../schedule'
@@ -181,10 +184,13 @@ import {
   MEMBER,
   newQueryClient,
   OTHER,
+  pds,
   prism,
   PRONOUNS,
   records,
   resetHarness,
+  signIn,
+  signOut,
   SPARROW,
   SYSTEM,
   uriOf,
@@ -214,9 +220,7 @@ function postWith(ids: string[] | undefined) {
       $type: 'app.bsky.feed.post',
       text: 'we both agree on this one',
       createdAt: '2026-10-24T12:00:00.000Z',
-      ...(ids
-        ? {[PLURAL_FRONTERS_KEY]: {members: ids.map(id => ({id}))}}
-        : {}),
+      ...(ids ? {[PLURAL_FRONTERS_KEY]: {members: ids.map(id => ({id}))}} : {}),
     },
   }
 }
@@ -250,7 +254,11 @@ function meta(
   return render(
     <I18nProvider i18n={i18n}>
       <QueryClientProvider client={qc}>
-        {post ? <PostFrontersScope post={post}>{line}</PostFrontersScope> : line}
+        {post ? (
+          <PostFrontersScope post={post}>{line}</PostFrontersScope>
+        ) : (
+          line
+        )}
       </QueryClientProvider>
     </I18nProvider>,
   )
@@ -287,7 +295,11 @@ function plain(label: unknown): string {
 }
 
 function expectText(node: Node, text: string) {
-  expect(textOf(node).replace(/\u00A0/g, ' ').trim()).toBe(text)
+  expect(
+    textOf(node)
+      .replace(/\u00A0/g, ' ')
+      .trim(),
+  ).toBe(text)
 }
 
 beforeEach(() => {
@@ -297,6 +309,7 @@ beforeEach(() => {
   resetIdentitySchedule()
   setIdentityVisibility({isVisible: () => true, subscribe: () => () => {}})
   setIdentityRunStart(START)
+  resetMemberImageFailures()
   qc = newQueryClient()
   mockCached.length = 0
   world.records.set(uriOf(AUTHOR, SYSTEM), records.system())
@@ -461,19 +474,17 @@ describe('the avatar (ID-9, P5R1-L2, P5R2-N12)', () => {
       <PreviewableUserAvatar
         size={42}
         profile={{...author, avatar: 'https://cdn.example/account.jpg'}}
-        moderation={
-          {
-            blur: blurred,
-            alert: blurred,
-            noOverride: false,
-            alerts: [],
-            blurs: [],
-            filter: false,
-            filters: [],
-            inform: false,
-            informs: [],
-          }
-        }
+        moderation={{
+          blur: blurred,
+          alert: blurred,
+          noOverride: false,
+          alerts: [],
+          blurs: [],
+          filter: false,
+          filters: [],
+          inform: false,
+          informs: [],
+        }}
         type="user"
         disableHoverCard
         disableNavigation
@@ -492,7 +503,9 @@ describe('the avatar (ID-9, P5R1-L2, P5R2-N12)', () => {
     avatar(postWith([WREN]), true)
     await advance()
     const image = screen.getByTestId('userAvatarImage')
-    expect(String((image.props.source as {uri: string}).uri)).toContain(AVATAR_CID)
+    expect(String((image.props.source as {uri: string}).uri)).toContain(
+      AVATAR_CID,
+    )
     expect(image.props.blurRadius).toBeGreaterThan(0)
     expect(screen.getByText('!')).toBeTruthy()
   })
@@ -501,7 +514,85 @@ describe('the avatar (ID-9, P5R1-L2, P5R2-N12)', () => {
     avatar(postWith([WREN, SPARROW]))
     await advance()
     const image = screen.getByTestId('userAvatarImage')
-    expect(String((image.props.source as {uri: string}).uri)).toContain('account')
+    expect(String((image.props.source as {uri: string}).uri)).toContain(
+      'account',
+    )
+  })
+
+  function shownUri() {
+    const image = screen.getByTestId('userAvatarImage')
+    return String((image.props.source as {uri: string}).uri)
+  }
+
+  function failImage() {
+    const image = screen.getByTestId('userAvatarImage')
+    const onError = image.props.onError as (() => void) | undefined
+    expect(onError).toBeInstanceOf(Function)
+    act(() => onError?.())
+  }
+
+  it('another account`s member the CDN fails on: the account`s own avatar, and no PDS is asked (PP-12, L9)', async () => {
+    avatar(postWith([WREN]))
+    await advance()
+    const seen = [shownUri()]
+    expect(seen[0]).toBe(
+      `https://cdn.bsky.app/img/avatar_thumbnail/plain/${AUTHOR}/${AVATAR_CID}@jpeg`,
+    )
+    failImage()
+    seen.push(shownUri())
+    expect(seen[1]).toBe('https://cdn.example/account.jpg')
+    // The account's own image is stock's: no member fallback is attached.
+    expect(screen.getByTestId('userAvatarImage').props.onError).toBeUndefined()
+    await advance()
+    expect(seen.some(uri => uri.includes('getBlob'))).toBe(false)
+    expect(pds.calls).toHaveLength(0)
+    expect(
+      prism.calls.every(call =>
+        call.method.startsWith('app.nearhorizon.plural.'),
+      ),
+    ).toBe(true)
+  })
+
+  it('a second post by the same member after a CDN failure starts at the account`s avatar', async () => {
+    const first = avatar(postWith([WREN]))
+    await advance()
+    failImage()
+    first.unmount()
+    avatar(postWith([WREN]))
+    await advance()
+    expect(shownUri()).toBe('https://cdn.example/account.jpg')
+  })
+
+  it('one`s own member the CDN fails on: the own PDS copy, then the account`s avatar', async () => {
+    signIn(AUTHOR, qc)
+    try {
+      pds.records.set(uriOf(AUTHOR, SYSTEM), records.system())
+      pds.records.set(
+        uriOf(AUTHOR, MEMBER, WREN),
+        records.member('Wren', {
+          avatar: {
+            $type: 'blob',
+            ref: {$link: AVATAR_CID},
+            mimeType: 'image/png',
+            size: 10,
+          },
+        }),
+      )
+      avatar(postWith([WREN]))
+      await advance()
+      expect(shownUri()).toContain('cdn.bsky.app')
+      failImage()
+      const own = new URL(shownUri())
+      expect(`${own.origin}${own.pathname}`).toBe(
+        'https://pds.example/xrpc/com.atproto.sync.getBlob',
+      )
+      expect(own.searchParams.get('did')).toBe(AUTHOR)
+      expect(own.searchParams.get('cid')).toBe(AVATAR_CID)
+      failImage()
+      expect(shownUri()).toBe('https://cdn.example/account.jpg')
+    } finally {
+      signOut()
+    }
   })
 
   it('outside any scope adds no query observer and asks nothing', async () => {

@@ -3,7 +3,9 @@
  * system badge: every member in list order (ascending rkey, which with TIDs
  * is creation order, 4.2 item 5), with avatar, emoji, colour swatch, name,
  * pronouns, roles, member types, age presentation, proxy note and
- * description; members in front are marked. Read-only.
+ * description; members in front are marked. Read-only; on one's own
+ * system an "Edit" button closes it and opens Edit Profile on the Plurality
+ * tab (`onEdit`, 6.2).
  *
  * Moderation is the account's (U-8, 6.2): names go through
  * `sanitizeDisplayName` with the account's `displayName` moderation, and
@@ -18,6 +20,7 @@ import {forceLTR} from '#/lib/strings/bidi'
 import {sanitizeDisplayName} from '#/lib/strings/display-names'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme, web} from '#/alf'
+import {Button, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
 import {Text} from '#/components/Typography'
 import {formatSets} from '#/horizon/identity/format'
@@ -32,16 +35,24 @@ export function MemberListDialog({
   did,
   profile,
   moderation,
+  onEdit,
 }: {
   control: Dialog.DialogControlProps
   did: string
   profile: PluralProfile
   moderation: ModerationDecision
+  /** One's own system only: opens Edit Profile on the Plurality tab. */
+  onEdit?: () => void
 }) {
   return (
     <Dialog.Outer control={control}>
       <Dialog.Handle />
-      <MemberListInner did={did} profile={profile} moderation={moderation} />
+      <MemberListInner
+        did={did}
+        profile={profile}
+        moderation={moderation}
+        onEdit={onEdit}
+      />
     </Dialog.Outer>
   )
 }
@@ -50,13 +61,16 @@ function MemberListInner({
   did,
   profile,
   moderation,
+  onEdit,
 }: {
   did: string
   profile: PluralProfile
   moderation: ModerationDecision
+  onEdit?: () => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
+  const control = Dialog.useDialogContext()
   const list = profile.members
   const inFront = new Map<string, string | undefined>()
   for (const entry of profile.front?.members ?? []) {
@@ -68,9 +82,22 @@ function MemberListInner({
       label={l`Members`}
       style={[web({maxWidth: 520}), a.w_full]}>
       <View style={[a.gap_lg]}>
-        <Text emoji style={[a.text_2xl, a.font_bold, t.atoms.text]}>
-          {title}
-        </Text>
+        <View style={[a.flex_row, a.align_center, a.justify_between, a.gap_md]}>
+          <Text emoji style={[a.flex_1, a.text_2xl, a.font_bold, t.atoms.text]}>
+            {title}
+          </Text>
+          {onEdit ? (
+            <Button
+              testID="pluralMemberListEdit"
+              size="small"
+              color="secondary"
+              label={l`Edit`}
+              accessibilityHint={l`Opens Edit Profile on the Plurality tab`}
+              onPress={() => control.close(() => onEdit())}>
+              <ButtonText>{l`Edit`}</ButtonText>
+            </Button>
+          ) : null}
+        </View>
         {profile.system?.description?.trim() ? (
           <Text emoji style={[a.text_md, t.atoms.text_contrast_medium]}>
             {profile.system.description.trim()}

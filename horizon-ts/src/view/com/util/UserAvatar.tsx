@@ -79,6 +79,8 @@ interface UserAvatarProps extends BaseUserAvatarProps {
   usePlainRNImage?: boolean
   noBorder?: boolean
   onLoad?: () => void
+  // HORIZON: identity ID-9: a member image's fallback when it fails to load (5.5, L9)
+  onError?: () => void
   style?: StyleProp<ViewStyle>
   extraAviStyle?: ImageStyle
 }
@@ -226,6 +228,8 @@ let UserAvatar = ({
   moderation,
   usePlainRNImage = false,
   onLoad,
+  // HORIZON: identity ID-9: a member image's fallback when it fails to load (5.5, L9)
+  onError,
   style,
   live,
   hideLiveBadge,
@@ -323,6 +327,8 @@ let UserAvatar = ({
           }}
           blurRadius={moderation?.blur ? BLUR_AMOUNT : 0}
           onLoad={onLoad}
+          // HORIZON: identity ID-9: a member image's fallback when it fails to load (5.5, L9)
+          onError={onError}
         />
       ) : (
         <ExpoImage
@@ -334,6 +340,8 @@ let UserAvatar = ({
           }}
           blurRadius={moderation?.blur ? BLUR_AMOUNT : 0}
           onLoad={onLoad}
+          // HORIZON: identity ID-9: a member image's fallback when it fails to load (5.5, L9)
+          onError={onError}
           useAppleWebpCodec
         />
       )}
@@ -582,7 +590,9 @@ let PreviewableUserAvatar = ({
   const avatarEl = (
     <UserAvatar
       // HORIZON: identity ID-9: the single fronter's image on a post in scope, the account's otherwise
-      avatar={fronterAvatar ?? profile.avatar}
+      avatar={fronterAvatar?.uri ?? profile.avatar}
+      // HORIZON: identity ID-9: on a CDN failure, one's own member's PDS copy, else the account's image
+      onError={fronterAvatar?.onError}
       moderation={moderation}
       type={profile.associated?.labeler ? 'labeler' : 'user'}
       live={status.isActive || live}

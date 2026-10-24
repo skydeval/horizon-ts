@@ -170,7 +170,9 @@ let ProfileHeaderShell = ({
         {!gtMobile && <StatusBarShadow />}
         <GrowableBanner
           // HORIZON: identity ID-18: the banner shown
-          testID={headerImages.banner ? 'userBannerImage' : 'userBannerFallback'}
+          testID={
+            headerImages.banner ? 'userBannerImage' : 'userBannerFallback'
+          }
           label={
             // HORIZON: identity ID-18: the banner shown
             headerImages.banner
@@ -232,6 +234,8 @@ let ProfileHeaderShell = ({
               type={profile.associated?.labeler ? 'labeler' : 'default'}
               // HORIZON: identity ID-18: one engaging member's banner, the account's otherwise
               banner={headerImages.banner}
+              // HORIZON: identity ID-18: on a CDN failure, one's own member's PDS copy, else the account's banner
+              onError={headerImages.onBannerError}
               moderation={moderation.ui('banner')}
             />
           )}
@@ -291,6 +295,8 @@ let ProfileHeaderShell = ({
                 size={live.isActive ? 88 : 90}
                 // HORIZON: identity ID-18: one engaging member's avatar, the account's otherwise
                 avatar={headerImages.avatar}
+                // HORIZON: identity ID-18: on a CDN failure, one's own member's PDS copy, else the account's avatar
+                onError={headerImages.onAvatarError}
                 moderation={moderation.ui('avatar')}
                 noBorder
               />

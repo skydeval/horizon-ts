@@ -37,7 +37,10 @@ import {
   useWriteProfileLinks,
 } from '#/features/profileLinks'
 // HORIZON: identity import
-import {EditProfileTabs} from '#/horizon/identity/edit/EditProfileTabs'
+import {
+  type EditProfileTab,
+  EditProfileTabs,
+} from '#/horizon/identity/edit/EditProfileTabs'
 // HORIZON: identity import
 import {
   PronounsField,
@@ -49,10 +52,14 @@ export function EditProfileDialog({
   profile,
   control,
   onUpdate,
+  // HORIZON: identity ID-20a: the tab Edit Profile opens on (the member list's Edit opens Plurality)
+  initialTab,
 }: {
   profile: app.bsky.actor.defs.ProfileViewDetailed
   control: Dialog.DialogControlProps
   onUpdate?: () => void
+  // HORIZON: identity ID-20a: the tab Edit Profile opens on
+  initialTab?: EditProfileTab
 }) {
   const {_} = useLingui()
   const cancelControl = Dialog.useDialogControl()
@@ -88,6 +95,8 @@ export function EditProfileDialog({
         onUpdate={onUpdate}
         setDirty={setDirty}
         onPressCancel={onPressCancel}
+        // HORIZON: identity ID-20a: the tab Edit Profile opens on
+        initialTab={initialTab}
       />
 
       <Prompt.Basic
@@ -107,11 +116,15 @@ function DialogInner({
   onUpdate,
   setDirty,
   onPressCancel,
+  // HORIZON: identity ID-20a: the tab Edit Profile opens on
+  initialTab,
 }: {
   profile: app.bsky.actor.defs.ProfileViewDetailed
   onUpdate?: () => void
   setDirty: (dirty: boolean) => void
   onPressCancel: () => void
+  // HORIZON: identity ID-20a: the tab Edit Profile opens on
+  initialTab?: EditProfileTab
 }) {
   const {_} = useLingui()
   const t = useTheme()
@@ -361,7 +374,8 @@ function DialogInner({
         </Dialog.Header>
       }>
       {/* HORIZON: identity ID-20: the Profile and Plurality tabs (start) */}
-      <EditProfileTabs profile={profile}>
+      {/* HORIZON: identity ID-20a: the tab Edit Profile opens on */}
+      <EditProfileTabs profile={profile} initialTab={initialTab}>
         <View style={[a.relative]}>
           <UserBanner
             banner={userBanner}
