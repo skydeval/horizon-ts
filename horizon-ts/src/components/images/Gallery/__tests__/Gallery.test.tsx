@@ -30,6 +30,14 @@ const mockRoot: {
   } | null
 } = {props: null}
 
+// HORIZON: the media spoiler hooks render their children as is here (no scope)
+jest.mock('#/horizon/media-spoilers/MediaSpoilerCell', () => ({
+  MediaSpoilerCell: ({children}: {children: React.ReactNode}) => children,
+}))
+// HORIZON: the media spoiler hooks render their children as is here (no scope)
+jest.mock('#/horizon/media-spoilers/MediaSpoilerScope', () => ({
+  useMediaSpoilerSlideLabel: () => () => undefined,
+}))
 jest.mock('@lingui/react', () => ({
   useLingui: () => ({
     _: (value: {message: string; values?: Record<string, unknown>}) =>

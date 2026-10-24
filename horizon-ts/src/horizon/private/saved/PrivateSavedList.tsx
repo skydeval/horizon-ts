@@ -22,11 +22,11 @@ import {cleanError} from '#/lib/strings/errors'
 import {Post} from '#/view/com/post/Post'
 import {EmptyState} from '#/view/com/util/EmptyState'
 import {List} from '#/view/com/util/List'
-import {PostFeedLoadingPlaceholder} from '#/view/com/util/LoadingPlaceholder'
 import {atoms as a, useTheme} from '#/alf'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import * as Layout from '#/components/Layout'
 import {ListFooter} from '#/components/Lists'
+import {PostFeedSkeleton} from '#/components/PostFeedSkeleton'
 import {IS_IOS} from '#/env'
 import {
   fetchPrivateBookmarksPage,
@@ -180,7 +180,7 @@ export function PrivateSavedList() {
   const renderItem = ({item, index}: {item: ListItem; index: number}) => {
     switch (item.type) {
       case 'loading':
-        return <PostFeedLoadingPlaceholder />
+        return <PostFeedSkeleton />
       case 'unavailable':
         return <ListUnavailable queryKey={queryKey} />
       case 'empty':

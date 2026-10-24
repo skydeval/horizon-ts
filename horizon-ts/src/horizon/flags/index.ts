@@ -35,9 +35,12 @@ const DEFAULTS: Record<Features, unknown> = {
   [Features.FollowingV2Enable]: true,
   [Features.OnboardingInterestsRequiredEnable]: false,
   [Features.ModerationInboxEnable]: false,
-  [Features.AtmosphereExploreEnable]: false,
+  // Renamed from atmosphere_explore:enable upstream; public default false (read 2026-10-24)
+  [Features.AtmosphereScreenEnable]: false,
   // Bluesky beta, on in Horizon: "Redesigned notifications"
   [Features.NotificationsV2Enable]: true,
+  // Profile links, public default true (read 2026-10-24); see docs/internal/notes/upstream-profile-links-audit.md
+  [Features.ProfileLinksEnable]: true,
   [Features.StarterPacksConfig]: {limit: 150},
   [Features.TrendingDiscoverValues]: {topics: 5, accounts: 15, videos: 30},
   [Features.TrendingExploreTopicsCountValue]: 5,

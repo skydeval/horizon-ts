@@ -288,7 +288,7 @@ below to that output for the complete ledger.
 | Hook | Why it has no marker |
 |---|---|
 | Deleted `assets/kawaii.png`, `assets/kawaii_smol.png` | Community artwork not covered by MIT (`ASSETS.md`). Deleted files carry no marker. |
-| Deleted `assets/illustrations/illustration-mobile.png`, `illustration-mobile-dark.png`, `README.md` | Commissioned illustration not covered by MIT (`ASSETS.md`). |
+| Deleted `assets/illustrations/illustration-mobile.png`, `illustration-mobile-dark.png`, `README.md`, and (upstream merge 2026-10-24) `illustration-mobile.webp`, `illustration-mobile-dark.webp`, `illustration-mobile-safe.webp`, `illustration-mobile-dark-safe.webp` | Commissioned illustration not covered by MIT (`ASSETS.md`). |
 | `package.json`: `"@atproto/oauth-client-browser": "0.5.4"` | JSON has no comments. The OAuth library, pinned exactly like the other `@atproto/*` packages. |
 | `pnpm-lock.yaml` | Follows `package.json`. |
 

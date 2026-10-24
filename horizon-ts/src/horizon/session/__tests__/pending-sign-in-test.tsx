@@ -129,7 +129,9 @@ describe('the pending sign-in record', () => {
     page.hash = '#state=abc&code=def'
     const session = {did: 'did:plc:aaaa'}
     mockInitCallback.mockResolvedValue({session, state: null})
-    const login = jest.fn((_session: unknown) => Promise.resolve())
+    const login = jest.fn((_session: unknown, _state?: unknown) =>
+      Promise.resolve(),
+    )
     await expect(completeWebOAuth(login)).resolves.toBe(true)
     expect(login).toHaveBeenCalledWith(session, null)
     expect(storage.getItem('horizon.oauth.pendingSignIn')).toBeNull()

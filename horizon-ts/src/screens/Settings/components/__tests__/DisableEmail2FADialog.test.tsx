@@ -8,6 +8,10 @@ const mockCall = jest.fn()
 const mockRefreshSession = jest.fn()
 const mockToastShow = jest.fn()
 
+// HORIZON: the password session gate renders the dialog body as is here
+jest.mock('#/horizon/auth/PasswordSessionGate', () => ({
+  PasswordSessionGate: ({children}: {children: React.ReactNode}) => children,
+}))
 jest.mock('@lingui/react', () => ({
   useLingui: () => ({_: (value: {message: string}) => value.message}),
   Trans: ({message}: {message?: string}) => message ?? null,

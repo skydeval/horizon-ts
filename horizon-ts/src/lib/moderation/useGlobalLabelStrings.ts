@@ -13,7 +13,8 @@ export type GlobalLabelStrings = Record<
 >
 
 export function useGlobalLabelStrings(): GlobalLabelStrings {
-  const {t: l} = useLingui()
+  // HORIZON: the CW self-label reads "Content warning" (its strings take i18n._)
+  const {t: l, i18n} = useLingui()
   return useMemo(
     () => ({
       '!hide': {
@@ -49,8 +50,9 @@ export function useGlobalLabelStrings(): GlobalLabelStrings {
         description: l`Explicit or potentially disturbing media.`,
       },
       // HORIZON: the CW self-label reads "Content warning"
-      ...horizonGlobalLabelStrings(_),
+      ...horizonGlobalLabelStrings(descriptor => i18n._(descriptor)),
     }),
-    [l],
+    // HORIZON: the CW self-label reads "Content warning" (its strings take i18n._)
+    [l, i18n],
   )
 }
