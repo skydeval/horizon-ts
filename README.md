@@ -31,7 +31,11 @@ members of the Horizon network.
 - **Restored accounts (Refract)**: accounts that Bluesky's AppView no
   longer serves, shown when a community that prism's operator trusts still
   hosts them.
-- **Planned**: pronouns and plural systems, polls and fundraisers.
+- **Pronouns and plural systems**: pronouns beside every name, plural
+  system profiles with members and front, posts that show which members
+  wrote them, and posting as another signed-in account or as members. See
+  [the design](docs/design/pronouns-and-plural-systems.md).
+- **Planned**: polls and fundraisers.
 
 ## Status
 
