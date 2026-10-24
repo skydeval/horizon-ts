@@ -40,12 +40,14 @@ const DEFAULTS: Record<Features, unknown> = {
   // Bluesky beta, on in Horizon: "Redesigned notifications"
   [Features.NotificationsV2Enable]: true,
   /*
-   * Profile links: Bluesky's public default is true (read 2026-10-24), but
-   * off in Horizon until the link editor stops fetching payment pages (the
-   * title of an unrecognised PayPal URL is saved into the public record).
-   * See docs/internal/notes/upstream-profile-links-audit.md.
+   * Profile links: Bluesky's public default is true (read 2026-10-24). On in
+   * Horizon since the link editor's payment guard landed (2026-10-24): a link
+   * on a payment or support host is never sent to cardyb (no title, favicon
+   * or reachability check), and typing is debounced. See
+   * src/horizon/profile-links/payment-domains.ts and
+   * docs/internal/notes/upstream-profile-links-audit.md.
    */
-  [Features.ProfileLinksEnable]: false,
+  [Features.ProfileLinksEnable]: true,
   [Features.StarterPacksConfig]: {limit: 150},
   [Features.TrendingDiscoverValues]: {topics: 5, accounts: 15, videos: 30},
   [Features.TrendingExploreTopicsCountValue]: 5,

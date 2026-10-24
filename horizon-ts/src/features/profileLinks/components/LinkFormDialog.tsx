@@ -14,6 +14,11 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_LIQUID_GLASS} from '#/env'
+// HORIZON: no page previews of payment links (design.md 10.2)
+import {
+  isPaymentUrl,
+  LINK_META_DEBOUNCE_MS,
+} from '#/horizon/profile-links/payment-domains'
 import {useSupportPalette} from '../palette'
 import {
   formatLinkUrl,
@@ -139,32 +144,62 @@ function LinkFormInner({
    * links skip this, so they read "Support on <provider>".
    */
   const autoTitle = useRef('')
+  // HORIZON: a payment link is never sent to cardyb (design.md 10.2)
+  const isPayment = isPaymentUrl(targetUrl)
   useEffect(() => {
     if (
       !targetUrl ||
       provider ||
+      isPayment || // HORIZON
       validation.isShortener ||
       validation.isInsecure
     ) {
       return
     }
     let cancelled = false
-    void getLinkMeta(targetUrl, 8e3).then(meta => {
-      if (cancelled || meta.error) return
-      setReachability('reachable')
-      // a standard.site record's title, like a blog's name, beats the HTML one
-      const suggestion = suggestTitle(meta.view?.external?.title || meta.title)
-      if (!suggestion) return
-      const previousAuto = autoTitle.current
-      autoTitle.current = suggestion
-      setTitle(prev =>
-        prev.trim() && prev !== previousAuto ? prev : suggestion,
-      )
-    })
+    // HORIZON: wait for typing to settle, so prefixes are not sent
+    const timer = setTimeout(() => {
+      void getLinkMeta(targetUrl, 8e3).then(meta => {
+        if (cancelled || meta.error) return
+        setReachability('reachable')
+        // a standard.site record's title, like a blog's name, beats the HTML one
+        const suggestion = suggestTitle(
+          meta.view?.external?.title || meta.title,
+        )
+        if (!suggestion) return
+        const previousAuto = autoTitle.current
+        autoTitle.current = suggestion
+        setTitle(prev =>
+          prev.trim() && prev !== previousAuto ? prev : suggestion,
+        )
+      })
+    }, LINK_META_DEBOUNCE_MS)
     return () => {
       cancelled = true
+      clearTimeout(timer)
     }
-  }, [targetUrl, provider, validation.isShortener, validation.isInsecure])
+  }, [
+    targetUrl,
+    provider,
+    isPayment,
+    validation.isShortener,
+    validation.isInsecure,
+  ])
+
+  /*
+   * HORIZON: a title filled in from an earlier page (`paypal.co`, say) is
+   * dropped once the link becomes a payment or support link. A typed title
+   * stays.
+   */
+  const clearAutoTitleFor = (value: string) => {
+    const next = validateLinkInput(value)
+    if (!autoTitle.current || (!next.provider && !isPaymentUrl(next.url))) {
+      return
+    }
+    const previousAuto = autoTitle.current
+    autoTitle.current = ''
+    setTitle(prev => (prev === previousAuto ? '' : prev))
+  }
 
   const nextTitle = title.trim() || undefined
   const isUnchanged =
@@ -199,15 +234,18 @@ function LinkFormInner({
     }
     const isNewDestination = targetUrl !== link?.url
     // a saved link has proven itself; only check new destinations
-    const needsCheck = isNewDestination && reachability === 'unchecked'
+    // HORIZON: payment links get no reachability check from cardyb
+    const needsCheck =
+      isNewDestination && reachability === 'unchecked' && !isPayment
     /*
      * Fetch the icon on every save, not just for new links, so editing a link
      * picks up a favicon the site has changed. If that fails, an edit keeps
      * the icon it had. Support links use bundled logos instead.
      */
-    const needsIcon = !provider
-    let icon = isNewDestination ? undefined : link?.icon
-    let iconUrl = isNewDestination ? undefined : link?.iconUrl
+    // HORIZON: and so do payment links; any stored favicon is dropped
+    const needsIcon = !provider && !isPayment
+    let icon = isNewDestination || isPayment ? undefined : link?.icon
+    let iconUrl = isNewDestination || isPayment ? undefined : link?.iconUrl
     if (needsCheck || needsIcon || isNewDestination) {
       setReachability('checking')
       const [meta, uploadedIcon, safelinkAction] = await Promise.all([
@@ -312,6 +350,7 @@ function LinkFormInner({
                 value={input}
                 onChangeText={value => {
                   setInput(value)
+                  clearAutoTitleFor(value) // HORIZON
                   setTouched(true)
                   setReachability('unchecked')
                   setError(undefined)

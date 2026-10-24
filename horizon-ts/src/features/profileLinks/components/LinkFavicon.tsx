@@ -6,6 +6,7 @@ import {getBlobCidString} from '@atproto/lex'
 import {atoms as a} from '#/alf'
 import {ButtonIcon} from '#/components/Button'
 import {Globe_Stroke2_Corner0_Rounded as GlobeIcon} from '#/components/icons/Globe'
+import {isPaymentUrl} from '#/horizon/profile-links/payment-domains' // HORIZON
 import {type ProfileLink} from '../types'
 
 /**
@@ -17,6 +18,8 @@ export function linkFaviconUrl(
   link: ProfileLink,
   did: string | undefined,
 ): string | undefined {
+  // HORIZON: payment links show a bundled logo or the globe (design.md 10.2)
+  if (isPaymentUrl(link.url)) return undefined
   if (link.iconUrl) return link.iconUrl
   if (!link.icon || !did) return undefined
   return `https://cdn.bsky.app/img/avatar_thumbnail/plain/${did}/${getBlobCidString(link.icon)}@png`

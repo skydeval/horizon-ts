@@ -5,6 +5,7 @@ import {useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {ArrowTopRight_Stroke2_Corner0_Rounded as ArrowTopRightIcon} from '#/components/icons/Arrow'
 import {Link} from '#/components/Link'
+import {paymentLogoProvider} from '#/horizon/profile-links/payment-domains' // HORIZON
 import {useSupportPalette} from '../palette'
 import {
   PILL_LEFT,
@@ -109,7 +110,10 @@ export function ProfileLinkPill({
       {faviconUrl ? (
         <ButtonFavicon key={faviconUrl} uri={faviconUrl} />
       ) : (
-        <ButtonIcon icon={linkIcon(provider)} />
+        // HORIZON: an unrecognised payment link still gets its bundled logo
+        <ButtonIcon
+          icon={linkIcon(provider ?? paymentLogoProvider(link.url))}
+        />
       )}
       <ButtonText numberOfLines={1} emoji style={{color}}>
         {link.title ? (

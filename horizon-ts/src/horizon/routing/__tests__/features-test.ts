@@ -10,6 +10,7 @@ jest.mock('#/horizon/session/local-store', () => ({
   subscribeLocal: () => () => {},
 }))
 
+import {THREAD_LENS} from '#/horizon/switches'
 import {
   clearCurrentClients,
   type CurrentClients,
@@ -87,17 +88,36 @@ describe('servesFeature', () => {
 })
 
 describe('answers and loads', () => {
-  it('a change notifies and invalidates every query once for the current account', () => {
+  it('a change notifies and invalidates every query once (one split pass) for the current account', () => {
     publish(DID)
     const listener = jest.fn()
     const unsubscribe = subscribePrismFeatures(listener)
     answerPrismFeatures(DID, ['private'])
     expect(listener).toHaveBeenCalledTimes(1)
-    expect(invalidateQueries).toHaveBeenCalledTimes(1)
-    expect(invalidateQueries).toHaveBeenCalledWith()
+    /*
+     * With Thread Lens on, one pass is split in two (Phase 4 design 11.6):
+     * every non-lens query is invalidated, and lens entries are only marked
+     * stale.
+     */
+    const calls = THREAD_LENS ? 2 : 1
+    expect(invalidateQueries).toHaveBeenCalledTimes(calls)
+    if (THREAD_LENS) {
+      const [rest, lens] = invalidateQueries.mock.calls as unknown as [
+        [{predicate: (query: {queryKey: unknown[]}) => boolean}],
+        [unknown],
+      ]
+      expect(rest[0].predicate({queryKey: ['horizon-thread-lens']})).toBe(false)
+      expect(rest[0].predicate({queryKey: ['post-thread']})).toBe(true)
+      expect(lens[0]).toEqual({
+        queryKey: ['horizon-thread-lens'],
+        refetchType: 'none',
+      })
+    } else {
+      expect(invalidateQueries).toHaveBeenCalledWith()
+    }
     answerPrismFeatures(DID, ['private'])
     expect(listener).toHaveBeenCalledTimes(1)
-    expect(invalidateQueries).toHaveBeenCalledTimes(1)
+    expect(invalidateQueries).toHaveBeenCalledTimes(calls)
     unsubscribe()
   })
 
