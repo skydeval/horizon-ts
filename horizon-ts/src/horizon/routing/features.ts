@@ -97,6 +97,15 @@ export const PRISM_FEATURES = [
    * (`thread-lens/labelers.ts`).
    */
   'threadLens.labelers',
+  /*
+   * Pronouns and plural (Phase 5 design 4.4, 9, 15.1): `plural.read` while
+   * prism serves S-2 (`app.nearhorizon.plural.getRecords` and
+   * `listMembers`), and `plural.fronters` while it stores and serves a
+   * post's fronters key on public and kryphocron views alike. Listed for
+   * members and non-members.
+   */
+  'plural.read',
+  'plural.fronters',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

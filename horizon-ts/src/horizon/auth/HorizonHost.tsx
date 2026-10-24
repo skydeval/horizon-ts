@@ -4,7 +4,8 @@
  * sign-in window,
  * the password dialog, the membership probe and its notice, the write
  * routes' PDS cross-check, the private outbox and the direct `getPosts`
- * token's prefetch, the Thread Lens `getThread` token's prefetch, the appearance
+ * token's prefetch, the Thread Lens `getThread` token's prefetch, the identity
+ * reads' `getRecords` and `listMembers` tokens' prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
  * the "spoilers from other apps" choice, the launch-time
  * check for a sign-in that never came back, the notice for a resume that
@@ -19,6 +20,7 @@ import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
+import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {RefractHost} from '#/horizon/refract/RefractHost'
@@ -83,6 +85,7 @@ export function HorizonHost() {
       <DirectPrismPrefetch />
       <RefractHost />
       <ThreadLensTokenPrefetch />
+      <IdentityTokenPrefetch />
       <OutboxHost />
       <AppearanceSync />
       <OtherAppSpoilersSync />

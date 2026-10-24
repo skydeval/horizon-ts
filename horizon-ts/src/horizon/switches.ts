@@ -336,6 +336,23 @@ export const REFRACT_COMMUNITY_LABELER: boolean = true
 export const PER_ACCOUNT_TID_CLOCK: boolean = true
 
 /**
+ * Pronouns (Phase 5 design section 10; `identity/`): the
+ * `app.nearhorizon.actor.pronouns` record read for every account (prism's
+ * S-2 for others, the own PDS for one's own) and shown on every site, and
+ * the pronouns editor. `false`: every pronouns hook renders nothing and no
+ * pronouns record is read or written.
+ */
+export const PRONOUNS: boolean = true
+
+/**
+ * Plural display (Phase 5 design section 10; `identity/`): the plural
+ * profile (badge, member list, front indicator, header) and fronters on
+ * posts. `false`: the account as stock everywhere and no plural record is
+ * read.
+ */
+export const PLURAL_DISPLAY: boolean = true
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading

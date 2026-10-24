@@ -667,3 +667,210 @@ export const threadLensResolve = l.procedure(
   }),
   THREAD_LENS_ERRORS,
 )
+
+/*
+ * Pronouns and plural systems (Phase 5 design 4.1, 4.2). The four records
+ * are from the pronouns and plural specs (`app.nearhorizon.actor.pronouns`,
+ * `app.nearhorizon.plural.{system,member,front}`), and the fronters object
+ * (`app.nearhorizon.plural.fronters`) is Horizon's spec addition, also kept
+ * as a lexicon document beside this file (`plural-fronters.json`). The
+ * schemas type writes and tests; reads parse leniently
+ * (`identity/parse.ts`), so one bad field never loses the others. A
+ * member's `color` pattern (`^#[0-9A-Fa-f]{6}$`) is checked by the parser
+ * and the editors, since string schemas carry no pattern.
+ *
+ * prism's two reads (S-2), from prism's
+ * `lexicons/app/nearhorizon/plural/{defs,getRecords,listMembers}.json`.
+ * Each answer carries an `unknown` value, so answers are typed as maps and
+ * each one is checked where it is read (`identity/reads.ts`), so one
+ * malformed answer never fails a call.
+ */
+
+export const PRONOUNS_COLLECTION = 'app.nearhorizon.actor.pronouns'
+export const PLURAL_SYSTEM_COLLECTION = 'app.nearhorizon.plural.system'
+export const PLURAL_MEMBER_COLLECTION = 'app.nearhorizon.plural.member'
+export const PLURAL_FRONT_COLLECTION = 'app.nearhorizon.plural.front'
+
+/** The rkey of the pronouns, system and front records. */
+export const PLURAL_SELF_RKEY = 'self'
+
+/**
+ * The top-level key a post record carries its fronters under, on
+ * `app.bsky.feed.post` and `tools.kryphocron.feed.postPrivate` alike
+ * (PP-1). Readers that do not know it ignore it.
+ */
+export const PLURAL_FRONTERS_KEY = 'app.nearhorizon.plural.fronters'
+
+/** `app.nearhorizon.actor.pronouns#pronounSet`. */
+const pronounSet = l.object({
+  forms: l.array(l.string({maxLength: 64, maxGraphemes: 24}), {
+    minLength: 1,
+    maxLength: 12,
+  }),
+})
+
+/**
+ * `app.nearhorizon.actor.pronouns`, rkey `self`. `displayMode` absent or
+ * unknown reads as `all`; empty `sets` shows nothing and blocks Bluesky's
+ * short field (pronouns spec, "Empty sets").
+ */
+export const pronounsRecord = l.record(
+  'literal:self',
+  PRONOUNS_COLLECTION,
+  l.object({
+    sets: l.array(pronounSet, {maxLength: 10}),
+    displayMode: l.optional(l.string<{knownValues: ['all', 'firstOnly']}>()),
+    createdAt: l.string({format: 'datetime'}),
+    updatedAt: l.optional(l.string({format: 'datetime'})),
+  }),
+)
+
+export type PronounsRecord = l.InferInput<typeof pronounsRecord>
+
+/** `app.nearhorizon.plural.system`, rkey `self`: the record is the signal. */
+export const pluralSystemRecord = l.record(
+  'literal:self',
+  PLURAL_SYSTEM_COLLECTION,
+  l.object({
+    name: l.optional(l.string({maxLength: 640, maxGraphemes: 64})),
+    description: l.optional(l.string({maxLength: 2560, maxGraphemes: 256})),
+    collectiveNoun: l.optional(l.string({maxLength: 320, maxGraphemes: 32})),
+    memberCount: l.optional(l.string({maxLength: 64, maxGraphemes: 16})),
+    createdAt: l.optional(l.string({format: 'datetime'})),
+    updatedAt: l.optional(l.string({format: 'datetime'})),
+  }),
+)
+
+export type PluralSystemRecord = l.InferInput<typeof pluralSystemRecord>
+
+/** `app.nearhorizon.plural.member#pronounSet`: the member lexicon's limits. */
+const memberPronounSet = l.object({
+  forms: l.array(l.string({maxLength: 240, maxGraphemes: 24}), {
+    maxLength: 6,
+  }),
+})
+
+/** `app.nearhorizon.plural.member#proxyRef`. */
+const proxyRef = l.object({
+  id: l.string(),
+  note: l.optional(l.string({maxLength: 640, maxGraphemes: 64})),
+})
+
+const memberImage = l.blob({
+  accept: ['image/png', 'image/jpeg'],
+  maxSize: 1_000_000,
+})
+
+/**
+ * `app.nearhorizon.plural.member`. The lexicon's key is `any`; Horizon
+ * creates TIDs (PP-18).
+ */
+export const pluralMemberRecord = l.record(
+  'any',
+  PLURAL_MEMBER_COLLECTION,
+  l.object({
+    displayName: l.string({maxLength: 640, maxGraphemes: 64}),
+    description: l.optional(l.string({maxLength: 2560, maxGraphemes: 256})),
+    emoji: l.optional(l.string({maxLength: 16, maxGraphemes: 4})),
+    color: l.optional(l.string({maxLength: 7})),
+    pronouns: l.optional(l.array(memberPronounSet, {maxLength: 6})),
+    roles: l.optional(
+      l.array(l.string({maxLength: 320, maxGraphemes: 32}), {maxLength: 10}),
+    ),
+    memberTypes: l.optional(
+      l.array(l.string({maxLength: 320, maxGraphemes: 32}), {maxLength: 5}),
+    ),
+    agePresentation: l.optional(l.string({maxLength: 320, maxGraphemes: 32})),
+    proxy: l.optional(proxyRef),
+    avatar: l.optional(memberImage),
+    banner: l.optional(memberImage),
+    createdAt: l.optional(l.string({format: 'datetime'})),
+    updatedAt: l.optional(l.string({format: 'datetime'})),
+  }),
+)
+
+export type PluralMemberRecord = l.InferInput<typeof pluralMemberRecord>
+
+/**
+ * `app.nearhorizon.plural.front#frontMember`: a member by rkey; `status`
+ * `engaging` or absent means fronting.
+ */
+export const frontMember = l.object({
+  id: l.string(),
+  status: l.optional(l.string({maxLength: 320, maxGraphemes: 32})),
+})
+
+/** `app.nearhorizon.plural.front`, rkey `self`. */
+export const pluralFrontRecord = l.record(
+  'literal:self',
+  PLURAL_FRONT_COLLECTION,
+  l.object({
+    members: l.array(frontMember, {maxLength: 20}),
+    state: l.optional(l.string({maxLength: 320, maxGraphemes: 32})),
+    comment: l.optional(l.string({maxLength: 2560, maxGraphemes: 256})),
+    setAt: l.string({format: 'datetime'}),
+  }),
+)
+
+export type PluralFrontRecord = l.InferInput<typeof pluralFrontRecord>
+
+/**
+ * `app.nearhorizon.plural.fronters` (Phase 5 design 4.2, Horizon's spec
+ * addition): the members who wrote a post, by rkey in the author's own
+ * repo, 1 to 20 `#frontMember` entries. Horizon writes no `status`.
+ */
+export const pluralFronters = l.object({
+  members: l.array(frontMember, {minLength: 1, maxLength: 20}),
+})
+
+export type PluralFronters = l.InferInput<typeof pluralFronters>
+
+/** The errors both S-2 reads declare (prism's lexicons). */
+const PLURAL_READ_ERRORS = [
+  'InvalidRequest',
+  'RateLimitExceeded',
+  'MethodNotImplemented',
+] as const
+
+/**
+ * `app.nearhorizon.plural.getRecords`: for each DID in `actors` its
+ * `#actorRecords` (pronouns, system and front, each an `#answer`), and an
+ * `#memberAnswer` for each member URI. At most 50 accounts (the actors and
+ * the member URIs' DIDs together) and 100 member URIs per call.
+ */
+export const pluralGetRecords = l.query(
+  'app.nearhorizon.plural.getRecords',
+  l.params({
+    actors: l.optional(l.array(l.string({format: 'did'}), {maxLength: 50})),
+    members: l.optional(
+      l.array(l.string({format: 'at-uri'}), {maxLength: 100}),
+    ),
+  }),
+  l.jsonPayload({
+    actors: l.array(l.lexMap()),
+    members: l.array(l.lexMap()),
+  }),
+  PLURAL_READ_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.plural.listMembers`: one account's member records in
+ * ascending rkey order (`#memberView`). `status` is `complete`, `partial`
+ * (prism cannot promise every member is listed) or `unknown` (not listed
+ * yet; members empty). prism's default `limit` is 50.
+ */
+export const pluralListMembers = l.query(
+  'app.nearhorizon.plural.listMembers',
+  l.params({
+    actor: l.string({format: 'did'}),
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+  }),
+  l.jsonPayload({
+    actor: l.string(),
+    status: l.string<{knownValues: ['complete', 'partial', 'unknown']}>(),
+    members: l.array(l.lexMap()),
+    cursor: l.optional(l.string()),
+  }),
+  PLURAL_READ_ERRORS,
+)

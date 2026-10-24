@@ -1,0 +1,19 @@
+{
+  "lexicon": 1,
+  "id": "app.nearhorizon.plural.fronters",
+  "description": "The members of a plural system who wrote a post. Carried on a post record under the key 'app.nearhorizon.plural.fronters'. References are member rkeys in the post author's own repository.",
+  "defs": {
+    "main": {
+      "type": "object",
+      "required": ["members"],
+      "properties": {
+        "members": {
+          "type": "array",
+          "minLength": 1,
+          "maxLength": 20,
+          "items": {"type": "ref", "ref": "app.nearhorizon.plural.front#frontMember"}
+        }
+      }
+    }
+  }
+}
