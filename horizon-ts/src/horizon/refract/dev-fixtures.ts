@@ -75,5 +75,15 @@ function answerOf(
       return {body: {count: 0}, proxied: false}
     case 'app.nearhorizon.refract.getAuthorReposts':
       return {body: {feed: []}, proxied: false}
+    case 'app.nearhorizon.refract.searchActorsTypeahead':
+    case 'app.nearhorizon.refract.searchActors': {
+      const q = typeof params.q === 'string' ? params.q.toLowerCase() : ''
+      const profile = rfProfile()
+      const handle = String(profile.handle)
+      return {
+        body: {actors: q && handle.startsWith(q) ? [profile] : []},
+        proxied: false,
+      }
+    }
   }
 }

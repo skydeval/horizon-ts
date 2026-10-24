@@ -40,6 +40,8 @@ import {type Metrics, useAnalytics} from '#/analytics'
 import {PrivateSearchNote} from '#/horizon/private/search/PrivateSearchNote'
 // HORIZON: private results merge into Top and Latest
 import {usePrivateSearchResults} from '#/horizon/private/search/results'
+// HORIZON: restored (Refract) accounts in People
+import {useRestoredPeople} from '#/horizon/refract/search-people'
 import {type app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 
@@ -565,15 +567,23 @@ let SearchScreenUserResults = ({
     await refetch()
     setIsPTR(false)
   }, [setIsPTR, refetch])
+  // HORIZON: restored (Refract) accounts in People, merged when they arrive
+  const [scrolled, setScrolled] = useState(false)
+  const restored = useRestoredPeople({
+    query,
+    active,
+    stockPages: results?.pages.map(page => page.actors) ?? [],
+    scrolled,
+  })
+  const profiles: bsky.profile.AnyProfileView[] = restored.profiles
+
   const onEndReached = useCallback(() => {
     if (!hasSession) return
+    // HORIZON: restored (Refract) pages follow stock's
+    restored.fetchNextPage()
     if (isFetching || !hasNextPage || error) return
     void fetchNextPage()
-  }, [isFetching, error, hasNextPage, fetchNextPage, hasSession])
-
-  const profiles = useMemo(() => {
-    return results?.pages.flatMap(page => page.actors) || []
-  }, [results])
+  }, [isFetching, error, hasNextPage, fetchNextPage, hasSession, restored])
 
   const fireTracking = useCallOnce(() => {
     ax.metric('search:results:loaded', {
@@ -614,11 +624,16 @@ let SearchScreenUserResults = ({
           refreshing={isPTR}
           onRefresh={() => void onPullToRefresh()}
           onEndReached={onEndReached}
+          // HORIZON: a late restored entry goes after the list once scrolled
+          onScrolledDownChange={setScrolled}
           desktopFixedHeight
           ListFooterComponent={
             <ListFooter
-              hasNextPage={hasNextPage && hasSession}
-              isFetchingNextPage={isFetchingNextPage}
+              // HORIZON: restored (Refract) pages too
+              hasNextPage={(hasNextPage || restored.hasNextPage) && hasSession}
+              isFetchingNextPage={
+                isFetchingNextPage || restored.isFetchingNextPage
+              }
             />
           }
         />

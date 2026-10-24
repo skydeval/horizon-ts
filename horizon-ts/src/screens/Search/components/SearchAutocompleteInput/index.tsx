@@ -10,6 +10,8 @@ import {
   useAutocomplete,
 } from '#/components/Autocomplete'
 import {SearchInput} from '#/components/forms/SearchInput'
+// HORIZON: restored (Refract) accounts in the search box
+import {useKeyboardNavigated} from '#/horizon/refract/search'
 import {type SearchAutocompleteInputProps} from './shared'
 
 /**
@@ -46,6 +48,8 @@ export function SearchAutocompleteInput({
 
   const active = focused && !dismissed
 
+  // HORIZON: restored (Refract) accounts in the search box
+  const navigated = useKeyboardNavigated(sift.elements.input, value)
   const {items} = useAutocomplete({
     type: 'profile',
     // The dropdown only shows while active, so don't fetch otherwise. This
@@ -53,6 +57,9 @@ export function SearchAutocompleteInput({
     // present (e.g. /search?q=foo).
     query: active ? value : '',
     showSearchFallback: true,
+    // HORIZON: restored (Refract) accounts in the search box
+    restored: true,
+    navigated,
   })
 
   const showDropdown =

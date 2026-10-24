@@ -137,6 +137,47 @@ export const getAuthorReposts = l.query(
   [...ERRORS, 'AccountTakedown', 'AccountDeactivated', 'InvalidRequest'],
 )
 
+/**
+ * Prefix matches on handle or display name over restored accounts only
+ * (feature `refract.search`, prism `0c4634d`), ignoring case and diacritics.
+ * Views come marked restored with fill's gate, block, mute and visitor rules
+ * applied, in a stable order: exact handle, handle prefix, display-name
+ * prefix, by handle within each. `q` over 100 characters is `InvalidRequest`.
+ */
+export const searchActorsTypeahead = l.query(
+  'app.nearhorizon.refract.searchActorsTypeahead',
+  l.params({
+    q: l.string(),
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+  }),
+  l.jsonPayload({
+    actors: l.array(l.lexMap()),
+    withheld: l.optional(l.array(l.lexMap())),
+    ...answerFields,
+  }),
+  [...ERRORS, 'InvalidRequest'],
+)
+
+/**
+ * The paged form of {@link searchActorsTypeahead}. Drops happen after the
+ * page is cut, so a page can be short (even empty) with a cursor.
+ */
+export const searchActors = l.query(
+  'app.nearhorizon.refract.searchActors',
+  l.params({
+    q: l.string(),
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+  }),
+  l.jsonPayload({
+    actors: l.array(l.lexMap()),
+    cursor: l.optional(l.string()),
+    withheld: l.optional(l.array(l.lexMap())),
+    ...answerFields,
+  }),
+  [...ERRORS, 'InvalidRequest'],
+)
+
 /** The methods' NSIDs, which share prism's one rate-limit family. */
 export const REFRACT_METHODS = {
   fill: 'app.nearhorizon.refract.fill',
@@ -147,6 +188,8 @@ export const REFRACT_METHODS = {
   listNotifications: 'app.nearhorizon.refract.listNotifications',
   getUnreadCount: 'app.nearhorizon.refract.getUnreadCount',
   getAuthorReposts: 'app.nearhorizon.refract.getAuthorReposts',
+  searchActorsTypeahead: 'app.nearhorizon.refract.searchActorsTypeahead',
+  searchActors: 'app.nearhorizon.refract.searchActors',
 } as const
 
 export type RefractMethod =

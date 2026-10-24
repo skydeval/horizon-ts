@@ -175,6 +175,9 @@ const SCHEMAS: Record<RefractMethod, unknown> = {
   [lexicon.REFRACT_METHODS.listNotifications]: lexicon.listNotifications,
   [lexicon.REFRACT_METHODS.getUnreadCount]: lexicon.getUnreadCount,
   [lexicon.REFRACT_METHODS.getAuthorReposts]: lexicon.getAuthorReposts,
+  [lexicon.REFRACT_METHODS.searchActorsTypeahead]:
+    lexicon.searchActorsTypeahead,
+  [lexicon.REFRACT_METHODS.searchActors]: lexicon.searchActors,
 }
 
 function callWith(

@@ -11,6 +11,8 @@ import {
   useAutocomplete,
 } from '#/components/Autocomplete'
 import {SearchInput} from '#/components/forms/SearchInput'
+// HORIZON: restored (Refract) accounts in the search box
+import {useKeyboardNavigated} from '#/horizon/refract/search'
 
 export function DesktopSearch() {
   const navigation = useNavigation<NavigationProp>()
@@ -97,10 +99,15 @@ function Inner({
   onSelect: (item: AutocompleteItem) => void
   onDismiss: () => void
 }) {
+  // HORIZON: restored (Refract) accounts in the search box
+  const navigated = useKeyboardNavigated(sift.elements.input, query)
   const {items} = useAutocomplete({
     type: 'profile',
     query,
     showSearchFallback: true,
+    // HORIZON: restored (Refract) accounts in the search box
+    restored: true,
+    navigated,
   })
 
   return items && items.length ? (

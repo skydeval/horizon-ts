@@ -84,6 +84,12 @@ export const PRISM_FEATURES = [
    */
   'refract',
   /*
+   * Restored-account search (prism `0c4634d`): `refract.searchActorsTypeahead`
+   * and `refract.searchActors`, prefix matches over restored accounts.
+   * Horizon calls them only while this is listed (`refract/search.ts`).
+   */
+  'refract.search',
+  /*
    * Thread Lens (Phase 4 design 3.2, TL-1; prism P-1): `threadLens` whenever
    * prism serves the lens, plus `threadLens.signedIn` when it serves every
    * signed-in account. With any `threadLens*` value listed, the list decides

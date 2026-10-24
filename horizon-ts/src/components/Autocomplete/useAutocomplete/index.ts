@@ -13,6 +13,12 @@ import {
   type AutocompleteItemType,
   type AutocompleteProfile,
 } from '#/components/Autocomplete/types'
+// HORIZON: restored (Refract) accounts in the search box
+import {
+  useRestoredActorMatches,
+  useRestoredPlacement,
+  withRestoredActors,
+} from '#/horizon/refract/search'
 import {app} from '#/lexicons'
 import {useEmojiSearch} from './useEmojiSearch'
 
@@ -26,11 +32,23 @@ export function useAutocomplete({
   query: q,
   limit,
   showSearchFallback = false,
+  restored = false,
+  navigated = false,
 }: {
   type: AutocompleteItemType
   query: string
   limit?: number
   showSearchFallback?: boolean
+  /**
+   * HORIZON: offer a restored (Refract) account the query names exactly,
+   * first; the search box only.
+   */
+  restored?: boolean
+  /**
+   * HORIZON: the reader moved through the list with the keyboard, so a late
+   * restored entry goes after the list instead of first.
+   */
+  navigated?: boolean
 }): AutocompleteApi {
   const client = useAppviewClient()
   const moderationOpts = useModerationOpts()
@@ -98,12 +116,29 @@ export function useAutocomplete({
     placeholderData: keepPreviousData,
   })
 
+  // HORIZON: restored (Refract) accounts, merged when they arrive
+  const restoredMatches = useRestoredActorMatches(
+    type === 'profile' && restored ? q : '',
+  )
+  const restoredItems = restoredMatches.actors.filter(profile =>
+    moderateProfileItem({
+      query: q.toLowerCase().trim().replace(/^@/, ''),
+      item: profileItem(profile),
+      moderationOpts: moderationOpts || DEFAULT_MOD_OPTS,
+    }),
+  )
+  const restoredAt = useRestoredPlacement(
+    q,
+    restoredItems.some(profile => profile.did === restoredMatches.exactDid),
+    navigated,
+  )
+
   const items = useMemo(() => {
-    if (!query.data) {
+    if (!query.data && restoredItems.length === 0) {
       return []
     }
 
-    const results = [...query.data]
+    let results = [...(query.data ?? [])]
 
     if (showSearchFallback && q) {
       results.unshift({
@@ -113,13 +148,38 @@ export function useAutocomplete({
       })
     }
 
+    // HORIZON: restored (Refract) accounts, never delaying stock's
+    results = withRestoredActors(results, restoredItems, {
+      placement: restoredAt,
+      didOf: item => (item.type === 'profile' ? item.profile.did : undefined),
+      toItem: profileItem,
+      exact: restoredMatches.exactDid,
+      leading: showSearchFallback && q ? 1 : 0,
+    })
+
     return results
-  }, [query.data, showSearchFallback, q])
+  }, [
+    query.data,
+    showSearchFallback,
+    q,
+    restoredItems,
+    restoredAt,
+    restoredMatches.exactDid,
+  ])
 
   return {
     query: q,
     items,
     isFetching: query.isFetching,
+  }
+}
+
+function profileItem(profile: AutocompleteProfile['profile']) {
+  return {
+    key: profile.did,
+    type: 'profile' as const,
+    value: '@' + profile.handle,
+    profile,
   }
 }
 

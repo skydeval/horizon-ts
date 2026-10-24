@@ -145,7 +145,14 @@ export type FillOutcome = {
 }
 
 /** Who is asking (5.2's "keeps its callers' kind"). */
-export type AskKind = 'profile' | 'anchor' | 'tab' | 'write' | 'slot'
+export type AskKind =
+  | 'profile'
+  | 'anchor'
+  | 'tab'
+  | 'write'
+  | 'slot'
+  /** A search box's exact-handle match (`search.ts`): paced like a slot. */
+  | 'search'
 
 type Waiter = {
   dids: readonly string[]
@@ -835,7 +842,7 @@ async function sendIds(
       return !!author && toConfirm.includes(author)
     })
     const slotsOnly = toConfirm.every(did =>
-      options.kindsFor(did).every(kind => kind === 'slot'),
+      options.kindsFor(did).every(kind => kind === 'slot' || kind === 'search'),
     )
     const confirmed = await sendIds(state, toConfirm, confirmUris, {
       ...options,

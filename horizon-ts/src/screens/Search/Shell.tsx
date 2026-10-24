@@ -151,6 +151,8 @@ export function SearchScreenShell({
        * query on web to keep the hook a no-op instead of doing wasted work.
        */
       query: IS_NATIVE ? searchText : '',
+      // HORIZON: restored (Refract) accounts in the search box
+      restored: true,
     })
 
   const [showAutocomplete, setShowAutocomplete] = useState(false)
