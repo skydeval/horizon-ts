@@ -361,6 +361,17 @@ export const PLURAL_DISPLAY: boolean = true
 export const PLURAL_EDITING: boolean = true
 
 /**
+ * Posting as (Phase 5 design 8, section 10; `posting-as/`): the composer's
+ * "Posting as" control (the signed-in accounts, and the chosen account's
+ * members when it has a system), the fronters written on public and
+ * kryphocron posts, the front update after a public post with members, and
+ * posting from another signed-in account through a temporary client.
+ * `false`: the stock composer avatar, no fronters key written, no front
+ * update, and every post goes from the current account.
+ */
+export const POSTING_AS: boolean = true
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading

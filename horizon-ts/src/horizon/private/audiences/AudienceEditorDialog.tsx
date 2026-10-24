@@ -15,6 +15,7 @@
 
 import {useContext, useEffect, useState} from 'react'
 import {View} from 'react-native'
+import {type Client} from '@atproto/lex'
 import {type DidString} from '@atproto/syntax'
 import {type ModerationOpts} from '@bsky/sdk/moderation'
 import {Trans, useLingui} from '@lingui/react/macro'
@@ -76,17 +77,26 @@ export type ListEditorKind = 'audience' | 'replyList'
  * The editor dialog. `onCreated` runs after the dialog has closed, with the
  * new list's URI and name (not called for an edit).
  */
+/**
+ * The account a list is created in, when it is not the current account (the
+ * composer's posting account, Phase 5 PA-14).
+ */
+export type EditorAccount = {did: string; pdsClient: Client}
+
 export function AudienceEditorDialog({
   control,
   onCreated,
   kind = 'audience',
   editing,
+  account,
 }: {
   control: Dialog.DialogControlProps
   onCreated?: (uri: string, name: string) => void
   kind?: ListEditorKind
   /** A list audience to edit instead of creating one. */
   editing?: AudienceEntry
+  /** Create in this account's repo, through its client. */
+  account?: EditorAccount
 }) {
   return (
     <Dialog.Outer control={control} nativeOptions={{fullHeight: true}}>
@@ -97,6 +107,7 @@ export function AudienceEditorDialog({
         onCreated={onCreated}
         kind={kind}
         editing={editing}
+        account={account}
       />
     </Dialog.Outer>
   )
@@ -107,11 +118,13 @@ function EditorInner({
   onCreated,
   kind,
   editing,
+  account,
 }: {
   control: Dialog.DialogControlProps
   onCreated?: (uri: string, name: string) => void
   kind: ListEditorKind
   editing: AudienceEntry | undefined
+  account: EditorAccount | undefined
 }) {
   const appviewClient = useAppviewClient()
   const [step, setStep] = useState<'details' | 'people'>('details')
@@ -189,6 +202,7 @@ function EditorInner({
       onCreated={onCreated}
       kind={kind}
       editing={editing}
+      account={account}
     />
   )
 }
@@ -253,6 +267,7 @@ function DetailsStep({
   onCreated,
   kind,
   editing,
+  account,
 }: {
   control: Dialog.DialogControlProps
   name: string
@@ -264,17 +279,21 @@ function DetailsStep({
   onCreated?: (uri: string, name: string) => void
   kind: ListEditorKind
   editing: AudienceEntry | undefined
+  account: EditorAccount | undefined
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
   const queryClient = useQueryClient()
   const {currentAccount} = useSession()
-  const pdsClient = usePdsClient()
+  const currentClient = usePdsClient()
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  // The posting account's repo when one is given (Phase 5 PA-14).
+  const did = account ? account.did : currentAccount?.did
+  const pdsClient = account ? account.pdsClient : currentClient
 
   const onCreate = async () => {
-    if (!currentAccount) return
+    if (!did) return
     if (!name.trim()) {
       setError(l`Give the list a name.`)
       return
@@ -284,7 +303,7 @@ function DetailsStep({
     const memberDids = members.map(member => member.did)
     const listName = name.trim()
     const clients = {
-      did: currentAccount.did,
+      did,
       pdsClient,
       prismClient: getPrismClient(pdsClient),
     }
@@ -318,7 +337,7 @@ function DetailsStep({
         kind === 'replyList'
           ? await createReplyList(
               queryClient,
-              {did: currentAccount.did, pdsClient},
+              {did, pdsClient},
               {name, members: memberDids},
             )
           : await createListAudience(queryClient, clients, {

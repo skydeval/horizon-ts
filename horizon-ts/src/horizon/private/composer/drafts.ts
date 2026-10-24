@@ -22,7 +22,6 @@ import {
   type ComposeAudience,
   type ComposeVisibility,
   getComposeVisibility,
-  PUBLIC_COMPOSE,
   setComposeVisibility,
 } from '#/horizon/private/composer/state'
 import {getCurrentDid} from '#/horizon/routing/current-clients'
@@ -233,10 +232,21 @@ export function recordDraftVisibility(
 }
 
 /**
- * The compose a draft restores as: Public for a recorded Public save;
- * Private with its audience for a Private entry (unpicked when none was
- * chosen or it did not parse); Private and unpicked with no entry, or an
- * unreadable table.
+ * The compose a recorded Public save restores as: Public, holding no
+ * audience for a later flip to Private (Phase 5 review pass 8, P5R8-Q1), so
+ * a flip waits for a pick instead of landing on Everyone.
+ */
+const PUBLIC_DRAFT_RESTORE: ComposeVisibility = {
+  visibility: 'public',
+  audience: {kind: 'unpicked', why: 'draft'},
+  locked: false,
+}
+
+/**
+ * The compose a draft restores as: Public for a recorded Public save (with
+ * no audience held for a later flip); Private with its audience for a
+ * Private entry (unpicked when none was chosen or it did not parse);
+ * Private and unpicked with no entry, or an unreadable table.
  */
 export function restoredDraftVisibility(
   entry: DraftEntry | undefined,
@@ -248,7 +258,7 @@ export function restoredDraftVisibility(
       locked: false,
     }
   }
-  if (entry.visibility === 'public') return PUBLIC_COMPOSE
+  if (entry.visibility === 'public') return PUBLIC_DRAFT_RESTORE
   return {
     visibility: 'private',
     audience:

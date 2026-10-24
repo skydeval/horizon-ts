@@ -40,6 +40,7 @@ import {isNetworkError} from '#/lib/strings/errors'
 import {logger} from '#/logger'
 import {type PostPrivate} from '#/horizon/lexicons/kryphocron'
 import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
+import {postingFronters} from '#/horizon/posting-as/fronters'
 import {toPostView} from '#/horizon/private/adapt/post-view'
 import {
   type AudienceClients,
@@ -101,6 +102,7 @@ import {
   setPendingBatch,
 } from '#/horizon/private/store'
 import {PP_COLLECTION} from '#/horizon/private/uri'
+import {getCurrentDid} from '#/horizon/routing/current-clients'
 import {getPrismClient} from '#/horizon/routing/prism'
 import {clientDid, getWriteRoute} from '#/horizon/routing/write-route'
 import {spoilerWriteMode} from '#/horizon/spoilers/write'
@@ -238,6 +240,15 @@ export async function postPrivate(
    * resolved, uploaded or written.
    */
   const routes = getWriteRoute(did)
+  /*
+   * Another signed-in account posts privately only on repo route `locus`
+   * (Phase 5 design 8.5): the outbox's job runs for the current account
+   * only. The composer already blocks it; this fails closed behind it.
+   */
+  const currentDid = getCurrentDid()
+  if (currentDid && did !== currentDid && routes.repoRoute !== 'locus') {
+    throw new PrivateRouteUnavailableError()
+  }
   if (routes.postingRoute === 'encode') {
     return pressEncodeCompose(queryClient, opts, routes)
   }
@@ -270,6 +281,8 @@ async function postThroughLocus(
   const repoWriter = repoWriterFor(routes.repoRoute, opts.pdsClient)
   // The composer's audience, read before the first await.
   const {audience} = getComposeVisibility()
+  // The post's fronters, read for this account before the first await (Phase 5 8.3).
+  const fronters = postingFronters(queryClient, did)
   opts.onStateChange?.(t`Processing...`)
 
   const prism = getPrismClient(opts.pdsClient)
@@ -334,6 +347,7 @@ async function postThroughLocus(
     audienceUri: plan.audienceUri,
     langs,
     composeSpoilers,
+    fronters,
   })
 
   const gateWrites = gatesForNewPost({

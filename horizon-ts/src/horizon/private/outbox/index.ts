@@ -56,6 +56,7 @@ import {
   draftPostSpoilers,
   jobSpoilerSnapshot,
 } from '#/horizon/media-spoilers/drafts'
+import {postingFronters} from '#/horizon/posting-as/fronters'
 import {toPostView} from '#/horizon/private/adapt/post-view'
 import {
   type AudienceEntry,
@@ -129,6 +130,7 @@ import {
   type OutboxRecord,
   type OutboxRecordPost,
   readOutboxRecord,
+  recordFronters,
   recordUris,
   removeOutboxRecord,
   saveOutboxRecord,
@@ -343,6 +345,8 @@ export function getOutboxVersion(): number {
  */
 type Capture = {
   visibility: ComposeVisibility
+  /** The post's fronters, member rkeys (Phase 5 8.3). */
+  fronters: string[]
   spoilers: DraftPostSpoilers[]
   spoilerMode: SpoilerWriteMode
   langs: string[] | undefined
@@ -642,11 +646,12 @@ function storedReplyRef(
  * the composer's records and `opts`. The spoiler snapshot is turned at once
  * into the serial form, with `pendingVideoPosts` cleared (K9-N2).
  */
-function captureCompose(opts: PostOpts): Capture {
+function captureCompose(opts: PostOpts, queryClient: QueryClient): Capture {
   const snap = getComposeSpoilers()
   const cleared = {...snap, pendingVideoPosts: new Set<string>()}
   return {
     visibility: getComposeVisibility(),
+    fronters: postingFronters(queryClient, opts.pdsClient.assertDid),
     spoilers: opts.thread.posts.map(post => draftPostSpoilers(post, cleared)),
     spoilerMode: spoilerWriteMode(true),
     langs:
@@ -749,7 +754,7 @@ export async function pressEncodeCompose(
   opts: PostOpts,
   routes: WriteRoutes,
 ): Promise<{uris: string[]}> {
-  const capture = captureCompose(opts)
+  const capture = captureCompose(opts, queryClient)
   const did = opts.pdsClient.assertDid
   // 1.2: a job never starts on `checking`.
   if (routes.postingRoute !== 'encode') throw new PrivateRouteUnavailableError()
@@ -796,6 +801,7 @@ export async function pressEncodeCompose(
     visibility: visibility.visibility,
     audience: visibility.audience,
     locked: visibility.locked,
+    ...(capture.fronters.length > 0 ? {fronters: capture.fronters} : {}),
     ...(capture.replyToUri ? {replyToUri: capture.replyToUri} : {}),
     ...(capture.replyTo ? {replyTo: capture.replyTo} : {}),
     gates: {
@@ -1677,6 +1683,8 @@ async function runCompose(entry: Entry) {
         audienceUri: plan.audienceUri,
         langs: entry.record.langs,
         composeSpoilers: spoilers,
+        // From the record, so a Retry after a reload keeps them (Phase 5 B-11).
+        fronters: recordFronters(entry.record),
         now: new Date(entry.record.pressedAt + present.length),
       })
       const absentRkeys = absent.map(index => entry.record.rkeys[index])

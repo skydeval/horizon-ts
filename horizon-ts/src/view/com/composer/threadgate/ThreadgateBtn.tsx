@@ -24,6 +24,8 @@ import {Group3_Stroke2_Corner0_Rounded as GroupIcon} from '#/components/icons/Gr
 import * as Tooltip from '#/components/Tooltip'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
+// HORIZON: posting as import
+import {useIsPostingAsCurrent} from '#/horizon/posting-as/compose-store'
 import {type app} from '#/lexicons'
 import {useThreadgateNudged} from '#/storage/hooks/threadgate-nudged'
 
@@ -66,6 +68,8 @@ export function ThreadgateBtn({
 
   const {data: preferences} = usePreferencesQuery()
   const [persist, setPersist] = useState(false)
+  // HORIZON: posting as PA-12a: no "Save these options" while another account posts
+  const savesDefaults = useIsPostingAsCurrent()
 
   const onPress = () => {
     ax.metric('composer:threadgate:open', {
@@ -165,7 +169,8 @@ export function ThreadgateBtn({
       <PostInteractionSettingsControlledDialog
         control={control}
         onSave={() => {
-          if (persist) {
+          // HORIZON: posting as PA-12a: the current account's defaults are saved only for its own posts
+          if (persist && savesDefaults) {
             persistChanges({
               threadgateAllowRules: threadgateAllowUISettingToAllowRecordValue(
                 threadgateAllowUISettings,
@@ -182,7 +187,8 @@ export function ThreadgateBtn({
         threadgateAllowUISettings={threadgateAllowUISettings}
         onChangeThreadgateAllowUISettings={onChangeThreadgateAllowUISettings}
         isDirty={isDirty}
-        persist={persist}
+        // HORIZON: posting as PA-12a: no "Save these options" row while another account posts
+        persist={savesDefaults ? persist : undefined}
         onChangePersist={setPersist}
       />
     </>

@@ -162,6 +162,29 @@ import {
 } from '#/horizon/media-spoilers/ComposerControls'
 // HORIZON: media spoilers and content warnings
 import {applyDraftSpoilers} from '#/horizon/media-spoilers/drafts'
+// HORIZON: posting as import
+import {
+  useIsPostingHeld,
+  useIsResetPending,
+} from '#/horizon/posting-as/compose-store'
+// HORIZON: posting as import
+import {
+  applyDraftPostingAs,
+  restoredThreadgateAllow,
+} from '#/horizon/posting-as/drafts'
+// HORIZON: posting as import
+import {
+  postingInteractionSettings,
+  postingVideoRefusal,
+} from '#/horizon/posting-as/gates'
+// HORIZON: posting as import
+import {HeldInteractionPill} from '#/horizon/posting-as/HeldInteractionPill'
+// HORIZON: posting as import
+import {PostingAsControl} from '#/horizon/posting-as/PostingAsControl'
+// HORIZON: posting as import
+import {beginPostingPublish} from '#/horizon/posting-as/publish'
+// HORIZON: posting as import
+import {postedAsText} from '#/horizon/posting-as/toasts'
 // HORIZON: private composing
 import {
   privateAssetTypes,
@@ -332,10 +355,8 @@ export const ComposePost = ({
   const chatClient = useChatClient()
   const pdsClient = usePdsClient()
   // HORIZON: the composer owns the Public | Private record for its lifetime; a quote starts as the quoted post is
-  const {isPrivate, audience, postingRoute} = usePrivateComposeSession(
-    replyTo,
-    initQuote,
-  )
+  const {isPrivate, audience, postingRoute, postingAllows} =
+    usePrivateComposeSession(replyTo, initQuote)
   // HORIZON: the composer owns the media spoiler and content warning snapshot for its lifetime
   const composeSpoilers = useComposeSpoilerSession()
   const queryClient = useQueryClient()
@@ -459,6 +480,9 @@ export const ComposePost = ({
 
   const selectVideo = useCallback(
     async (postId: string, asset: ImagePickerAsset) => {
+      // HORIZON: posting as PA-11: a video is uploaded as the current account, so none while another account posts
+      const videoRefusal = postingVideoRefusal()
+      if (videoRefusal) return void Toast.show(videoRefusal, {type: 'warning'})
       /*
        * Share-extension deeplinks deliver a video URI without duration, so
        * probe before we decide whether to compress. The picker and web paste
@@ -580,6 +604,9 @@ export const ComposePost = ({
 
   const restoreVideo = useCallback(
     async (postId: string, videoInfo: RestoredVideo) => {
+      // HORIZON: posting as PA-11: a video is uploaded as the current account, so none while another account posts
+      const videoRefusal = postingVideoRefusal()
+      if (videoRefusal) return void Toast.show(videoRefusal, {type: 'warning'})
       try {
         logger.debug('restoring video from draft', {
           postId,
@@ -748,12 +775,18 @@ export const ComposePost = ({
         loadedMedia,
       )
 
+      // HORIZON: posting as PA-10: the draft's posting account, set without the reset, before its gates and audience apply
+      const postingDid = applyDraftPostingAs(draftSummary.id)
       // Dispatch restore action (this also sets draftId in state)
       composerDispatch({
         type: 'restore_from_draft',
         draftId: draftSummary.id,
         posts,
-        threadgateAllow: draftSummary.draft.threadgateAllow,
+        // HORIZON: posting as PA-10: reply lists of another account are dropped, in the record form
+        threadgateAllow: restoredThreadgateAllow(
+          postingDid,
+          draftSummary.draft.threadgateAllow,
+        ),
         postgateEmbeddingRules: draftSummary.draft.postgateEmbeddingRules,
         loadedMedia,
         originalLocalRefs,
@@ -940,7 +973,10 @@ export const ComposePost = ({
   const handleClearComposer = useCallback(() => {
     composerDispatch({
       type: 'clear',
-      initInteractionSettings: preferences?.postInteractionSettings,
+      // HORIZON: posting as PA-9: Clear re-seeds from the posting account's settings
+      initInteractionSettings: postingInteractionSettings(
+        preferences?.postInteractionSettings,
+      ),
     })
   }, [composerDispatch, preferences?.postInteractionSettings])
 
@@ -1050,8 +1086,9 @@ export const ComposePost = ({
   )
 
   const canPost =
-    // HORIZON: Publish is disabled while a private-post blocker applies, an unpicked audience included
+    // HORIZON: Publish is disabled while a private-post blocker applies (an unpicked audience included) and while the posting account's hold is on
     privateComposeAllows(thread, isPrivate, postingRoute, audience) &&
+    postingAllows &&
     !missingAltError &&
     !hasUnavailableChatInvite &&
     thread.posts.some(post => !isEmptyPost(post)) &&
@@ -1131,19 +1168,28 @@ export const ComposePost = ({
 
     let postUri: string | undefined
     let postSuccessData: OnPostSuccessData
+    // HORIZON: posting as PA-2: what the post goes from, set in the try so a refusal shows as an error
+    let posting: ReturnType<typeof beginPostingPublish> | undefined
     try {
       logger.info(`composer: posting...`)
+      // HORIZON: posting as PA-2: the posting account's clients, after its gates are checked
+      posting = beginPostingPublish(
+        {appviewClient: client, chatClient, pdsClient},
+        filteredThread,
+        queryClient,
+      )
       postUri = (
         await apilib.post(queryClient, {
           thread: filteredThread,
           replyTo: replyTo?.uri,
           onStateChange: setPublishingStage,
           langs: currentLanguages,
-          appviewClient: client,
-          chatClient,
-          pdsClient,
+          // HORIZON: posting as PA-2: the posting account's clients
+          ...posting.clients,
         })
       ).uris[0]
+      // HORIZON: posting as PA-2: the front update after a public post, and the client held for the background work
+      posting.afterPublish(postUri)
 
       // Fire published event for every video that made it into the post.
       // The status guard upstream ensures each video.telemetry is present and
@@ -1328,11 +1374,14 @@ export const ComposePost = ({
         <Toast.Outer>
           <Toast.Icon />
           <Toast.Text>
-            {filteredThread.posts.length > 1
-              ? l`Your posts were sent`
-              : replyTo
-                ? l`Your reply was sent`
-                : l`Your post was sent`}
+            {/* HORIZON: posting as: "Posted as @other" when the post went from another account */}
+            {posting?.postedAs
+              ? postedAsText(posting.postedAs)
+              : filteredThread.posts.length > 1
+                ? l`Your posts were sent`
+                : replyTo
+                  ? l`Your reply was sent`
+                  : l`Your post was sent`}
           </Toast.Text>
           {postUri && (
             <Toast.Action
@@ -1797,12 +1846,16 @@ let ComposerPost = memo(function ComposerPost({
       {/* HORIZON: the content warning line above the editor, while the post has one */}
       <ContentWarningField post={post} textInputRef={textInputRef} />
       <View style={[a.flex_row, IS_NATIVE && a.flex_1]}>
-        <UserAvatar
-          avatar={currentProfile?.avatar}
-          size={42}
-          type={currentProfile?.associated?.labeler ? 'labeler' : 'user'}
-          style={[a.mt_xs]}
-        />
+        {/* HORIZON: posting as PA-1: the first post's avatar is the "Posting as" control (start) */}
+        <PostingAsControl isFirstPost={isFirstPost}>
+          <UserAvatar
+            avatar={currentProfile?.avatar}
+            size={42}
+            type={currentProfile?.associated?.labeler ? 'labeler' : 'user'}
+            style={[a.mt_xs]}
+          />
+          {/* HORIZON: posting as PA-1 (end) */}
+        </PostingAsControl>
         <TextInput
           ref={textInputRef}
           style={[a.pt_xs]}
@@ -1931,6 +1984,8 @@ function ComposerTopBar({
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
+  // HORIZON: posting as PA-9: the Post button spins while the posting account's settings load
+  const postingHeld = useIsPostingHeld()
 
   return (
     <Animated.View style={topBarAnimatedStyle}>
@@ -2010,6 +2065,8 @@ function ComposerTopBar({
               size="small"
               onPress={onPublish}
               disabled={!canPost || isPublishQueued}>
+              {/* HORIZON: posting as PA-9: the Post button spins while the posting account's settings load */}
+              {postingHeld ? <ActivityIndicator size="small" /> : null}
               <ButtonText style={[a.text_md]} maxFontSizeMultiplier={2}>
                 {isReply ? (
                   <Trans context="action">Reply</Trans>
@@ -2175,6 +2232,8 @@ function ComposerPills({
   const isPrivate = useIsPrivateCompose()
   // HORIZON: the audience drop-down takes the stock interaction pill's place in this row
   const audiencePill = useShowsComposerAudiencePill()
+  // HORIZON: posting as PA-12: the stock pill is held while the posting account's reset applies
+  const postingResetPending = useIsResetPending()
   const media = post.embed.media
   const hasMedia =
     media?.type === 'images' ||
@@ -2206,7 +2265,14 @@ function ComposerPills({
         {/* HORIZON: the audience drop-down sets who can see, reply and quote in place of the stock pill */}
         {audiencePill ? (
           <ComposerAudiencePill />
-        ) : isReply || hidesStockInteractionPill(isPrivate) ? null : (
+        ) : isReply ||
+          hidesStockInteractionPill(isPrivate) ? null : postingResetPending ? (
+          // HORIZON: posting as PA-12: a held stand-in while the posting account's reset applies
+          <HeldInteractionPill
+            threadgate={thread.threadgate}
+            postgate={thread.postgate}
+          />
+        ) : (
           <ThreadgateBtn
             postgate={thread.postgate}
             onChangePostgate={nextPostgate => {

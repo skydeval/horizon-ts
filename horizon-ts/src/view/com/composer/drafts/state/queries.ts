@@ -12,6 +12,11 @@ import {useAnalytics} from '#/analytics'
 import {getDeviceId} from '#/analytics/identifiers'
 // HORIZON: remember a draft's media spoilers and content warnings
 import {recordDraftSpoilers} from '#/horizon/media-spoilers/drafts'
+// HORIZON: posting as import
+import {
+  captureDraftPostingAs,
+  recordDraftPostingAs,
+} from '#/horizon/posting-as/drafts'
 // HORIZON: remember whether a draft was saved Private
 import {
   captureDraftVisibility,
@@ -147,6 +152,8 @@ export function useSaveDraftMutation() {
     }> => {
       // HORIZON: capture the visibility and account before any await (P5R8-L1)
       const visibility = captureDraftVisibility()
+      // HORIZON: posting as PA-10: the posting account and members, captured before any await
+      const postingAs = captureDraftPostingAs()
       // Convert composer state to server draft format
       const {draft: apiDraft, localRefPaths} = await composerStateToDraft(
         {appviewClient: client, chatClient},
@@ -184,6 +191,8 @@ export function useSaveDraftMutation() {
 
       // HORIZON: remember whether this draft was saved Private, and its audience
       recordDraftVisibility(draftId, visibility)
+      // HORIZON: posting as PA-10: remember who this draft was written as
+      recordDraftPostingAs(draftId, postingAs)
       // HORIZON: remember this draft's media spoilers and content warnings
       recordDraftSpoilers(draftId, composerState.thread.posts)
 

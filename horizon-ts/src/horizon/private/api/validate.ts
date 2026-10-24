@@ -17,16 +17,21 @@
  * On the encode route (2K design 4.1) the record as composed is checked in
  * that plaintext form before the encode, and the record written in an
  * encoded form (`validateEncodedRecord`).
+ *
+ * Both whitelists admit the post's fronters, `app.nearhorizon.plural.fronters`
+ * (Phase 5 PP-7, B-11), which stays in the clear on both routes.
  */
 
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
+import {readFronters} from '#/horizon/identity/fronters'
 import {kryphocron} from '#/horizon/lexicons'
 import {
   type PostPrivate,
   type PostPrivateEncoded,
   PRIVATE_ENCODED_FIELD_KEYS,
 } from '#/horizon/lexicons/kryphocron'
+import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
 import {MEDIA_SPOILER_FIELD} from '#/horizon/media-spoilers/nsid'
 import {
   PRIVATE_GALLERY,
@@ -49,12 +54,39 @@ const ALLOWED_KEYS = new Set([
   'audienceList',
   'reply',
   'embed',
+  PLURAL_FRONTERS_KEY,
 ])
 
 /**
  * Keys Horizon writes once `PRIVATE_LANGS_LABELS` is on (K-1).
  */
 const LANGS_LABELS_KEYS = new Set(['langs', 'labels'])
+
+/**
+ * The post's fronters (Phase 5 PP-7, B-11): in the clear on both routes,
+ * and well-formed when present (`readFronters` accepts it), so a bad value
+ * is never written.
+ */
+function checkFronters(record: Record<string, unknown>) {
+  if (!(PLURAL_FRONTERS_KEY in record)) return
+  if (readFronters(record) === null) {
+    fail(PLURAL_FRONTERS_KEY, 'not a list of 1 to 20 member record keys')
+  }
+}
+
+/**
+ * The validated value, with the fronters key as written: the schema's output
+ * is not relied on to keep a key it does not name.
+ */
+function withFrontersKept<T extends object>(
+  value: T,
+  record: Record<string, unknown>,
+): T {
+  if (!(PLURAL_FRONTERS_KEY in record) || PLURAL_FRONTERS_KEY in value) {
+    return value
+  }
+  return {...value, [PLURAL_FRONTERS_KEY]: record[PLURAL_FRONTERS_KEY]}
+}
 
 const MAX_LANGS = 3
 const MAX_SELF_LABELS = 10
@@ -203,6 +235,7 @@ export function validatePrivateRecord(record: unknown): PostPrivate {
     if (PRIVATE_LANGS_LABELS && LANGS_LABELS_KEYS.has(key)) continue
     fail(key, 'not a field Horizon writes')
   }
+  checkFronters(record)
 
   if (record.$type !== PP_COLLECTION) fail('$type', `must be ${PP_COLLECTION}`)
 
@@ -308,7 +341,7 @@ export function validatePrivateRecord(record: unknown): PostPrivate {
     const path = issue?.path.length ? issue.path.join('.') : 'record'
     fail(path, issue?.message ?? result.message)
   }
-  return result.value
+  return withFrontersKept(result.value, record)
 }
 
 /**
@@ -335,6 +368,7 @@ const ENCODED_CREATE_KEYS = new Set<string>([
   'createdAt',
   'audienceList',
   'reply',
+  PLURAL_FRONTERS_KEY,
   ...PRIVATE_ENCODED_FIELD_KEYS,
 ])
 
@@ -391,6 +425,7 @@ export function validateEncodedRecord(
     if (!isAudienceUri(record.audienceList as string | undefined)) {
       fail('audienceList', 'not the at-uri of an audience record')
     }
+    checkFronters(record)
     const result = kryphocron.postPrivateEncoded.safeValidate(record)
     if (!result.success) {
       const issue = result.issues[0]
@@ -399,7 +434,7 @@ export function validateEncodedRecord(
         'not well-formed',
       )
     }
-    return result.value
+    return withFrontersKept(result.value, record)
   }
 
   const result = kryphocron.postPrivateEncodedRewrite.safeValidate(record)

@@ -29,6 +29,13 @@ const UNSAVED_RESTORE = {
   locked: false,
 }
 
+/** A recorded Public save, restored (P5R8-Q1). */
+const PUBLIC_DRAFT_RESTORE = {
+  visibility: 'public',
+  audience: {kind: 'unpicked', why: 'draft'},
+  locked: false,
+}
+
 beforeEach(() => {
   writeLocal(`horizon:draft-visibility:${DID}`, undefined)
   setComposeVisibility(PUBLIC_COMPOSE)
@@ -73,7 +80,7 @@ describe('the draft visibility table', () => {
     expect(readDraftTable(DID)).toEqual([{id: 'draft-1', visibility: 'public'}])
   })
 
-  it('a draft saved Public restores Public with no tap', () => {
+  it('a draft saved Public restores Public with no tap, holding no audience for a flip (P5R8-Q1)', () => {
     setComposeVisibility(PUBLIC_COMPOSE)
     recordDraftVisibility('draft-1', captureDraftVisibility())
     setComposeVisibility({
@@ -82,7 +89,12 @@ describe('the draft visibility table', () => {
       locked: false,
     })
     applyDraftVisibility('draft-1')
-    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    expect(getComposeVisibility()).toEqual(PUBLIC_DRAFT_RESTORE)
+    // Not Everyone: a flip to Private waits for a pick.
+    expect(getComposeVisibility().audience).not.toEqual(PUBLIC_COMPOSE.audience)
+    // A re-save while Public still records a Public entry.
+    recordDraftVisibility('draft-1', captureDraftVisibility())
+    expect(readDraftTable(DID)).toEqual([{id: 'draft-1', visibility: 'public'}])
   })
 
   it('restoring a draft with an entry makes the compose private with that audience', () => {
@@ -181,7 +193,7 @@ describe('the draft visibility table', () => {
       {id: 'list', ...unpicked},
     ])
     applyDraftVisibility('pub')
-    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    expect(getComposeVisibility()).toEqual(PUBLIC_DRAFT_RESTORE)
     applyDraftVisibility('typo')
     expect(getComposeVisibility()).toEqual({
       visibility: 'private',

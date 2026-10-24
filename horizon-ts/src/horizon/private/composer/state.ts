@@ -52,9 +52,13 @@ export type ComposeAudience =
  * - `unsaved`: a draft restored with no visibility entry on this device (or
  *   an unreadable table), so whether it was Public or Private is unknown;
  * - `draft`: a draft restored Private whose audience was not chosen or did
- *   not parse.
+ *   not parse, or a draft restored Public (the audience a later flip to
+ *   Private holds, Phase 5 review pass 8, P5R8-Q1);
+ * - `switch`: the posting account was changed in the composer's "Posting
+ *   as" control, so the previous account's audience was dropped (Phase 5
+ *   design 8.2, skydeval's option c).
  */
-export type UnpickedReason = 'unsaved' | 'draft'
+export type UnpickedReason = 'unsaved' | 'draft' | 'switch'
 
 export type ComposeVisibility = {
   visibility: 'public' | 'private'

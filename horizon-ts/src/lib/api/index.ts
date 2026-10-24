@@ -30,6 +30,8 @@ import {
   type PostDraft,
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
+// HORIZON: posting as import
+import {withFronters} from '#/horizon/identity/fronters'
 // HORIZON: media spoiler flags and content warnings are read from the composer's snapshot
 import {getComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
 // HORIZON: media spoiler flags, the content warning's text and its self-label
@@ -38,6 +40,8 @@ import {
   withContentWarningLabel,
   withMediaSpoilers,
 } from '#/horizon/media-spoilers/write'
+// HORIZON: posting as import
+import {publicPostingFronters} from '#/horizon/posting-as/fronters'
 // HORIZON: a private compose takes the private write path
 import {postPrivate} from '#/horizon/private/api/writes'
 // HORIZON: a private compose takes the private write path
@@ -105,6 +109,8 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
   }
 
   const did = opts.pdsClient.assertDid
+  // HORIZON: posting as PA-3: the fronters, read for the posting account before the first await
+  const fronters = publicPostingFronters(queryClient, opts.pdsClient)
   const writes: com.atproto.repo.applyWrites.$InputBody['writes'] = []
   const uris: string[] = []
 
@@ -150,18 +156,22 @@ export async function post(queryClient: QueryClient, opts: PostOpts) {
     // HORIZON: flagged images and videos carry the media spoiler flag
     const embed = withMediaSpoilers(await embedPromise, draft, composeSpoilers)
     const reply = await replyPromise
-    const record: app.bsky.feed.post.Main = {
-      // IMPORTANT: $type has to exist, CID is calculated with the `$type` field
-      // present and will produce the wrong CID if you omit it.
-      $type: 'app.bsky.feed.post',
-      createdAt: toDatetimeString(now),
-      text: rt.text,
-      facets: rt.facets,
-      reply,
-      embed,
-      langs,
-      labels,
-    }
+    // HORIZON: posting as PA-3: the post's fronters, in the record the CID covers
+    const record: app.bsky.feed.post.Main = withFronters(
+      {
+        // IMPORTANT: $type has to exist, CID is calculated with the `$type` field
+        // present and will produce the wrong CID if you omit it.
+        $type: 'app.bsky.feed.post',
+        createdAt: toDatetimeString(now),
+        text: rt.text,
+        facets: rt.facets,
+        reply,
+        embed,
+        langs,
+        labels,
+      },
+      fronters,
+    )
     writes.push({
       $type: 'com.atproto.repo.applyWrites#create',
       collection: 'app.bsky.feed.post',

@@ -60,9 +60,12 @@ export type PrivateWriteRoute = 'checking' | 'locus' | 'encode' | 'none'
 /**
  * Why the posting route is `none`, when the note words it differently:
  * `no-encoder` when the only reason is that this platform cannot run the
- * encoder (D-0.13; a browser without WebAssembly or a CSRNG).
+ * encoder (D-0.13; a browser without WebAssembly or a CSRNG);
+ * `other-account` for another signed-in account chosen in the composer's
+ * "Posting as" control whose repo route is not `locus` (Phase 5 design 8.5,
+ * P5R7-N2): its private posts are not offered from this account's session.
  */
-export type PostingRouteReason = 'no-encoder'
+export type PostingRouteReason = 'no-encoder' | 'other-account'
 
 /**
  * An account's two routes, and what the `none` note's wording needs.
@@ -268,9 +271,24 @@ export function subscribeWriteRoutes(listener: () => void) {
   }
 }
 
-function currentRoutes(): WriteRoutes {
+/**
+ * The current account's routes, as {@link useWriteRoute} reads them, for a
+ * subscription that combines them with another store.
+ */
+export function currentRoutes(): WriteRoutes {
   const current = getCurrentClients()
   return routesFor(current?.did, current?.pdsUrl)
+}
+
+/**
+ * Routes for an account that cannot post privately from this session: posting
+ * route `none` for `reason`, on its repo route. Shared by value.
+ */
+export function noPostingRoutes(
+  repoRoute: RepoRoute,
+  reason: PostingRouteReason,
+): WriteRoutes {
+  return snapshot({repoRoute, postingRoute: 'none', reason, indexing: false})
 }
 
 /**

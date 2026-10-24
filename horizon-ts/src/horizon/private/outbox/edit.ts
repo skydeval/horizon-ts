@@ -18,6 +18,7 @@ import {type ComposerAction} from '#/view/com/composer/state/composer'
 import * as Toast from '#/components/Toast'
 import {replaceComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
 import {draftSpoilerSnapshot} from '#/horizon/media-spoilers/drafts'
+import {restorePostingAccount} from '#/horizon/posting-as/gates'
 import {setComposeVisibility} from '#/horizon/private/composer/state'
 import {
   clearComposerEdit,
@@ -25,7 +26,7 @@ import {
   revokeEditUrls,
   takeStagedOutboxEdit,
 } from '#/horizon/private/outbox'
-import {recordHasMedia, recordHasMediaFlags} from './record'
+import {recordFronters, recordHasMedia, recordHasMediaFlags} from './record'
 import {mediaDroppedText} from './texts'
 
 export {stageOutboxEdit} from '#/horizon/private/outbox'
@@ -68,6 +69,9 @@ export function useOutboxEdit(
       audience: record.audience,
       locked: record.locked,
     })
+    // Its fronters, held until the account's members are read (Phase 5 B-11).
+    const fronters = recordFronters(record)
+    if (fronters.length > 0) restorePostingAccount(record.did, fronters)
     replaceComposeSpoilers(
       draftSpoilerSnapshot(
         {id, posts: record.posts.map(post => post.spoilers)},

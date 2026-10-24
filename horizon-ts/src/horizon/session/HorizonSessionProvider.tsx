@@ -13,6 +13,7 @@ import {
   currentBundle,
   type HorizonSessionStore,
 } from '#/horizon/session/session-store'
+import {registerStoredAccountSink} from '#/horizon/session/stored-account'
 import {com} from '#/lexicons'
 
 /**
@@ -96,6 +97,15 @@ export function HorizonSessionProvider({
   children: React.ReactNode
 }) {
   useEffect(() => watchOAuthSessionDeath(store), [store])
+
+  // A temporary client's rotated tokens (Phase 5, PA-4).
+  useEffect(
+    () =>
+      registerStoredAccountSink(account =>
+        store.dispatch({type: 'updated-stored-account', account}),
+      ),
+    [store],
+  )
 
   useEffect(() => {
     let last = currentBundle(store)

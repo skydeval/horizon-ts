@@ -15,10 +15,9 @@
  */
 
 import {useEffect, useRef, useState} from 'react'
-import {type GestureResponderEvent, View} from 'react-native'
+import {ActivityIndicator, type GestureResponderEvent, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
-import {useMyListsQuery} from '#/state/queries/my-lists'
 import {type ThreadgateAllowUISetting} from '#/state/queries/threadgate/types'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme, web} from '#/alf'
@@ -38,6 +37,11 @@ import * as Menu from '#/components/Menu'
 import * as Tooltip from '#/components/Tooltip'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+import {
+  type PostingAccount,
+  usePostingCurateLists,
+} from '#/horizon/posting-as/account'
+import {retryPostingReads} from '#/horizon/posting-as/gates'
 import {
   type AudienceEntry,
   audienceLabel,
@@ -86,6 +90,16 @@ export type AudienceMenuProps = {
   reportMetrics?: boolean
   /** The trigger fills its container (the post settings dialog). */
   fullWidth?: boolean
+  /**
+   * The composer's posting account when it is not the current account
+   * (Phase 5 8.2, PA-13): its audiences and lists, created in its repo.
+   */
+  account?: PostingAccount
+  /**
+   * Every section held (spinner, nothing pickable) until the posting
+   * account's reset has applied; `failed` when a read failed (P5R4-L1).
+   */
+  held?: {failed: boolean; handle: string | undefined}
 }
 
 /**
@@ -185,6 +199,8 @@ export function AudienceMenu({
   nudge = false,
   reportMetrics = false,
   fullWidth = false,
+  account,
+  held,
 }: AudienceMenuProps) {
   const {t: l} = useLingui()
   const ax = useAnalytics()
@@ -192,7 +208,10 @@ export function AudienceMenu({
   const audienceEditor = Dialog.useDialogControl()
   const replyListEditor = Dialog.useDialogControl()
   const isPrivate = visibility === 'private'
-  const {data: audiences} = useAudiencesQuery({enabled: isPrivate})
+  const {data: audiences} = useAudiencesQuery({
+    enabled: isPrivate && !held,
+    account,
+  })
   const audienceText = useAudienceText(audience, audiences)
   /** Names of reply lists made here, until the AppView lists them. */
   const [createdLists, setCreatedLists] = useState<Record<string, string>>({})
@@ -327,7 +346,8 @@ export function AudienceMenu({
               scrollbarWidth: 'thin',
             }),
           ]}>
-          {isPrivate && audience ? (
+          {held ? <HeldSections held={held} /> : null}
+          {!held && isPrivate && audience ? (
             <WhoCanSee
               audience={audience}
               audiences={audiences}
@@ -336,7 +356,7 @@ export function AudienceMenu({
               onNewList={() => audienceEditor.open()}
             />
           ) : null}
-          {threadgate ? (
+          {!held && threadgate ? (
             <>
               {isPrivate && audience ? <Menu.Divider /> : null}
               <WhoCanReply
@@ -349,7 +369,7 @@ export function AudienceMenu({
               />
             </>
           ) : null}
-          {postgate ? (
+          {!held && postgate ? (
             <>
               <Menu.Divider />
               <Menu.Group>
@@ -378,7 +398,7 @@ export function AudienceMenu({
               </Menu.Group>
             </>
           ) : null}
-          {defaults && threadgate ? (
+          {!held && defaults && threadgate ? (
             <>
               <Menu.Divider />
               <Menu.Group>
@@ -409,6 +429,7 @@ export function AudienceMenu({
         <AudienceEditorDialog
           control={audienceEditor}
           kind="audience"
+          account={account}
           onCreated={uri => onAudience({kind: 'list', uri})}
         />
       ) : null}
@@ -416,6 +437,7 @@ export function AudienceMenu({
         <AudienceEditorDialog
           control={replyListEditor}
           kind="replyList"
+          account={account}
           onCreated={(uri, name) => {
             setCreatedLists(current => ({...current, [uri]: name}))
             onThreadgate(
@@ -428,6 +450,44 @@ export function AudienceMenu({
         />
       ) : null}
     </>
+  )
+}
+
+/**
+ * In place of every section while the posting account's reset has not
+ * applied (Phase 5 P5R4-L1): a spinner, or the failed read's note and Try
+ * again. Nothing here picks an audience or a setting.
+ */
+function HeldSections({
+  held,
+}: {
+  held: {failed: boolean; handle: string | undefined}
+}) {
+  const {t: l} = useLingui()
+  const handle = held.handle ? `@${held.handle}` : l`that account`
+  return (
+    <Menu.Group>
+      {held.failed ? (
+        <>
+          <Menu.LabelText>{l`Couldn’t load ${handle}’s settings.`}</Menu.LabelText>
+          <Menu.Item
+            testID="composerAudienceHeldRetry"
+            label={l`Try loading the settings again`}
+            onPress={() => retryPostingReads()}>
+            <Menu.ItemText>
+              <Trans>Try again</Trans>
+            </Menu.ItemText>
+          </Menu.Item>
+        </>
+      ) : (
+        <View
+          testID="composerAudienceHeld"
+          style={[a.flex_row, a.align_center, a.gap_sm, a.px_md, a.py_sm]}>
+          <ActivityIndicator size="small" />
+          <Text style={[a.text_sm]}>{l`Loading ${handle}’s settings…`}</Text>
+        </View>
+      )}
+    </Menu.Group>
   )
 }
 
@@ -553,11 +613,12 @@ function WhoCanReply({
   onNewList: () => void
 }) {
   const {t: l} = useLingui()
+  // The posting account's lists (Phase 5 8.2, PA-13).
   const {
     data: lists,
     isPending: isListsPending,
     isError: isListsError,
-  } = useMyListsQuery('curate')
+  } = usePostingCurateLists()
   const checked = replyValues(threadgate)
   const anyone = threadgate.some(setting => setting.type === 'everybody')
   const nobody = threadgate.some(setting => setting.type === 'nobody')

@@ -28,10 +28,25 @@
  * `locus` once membership is confirmed and on `encode`; not offered yet on
  * `checking`; on `none` the Private segment is shown but inert, and pressing
  * or focusing it shows the route's note under the control row.
+ *
+ * "Posting as" (Phase 5 design 8.2, 8.5, PA-5, PA-13): every piece reads the
+ * **posting** account. With another account chosen, Private follows that
+ * account's routes (offered on `locus` only, else "Switch to @other to post
+ * privately."), the drop-down lists that account's audiences and lists and
+ * saves its defaults, and while the account's reset has not applied, both
+ * segments and every drop-down section are held, so nothing chosen in the
+ * gap is overwritten when its settings land.
  */
 
-import {createContext, useContext, useEffect, useSyncExternalStore} from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from 'react'
 import {View} from 'react-native'
+import {setPostInteractionSettings} from '@bsky/sdk'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {isNetworkError} from '#/lib/strings/errors'
@@ -47,6 +62,19 @@ import {atoms as a, useBreakpoints, useTheme} from '#/alf'
 import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Text} from '#/components/Typography'
+import {usePostingAccount} from '#/horizon/posting-as/account'
+import {
+  isPostingAsOther,
+  useIsResetPending,
+  usePostingState,
+} from '#/horizon/posting-as/compose-store'
+import {
+  notePostingSettingsSaved,
+  registerPostingComposer,
+  setPostingHasVideo,
+} from '#/horizon/posting-as/gates'
+import {PostingAsNotes} from '#/horizon/posting-as/PostingAsNotes'
+import {usePostingCanPostPrivately} from '#/horizon/posting-as/routes'
 import {AudienceMenu} from '#/horizon/private/composer/AudienceMenu'
 import {
   privateComposeBlocker,
@@ -61,9 +89,9 @@ import {
 } from '#/horizon/private/composer/state'
 import {useReplyAnchor} from '#/horizon/private/composer/useReplyAnchor'
 import {prewarmEncoder} from '#/horizon/private/encoder'
-import {useCanPostPrivately} from '#/horizon/private/membership'
 import {usePostAudienceLabel} from '#/horizon/private/render/AudienceLabel'
 import {COMPOSER_AUDIENCE_MENU, PRIVATE_POSTING} from '#/horizon/switches'
+import {type app} from '#/lexicons'
 
 type ComposerAudienceContext = {
   replyTo: {uri: string} | undefined
@@ -113,11 +141,22 @@ export function ComposerAudienceProvider({
   dispatch,
   children,
 }: ComposerAudienceContext & {children: React.ReactNode}) {
-  const can = useCanPostPrivately()
+  const can = usePostingCanPostPrivately()
   const prewarms = PRIVATE_POSTING && can.offered && can.route === 'encode'
   useEffect(() => {
     if (prewarms) prewarmEncoder()
   }, [prewarms])
+  // The "Posting as" reset dispatches into this composer (Phase 5 8.2).
+  const replyToUri = replyTo?.uri
+  useLayoutEffect(
+    () => registerPostingComposer({dispatch, replyTo: replyToUri}),
+    [dispatch, replyToUri],
+  )
+  // A video was uploaded as the current account (Phase 5 8.5).
+  const hasVideo = thread.posts.some(post => post.embed.media?.type === 'video')
+  useLayoutEffect(() => {
+    setPostingHasVideo(hasVideo)
+  }, [hasVideo])
   return (
     <Context.Provider value={{replyTo, thread, dispatch}}>
       {children}
@@ -133,8 +172,11 @@ function useControlState() {
   /*
    * A membership only persisted on the device does not offer Private yet,
    * and neither does a posting route that cannot write it (2K design 2.3).
+   * The posting account's, with another account chosen (Phase 5 8.5).
    */
-  const can = useCanPostPrivately()
+  const can = usePostingCanPostPrivately()
+  // Until the posting account's reset has applied (Phase 5 P5R5-N1).
+  const held = useIsResetPending()
   const isMember = can.offered
   const compose = useComposeVisibility()
   const isPrivate = compose.visibility === 'private'
@@ -174,6 +216,8 @@ function useControlState() {
     locked,
     inert,
     routes: can.routes,
+    handle: can.handle,
+    held,
   }
 }
 
@@ -204,15 +248,17 @@ export function ComposerAudienceRow() {
           state.context.thread,
           state.routes,
           state.compose.audience,
+          state.handle,
         )
       : undefined
   const note =
     !blocker && state.inert && noteShown
-      ? privateRouteNote(state.routes)
+      ? privateRouteNote(state.routes, state.handle)
       : undefined
-  if (!inRow && !blocker && !note) return null
   return (
     <View style={[t.atoms.bg]}>
+      {/* The posting account's own notes (Phase 5 8.2) */}
+      <PostingAsNotes />
       {inRow ? (
         <View
           style={[
@@ -283,7 +329,8 @@ export function ComposerAudienceSlot() {
  */
 function VisibilityControl() {
   const {t: l} = useLingui()
-  const {context, compose, showsSegments, locked, inert} = useControlState()
+  const {context, compose, showsSegments, locked, inert, held} =
+    useControlState()
   // The note never outlives the control (a remount, the composer closing).
   useEffect(() => () => setInertNoteShown(false), [])
   if (!context) return null
@@ -305,6 +352,8 @@ function VisibilityControl() {
       value={compose.visibility}
       style={[{maxWidth: 160}]}
       onChange={visibility => {
+        // Held until the posting account's reset has applied (P5R5-N1).
+        if (held) return
         if (inert && visibility === 'private') {
           setInertNoteShown(true)
           return
@@ -314,12 +363,14 @@ function VisibilityControl() {
       <SegmentedControl.Item
         testID="composerVisibilityPublic"
         value="public"
+        disabled={held}
         label={l`Public`}>
         <SegmentedControl.ItemText>{l`Public`}</SegmentedControl.ItemText>
       </SegmentedControl.Item>
       <SegmentedControl.Item
         testID="composerVisibilityPrivate"
         value="private"
+        disabled={held}
         label={l`Private`}
         accessibilityHint={inert ? privateRouteHint() : undefined}
         onFocus={inert ? () => setInertNoteShown(true) : undefined}
@@ -337,7 +388,8 @@ function VisibilityControl() {
  * branch, where the menu has no reply section.
  */
 export function ComposerAudiencePill() {
-  const {context, compose, isPrivate, isReply, showsPill} = useControlState()
+  const {context, compose, isPrivate, isReply, showsPill, held, handle} =
+    useControlState()
   const {data: preferences} = usePreferencesQuery()
   const {mutate: persistDefaults} = usePostInteractionSettingsMutation({
     onError: error => {
@@ -348,6 +400,12 @@ export function ComposerAudiencePill() {
       }
     },
   })
+  /*
+   * Another posting account (Phase 5 8.2, PA-13): its own settings for the
+   * dirty check, saved through its own client, never the current account's.
+   */
+  const account = usePostingAccount()
+  const posting = usePostingState()
   if (!context || !showsPill) return null
 
   const {thread, dispatch} = context
@@ -358,6 +416,28 @@ export function ComposerAudiencePill() {
   const interactions = COMPOSER_AUDIENCE_MENU && !isReply
   const threadgate = interactions ? thread.threadgate : undefined
   const postgate = interactions ? thread.postgate : undefined
+  const settings = account
+    ? posting.settings
+    : preferences?.postInteractionSettings
+
+  const saveDefaults = (
+    next: app.bsky.actor.defs.PostInteractionSettingsPref,
+  ) => {
+    if (!account) {
+      persistDefaults(next)
+      return
+    }
+    account.pdsClient.call(setPostInteractionSettings, next).then(
+      () => notePostingSettingsSaved(account.did, next),
+      (error: unknown) => {
+        if (!isNetworkError(error)) {
+          logger.error('Failed to persist threadgate settings', {
+            safeMessage: error,
+          })
+        }
+      },
+    )
+  }
 
   return (
     <AudienceMenu
@@ -371,20 +451,24 @@ export function ComposerAudiencePill() {
       postgate={postgate}
       onPostgate={next => dispatch({type: 'update_postgate', postgate: next})}
       defaults={
-        threadgate && postgate
+        // Never the current account's defaults for another posting account.
+        threadgate && postgate && (account || !isPostingAsOther(posting))
           ? {
-              isDirty: isInteractionDirty(
-                preferences?.postInteractionSettings,
-                threadgate,
-                postgate,
-              ),
+              isDirty: isInteractionDirty(settings, threadgate, postgate),
               onSave: () =>
-                persistDefaults({
+                saveDefaults({
                   threadgateAllowRules:
                     threadgateAllowUISettingToAllowRecordValue(threadgate),
                   postgateEmbeddingRules: postgate.embeddingRules ?? [],
                 }),
             }
+          : undefined
+      }
+      account={account}
+      held={
+        // Another account without its clients reads as held, never as the current one.
+        held || (isPostingAsOther(posting) && !account)
+          ? {failed: posting.hold.kind === 'failed', handle}
           : undefined
       }
       nudge={interactions}

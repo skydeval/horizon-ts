@@ -81,6 +81,12 @@ import {QueryClient} from '@tanstack/react-query'
 import {computeCid} from '#/lib/api/computeCid'
 import {type PostOpts} from '#/lib/api/index'
 import {type ThreadDraft} from '#/view/com/composer/state/composer'
+import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
+import {
+  resetPostingRecord,
+  startPostingRecord,
+  updatePosting,
+} from '#/horizon/posting-as/compose-store'
 import {
   clearCurrentClients,
   publishCurrentClients,
@@ -1027,6 +1033,45 @@ describe('Retry and Finish posting (T-24)', () => {
     const written = postWrites()[0].body?.record as {langs?: string[]}
     expect(written.langs).toEqual(['de', 'en'])
   })
+
+  it('a record-only Retry (after a reload) writes the fronters chosen at press, in the clear and never in the payload (Phase 5 B-11)', async () => {
+    const WREN = '3m4kq2xv7ad2c'
+    startPostingRecord(DID, 'alice.test')
+    updatePosting({
+      members: [WREN],
+      data: {
+        did: DID,
+        isSystem: true,
+        members: [
+          {
+            rkey: WREN,
+            value: {
+              displayName: 'Wren',
+              pronouns: [],
+              roles: [],
+              memberTypes: [],
+              raw: {},
+            },
+          },
+        ],
+      },
+    })
+    mockLoadEncoder.mockRejectedValueOnce(new PrivateEncodeFailedError('load'))
+    await press(opts(['hello']))
+    const record = only()
+    expect(record.fronters).toEqual([WREN])
+    // The composer is gone, and so is this tab's capture.
+    resetPostingRecord()
+    resetOutbox()
+    await retryOutboxEntry(seen(record))
+    await whenOutboxIdle()
+    const written = postWrites()[0].body?.record as Record<string, unknown>
+    expect(written[PLURAL_FRONTERS_KEY]).toEqual({members: [{id: WREN}]})
+    const encoded = mockEncode.mock.calls.at(-1)?.[0] as unknown as {
+      content: Record<string, unknown>
+    }
+    expect(Object.keys(encoded.content)).toEqual(['text'])
+  })
 })
 
 describe('the member’s deletes (K10-L1, T-23)', () => {
@@ -1809,7 +1854,10 @@ describe('the reply block check (reply design 2, skydeval 2026-10-23)', () => {
     })
 
     it('the check cannot be made before the post: failed parent-busy at once', async () => {
-      answerFromThird(() => ({status: 500, body: {error: 'InternalServerError'}}))
+      answerFromThird(() => ({
+        status: 500,
+        body: {error: 'InternalServerError'},
+      }))
       await press(opts(['reply'], {replyTo: PARENT, limits: LIMITS}))
       const record = only()
       expect(record).toMatchObject({state: 'failed', failure: 'parent-busy'})

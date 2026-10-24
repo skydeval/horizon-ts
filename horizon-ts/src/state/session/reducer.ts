@@ -2,6 +2,8 @@ import {unregisterPushToken} from '#/lib/notifications/notifications'
 import {logger} from '#/lib/notifications/util'
 // HORIZON: signed-out OAuth accounts are marked in the same persisted write
 import {withOAuthSignOutMarks} from '#/horizon/session/reducer'
+// HORIZON: posting as import
+import {updatedStoredAccount} from '#/horizon/session/stored-account'
 import {wrapSessionReducerForLogging} from './logging'
 import {createPublicSessionBundle} from './session-core'
 import {type AtpSessionEvent, type SessionAccount} from './types'
@@ -62,6 +64,8 @@ export type Action =
       accountDid: string
       patch: Pick<SessionAccount, 'emailConfirmed' | 'emailAuthFactor'>
     }
+  // HORIZON: posting as PA-4: a temporary client's rotated tokens are stored at once
+  | {type: 'updated-stored-account'; account: SessionAccount}
 
 function createPublicBundleState(): BundleState {
   return {
@@ -262,6 +266,10 @@ let reducer = (state: State, action: Action): State => {
         }),
         needsPersist: true,
       }
+    }
+    // HORIZON: posting as PA-4: a temporary client's rotated tokens are stored at once
+    case 'updated-stored-account': {
+      return updatedStoredAccount(state, action.account)
     }
   }
 }

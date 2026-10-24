@@ -31,8 +31,13 @@ import {
   type QueryState,
 } from '@tanstack/react-query'
 
-import {createQueryKey} from '#/state/queries/util'
 import {FAILURE_CAP_MS, GC_MS, STALE_MS} from '#/horizon/identity/config'
+import {
+  IDENTITY_ROOTS,
+  type IdentityArgs,
+  type IdentityKind,
+  identityQueryKey,
+} from '#/horizon/identity/keys'
 import {
   type PluralFront,
   type PluralMember,
@@ -58,17 +63,7 @@ import {
   type ScheduledKey,
 } from '#/horizon/identity/schedule'
 
-/** The entries, by kind. */
-export type IdentityKind =
-  'pronouns' | 'system' | 'member' | 'members' | 'front'
-
-export const IDENTITY_ROOTS: Record<IdentityKind, string> = {
-  pronouns: 'horizon-identity-pronouns',
-  system: 'horizon-identity-system',
-  member: 'horizon-identity-member',
-  members: 'horizon-identity-members',
-  front: 'horizon-identity-front',
-}
+export {IDENTITY_ROOTS, type IdentityArgs, type IdentityKind, identityQueryKey}
 
 /** A record (its parsed value and CID) or a proven none. */
 export type IdentityAnswer<T> =
@@ -84,15 +79,6 @@ export type IdentityData = {
   member: IdentityAnswer<PluralMember>
   members: MemberList
   front: IdentityAnswer<PluralFront>
-}
-
-/** Each entry's args. */
-export type IdentityArgs = {
-  pronouns: {did: string}
-  system: {did: string}
-  member: {did: string; rkey: string}
-  members: {did: string}
-  front: {did: string}
 }
 
 /**
@@ -115,16 +101,6 @@ let runStart = Date.now()
 /** Test-only: move the start of the run. */
 export function setIdentityRunStart(ms: number) {
   runStart = ms
-}
-
-/** The persisted query key of an entry (the front is not persisted). */
-export function identityQueryKey<K extends IdentityKind>(
-  kind: K,
-  args: IdentityArgs[K],
-) {
-  return kind === 'front'
-    ? createQueryKey(IDENTITY_ROOTS[kind], args)
-    : createQueryKey(IDENTITY_ROOTS[kind], args, {persistedVersion: 1})
 }
 
 function hashOf(kind: IdentityKind, args: IdentityArgs[IdentityKind]): string {

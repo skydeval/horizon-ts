@@ -453,7 +453,12 @@ describe('a draft restored with no visibility entry on this device (P5R7-L1)', (
     recordDraftVisibility('private-draft', captureDraftVisibility())
     const screen = show()
     act(() => applyDraftVisibility('public-draft'))
-    expect(getComposeVisibility()).toEqual(PUBLIC_COMPOSE)
+    // Public, holding no audience for a later flip (P5R8-Q1).
+    expect(getComposeVisibility()).toEqual({
+      visibility: 'public',
+      audience: {kind: 'unpicked', why: 'draft'},
+      locked: false,
+    })
     expect(canPost).toBe(true)
     act(() => applyDraftVisibility('private-draft'))
     expect(getComposeVisibility()).toEqual({

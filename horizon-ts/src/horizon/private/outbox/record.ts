@@ -5,8 +5,11 @@
  * Unsent. Never the encoded bytes, never media bytes.
  */
 
+import {isValidRecordKey} from '@atproto/syntax'
+
 import {type ThreadgateAllowUISetting} from '#/state/queries/threadgate/types'
 import {type Gif} from '#/features/gifPicker/types'
+import {MAX_FRONTERS} from '#/horizon/identity/fronters'
 import {type DraftPostSpoilers} from '#/horizon/media-spoilers/drafts'
 import {type ComposeAudience} from '#/horizon/private/composer/state'
 import {
@@ -78,6 +81,11 @@ export type OutboxRecord = {
   visibility: 'public' | 'private'
   audience: ComposeAudience
   locked: boolean
+  /**
+   * The member rkeys every post names as its fronters (Phase 5 8.3, B-11),
+   * so a Retry or an Edit after a reload keeps them. Absent: none.
+   */
+  fronters?: string[]
   /** The post the compose replies to (its URI, kept apart from the ref). */
   replyToUri?: string
   replyTo?: StoredReplyRef
@@ -176,6 +184,20 @@ export function saveOutboxRecord(record: OutboxRecord): boolean {
  */
 export function removeOutboxRecord(did: string, id: string): boolean {
   return writeLocalChecked(outboxRecordKey(did, id), undefined)
+}
+
+/**
+ * The record's fronters: valid member rkeys only (at most 20), so a
+ * malformed stored value writes none rather than a bad key.
+ */
+export function recordFronters(record: OutboxRecord): string[] {
+  const value = record.fronters
+  if (!Array.isArray(value)) return []
+  const rkeys = value.filter(
+    (rkey): rkey is string =>
+      typeof rkey === 'string' && isValidRecordKey(rkey),
+  )
+  return [...new Set(rkeys)].slice(0, MAX_FRONTERS)
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   type PostPrivate,
   PRIVATE_ENCODED_FIELD_KEYS,
 } from '#/horizon/lexicons/kryphocron'
+import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
 import {type EncodedFields} from '#/horizon/private/encoder'
 import {PP_COLLECTION} from '#/horizon/private/uri'
 
@@ -36,6 +37,11 @@ export type EncodedRecordClearFields = {
   reply?: PostPrivate['reply']
   langs?: PostPrivate['langs']
   labels?: PostPrivate['labels']
+  /**
+   * The post's fronters (`app.nearhorizon.plural.fronters`), in the clear as
+   * locus leaves them (Phase 5 PP-7, B-11); never inside `encodedContent`.
+   */
+  fronters?: LexMap[string]
 }
 
 /**
@@ -69,6 +75,9 @@ export function assembleEncodedRecord(
     ...(clear.reply ? {reply: clear.reply} : {}),
     ...(clear.langs ? {langs: clear.langs} : {}),
     ...(clear.labels ? {labels: clear.labels} : {}),
+    ...(clear.fronters !== undefined
+      ? {[PLURAL_FRONTERS_KEY]: clear.fronters}
+      : {}),
     ...fields,
   }
 }

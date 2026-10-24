@@ -9,7 +9,7 @@ import {useQueryClient} from '@tanstack/react-query'
 import {useHaptics} from '#/lib/haptics'
 import {useNonReactiveCallback} from '#/lib/hooks/useNonReactiveCallback'
 import {STALE} from '#/state/queries'
-import {useMyListsQuery} from '#/state/queries/my-lists'
+// HORIZON: posting as: the stock list query is reached through usePostingCurateLists
 import {useGetPost} from '#/state/queries/post'
 import {
   createPostgateQueryKey,
@@ -49,6 +49,8 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: posting as import
+import {usePostingCurateLists} from '#/horizon/posting-as/account'
 import {type app} from '#/lexicons'
 
 export type PostInteractionSettingsFormProps = {
@@ -346,7 +348,8 @@ export function PostInteractionSettingsForm({
     data: lists,
     isPending: isListsPending,
     isError: isListsError,
-  } = useMyListsQuery('curate')
+    // HORIZON: posting as PA-12: the posting account's lists while the composer posts as another account
+  } = usePostingCurateLists()
   const [quotesEnabled, setQuotesEnabled] = useState(
     !(
       postgate.embeddingRules &&

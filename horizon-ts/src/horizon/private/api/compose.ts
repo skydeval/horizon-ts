@@ -14,7 +14,7 @@
  * an encoder's or server's message.
  */
 
-import {type Client, XrpcResponseError} from '@atproto/lex'
+import {type Client, type LexMap, XrpcResponseError} from '@atproto/lex'
 import {type DidString, toDatetimeString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
 import {type QueryClient} from '@tanstack/react-query'
@@ -26,11 +26,13 @@ import {RQKEY_ROOT as POST_FEED_RQKEY_ROOT} from '#/state/queries/post-feed'
 import {RQKEY as profileQueryKey} from '#/state/queries/profile'
 import {RQKEY_LINK} from '#/state/queries/resolve-link'
 import {type PostDraft} from '#/view/com/composer/state/composer'
+import {withFronters} from '#/horizon/identity/fronters'
 import {kryphocron} from '#/horizon/lexicons'
 import {
   type PostPrivate,
   type PostPrivateEncoded,
 } from '#/horizon/lexicons/kryphocron'
+import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
 import {type ComposeSpoilers} from '#/horizon/media-spoilers/compose-store'
 import {
   contentWarningLabelValues,
@@ -353,9 +355,7 @@ export async function planFirstPost(
      * No guess and no owner pair: the reply is itself a branch root, owned
      * by the member.
      */
-    blockCheck: authorDid
-      ? {pairs: [{did: authorDid}], checkedAt}
-      : undefined,
+    blockCheck: authorDid ? {pairs: [{did: authorDid}], checkedAt} : undefined,
   }
 }
 
@@ -621,7 +621,9 @@ export type ComposedPost = Record<string, unknown>
 /**
  * Each post's plaintext record from its resolved text and embed, under
  * `audienceUri`, 1 ms apart from `now` as stock does, with the captured
- * langs and each post's self-labels and CW label.
+ * langs and each post's self-labels and CW label. `fronters` (Phase 5 PP-7,
+ * 9) are the member rkeys every post of the compose names, in the clear
+ * beside `audienceList`, never in the encoded payload.
  */
 export function buildComposedPosts({
   posts,
@@ -629,6 +631,7 @@ export function buildComposedPosts({
   audienceUri,
   langs,
   composeSpoilers,
+  fronters = [],
   now = new Date(),
 }: {
   posts: readonly PostDraft[]
@@ -636,6 +639,7 @@ export function buildComposedPosts({
   audienceUri: string
   langs: string[] | undefined
   composeSpoilers: ComposeSpoilers
+  fronters?: readonly string[]
   now?: Date
 }): ComposedPost[] {
   return posts.map((draft, index) => {
@@ -649,16 +653,19 @@ export function buildComposedPosts({
     const labels = toPrivateSelfLabels(
       contentWarningLabelValues(draft, composeSpoilers),
     )
-    return {
-      $type: PP_COLLECTION,
-      text: rt.text,
-      createdAt: toDatetimeString(now),
-      audienceList: audienceUri,
-      ...(facets ? {facets} : {}),
-      ...(privateEmbed ? {embed: privateEmbed} : {}),
-      ...(langs ? {langs} : {}),
-      ...(labels ? {labels} : {}),
-    }
+    return withFronters(
+      {
+        $type: PP_COLLECTION,
+        text: rt.text,
+        createdAt: toDatetimeString(now),
+        audienceList: audienceUri,
+        ...(facets ? {facets} : {}),
+        ...(privateEmbed ? {embed: privateEmbed} : {}),
+        ...(langs ? {langs} : {}),
+        ...(labels ? {labels} : {}),
+      },
+      fronters,
+    )
   })
 }
 
@@ -753,6 +760,8 @@ export async function encodeComposePosts(
           reply: plain.reply,
           langs: plain.langs,
           labels: plain.labels,
+          // In the clear, as locus leaves it (Phase 5 PP-7, B-11).
+          fronters: (plain as LexMap)[PLURAL_FRONTERS_KEY],
         },
         fields,
       ),
