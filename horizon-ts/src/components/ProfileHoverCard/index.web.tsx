@@ -45,6 +45,8 @@ import {Text} from '#/components/Typography'
 import {IS_WEB_TOUCH_DEVICE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
 import {LiveStatus} from '#/features/liveNow/components/LiveStatusDialog'
+// HORIZON: identity import
+import {HoverCardIdentity} from '#/horizon/identity/HoverCardIdentity'
 // HORIZON: C-8, a restored view's community labeler for members
 import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
@@ -558,6 +560,11 @@ function Inner({
           <ProfileHeaderHandle profile={profileShadow} disableTaps />
         </View>
       </Link>
+
+      {/* HORIZON: identity ID-19: the account's pronouns, the system badge and who is fronting now */}
+      {!isBlockedUser && (
+        <HoverCardIdentity profile={profile} moderation={moderation} />
+      )}
 
       {isBlockedUser && (
         <View style={[a.flex_row, a.flex_wrap, a.gap_xs]}>

@@ -9,6 +9,8 @@ import {
   NotificationQuoteSmall_Filled_Corner0_Rounded as QuoteIcon,
   NotificationReplySmall_Filled_Corner0_Rounded as ReplyIcon,
 } from '#/components/icons/Notification'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: a private post's row carries the corner lock
 import {PrivateAuthorRow} from '#/horizon/private/notifications/PrivateAuthorRow'
 import * as Item from '../Item'
@@ -91,28 +93,32 @@ function PostNotification({
   if (shadow === POST_TOMBSTONE) return null
 
   return (
-    <Item.Root
-      href={makePostLink(post)}
-      isRead={notification.isRead}
-      // Actions in the row need to be individually reachable
-      accessible={false}
-      testID={`notification-${notification.type}-${notification.id}`}>
-      <Item.Avatar profile={post.author} icon={icon} tone="conversation" />
-      <Item.Content style={[a.gap_sm]}>
-        <View style={[a.gap_xs]}>
-          {/* HORIZON: a private post's row carries the corner lock (start) */}
-          <PrivateAuthorRow uri={post.uri}>
-            <Item.Author profile={post.author} />
-          </PrivateAuthorRow>
-          {/* HORIZON: a private post's row carries the corner lock (end) */}
-          {parent && (
-            <Item.ReplyContext parent={parent} variant={replyVariant} />
-          )}
-          <Item.PostBody post={post} />
-          <Item.Timestamp date={notification.indexedAt} />
-        </View>
-        <Item.PostActions post={post} />
-      </Item.Content>
-    </Item.Root>
+    // HORIZON: identity ID-16: the post's fronters reach the row's actor name and avatar (start)
+    <PostFrontersScope post={post}>
+      <Item.Root
+        href={makePostLink(post)}
+        isRead={notification.isRead}
+        // Actions in the row need to be individually reachable
+        accessible={false}
+        testID={`notification-${notification.type}-${notification.id}`}>
+        <Item.Avatar profile={post.author} icon={icon} tone="conversation" />
+        <Item.Content style={[a.gap_sm]}>
+          <View style={[a.gap_xs]}>
+            {/* HORIZON: a private post's row carries the corner lock (start) */}
+            <PrivateAuthorRow uri={post.uri}>
+              <Item.Author profile={post.author} />
+            </PrivateAuthorRow>
+            {/* HORIZON: a private post's row carries the corner lock (end) */}
+            {parent && (
+              <Item.ReplyContext parent={parent} variant={replyVariant} />
+            )}
+            <Item.PostBody post={post} />
+            <Item.Timestamp date={notification.indexedAt} />
+          </View>
+          <Item.PostActions post={post} />
+        </Item.Content>
+      </Item.Root>
+    </PostFrontersScope>
+    // HORIZON: identity ID-16: the post's fronters reach the row's actor name and avatar (end)
   )
 }

@@ -47,6 +47,16 @@ export function privateFacetsServed(opts?: ServedOptions): boolean {
 }
 
 /**
+ * prism stores and serves a kryphocron post's fronters
+ * (`plural.fronters`, Phase 5 design 9, S-1): the private view's `record`
+ * carries `app.nearhorizon.plural.fronters` as written. Until then, and on
+ * an instance without it, a kryphocron post shows the account.
+ */
+export function pluralFrontersServed(opts?: ServedOptions): boolean {
+  return served('plural.fronters', opts)
+}
+
+/**
  * prism serves bookmarks of private posts (`private.bookmarks`, P-8, P-19).
  * Until then: a bookmark press on a private post is refused with a toast,
  * and Saved's Private tab shows its empty state and makes no request.

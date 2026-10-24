@@ -35,6 +35,18 @@ import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Text} from '#/components/Typography'
+// HORIZON: identity import
+import {
+  FronterName,
+  useFronterLinkLabel,
+  useNameModeration,
+} from '#/horizon/identity/FronterName'
+// HORIZON: identity import
+import {useFronterAvatar} from '#/horizon/identity/hooks'
+// HORIZON: identity import
+import {PronounsText, stockPronouns} from '#/horizon/identity/PronounsText'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: a post with spoiler media or a content warning has its thumbnails blurred
 import {hasMediaSpoilers} from '#/horizon/media-spoilers/read'
 // HORIZON: links in a private post open directly
@@ -81,7 +93,11 @@ export function Author({profile}: {profile: bsky.profile.AnyProfileView}) {
   const {t: l} = useLingui()
   const name = useDisplayName(profile)
   const href = makeProfileLink(profile)
-  const label = l`Go to ${name}’s profile`
+  // HORIZON: identity ID-16: the row's actor is the post's fronters, named in words in the label
+  const nameModeration = useNameModeration(profile)
+  // HORIZON: identity ID-16: the row's actor is the post's fronters, named in words in the label
+  const label =
+    useFronterLinkLabel(profile, nameModeration) ?? l`Go to ${name}’s profile`
 
   return (
     <ProfileHoverCard did={profile.did}>
@@ -100,7 +116,12 @@ export function Author({profile}: {profile: bsky.profile.AnyProfileView}) {
             t.atoms.text,
             web({direction: 'ltr', unicodeBidi: 'isolate'}),
           ]}>
-          {forceLTR(name)}
+          {/* HORIZON: identity ID-16: the post's fronters in place of the actor's name */}
+          <FronterName
+            did={profile.did}
+            moderation={nameModeration}
+            fallback={forceLTR(name)}
+          />
         </WebOnlyInlineLinkText>
         <ProfileBadges profile={profile} size="sm" style={[a.pl_2xs]} />
         <WebOnlyInlineLinkText
@@ -118,6 +139,13 @@ export function Author({profile}: {profile: bsky.profile.AnyProfileView}) {
           ]}>
           {NON_BREAKING_SPACE + sanitizeHandle(profile.handle, '@')}
         </WebOnlyInlineLinkText>
+        {/* HORIZON: identity ID-16: pronouns after the handle */}
+        <PronounsText
+          did={profile.did}
+          fallback={stockPronouns(profile)}
+          inline
+          style={[a.leading_snug]}
+        />
       </View>
     </ProfileHoverCard>
   )
@@ -484,11 +512,20 @@ export function QuoteCard({
   switch (parsed.type) {
     case 'post':
       return (
-        <QuoteCardPost
-          view={parsed.view}
-          numberOfLines={numberOfLines}
-          isMuted={isMuted}
-        />
+        // HORIZON: identity ID-16: the quoted post's fronters reach the card's author line (start)
+        <PostFrontersScope
+          post={{
+            uri: parsed.view.uri,
+            author: parsed.view.author,
+            record: parsed.view.value,
+          }}>
+          <QuoteCardPost
+            view={parsed.view}
+            numberOfLines={numberOfLines}
+            isMuted={isMuted}
+          />
+        </PostFrontersScope>
+        // HORIZON: identity ID-16: the quoted post's fronters reach the card's author line (end)
       )
     case 'post_blocked':
       placeholder = <Trans>Blocked post</Trans>
@@ -533,6 +570,8 @@ function QuoteCardPost({
   const {t: l} = useLingui()
   const moderationOpts = useModerationOpts()
   const name = useDisplayName(view.author)
+  // HORIZON: identity ID-16: the quoted post's single fronter's image, the account's otherwise
+  const fronterAvatar = useFronterAvatar(view.author)
   const quote: PostView = {
     ...view,
     $type: 'app.bsky.feed.defs#postView',
@@ -563,7 +602,8 @@ function QuoteCardPost({
             <View style={[a.flex_row, a.align_center, a.gap_xs, {height: 20}]}>
               <UserAvatar
                 size={20}
-                avatar={view.author.avatar}
+                // HORIZON: identity ID-16: the quoted post's single fronter's image, the account's otherwise
+                avatar={fronterAvatar ?? view.author.avatar}
                 moderation={moderation?.ui('avatar')}
                 type={view.author.associated?.labeler ? 'labeler' : 'user'}
               />
@@ -577,7 +617,12 @@ function QuoteCardPost({
                   a.font_semi_bold,
                   t.atoms.text,
                 ]}>
-                {forceLTR(name)}
+                {/* HORIZON: identity ID-16: the quoted post's fronters in place of the name */}
+                <FronterName
+                  did={view.author.did}
+                  moderation={moderation?.ui('displayName')}
+                  fallback={forceLTR(name)}
+                />
               </Text>
               <Text
                 emoji

@@ -32,6 +32,8 @@ import {useAppviewClient, useSession} from '#/state/session'
 import {useMergeThreadgateHiddenReplies} from '#/state/threadgate-hidden-replies'
 import {useBreakpoints} from '#/alf'
 import {IS_WEB} from '#/env'
+// HORIZON: identity import
+import {prefetchPageIdentities} from '#/horizon/identity/page-prefetch'
 // HORIZON: a private thread is retried while prism is busy, never over kept data
 import {keepOverData, privateRetryFor} from '#/horizon/private/api/transient'
 // HORIZON: a held private anchor is read again on the suspect clock
@@ -130,6 +132,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
       const placeholder = getThreadPlaceholder(qc, anchor!)
       // HORIZON: Thread Lens TH-2: the lens read, or its fallback below tagged at the end (start)
       const lensRun = await lens.run(ctx, placeholder)
+      // HORIZON: identity ID-23: warm a lens thread's pronouns and fronters, without waiting
+      void prefetchPageIdentities(qc, lensRun.data)
       if (lensRun.data)
         return lensRun.data as unknown as UsePostThreadQueryResult
       // HORIZON: a private thread is read through prism; a public one with its private branches (start)
@@ -178,6 +182,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
       // HORIZON: a private thread is read through prism; a public one with its private branches (end)
       // HORIZON: the private posts a thread quotes arrive with it
       await resolveThreadQuotes(data.thread)
+      // HORIZON: identity ID-23: warm the thread's pronouns and fronters, without waiting
+      void prefetchPageIdentities(qc, data.thread)
 
       const cachedKnownLikers =
         placeholder &&

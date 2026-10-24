@@ -34,6 +34,8 @@ import {TranslatedPost} from '#/components/Post/Translated'
 import {PostControls} from '#/components/PostControls'
 import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: links in a private post open directly
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
@@ -93,16 +95,20 @@ export function Post({
   if (record && richText && moderation) {
     return (
       <ReportDialogMetadataContext.Provider key={postShadowed.uri}>
-        <PostInner
-          post={postShadowed}
-          record={record}
-          richText={richText}
-          moderation={moderation}
-          showReplyLine={showReplyLine}
-          hideTopBorder={hideTopBorder}
-          style={style}
-          onBeforePress={onBeforePress}
-        />
+        {/* HORIZON: identity ID-5: the post's fronters reach its author line and avatar (start) */}
+        <PostFrontersScope post={postShadowed}>
+          <PostInner
+            post={postShadowed}
+            record={record}
+            richText={richText}
+            moderation={moderation}
+            showReplyLine={showReplyLine}
+            hideTopBorder={hideTopBorder}
+            style={style}
+            onBeforePress={onBeforePress}
+          />
+        </PostFrontersScope>
+        {/* HORIZON: identity ID-5: the post's fronters reach its author line and avatar (end) */}
       </ReportDialogMetadataContext.Provider>
     )
   }

@@ -39,6 +39,11 @@ import {
 } from '#/state/queries/util'
 import {useAppviewClient, useSession} from '#/state/session'
 import {useThreadgateHiddenReplyUris} from '#/state/threadgate-hidden-replies'
+// HORIZON: identity import
+import {
+  isLaterPage,
+  prefetchPageIdentities,
+} from '#/horizon/identity/page-prefetch'
 // HORIZON: a page whose grouped request fails is read from listNotifications
 import {withGroupedFallback} from '#/horizon/notifications/grouped-fallback'
 import {app} from '#/lexicons'
@@ -173,10 +178,16 @@ export function useGroupedNotificationsQuery({
     enabled: enabled && !!moderationOpts,
     staleTime: STALE.INFINITY,
     queryKey: createGroupedNotificationsQueryKey({feed}),
-    async queryFn({pageParam}): Promise<LoadedGroupedNotificationsPage> {
+    // HORIZON: identity ID-23: the query client and key, for the page's identities
+    async queryFn({
+      pageParam,
+      client: queryClient,
+      queryKey,
+    }): Promise<LoadedGroupedNotificationsPage> {
       const requestedAt = Date.now()
       // HORIZON: a page whose grouped request fails is read from listNotifications
-      return withGroupedFallback(
+      // HORIZON: identity ID-23: the page is warmed before it is returned
+      const page = await withGroupedFallback(
         {client, feed, cursor: pageParam, viewerDid, requestedAt},
         async () => {
           const res = await client.call(
@@ -190,6 +201,11 @@ export function useGroupedNotificationsQuery({
           return {...hydratePage(res, {viewerDid}), requestedAt}
         },
       )
+      // HORIZON: identity ID-23: warm the page's pronouns and fronters; a later page waits up to 250 ms
+      await prefetchPageIdentities(queryClient, page.notifications, {
+        later: isLaterPage(queryClient, queryKey, pageParam),
+      })
+      return page
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (_lastPage, pages) => getNextCursor(pages),

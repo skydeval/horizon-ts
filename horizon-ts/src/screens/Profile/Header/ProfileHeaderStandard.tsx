@@ -40,6 +40,8 @@ import {IS_IOS, IS_NATIVE} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
 import {ProfileHeaderLinks} from '#/features/profileLinks'
+// HORIZON: identity import
+import {ProfileHeaderIdentity} from '#/horizon/identity/ProfileIdentity'
 // HORIZON: C-8, a restored view's community labeler for members
 import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
@@ -146,6 +148,8 @@ let ProfileHeaderStandard = ({
               moderation={moderation}
             />
             <ProfileHeaderHandle profile={profile} />
+            {/* HORIZON: identity ID-17: pronouns, the system badge and the front indicator under the handle */}
+            <ProfileHeaderIdentity profile={profile} moderation={moderation} />
           </View>
           {!isPlaceholderProfile && !isBlockedUser && (
             <View style={a.gap_md}>

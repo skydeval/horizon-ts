@@ -36,6 +36,13 @@ import {
   useSetOwnProfileLinksCache,
   useWriteProfileLinks,
 } from '#/features/profileLinks'
+// HORIZON: identity import
+import {EditProfileTabs} from '#/horizon/identity/edit/EditProfileTabs'
+// HORIZON: identity import
+import {
+  PronounsField,
+  useIdentityEditParts,
+} from '#/horizon/identity/edit/PronounsField'
 import {type app} from '#/lexicons'
 
 export function EditProfileDialog({
@@ -166,6 +173,8 @@ function DialogInner({
   const [isDraggingLinks, setIsDraggingLinks] = useState(false)
   // on Android the sheet turns its own drag off while scrolled, so put that back after
   const sheetDragWasDisabled = useRef(false)
+  // HORIZON: identity ID-22: the pronouns field's state, saved with the stock Save
+  const identityParts = useIdentityEditParts(profile)
 
   const profileDirty =
     displayName !== initialDisplayName ||
@@ -176,7 +185,8 @@ function DialogInner({
     !!editedLinks &&
     !!storedLinks &&
     !sameProfileLinks(editedLinks, storedLinks)
-  const dirty = profileDirty || linksDirty
+  // HORIZON: identity ID-22: the dirty check includes the pronouns field
+  const dirty = profileDirty || linksDirty || identityParts.dirty
 
   useEffect(() => {
     setDirty(dirty)
@@ -226,6 +236,8 @@ function DialogInner({
       const written = nextLinks
         ? await writeProfileLinks(profile.did, nextLinks, storedLinks ?? [])
         : undefined
+      // HORIZON: identity ID-22: the pronouns write (only when changed), before the profile's
+      await identityParts.save()
       await updateProfileMutation({
         profile,
         updates: {
@@ -265,6 +277,8 @@ function DialogInner({
     ax,
     writeProfileLinks,
     setOwnProfileLinksCache,
+    // HORIZON: identity ID-22: the pronouns write
+    identityParts,
   ])
 
   const displayNameTooLong = isOverMaxGraphemeCount({
@@ -303,7 +317,10 @@ function DialogInner({
           !dirty ||
           isUpdatingProfile ||
           displayNameTooLong ||
-          descriptionTooLong
+          descriptionTooLong ||
+          // HORIZON: identity ID-22: held while the pronouns are over a limit or saving
+          identityParts.invalid ||
+          identityParts.saving
         }
         size="small"
         color="primary"
@@ -324,6 +341,9 @@ function DialogInner({
       isUpdatingProfile,
       displayNameTooLong,
       descriptionTooLong,
+      // HORIZON: identity ID-22: the pronouns hold
+      identityParts.invalid,
+      identityParts.saving,
     ],
   )
 
@@ -340,136 +360,146 @@ function DialogInner({
           </Dialog.HeaderText>
         </Dialog.Header>
       }>
-      <View style={[a.relative]}>
-        <UserBanner banner={userBanner} onSelectNewBanner={onSelectNewBanner} />
-        <View
-          style={[
-            a.absolute,
-            {
-              top: 80,
-              left: 20,
-              width: 84,
-              height: 84,
-              borderWidth: 2,
-              borderRadius: 42,
-              borderColor: t.atoms.bg.backgroundColor,
-            },
-          ]}>
-          <EditableUserAvatar
-            size={80}
-            avatar={userAvatar}
-            onSelectNewAvatar={onSelectNewAvatar}
+      {/* HORIZON: identity ID-20: the Profile and Plurality tabs (start) */}
+      <EditProfileTabs profile={profile}>
+        <View style={[a.relative]}>
+          <UserBanner
+            banner={userBanner}
+            onSelectNewBanner={onSelectNewBanner}
           />
-        </View>
-      </View>
-      {isUpdateProfileError && (
-        <View style={[a.mt_xl]}>
-          <ErrorMessage message={cleanError(updateProfileError)} />
-        </View>
-      )}
-      {imageError !== '' && (
-        <View style={[a.mt_xl]}>
-          <ErrorMessage message={imageError} />
-        </View>
-      )}
-      <View style={[a.mt_4xl, a.px_xl, a.gap_xl]}>
-        <View>
-          <TextField.LabelText>
-            <Trans>Display name</Trans>
-          </TextField.LabelText>
-          <TextField.Root isInvalid={displayNameTooLong}>
-            <Dialog.Input
-              value={displayName}
-              onChangeText={setDisplayName}
-              label={_(msg`Display name`)}
-              placeholder={_(msg`e.g. Alice Lastname`)}
-              testID="editProfileDisplayNameInput"
+          <View
+            style={[
+              a.absolute,
+              {
+                top: 80,
+                left: 20,
+                width: 84,
+                height: 84,
+                borderWidth: 2,
+                borderRadius: 42,
+                borderColor: t.atoms.bg.backgroundColor,
+              },
+            ]}>
+            <EditableUserAvatar
+              size={80}
+              avatar={userAvatar}
+              onSelectNewAvatar={onSelectNewAvatar}
             />
-          </TextField.Root>
-          {displayNameTooLong && (
-            <Text
-              style={[
-                a.text_sm,
-                a.mt_xs,
-                a.font_semi_bold,
-                {color: t.palette.negative_400},
-              ]}>
-              <Plural
-                value={MAX_DISPLAY_NAME}
-                other="Display name is too long. The maximum number of characters is #."
-              />
-            </Text>
-          )}
+          </View>
         </View>
-
-        {verification.isVerified &&
-          verification.role === 'default' &&
-          displayName !== initialDisplayName && (
-            <Admonition type="error">
-              <Trans>
-                You are verified. You will lose your verification status if you
-                change your display name.{' '}
-                <InlineLinkText
-                  label={_(
-                    msg({
-                      message: `Learn more`,
-                      context: `english-only-resource`,
-                    }),
-                  )}
-                  to={urls.website.blog.initialVerificationAnnouncement}>
-                  <Trans context="english-only-resource">Learn more.</Trans>
-                </InlineLinkText>
-              </Trans>
-            </Admonition>
-          )}
-
-        <View>
-          <TextField.LabelText>
-            <Trans>Description</Trans>
-          </TextField.LabelText>
-          <TextField.Root isInvalid={descriptionTooLong}>
-            <Dialog.Input
-              value={description}
-              onChangeText={setDescription}
-              multiline
-              label={_(msg`Description`)}
-              placeholder={_(msg`Tell us a bit about yourself`)}
-              testID="editProfileDescriptionInput"
-            />
-          </TextField.Root>
-          {descriptionTooLong && (
-            <Text
-              style={[
-                a.text_sm,
-                a.mt_xs,
-                a.font_semi_bold,
-                {color: t.palette.negative_400},
-              ]}>
-              <Plural
-                value={MAX_DESCRIPTION}
-                other="Description is too long. The maximum number of characters is #."
-              />
-            </Text>
-          )}
-        </View>
-
-        {linksEnabled && links && (
-          <ProfileLinksEditor
-            did={profile.did}
-            links={links}
-            onChange={setEditedLinks}
-            onDragStateChange={dragging => {
-              setIsDraggingLinks(dragging)
-              if (dragging) {
-                sheetDragWasDisabled.current = control.disableDrag
-                control.setDisableDrag(true)
-              } else {
-                control.setDisableDrag(sheetDragWasDisabled.current)
-              }
-            }}
-          />
+        {isUpdateProfileError && (
+          <View style={[a.mt_xl]}>
+            <ErrorMessage message={cleanError(updateProfileError)} />
+          </View>
         )}
-      </View>
+        {imageError !== '' && (
+          <View style={[a.mt_xl]}>
+            <ErrorMessage message={imageError} />
+          </View>
+        )}
+        <View style={[a.mt_4xl, a.px_xl, a.gap_xl]}>
+          <View>
+            <TextField.LabelText>
+              <Trans>Display name</Trans>
+            </TextField.LabelText>
+            <TextField.Root isInvalid={displayNameTooLong}>
+              <Dialog.Input
+                value={displayName}
+                onChangeText={setDisplayName}
+                label={_(msg`Display name`)}
+                placeholder={_(msg`e.g. Alice Lastname`)}
+                testID="editProfileDisplayNameInput"
+              />
+            </TextField.Root>
+            {displayNameTooLong && (
+              <Text
+                style={[
+                  a.text_sm,
+                  a.mt_xs,
+                  a.font_semi_bold,
+                  {color: t.palette.negative_400},
+                ]}>
+                <Plural
+                  value={MAX_DISPLAY_NAME}
+                  other="Display name is too long. The maximum number of characters is #."
+                />
+              </Text>
+            )}
+          </View>
+
+          {verification.isVerified &&
+            verification.role === 'default' &&
+            displayName !== initialDisplayName && (
+              <Admonition type="error">
+                <Trans>
+                  You are verified. You will lose your verification status if
+                  you change your display name.{' '}
+                  <InlineLinkText
+                    label={_(
+                      msg({
+                        message: `Learn more`,
+                        context: `english-only-resource`,
+                      }),
+                    )}
+                    to={urls.website.blog.initialVerificationAnnouncement}>
+                    <Trans context="english-only-resource">Learn more.</Trans>
+                  </InlineLinkText>
+                </Trans>
+              </Admonition>
+            )}
+
+          <View>
+            <TextField.LabelText>
+              <Trans>Description</Trans>
+            </TextField.LabelText>
+            <TextField.Root isInvalid={descriptionTooLong}>
+              <Dialog.Input
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                label={_(msg`Description`)}
+                placeholder={_(msg`Tell us a bit about yourself`)}
+                testID="editProfileDescriptionInput"
+              />
+            </TextField.Root>
+            {descriptionTooLong && (
+              <Text
+                style={[
+                  a.text_sm,
+                  a.mt_xs,
+                  a.font_semi_bold,
+                  {color: t.palette.negative_400},
+                ]}>
+                <Plural
+                  value={MAX_DESCRIPTION}
+                  other="Description is too long. The maximum number of characters is #."
+                />
+              </Text>
+            )}
+          </View>
+
+          {/* HORIZON: identity ID-21: the pronouns field */}
+          <PronounsField parts={identityParts} />
+
+          {linksEnabled && links && (
+            <ProfileLinksEditor
+              did={profile.did}
+              links={links}
+              onChange={setEditedLinks}
+              onDragStateChange={dragging => {
+                setIsDraggingLinks(dragging)
+                if (dragging) {
+                  sheetDragWasDisabled.current = control.disableDrag
+                  control.setDisableDrag(true)
+                } else {
+                  control.setDisableDrag(sheetDragWasDisabled.current)
+                }
+              }}
+            />
+          )}
+        </View>
+        {/* HORIZON: identity ID-20: the Profile and Plurality tabs (end) */}
+      </EditProfileTabs>
     </Dialog.ScrollableInner>
   )
 }

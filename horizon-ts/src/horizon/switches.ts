@@ -353,6 +353,14 @@ export const PRONOUNS: boolean = true
 export const PLURAL_DISPLAY: boolean = true
 
 /**
+ * Plural editing (Phase 5 design section 10, 7.2, 7.3; `identity/edit/`):
+ * the Plurality tab in Edit Profile (system, members, set up and remove)
+ * and the front switcher. `false`: Edit Profile as stock and no plural
+ * record is written.
+ */
+export const PLURAL_EDITING: boolean = true
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading

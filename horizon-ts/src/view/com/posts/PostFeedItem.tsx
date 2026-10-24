@@ -54,6 +54,8 @@ import {RichText} from '#/components/RichText'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Features, useAnalytics} from '#/analytics'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: links in a private post open directly
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
@@ -130,26 +132,30 @@ export function PostFeedItem({
   if (richText && moderation) {
     return (
       <ReportDialogMetadataContext.Provider key={postShadowed.uri}>
-        <FeedItemInner
-          post={postShadowed}
-          record={record}
-          postNumbering={postNumbering}
-          reason={reason}
-          feedContext={feedContext}
-          reqId={reqId}
-          richText={richText}
-          parentAuthor={parentAuthor}
-          showReplyTo={showReplyTo}
-          moderation={moderation}
-          isThreadChild={isThreadChild}
-          isThreadLastChild={isThreadLastChild}
-          isThreadParent={isThreadParent}
-          hideTopBorder={hideTopBorder}
-          isParentBlocked={isParentBlocked}
-          isParentNotFound={isParentNotFound}
-          rootPost={rootPost}
-          onShowLess={onShowLess}
-        />
+        {/* HORIZON: identity ID-4: the post's fronters reach its author line and avatar (start) */}
+        <PostFrontersScope post={postShadowed}>
+          <FeedItemInner
+            post={postShadowed}
+            record={record}
+            postNumbering={postNumbering}
+            reason={reason}
+            feedContext={feedContext}
+            reqId={reqId}
+            richText={richText}
+            parentAuthor={parentAuthor}
+            showReplyTo={showReplyTo}
+            moderation={moderation}
+            isThreadChild={isThreadChild}
+            isThreadLastChild={isThreadLastChild}
+            isThreadParent={isThreadParent}
+            hideTopBorder={hideTopBorder}
+            isParentBlocked={isParentBlocked}
+            isParentNotFound={isParentNotFound}
+            rootPost={rootPost}
+            onShowLess={onShowLess}
+          />
+        </PostFrontersScope>
+        {/* HORIZON: identity ID-4: the post's fronters reach its author line and avatar (end) */}
       </ReportDialogMetadataContext.Provider>
     )
   }

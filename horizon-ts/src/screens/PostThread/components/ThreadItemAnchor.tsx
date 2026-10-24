@@ -60,6 +60,12 @@ import {Text} from '#/components/Typography'
 import {WhoCanReply} from '#/components/WhoCanReply'
 import {Features, useAnalytics} from '#/analytics'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: identity import
+import {FronterName, useFronterLinkLabel} from '#/horizon/identity/FronterName'
+// HORIZON: identity import
+import {PronounsText} from '#/horizon/identity/PronounsText'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: a private post shows its badge and audience
 import {PrivatePostDetails} from '#/horizon/private/render/AudienceLabel'
 // HORIZON: private display: counts once prism serves them, who can reply once prism applies gates, links open directly
@@ -98,14 +104,18 @@ export function ThreadItemAnchor({
 
   return (
     <ReportDialogMetadataContext.Provider key={postShadow.uri}>
-      <ThreadItemAnchorInner
-        item={item}
-        isRoot={isRoot}
-        postShadow={postShadow}
-        onPostSuccess={onPostSuccess}
-        threadgateRecord={threadgateRecord}
-        postSource={postSource}
-      />
+      {/* HORIZON: identity ID-8: the anchor's fronters reach its author row and avatar (start) */}
+      <PostFrontersScope post={postShadow}>
+        <ThreadItemAnchorInner
+          item={item}
+          isRoot={isRoot}
+          postShadow={postShadow}
+          onPostSuccess={onPostSuccess}
+          threadgateRecord={threadgateRecord}
+          postSource={postSource}
+        />
+      </PostFrontersScope>
+      {/* HORIZON: identity ID-8: the anchor's fronters reach its author row and avatar (end) */}
     </ReportDialogMetadataContext.Provider>
   )
 }
@@ -206,6 +216,11 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
   const moderation = item.moderation
   const authorShadow = useProfileShadow(post.author)
   const {isActive: live} = useActorStatus(post.author)
+  // HORIZON: identity ID-13: the author link's label names the anchor's fronters in words
+  const fronterLabel = useFronterLinkLabel(
+    post.author,
+    moderation.ui('displayName'),
+  )
   const richText = useMemo(
     () =>
       // HORIZON: a CW post's line reads as a warning
@@ -367,10 +382,14 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
             <Link
               to={authorHref}
               style={[a.flex_1]}
-              label={sanitizeDisplayName(
-                post.author.displayName || sanitizeHandle(post.author.handle),
-                moderation.ui('displayName'),
-              )}
+              label={
+                // HORIZON: identity ID-13: the author link's label names the anchor's fronters in words
+                fronterLabel ??
+                sanitizeDisplayName(
+                  post.author.displayName || sanitizeHandle(post.author.handle),
+                  moderation.ui('displayName'),
+                )
+              }
               onPress={onOpenAuthor}>
               <View style={[a.flex_1, a.align_start]}>
                 <ProfileHoverCard did={post.author.did} style={[a.w_full]}>
@@ -384,11 +403,16 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
                         a.leading_snug,
                       ]}
                       numberOfLines={1}>
-                      {sanitizeDisplayName(
-                        post.author.displayName ||
-                          sanitizeHandle(post.author.handle),
-                        moderation.ui('displayName'),
-                      )}
+                      {/* HORIZON: identity ID-13: the anchor's fronters in place of the display name */}
+                      <FronterName
+                        did={post.author.did}
+                        moderation={moderation.ui('displayName')}
+                        fallback={sanitizeDisplayName(
+                          post.author.displayName ||
+                            sanitizeHandle(post.author.handle),
+                          moderation.ui('displayName'),
+                        )}
+                      />
                     </Text>
 
                     <View style={[a.pl_xs]}>
@@ -408,6 +432,12 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
                     numberOfLines={1}>
                     {sanitizeHandle(post.author.handle, '@')}
                   </Text>
+                  {/* HORIZON: identity ID-14: pronouns under the handle, each fronter's beside its name */}
+                  <PronounsText
+                    did={post.author.did}
+                    fallback={post.author.pronouns}
+                    full
+                  />
                 </ProfileHoverCard>
               </View>
             </Link>

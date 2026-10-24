@@ -39,6 +39,11 @@ import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
 import {useAppviewClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+// HORIZON: identity import
+import {
+  isLaterPage,
+  prefetchPageIdentities,
+} from '#/horizon/identity/page-prefetch'
 // HORIZON: the Private tab is retried while prism is busy
 import {privateQueryFn, privateRetryFor} from '#/horizon/private/api/transient'
 // HORIZON: feeds while prism is busy: the load gate, degraded pages and the carry
@@ -252,6 +257,10 @@ export function usePostFeedQuery(
       const res = await privateQueryFn(!!privateTabDid(feedDesc), context, () =>
         api.fetch({cursor, limit: fetchLimit}),
       )
+      // HORIZON: identity ID-23: warm the page's pronouns and fronters; a later page waits up to 250 ms
+      await prefetchPageIdentities(context.client, res.feed, {
+        later: isLaterPage(context.client, context.queryKey, cursor),
+      })
 
       /*
        * If this is a public view, we need to check if posts fail moderation.

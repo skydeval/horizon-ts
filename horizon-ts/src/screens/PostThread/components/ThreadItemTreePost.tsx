@@ -46,6 +46,8 @@ import {RichText} from '#/components/RichText'
 import * as Skele from '#/components/Skeleton'
 import {SubtleHover} from '#/components/SubtleHover'
 import {Text} from '#/components/Typography'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: links in a private post open directly
 import {proxiesPostLinks} from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
@@ -83,13 +85,17 @@ export function ThreadItemTreePost({
 
   return (
     <ReportDialogMetadataContext.Provider key={postShadow.uri}>
-      <ThreadItemTreePostInner
-        item={item}
-        postShadow={postShadow}
-        threadgateRecord={threadgateRecord}
-        overrides={overrides}
-        onPostSuccess={onPostSuccess}
-      />
+      {/* HORIZON: identity ID-7: the reply's fronters reach its author line and avatar (start) */}
+      <PostFrontersScope post={postShadow}>
+        <ThreadItemTreePostInner
+          item={item}
+          postShadow={postShadow}
+          threadgateRecord={threadgateRecord}
+          overrides={overrides}
+          onPostSuccess={onPostSuccess}
+        />
+      </PostFrontersScope>
+      {/* HORIZON: identity ID-7: the reply's fronters reach its author line and avatar (end) */}
     </ReportDialogMetadataContext.Provider>
   )
 }

@@ -31,6 +31,8 @@ import {useActorStatus} from '#/features/liveNow'
 import {EditLiveDialog} from '#/features/liveNow/components/EditLiveDialog'
 import {LiveIndicator} from '#/features/liveNow/components/LiveIndicator'
 import {LiveStatusDialog} from '#/features/liveNow/components/LiveStatusDialog'
+// HORIZON: identity import
+import {usePluralHeaderImages} from '#/horizon/identity/ProfileIdentity'
 import {type app} from '#/lexicons'
 import {GrowableAvatar} from './GrowableAvatar'
 import {GrowableBanner} from './GrowableBanner'
@@ -64,6 +66,8 @@ let ProfileHeaderShell = ({
 
   const aviRef = useAnimatedRef()
   const bannerRef = useAnimatedRef()
+  // HORIZON: identity ID-18: one engaging member's avatar and banner, the account's otherwise
+  const headerImages = usePluralHeaderImages(profile)
 
   const onPressBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -128,7 +132,8 @@ let ProfileHeaderShell = ({
       liveStatusControl.open()
     } else {
       const modui = moderation.ui('avatar')
-      const avatar = profile.avatar
+      // HORIZON: identity ID-18: the lightbox opens the avatar shown
+      const avatar = headerImages.avatar
       const type = profile.associated?.labeler ? 'rect-avi' : 'circle-avi'
       if (avatar && !(modui.blur && modui.noOverride)) {
         _openLightbox(avatar, aviRef, type)
@@ -137,6 +142,8 @@ let ProfileHeaderShell = ({
   }, [
     ax,
     profile,
+    // HORIZON: identity ID-18: the lightbox opens the avatar shown
+    headerImages.avatar,
     moderation,
     _openLightbox,
     aviRef,
@@ -147,11 +154,13 @@ let ProfileHeaderShell = ({
 
   const onPressBanner = useCallback(() => {
     const modui = moderation.ui('banner')
-    const banner = profile.banner
+    // HORIZON: identity ID-18: the lightbox opens the banner shown
+    const banner = headerImages.banner
     if (banner && !(modui.blur && modui.noOverride)) {
       _openLightbox(banner, bannerRef, 'image')
     }
-  }, [profile.banner, moderation, _openLightbox, bannerRef])
+    // HORIZON: identity ID-18: the lightbox opens the banner shown
+  }, [headerImages.banner, moderation, _openLightbox, bannerRef])
 
   return (
     <View style={t.atoms.bg} pointerEvents={IS_IOS ? 'auto' : 'box-none'}>
@@ -160,9 +169,11 @@ let ProfileHeaderShell = ({
         style={[a.relative, {height: PROFILE_BANNER_HEIGHT}]}>
         {!gtMobile && <StatusBarShadow />}
         <GrowableBanner
-          testID={profile.banner ? 'userBannerImage' : 'userBannerFallback'}
+          // HORIZON: identity ID-18: the banner shown
+          testID={headerImages.banner ? 'userBannerImage' : 'userBannerFallback'}
           label={
-            profile.banner
+            // HORIZON: identity ID-18: the banner shown
+            headerImages.banner
               ? l`View profile banner`
               : l`Profile banner placeholder`
           }
@@ -219,7 +230,8 @@ let ProfileHeaderShell = ({
           ) : (
             <UserBanner
               type={profile.associated?.labeler ? 'labeler' : 'default'}
-              banner={profile.banner}
+              // HORIZON: identity ID-18: one engaging member's banner, the account's otherwise
+              banner={headerImages.banner}
               moderation={moderation.ui('banner')}
             />
           )}
@@ -277,7 +289,8 @@ let ProfileHeaderShell = ({
               <UserAvatar
                 type={profile.associated?.labeler ? 'labeler' : 'user'}
                 size={live.isActive ? 88 : 90}
-                avatar={profile.avatar}
+                // HORIZON: identity ID-18: one engaging member's avatar, the account's otherwise
+                avatar={headerImages.avatar}
                 moderation={moderation.ui('avatar')}
                 noBorder
               />

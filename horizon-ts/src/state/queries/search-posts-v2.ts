@@ -11,6 +11,11 @@ import {
 import {useModerationOpts} from '#/state/preferences/moderation-opts'
 import {useAppviewClient} from '#/state/session'
 import {type SearchFilters} from '#/screens/Search/searchParams'
+// HORIZON: identity import
+import {
+  isLaterPage,
+  prefetchPageIdentities,
+} from '#/horizon/identity/page-prefetch'
 import {app} from '#/lexicons'
 import {
   appendFromMe,
@@ -69,7 +74,8 @@ export function useSearchPostsV2Query({
     string | undefined
   >({
     queryKey: searchPostsV2QueryKey({query, sort, filters}),
-    queryFn: async ({pageParam}) => {
+    // HORIZON: identity ID-23: the query client and key, for the page's identities
+    queryFn: async ({pageParam, client: queryClient, queryKey}) => {
       /*
        * Operators embedded in the query string (e.g. for back-compat links) are
        * merged with the explicit structured filters from the advanced search
@@ -87,7 +93,8 @@ export function useSearchPostsV2Query({
         filters,
       ) as app.bsky.feed.searchPostsV2.$Params
       const finalQuery = appendFromMe(q, filters?.from === 'me')
-      return await client.call(app.bsky.feed.searchPostsV2, {
+      // HORIZON: identity ID-23: the page is warmed before it is returned
+      const page = await client.call(app.bsky.feed.searchPostsV2, {
         ...builtFilters,
         query: finalQuery,
         limit: 25,
@@ -99,6 +106,11 @@ export function useSearchPostsV2Query({
         sort: sort === 'latest' ? 'recent' : sort,
         allTime: true,
       })
+      // HORIZON: identity ID-23: warm the page's pronouns and fronters; a later page waits up to 250 ms
+      await prefetchPageIdentities(queryClient, page.posts, {
+        later: isLaterPage(queryClient, queryKey, pageParam),
+      })
+      return page
     },
     initialPageParam: undefined,
     getNextPageParam: lastPage => lastPage.cursor,

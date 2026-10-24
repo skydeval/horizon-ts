@@ -58,6 +58,8 @@ import {IS_ANDROID, IS_NATIVE, IS_WEB, IS_WEB_TOUCH_DEVICE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
 import {LiveIndicator} from '#/features/liveNow/components/LiveIndicator'
 import {LiveStatusDialog} from '#/features/liveNow/components/LiveStatusDialog'
+// HORIZON: identity import
+import {useFronterAvatar} from '#/horizon/identity/hooks'
 import type * as bsky from '#/types/bsky'
 
 export type UserAvatarType = 'user' | 'algo' | 'list' | 'labeler'
@@ -563,6 +565,8 @@ let PreviewableUserAvatar = ({
   const status = useActorStatus(profile)
   const liveControl = useDialogControl()
   const haptics = useHaptics()
+  // HORIZON: identity ID-9: the single fronter's image on a post in scope, the account's otherwise
+  const fronterAvatar = useFronterAvatar(profile)
 
   const onPress = useCallback(() => {
     onBeforePress?.()
@@ -577,7 +581,8 @@ let PreviewableUserAvatar = ({
 
   const avatarEl = (
     <UserAvatar
-      avatar={profile.avatar}
+      // HORIZON: identity ID-9: the single fronter's image on a post in scope, the account's otherwise
+      avatar={fronterAvatar ?? profile.avatar}
       moderation={moderation}
       type={profile.associated?.labeler ? 'labeler' : 'user'}
       live={status.isActive || live}

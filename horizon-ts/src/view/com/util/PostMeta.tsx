@@ -20,6 +20,10 @@ import {ProfileHoverCard} from '#/components/ProfileHoverCard'
 import {Text} from '#/components/Typography'
 import {IS_ANDROID} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: identity import
+import {FronterName, useFronterLinkLabel} from '#/horizon/identity/FronterName'
+// HORIZON: identity import
+import {PronounsText} from '#/horizon/identity/PronounsText'
 // HORIZON: a private post carries a lock at the right end of its meta row
 import {PrivateHeaderLock} from '#/horizon/private/render/PrivateBadge'
 // HORIZON: the reader's own private post prism has not served yet reads "Syncing"
@@ -60,6 +64,11 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
 
   const timestampLabel = niceDate(i18n, opts.timestamp)
   const {isActive: live} = useActorStatus(author)
+  // HORIZON: identity ID-1: the name link's label names a post's fronters in words
+  const fronterLabel = useFronterLinkLabel(
+    author,
+    opts.moderation?.ui('displayName'),
+  )
 
   const MaybeLinkText = opts.linkDisabled ? Text : WebOnlyInlineLinkText
 
@@ -94,7 +103,8 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
               emoji
               numberOfLines={1}
               to={profileLink}
-              label={_(msg`View profile`)}
+              // HORIZON: identity ID-1: the name link's label names a post's fronters in words
+              label={fronterLabel ?? _(msg`View profile`)}
               disableMismatchWarning
               onPress={opts.linkDisabled ? undefined : onBeforePressAuthor}
               style={[
@@ -106,12 +116,17 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
                 {maxWidth: '70%'},
                 web({direction: 'ltr', unicodeBidi: 'isolate'}),
               ]}>
-              {forceLTR(
-                sanitizeDisplayName(
-                  displayName,
-                  opts.moderation?.ui('displayName'),
-                ),
-              )}
+              {/* HORIZON: identity ID-1: a post's fronters in place of the display name */}
+              <FronterName
+                did={author.did}
+                moderation={opts.moderation?.ui('displayName')}
+                fallback={forceLTR(
+                  sanitizeDisplayName(
+                    displayName,
+                    opts.moderation?.ui('displayName'),
+                  ),
+                )}
+              />
             </MaybeLinkText>
             <ProfileBadges
               profile={author}
@@ -122,7 +137,8 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
               emoji
               numberOfLines={1}
               to={profileLink}
-              label={_(msg`View profile`)}
+              // HORIZON: identity ID-1: the name link's label names a post's fronters in words
+              label={fronterLabel ?? _(msg`View profile`)}
               disableMismatchWarning
               disableUnderline
               onPress={opts.linkDisabled ? undefined : onBeforePressAuthor}
@@ -134,6 +150,8 @@ let PostMeta = (opts: PostMetaOpts): React.ReactNode => {
               ]}>
               {NON_BREAKING_SPACE + sanitizeHandle(handle, '@')}
             </MaybeLinkText>
+            {/* HORIZON: identity ID-2: pronouns after the handle */}
+            <PronounsText did={author.did} fallback={author.pronouns} inline />
           </View>
         </ProfileHoverCard>
 

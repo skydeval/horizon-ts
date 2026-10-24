@@ -23,13 +23,16 @@ import {type $Typed} from '@atproto/lex'
 import {type DatetimeString, isValidLanguage} from '@atproto/syntax'
 import {RichText} from '@bsky/sdk/richtext'
 
+import {readFronters} from '#/horizon/identity/fronters'
 import {
   type PostPrivate,
   type PostPrivateEmbed,
   type PostPrivateFacet,
 } from '#/horizon/lexicons/kryphocron'
+import {PLURAL_FRONTERS_KEY} from '#/horizon/lexicons/nearhorizon'
 import {CW_SELF_LABEL, isFlagged, withFlag} from '#/horizon/media-spoilers/nsid'
 import {
+  pluralFrontersServed,
   PRIVATE_GALLERY,
   PRIVATE_LANGS_LABELS,
   PRIVATE_MEDIA_EXTRAS,
@@ -487,7 +490,8 @@ function detectLocalRecordFacets(
  * locally detected links and hashtags while prism does not serve facets
  * (`privateFacetsServed`). Returns `undefined` when the record is not a
  * private post record or its text is not a string. A reply ref without a
- * `cid` is kept as served; the adapter fills or drops it.
+ * `cid` is kept as served; the adapter fills or drops it. The post's
+ * fronters are copied while prism serves them (`copyFronters`).
  */
 export function toBskyRecord(
   record: unknown,
@@ -531,5 +535,24 @@ export function toBskyRecord(
       values: labelValues.map(val => ({val})),
     }
   }
+  copyFronters(record, converted)
   return converted
+}
+
+/**
+ * The post's fronters, carried in the clear beside `audienceList` (Phase 5
+ * design 9, PP-7), copied into the stock shape under the same key so the
+ * same scope and components render them (B-11). Only while prism lists
+ * `plural.fronters`, and only a value that reads as fronters (4.2): this
+ * runs on views prism served to this reader now, so a stand-in, an
+ * outbox copy or an off-site preview never gains them.
+ */
+function copyFronters(
+  record: Record<string, unknown>,
+  converted: $Typed<app.bsky.feed.post.Main>,
+) {
+  if (!pluralFrontersServed()) return
+  const value = record[PLURAL_FRONTERS_KEY]
+  if (!readFronters(record)) return
+  ;(converted as Record<string, unknown>)[PLURAL_FRONTERS_KEY] = value
 }

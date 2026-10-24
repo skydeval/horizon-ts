@@ -37,6 +37,8 @@ import {isStandardSiteEmbed} from '#/components/Post/Embed/StandardSiteEmbed/uti
 import {RichText} from '#/components/RichText'
 import {Embed as StarterPackCard} from '#/components/StarterPack/StarterPackCard'
 import {SubtleHover} from '#/components/SubtleHover'
+// HORIZON: identity import
+import {PostFrontersScope} from '#/horizon/identity/scope'
 // HORIZON: a post's flagged images and videos are covered until pressed
 import {MediaSpoilerScope} from '#/horizon/media-spoilers/MediaSpoilerScope'
 // HORIZON: a private post's link card is the plain card, whose link is not proxied
@@ -454,14 +456,18 @@ export function QuoteEmbed({
 
   const contents = (
     <ReportDialogMetadataContext.Provider key={quote.uri}>
-      <PostMeta
-        author={quote.author}
-        moderation={moderation}
-        showAvatar
-        postHref={itemHref}
-        timestamp={quote.indexedAt}
-        linkDisabled
-      />
+      {/* HORIZON: identity ID-15: the quoted post's fronters reach its author line (start) */}
+      <PostFrontersScope post={quote}>
+        <PostMeta
+          author={quote.author}
+          moderation={moderation}
+          showAvatar
+          postHref={itemHref}
+          timestamp={quote.indexedAt}
+          linkDisabled
+        />
+      </PostFrontersScope>
+      {/* HORIZON: identity ID-15: the quoted post's fronters reach its author line (end) */}
       {moderation ? (
         <PostAlerts
           post={quote}
