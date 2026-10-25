@@ -185,6 +185,10 @@ summary in `docs/design/pronouns-and-plural-systems.md`).
   front indicator, "Set front", or a "Change front" fallback while the front
   loads or can't be read, and from the member list; focus returns to what
   opened it.
+- **Opening the account menu no longer crashes the app on web** ("Oh no!",
+  "doesn't have an indexed property setter for '0'"). Once a second account
+  was signed in, its row in the left nav's account menu carried a style the
+  menu passed on unflattened; every web menu item now flattens its style.
 - **Adding a system account no longer goes blank after Next.** The dialog
   showed only its title once a handle was entered; it now shows the sign-in
   step. A step that ever loses its registration says "Something went wrong.

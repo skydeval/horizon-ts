@@ -249,10 +249,15 @@ export function Outer({children, style, onCloseAutoFocus}: OuterProps) {
   )
 }
 
-export function Item(props: ItemProps) {
+/*
+ * HORIZON: Radix's `asChild` merges `style` with an object spread, so an
+ * array style (`[a.gap_sm, {minWidth: 150}]`) became `{0: ..., 1: ...}` and
+ * the browser threw on setting style "0". Every item kind flattens it first.
+ */
+export function Item({style, ...props}: ItemProps) {
   return (
     <DropdownMenu.Item asChild>
-      <ItemPressable {...props} />
+      <ItemPressable {...props} style={flatten(style)} />
     </DropdownMenu.Item>
   )
 }
@@ -261,13 +266,13 @@ export function Item(props: ItemProps) {
  * A single choice inside a `RadioGroup`: `role="menuitemradio"` with
  * `aria-checked`, from Radix. Show the state with `ItemRadio` too.
  */
-export function RadioItem({value, ...props}: RadioItemProps) {
+export function RadioItem({value, style, ...props}: RadioItemProps) {
   return (
     <DropdownMenu.RadioItem
       asChild
       value={value}
       disabled={Boolean(props.disabled)}>
-      <ItemPressable {...props} choice="radio" />
+      <ItemPressable {...props} style={flatten(style)} choice="radio" />
     </DropdownMenu.RadioItem>
   )
 }
@@ -277,13 +282,13 @@ export function RadioItem({value, ...props}: RadioItemProps) {
  * from Radix. Pressing toggles and keeps the menu open. Show the state with
  * a visible mark too.
  */
-export function CheckboxItem({checked, ...props}: CheckboxItemProps) {
+export function CheckboxItem({checked, style, ...props}: CheckboxItemProps) {
   return (
     <DropdownMenu.CheckboxItem
       asChild
       checked={checked}
       disabled={Boolean(props.disabled)}>
-      <ItemPressable {...props} choice="checkbox" />
+      <ItemPressable {...props} style={flatten(style)} choice="checkbox" />
     </DropdownMenu.CheckboxItem>
   )
 }
