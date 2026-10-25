@@ -391,9 +391,11 @@ export const ACT_AS_CONTROLS: boolean = true
  * the current account and its registered system accounts. `false`: no
  * section and no prism call, and Posting as and Act as offer the current
  * account only (members still), never the other switcher accounts (S-1).
- * Off until prism ships SP-1 (`account.systemAccounts`).
+ * On for testers since prism serves SP-1 (`account.systemAccounts`,
+ * 2026-10-25); a prism without it answers 501 and the section says the
+ * feature isn't available.
  */
-export const SYSTEM_ACCOUNTS: boolean = false
+export const SYSTEM_ACCOUNTS: boolean = true
 
 /**
  * Development builds only, off by default: the five system-account methods

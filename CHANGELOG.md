@@ -115,8 +115,8 @@ summary in `docs/design/pronouns-and-plural-systems.md`).
   "Sign in on this device" on another one. Remove puts a row back if prism
   can't be reached. Signed in as a registered account, its own Plurality tab
   says whether some account can post as it, with "Leave every system".
-  Status changes are announced to screen readers on every platform. Behind
-  the `SYSTEM_ACCOUNTS` switch.
+  Status changes are announced to screen readers on every platform. The
+  `SYSTEM_ACCOUNTS` switch is on.
 - **Thread Lens shows your labelers' labels:** it sends your chosen labelers
   to prism, takes their labels from its answer and merges them with the public
   AppView's, without repeats. A labeler's hide makes the post a placeholder.
