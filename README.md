@@ -15,9 +15,8 @@ members of the Horizon network.
 
 - **Sign in with OAuth or a password**, against any PDS, with a switcher
   for which public AppView you read from.
-- **Kryphocron posts** (labelled "Private" in the app): posts whose content
-  is encoded before it is stored and shown only to the audience you choose. This is
-  friction, not encryption. See [the design](docs/design/kryphocron-posts.md).
+- **Kryphocron posts** (labelled "Private" in the app): posts shown only to
+  the audience you choose.
 - **Spoilers and content warnings**: `||inline spoilers||`, per-image
   spoiler blur, and Mastodon-style content warnings.
 - **Backdrops and glass themes**: gradient backdrops behind the app, with
@@ -33,8 +32,7 @@ members of the Horizon network.
   hosts them.
 - **Pronouns and plural systems**: pronouns beside every name, plural
   system profiles with members and front, posts that show which members
-  wrote them, and posting as another signed-in account or as members. See
-  [the design](docs/design/pronouns-and-plural-systems.md).
+  wrote them, and posting as another signed-in account or as members.
 - **Planned**: polls and fundraisers.
 
 ## Status
@@ -50,7 +48,7 @@ goal: web comes first.
 |---|---|
 | `horizon-ts/` | The app: a git subtree of Bluesky's social-app, merged from upstream from time to time |
 | `horizon-ts/src/horizon/` | Horizon's own code. Changes to Bluesky's files are small hooks marked `HORIZON:` |
-| `docs/` | Documentation: overview, architecture and per-feature designs |
+| `docs/` | Documentation: overview and architecture |
 | `CHANGELOG.md` | What has changed so far |
 
 ## Read more
@@ -59,8 +57,6 @@ goal: web comes first.
   vocabulary.
 - [Architecture](docs/architecture.md): the servers Horizon talks to and how
   calls are routed.
-- [Design docs](docs/design/README.md): one page per feature, built and
-  planned.
 
 ## Credits and licenses
 

@@ -95,7 +95,7 @@ part of the interface. When prism doesn't list it, that part stays hidden or
 uses a simpler interim behaviour.
 
 When prism is busy or catching up, Horizon keeps your membership as it was
-and handles the gap quietly. See [prism busy or behind](design/prism-busy.md).
+and handles the gap quietly.
 
 ## Inside the app
 
@@ -111,7 +111,7 @@ that work:
   guard or component, with a `// HORIZON:` comment on the line above.
   `git grep -n "HORIZON:"` lists them all.
 - **Switches.** Most hooks are guarded by a constant in
-  `src/horizon/switches.ts`. Turning one off restores Bluesky's behaviour at
+  `horizon-ts/src/horizon/switches.ts`. Turning one off restores Bluesky's behaviour at
   that hook.
 - **Bluesky's types aren't widened.** Horizon data that travels with a
   Bluesky object, such as the audience of a kryphocron post, sits in a side

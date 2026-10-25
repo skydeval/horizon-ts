@@ -11,9 +11,7 @@ references.
 ## [Unreleased]
 
 Work since Phase 4 closed. Phase 5, pronouns and plural systems, is built on
-web and waiting on its live checks (design: internal,
-`docs/internal/design/phase-5-pronouns-plural.md`, steps 5A to 5E; public
-summary in `docs/design/pronouns-and-plural-systems.md`).
+web and waiting on its live checks.
 
 ### Added
 
@@ -247,10 +245,7 @@ summary in `docs/design/pronouns-and-plural-systems.md`).
 A public thread keeps its whole shape around posts hidden by blocks or
 deleted, with a labelled placeholder in each gap, for every signed-in reader.
 
-Design: internal, `docs/internal/design/phase-4-thread-lens.md`, steps 4A to
-4C, with 4D's live checks passed; speed notes in
-`docs/internal/notes/thread-lens-speed.md`; public summary in
-`docs/design/thread-lens.md`. Built on web; native is not yet verified.
+Built on web, with its live checks passed; native is not yet verified.
 
 ### Added
 
@@ -308,10 +303,8 @@ operator trusts still hosts, can be viewed and used in Horizon like any other
 account. Refract is prism's service for them, and this is Horizon's side of
 it, a track of its own outside the numbered phases.
 
-Design: internal, `docs/internal/design/refract-client.md` and
-`docs/internal/design/refract-client-feeds.md`; public summary in
-`docs/design/refract.md`. Built on web; reply references in other feeds, and
-notifications, are still to come.
+Built on web; reply references in other feeds, and notifications, are still
+to come.
 
 ### Added
 
@@ -353,8 +346,7 @@ Backdrops behind the app on every screen size, with light, dim and dark as
 glass over them, and appearance that follows the account. The change lists
 from skydeval's live checks are part of this phase.
 
-Design: internal, `docs/internal/design/phase-3-backdrops-themes.md`; public
-summary in `docs/design/backdrops-and-themes.md`. Steps 3A to 3F: desktop,
+Steps 3A to 3F: desktop,
 tablet and phone web, with the native pieces built but not yet verified, then
 change lists 1 to 3 from skydeval's live checks.
 
@@ -494,8 +486,7 @@ change lists 1 to 3 from skydeval's live checks.
   `EXPO_PUBLIC_PREVIEW_ORIGIN`), with its own client document written into the
   build output, single-page routing and headers for Pages, private share links
   on the preview's own origin, and `scripts/preview-build.sh` (`build`,
-  `deploy`, `info`) for silonew. How-to (internal):
-  `docs/internal/notes/preview-deploy.md`.
+  `deploy`, `info`) for silonew.
 
 ### Changed
 
@@ -547,17 +538,7 @@ choose, beside public ones across the app, with spoiler tags, media spoilers
 and content warnings for everyone. Private-post work done during Phase 3's
 live checks is listed here, by subject.
 
-Design: internal, `docs/internal/design/phase-2-private-posting.md`, steps 2A
-to 2D, 2F-1 to 2F-5, the v2 fix batch and its round 2 and round 3 fixes, 2G
-spoiler tags, 2H, adopting what prism serves
-(`docs/internal/design/phase-2h-prism-features.md`, 2H-1 to 2H-9), 2J, media
-spoilers and content warnings, and 2K, private posting from any PDS
-(`docs/internal/design/phase-2k-private-posting-any-pds.md`), with the
-follow-on designs for busy prism, hidden replies, reply blocks and private
-activity subscriptions; public summaries in `docs/design/kryphocron-posts.md`,
-`docs/design/spoilers-and-content-warnings.md`, `docs/design/prism-busy.md`,
-`docs/design/hidden-replies.md` and `docs/design/reply-blocks.md`. The parts
-that wait on server support are switched off until it lands.
+The parts that wait on server support are switched off until it lands.
 
 ### Added
 
@@ -716,8 +697,7 @@ that wait on server support are switched off until it lands.
   this" line, and a branch root's warning says the author's own replies inside
   it are checked too. Placing a reply deep in a private branch reads the
   branch in one request instead of one per level.
-- **Spoiler tags** (design: internal,
-  `docs/internal/design/phase-2-spoilers.md`, step 2G), for everyone. Write
+- **Spoiler tags**, for everyone. Write
   `||secret||`, or select text and press the composer's spoiler button (web),
   and the text is covered until the reader presses it, in feeds, threads,
   quotes, notifications, Saved, search, the video feed and the reply preview;
@@ -739,8 +719,7 @@ that wait on server support are switched off until it lands.
 - **Who can see and interact:** on web, the drop-down stays open while you
   choose, in every section, and closes on a click outside it or on its button.
   It no longer narrows when it grows tall enough to scroll.
-- **Media spoilers and content warnings** (design: internal,
-  `docs/internal/design/phase-2j-media-spoilers-cw.md`, step 2J).
+- **Media spoilers and content warnings.**
   - **Mark as spoiler:** the image alt text dialog and the video captions
     dialog have a "Mark as spoiler" checkbox, and a flagged thumbnail in the
     composer shows a "Spoiler" badge. The post records the flag on that image
@@ -862,22 +841,19 @@ that wait on server support are switched off until it lands.
   never a server's, and nothing is retried or deleted without you.
 - `NOTICE.md` credits kryphocron-web (MPL-2.0), which private posting from any
   PDS uses, with its licence text.
-- **Hidden replies on private threads** (design: internal,
-  `docs/internal/design/private-hidden-replies.md`). A reply the original
+- **Hidden replies on private threads.** A reply the original
   poster hid collapses under the stock "Show more replies" row, fetched in the
   background so it shows without a wait when pressed. The original poster sees
   it marked "Reply Hidden by You" and can choose "Show reply for everyone";
   others see it plainly, and its author still sees it in place. "Hide reply
   for everyone" is also offered on a private reply under a public post. The
   row appears only when something is behind it.
-- **New private posts arrive at the top of Following** like public ones
-  (design: internal, `docs/internal/design/following-new-private-posts.md`):
+- **New private posts arrive at the top of Following** like public ones:
   on native they are staged above your place without moving it, with the Home
   dot and the pill; on web they light the new-posts button and the Home dot.
   Your own new private post is staged before prism serves it, and a staged
   post that is deleted drops out at the next check.
-- **Replies across a block are refused** (design: internal,
-  `docs/internal/design/kryphocron-blocks-on-public-replies.md`). A private
+- **Replies across a block are refused.** A private
   reply is refused, with nothing written or uploaded, when you and the author
   being replied to, or you and the thread's owner (its original poster, or the
   author whose private reply started that branch), are blocked in either
@@ -887,8 +863,7 @@ that wait on server support are switched off until it lands.
   blocked whom. A block with anyone else higher up the thread doesn't stop the
   reply. The check is made again just before the post is written, and if it
   can't be made, nothing is written either.
-- **When prism is busy or behind** (design: internal,
-  `docs/internal/design/prism-busy-resilience.md`). A slow or catching-up
+- **When prism is busy or behind.** A slow or catching-up
   prism no longer makes a member look like a non-member, and a re-indexing
   account stays a member. What is on screen stays. Your own private posts that
   prism hasn't served yet stay, labelled "Syncing", and are no longer dropped
@@ -901,8 +876,7 @@ that wait on server support are switched off until it lands.
   moment.", and goes to Unsent; replies to your own posts still work. Waits
   are capped (30 s for a thread or list, then "Couldn't load right now" with
   "Try again"; 2 s for a quote).
-- **Private activity subscriptions** (design: internal,
-  `docs/internal/design/private-activity-subscriptions.md`): the profile
+- **Private activity subscriptions**: the profile
   bell's dialog gains "Private posts" and "Private replies" toggles for
   members, under "Subscribe to account activity in private posts", saved to
   prism; the bell lights if any toggle is on, and Save closes the dialog at
@@ -963,8 +937,6 @@ that wait on server support are switched off until it lands.
 OAuth sign-in beside the password sign-in, signup on any server, and the two
 AppViews Horizon talks to: prism, always connected, and a public one.
 
-Design: internal, `docs/internal/design/phase-1-login-and-wiring.md`.
-
 ### Added
 
 - **OAuth sign-in on web**, beside the password sign-in: the sign-in form has
@@ -1019,8 +991,6 @@ Bluesky's social-app imported as Horizon's base, with Horizon's own code in
 its own folder, Bluesky's telemetry and age assurance switched off, and the
 umbrella design that sets the build order.
 
-Design: internal, `docs/internal/design/phase-0-foundations.md`.
-
 ### Added
 
 - `horizon-ts/src/horizon/` holds Horizon's own code: fixed switches
@@ -1038,18 +1008,14 @@ Design: internal, `docs/internal/design/phase-0-foundations.md`.
   once for every Bluesky release.
 - **`.gitignore`** for internal docs and local tooling (`docs/internal`,
   `.chainlink`, `.claude`).
-- **The umbrella design for the Horizon client** (internal,
-  `docs/internal/design/design.md`), drafted as `design-v1.md` and taken
-  through a six-pass adversarial review that ended clean (reviews in
-  `docs/internal/review/`). It sets what the client is, who gets which
+- **The umbrella design for the Horizon client** (internal). It sets what
+  the client is, who gets which
   features, how Horizon code sits beside Bluesky's so upstream keeps merging,
   and the build order: foundations, login and server wiring, private posting,
   backdrops, Thread Lens, pronouns and plural systems, polls, then release on
   web.
-- **Recon on running Horizon's own link-card service** (internal,
-  `docs/internal/recon/cardyb-hosting.md`).
-- **Recon on hosting a LibreTranslate instance** (internal,
-  `docs/internal/recon/libretranslate-hosting.md`). Not adopted: posts
+- **Recon on running Horizon's own link-card service** (internal).
+- **Recon on hosting a LibreTranslate instance** (internal). Not adopted: posts
   translate in place through the browser where it can, and through Google
   Translate otherwise.
 - **This changelog.**

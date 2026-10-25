@@ -14,8 +14,7 @@ On top of that, Horizon connects to **prism**, an AppView that serves
 Horizon's own features. Some of these work for anyone who signs in. Others
 are for members of the Horizon network.
 
-Horizon is in early development. See [the design index](design/README.md)
-for what is built and what is planned.
+Horizon is in early development.
 
 ## Who gets what
 
@@ -50,36 +49,11 @@ experience and a short note.
 - **locus**: aurora-locus, a PDS with kryphocron support built in, at
   `locus.nearhorizon.app`. Members can be hosted there or anywhere else.
 - **kryphocron**: a set of atproto record types (`tools.kryphocron.*`) for
-  posts whose content is encoded and whose readers are limited to an
-  audience.
+  posts shown only to a chosen audience.
 - **Kryphocron post**: a post written as a kryphocron record. The app labels
-  these **Private**, with a lock icon. These docs say "kryphocron post",
-  because "private" can mean many things, and these posts are not secret
-  (see below).
+  these **Private**, with a lock icon.
 - **Public post**: an ordinary `app.bsky.feed.post`.
-
-## What kryphocron posts are, and what they are not
-
-A kryphocron post's text, links and embeds are encoded in the record on the
-author's PDS, so ordinary clients, feeds and search indexes don't show its
-content. prism decodes posts and serves each one only to the readers its
-audience allows.
-
-That is **friction, not encryption**:
-
-- The encoding format is public. Anyone with the right software and the
-  record can read it.
-- That a post exists is not hidden, and some fields stay readable in the
-  record: what it replies to, which audience it uses, which accounts it
-  mentions, what it quotes, and references to its images.
-- Images and video are stored as ordinary blobs on the author's PDS.
-- prism's operator can read every kryphocron post prism serves.
-
-Use kryphocron posts to keep a post off public surfaces and in front of the
-people you chose. Don't use them for anything that would be dangerous if it
-were read by someone else.
 
 ## Where to go next
 
 - [Architecture](architecture.md): the servers and how Horizon talks to them.
-- [Design docs](design/README.md): each feature in detail.
