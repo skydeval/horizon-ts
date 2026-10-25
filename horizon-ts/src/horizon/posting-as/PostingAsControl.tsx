@@ -170,8 +170,14 @@ function PostingMenu({
           )}
         </Menu.Trigger>
         <Menu.Outer style={[{minWidth: 260, maxWidth: 360}]}>
+          {/*
+           * The accounts are a radio group and the members a checkbox group,
+           * so a screen reader hears which are chosen (SAR2-L5). Each also
+           * shows a mark, never colour alone. Labels sit outside the groups:
+           * a native group renders only its items.
+           */}
           {multiple ? (
-            <Menu.Group>
+            <>
               <Menu.LabelText>
                 <Trans>Post from</Trans>
               </Menu.LabelText>
@@ -180,52 +186,64 @@ function PostingMenu({
                   <Trans>Remove the video to post from another account</Trans>
                 </Menu.LabelText>
               ) : null}
-              {accounts.map(account => {
-                const name = sanitizeHandle(account.handle)
-                return (
-                  <Menu.Item
-                    key={account.did}
-                    testID={`composerPostingAs-${account.handle}`}
-                    label={l`Post from @${name}`}
-                    disabled={s.hasVideo && account.did !== s.currentDid}
-                    onPress={() => choosePostingAccount(account.did)}>
-                    <Menu.ItemText>{`@${name}`}</Menu.ItemText>
-                    <Menu.ItemRadio selected={account.did === s.did} />
-                  </Menu.Item>
-                )
-              })}
-            </Menu.Group>
+              <Menu.RadioGroup label={l`Post from`} value={s.did}>
+                {accounts.map(account => {
+                  const name = sanitizeHandle(account.handle)
+                  return (
+                    <Menu.RadioItem
+                      key={account.did}
+                      value={account.did}
+                      testID={`composerPostingAs-${account.handle}`}
+                      label={l`Post from @${name}`}
+                      disabled={s.hasVideo && account.did !== s.currentDid}
+                      onPress={() => choosePostingAccount(account.did)}>
+                      <Menu.ItemText>{`@${name}`}</Menu.ItemText>
+                      <Menu.ItemRadio selected={account.did === s.did} />
+                    </Menu.RadioItem>
+                  )
+                })}
+              </Menu.RadioGroup>
+            </>
           ) : null}
           {isSystem ? (
             <>
               {multiple ? <Menu.Divider /> : null}
-              <Menu.Group>
+              <Menu.LabelText>
+                <Trans>Members of @{handle}</Trans>
+              </Menu.LabelText>
+              {held ? (
+                <View
+                  testID="composerPostingAsMembersHeld"
+                  style={[a.flex_row, a.align_center, a.gap_sm, a.px_md]}>
+                  <ActivityIndicator size="small" />
+                </View>
+              ) : null}
+              {shownMembers.length > 0 ? (
+                <Menu.CheckboxGroup label={l`Members of @${handle}`}>
+                  {shownMembers.map(member => {
+                    const selected = s.members.includes(member.rkey)
+                    return (
+                      <Menu.CheckboxItem
+                        key={member.rkey}
+                        checked={selected}
+                        testID={`composerPostingAsMember-${member.rkey}`}
+                        label={l`Post as ${formatMemberLabel(member.value)}`}
+                        disabled={held || (atCap && !selected)}
+                        onPress={() => togglePostingMember(member.rkey)}>
+                        <MemberItemContent member={member} />
+                        <MenuCheck selected={selected} />
+                      </Menu.CheckboxItem>
+                    )
+                  })}
+                </Menu.CheckboxGroup>
+              ) : null}
+              {atCap ? (
                 <Menu.LabelText>
-                  <Trans>Members of @{handle}</Trans>
+                  <Trans>Up to 20 members</Trans>
                 </Menu.LabelText>
-                {held ? (
-                  <View
-                    testID="composerPostingAsMembersHeld"
-                    style={[a.flex_row, a.align_center, a.gap_sm, a.px_md]}>
-                    <ActivityIndicator size="small" />
-                  </View>
-                ) : null}
-                {shownMembers.map(member => (
-                  <MemberItem
-                    key={member.rkey}
-                    member={member}
-                    selected={s.members.includes(member.rkey)}
-                    disabled={
-                      held || (atCap && !s.members.includes(member.rkey))
-                    }
-                  />
-                ))}
-                {atCap ? (
-                  <Menu.LabelText>
-                    <Trans>Up to 20 members</Trans>
-                  </Menu.LabelText>
-                ) : null}
-                {isCurrent && PLURAL_EDITING ? (
+              ) : null}
+              {isCurrent && PLURAL_EDITING ? (
+                <Menu.Group>
                   <Menu.Item
                     testID="composerPostingAsEditFront"
                     label={l`Edit front…`}
@@ -234,8 +252,8 @@ function PostingMenu({
                       <Trans>Edit front…</Trans>
                     </Menu.ItemText>
                   </Menu.Item>
-                ) : null}
-              </Menu.Group>
+                </Menu.Group>
+              ) : null}
             </>
           ) : null}
         </Menu.Outer>
@@ -285,43 +303,26 @@ const styles = StyleSheet.create({
   },
 })
 
-function MemberItem({
-  member,
-  selected,
-  disabled,
-}: {
-  member: ListedMember
-  selected: boolean
-  disabled: boolean
-}) {
+/**
+ * A member row's swatch, name and pronouns. The `CheckboxItem` stays a direct
+ * child of its group, which a native group needs to render it.
+ */
+function MemberItemContent({member}: {member: ListedMember}) {
   const t = useTheme()
-  const {t: l} = useLingui()
-  const name = formatMemberLabel(member.value)
   const pronouns = formatSets(member.value.pronouns)
   return (
-    <Menu.Item
-      testID={`composerPostingAsMember-${member.rkey}`}
-      label={selected ? l`Stop posting as ${name}` : l`Post as ${name}`}
-      disabled={disabled}
-      onPress={e => {
-        // Keeps the menu open on web, so several members can be checked.
-        e.preventDefault()
-        togglePostingMember(member.rkey)
-      }}>
-      <View style={[a.flex_1, a.flex_row, a.align_center, a.gap_xs]}>
-        <MemberSwatch color={member.value.color} size={8} />
-        <View style={[a.flex_1]}>
-          <Menu.ItemText>{name}</Menu.ItemText>
-          {pronouns ? (
-            <Text
-              emoji
-              style={[a.text_xs, a.leading_snug, t.atoms.text_contrast_medium]}>
-              {pronouns}
-            </Text>
-          ) : null}
-        </View>
+    <View style={[a.flex_1, a.flex_row, a.align_center, a.gap_xs]}>
+      <MemberSwatch color={member.value.color} size={8} />
+      <View style={[a.flex_1]}>
+        <Menu.ItemText>{formatMemberLabel(member.value)}</Menu.ItemText>
+        {pronouns ? (
+          <Text
+            emoji
+            style={[a.text_xs, a.leading_snug, t.atoms.text_contrast_medium]}>
+            {pronouns}
+          </Text>
+        ) : null}
       </View>
-      <MenuCheck selected={selected} />
-    </Menu.Item>
+    </View>
   )
 }

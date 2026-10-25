@@ -8,6 +8,10 @@ Context.displayName = 'MenuContext'
 export const ItemContext = createContext<ItemContextType | null>(null)
 ItemContext.displayName = 'MenuItemContext'
 
+/** The checked value of the enclosing `RadioGroup`. */
+export const RadioGroupContext = createContext<string | undefined>(undefined)
+RadioGroupContext.displayName = 'MenuRadioGroupContext'
+
 export function useMenuContext() {
   const context = useContext(Context)
 

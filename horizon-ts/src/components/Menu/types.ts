@@ -126,3 +126,40 @@ export type ItemIconProps = React.PropsWithChildren<{
 }>
 
 export type GroupProps = React.PropsWithChildren<ViewStyleProp & {}>
+
+/*
+ * Choice groups (Horizon). The plain `Item` with a visual `ItemRadio` reads
+ * as a bare "menu item" to a screen reader, with no checked state. These
+ * expose the choice: `menuitemradio` / `menuitemcheckbox` with
+ * `aria-checked` on web, `radio` / `checkbox` with a checked
+ * `accessibilityState` on native.
+ */
+
+export type RadioGroupProps = React.PropsWithChildren<
+  ViewStyleProp & {
+    /** Names the group for assistive technology. */
+    label: string
+    /** The checked item's `value`; none checked when undefined. */
+    value: string | undefined
+  }
+>
+
+/**
+ * A single choice. Checked when its `value` is its group's. Pressing closes
+ * the menu, unless the press is default-prevented (web).
+ */
+export type RadioItemProps = Omit<ItemProps, 'destructive'> & {
+  value: string
+}
+
+export type CheckboxGroupProps = React.PropsWithChildren<
+  ViewStyleProp & {
+    /** Names the group for assistive technology. */
+    label: string
+  }
+>
+
+/** One of several choices. Pressing toggles it and keeps the menu open. */
+export type CheckboxItemProps = Omit<ItemProps, 'destructive'> & {
+  checked: boolean
+}

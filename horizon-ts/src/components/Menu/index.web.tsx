@@ -22,12 +22,16 @@ import {
   useMenuItemContext,
 } from '#/components/Menu/context'
 import {
+  type CheckboxGroupProps,
+  type CheckboxItemProps,
   type ContextType,
   type GroupProps,
   type ItemIconProps,
   type ItemProps,
   type ItemTextProps,
   type OuterProps,
+  type RadioGroupProps,
+  type RadioItemProps,
   type RadixPassThroughTriggerProps,
   type TriggerProps,
 } from '#/components/Menu/types'
@@ -245,14 +249,72 @@ export function Outer({children, style, onCloseAutoFocus}: OuterProps) {
   )
 }
 
-export function Item({
+export function Item(props: ItemProps) {
+  return (
+    <DropdownMenu.Item asChild>
+      <ItemPressable {...props} />
+    </DropdownMenu.Item>
+  )
+}
+
+/**
+ * A single choice inside a `RadioGroup`: `role="menuitemradio"` with
+ * `aria-checked`, from Radix. Show the state with `ItemRadio` too.
+ */
+export function RadioItem({value, ...props}: RadioItemProps) {
+  return (
+    <DropdownMenu.RadioItem
+      asChild
+      value={value}
+      disabled={Boolean(props.disabled)}>
+      <ItemPressable {...props} choice="radio" />
+    </DropdownMenu.RadioItem>
+  )
+}
+
+/**
+ * One of several choices: `role="menuitemcheckbox"` with `aria-checked`,
+ * from Radix. Pressing toggles and keeps the menu open. Show the state with
+ * a visible mark too.
+ */
+export function CheckboxItem({checked, ...props}: CheckboxItemProps) {
+  return (
+    <DropdownMenu.CheckboxItem
+      asChild
+      checked={checked}
+      disabled={Boolean(props.disabled)}>
+      <ItemPressable {...props} choice="checkbox" />
+    </DropdownMenu.CheckboxItem>
+  )
+}
+
+/** Names a set of `RadioItem`s and holds which one is checked. */
+export function RadioGroup({children, label, value}: RadioGroupProps) {
+  return (
+    <DropdownMenu.RadioGroup value={value} aria-label={label}>
+      {children}
+    </DropdownMenu.RadioGroup>
+  )
+}
+
+/** Names a set of `CheckboxItem`s. */
+export function CheckboxGroup({children, label}: CheckboxGroupProps) {
+  return <DropdownMenu.Group aria-label={label}>{children}</DropdownMenu.Group>
+}
+
+/**
+ * The pressable row of every item kind. Radix's `asChild` merges its role,
+ * `aria-checked` and key handlers onto it.
+ */
+function ItemPressable({
   children,
   label,
   onPress,
   style,
   destructive = false,
+  choice,
   ...rest
-}: ItemProps) {
+}: ItemProps & {choice?: 'radio' | 'checkbox'}) {
   const t = useTheme()
   const {control} = useMenuContext()
   const {
@@ -263,54 +325,63 @@ export function Item({
   const {state: focused, onIn: onFocus, onOut: onBlur} = useInteractionState()
 
   return (
-    <DropdownMenu.Item asChild>
-      <Pressable
-        {...rest}
-        className="radix-dropdown-item"
-        accessibilityHint=""
-        accessibilityLabel={label}
-        onPress={e => {
-          onPress(e)
+    <Pressable
+      {...rest}
+      className="radix-dropdown-item"
+      accessibilityHint=""
+      accessibilityLabel={label}
+      onPress={e => {
+        /*
+         * Enter reaches a choice twice: Radix's keydown clicks the item, and
+         * react-native-web's Pressable presses it again on keyup. Radix's
+         * click covers Enter and Space, so the keyup press is dropped, or a
+         * checkbox would toggle back.
+         */
+        if (choice && e.type === 'keyup') return
 
-          /**
-           * Ported forward from Radix
-           * @see https://www.radix-ui.com/primitives/docs/components/dropdown-menu#item
-           */
-          if (!e.defaultPrevented) {
-            control.close()
-          }
-        }}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        // need `flatten` here for Radix compat
-        style={flatten([
-          a.flex_row,
-          a.align_center,
-          a.gap_lg,
-          a.py_sm,
-          a.rounded_xs,
-          a.overflow_hidden,
-          {minHeight: 32, paddingHorizontal: 10},
-          web({outline: 0}),
-          (hovered || focused) &&
-            !rest.disabled && [
-              web({outline: '0 !important'}),
-              t.name === 'light'
-                ? t.atoms.bg_contrast_25
-                : t.atoms.bg_contrast_50,
-            ],
-          style,
-        ])}
-        {...web({
-          onMouseEnter,
-          onMouseLeave,
-        })}>
-        <ItemContext.Provider
-          value={{disabled: Boolean(rest.disabled), destructive}}>
-          {children}
-        </ItemContext.Provider>
-      </Pressable>
-    </DropdownMenu.Item>
+        onPress(e)
+
+        // A checkbox keeps the menu open, so several can be checked.
+        if (choice === 'checkbox') return
+
+        /**
+         * Ported forward from Radix
+         * @see https://www.radix-ui.com/primitives/docs/components/dropdown-menu#item
+         */
+        if (!e.defaultPrevented) {
+          control.close()
+        }
+      }}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      // need `flatten` here for Radix compat
+      style={flatten([
+        a.flex_row,
+        a.align_center,
+        a.gap_lg,
+        a.py_sm,
+        a.rounded_xs,
+        a.overflow_hidden,
+        {minHeight: 32, paddingHorizontal: 10},
+        web({outline: 0}),
+        (hovered || focused) &&
+          !rest.disabled && [
+            web({outline: '0 !important'}),
+            t.name === 'light'
+              ? t.atoms.bg_contrast_25
+              : t.atoms.bg_contrast_50,
+          ],
+        style,
+      ])}
+      {...web({
+        onMouseEnter,
+        onMouseLeave,
+      })}>
+      <ItemContext.Provider
+        value={{disabled: Boolean(rest.disabled), destructive}}>
+        {children}
+      </ItemContext.Provider>
+    </Pressable>
   )
 }
 

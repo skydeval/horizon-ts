@@ -1,10 +1,18 @@
-import {cloneElement, Fragment, isValidElement, useMemo, useRef} from 'react'
+import {
+  cloneElement,
+  Fragment,
+  isValidElement,
+  useContext,
+  useMemo,
+  useRef,
+} from 'react'
 import {
   type GestureResponderEvent,
   Pressable,
   type StyleProp,
   type TextStyle,
   View,
+  type ViewProps,
   type ViewStyle,
 } from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
@@ -17,17 +25,22 @@ import {useInteractionState} from '#/components/hooks/useInteractionState'
 import {
   Context,
   ItemContext,
+  RadioGroupContext,
   useMenuContext,
   useMenuItemContext,
 } from '#/components/Menu/context'
 import {getMenuSourceViewTag} from '#/components/Menu/sourceViewTag'
 import {
+  type CheckboxGroupProps,
+  type CheckboxItemProps,
   type ContextType,
   type GroupProps,
   type ItemIconProps,
   type ItemProps,
   type ItemTextProps,
   type OuterProps,
+  type RadioGroupProps,
+  type RadioItemProps,
   type TriggerProps,
 } from '#/components/Menu/types'
 import {Text} from '#/components/Typography'
@@ -142,14 +155,52 @@ export function Outer({
   )
 }
 
-export function Item({
+export function Item(props: ItemProps) {
+  return <ItemPressable {...props} />
+}
+
+/**
+ * A single choice inside a `RadioGroup`: role `radio`, checked when its
+ * `value` is the group's. Show the state with `ItemRadio` too.
+ */
+export function RadioItem({value, ...props}: RadioItemProps) {
+  const groupValue = useContext(RadioGroupContext)
+  return (
+    <ItemPressable
+      {...props}
+      accessibilityRole="radio"
+      accessibilityState={{
+        checked: value === groupValue,
+        disabled: Boolean(props.disabled),
+      }}
+    />
+  )
+}
+
+/**
+ * One of several choices: role `checkbox` with its checked state. Pressing
+ * toggles and keeps the menu open. Show the state with a visible mark too.
+ */
+export function CheckboxItem({checked, ...props}: CheckboxItemProps) {
+  return (
+    <ItemPressable
+      {...props}
+      keepOpen
+      accessibilityRole="checkbox"
+      accessibilityState={{checked, disabled: Boolean(props.disabled)}}
+    />
+  )
+}
+
+function ItemPressable({
   children,
   label,
   style,
   onPress,
   destructive = false,
+  keepOpen = false,
   ...rest
-}: ItemProps) {
+}: ItemProps & {keepOpen?: boolean}) {
   const t = useTheme()
   const context = useMenuContext()
   const {state: focused, onIn: onFocus, onOut: onBlur} = useInteractionState()
@@ -167,7 +218,9 @@ export function Item({
       onFocus={onFocus}
       onBlur={onBlur}
       onPress={e => {
-        if (IS_ANDROID) {
+        if (keepOpen) {
+          onPress?.(e)
+        } else if (IS_ANDROID) {
           /**
            * Below fix for iOS doesn't work for Android, this does.
            */
@@ -341,9 +394,48 @@ export function LabelText({
 }
 
 export function Group({children, style}: GroupProps) {
+  return <GroupView style={style}>{children}</GroupView>
+}
+
+/** Names a set of `RadioItem`s and holds which one is checked. */
+export function RadioGroup({children, style, label, value}: RadioGroupProps) {
+  return (
+    <RadioGroupContext.Provider value={value}>
+      <GroupView style={style} role="radiogroup" label={label}>
+        {children}
+      </GroupView>
+    </RadioGroupContext.Provider>
+  )
+}
+
+/** Names a set of `CheckboxItem`s. */
+export function CheckboxGroup({children, style, label}: CheckboxGroupProps) {
+  return (
+    <GroupView style={style} role="group" label={label}>
+      {children}
+    </GroupView>
+  )
+}
+
+function GroupView({
+  children,
+  style,
+  role,
+  label,
+}: GroupProps & {role?: 'radiogroup' | 'group'; label?: string}) {
   const t = useTheme()
+  const a11y: ViewProps = !role
+    ? {}
+    : role === 'radiogroup'
+      ? {
+          accessibilityRole: 'radiogroup',
+          accessibilityLabel: label,
+          accessibilityHint: '',
+        }
+      : {role: 'group', accessibilityLabel: label, accessibilityHint: ''}
   return (
     <View
+      {...a11y}
       style={[
         a.rounded_lg,
         a.curve_continuous,
@@ -354,7 +446,10 @@ export function Group({children, style}: GroupProps) {
       ]}>
       {flattenReactChildren(children).map((child, i) => {
         return isValidElement(child) &&
-          (child.type === Item || child.type === ContainerItem) ? (
+          (child.type === Item ||
+            child.type === RadioItem ||
+            child.type === CheckboxItem ||
+            child.type === ContainerItem) ? (
           <Fragment key={i}>
             {i > 0 ? (
               <View style={[a.border_b, t.atoms.border_contrast_low]} />
