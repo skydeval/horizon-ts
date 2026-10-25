@@ -26,10 +26,14 @@ const DEFAULTS: Record<Features, unknown> = {
   [Features.GroupChatsDisable]: false,
   [Features.ComposerLanguageDetectionEnable]: false,
   [Features.PostGalleryEmbedEnable]: false,
-  // Bluesky beta, on in Horizon: "Social proofing on posts"
-  [Features.PostFeedKnownLikersEnable]: true,
-  // The same social proofing on the thread's main post
-  [Features.PostThreadKnownLikersEnable]: true,
+  /*
+   * Bluesky beta "Social proofing on posts" (the "Liked by ..." row under a
+   * post): off in Horizon since 2026-10-25 (skydeval, on trial), so posts
+   * show the like count only. Set both to true to bring the row back.
+   */
+  [Features.PostFeedKnownLikersEnable]: false,
+  // The same row on the thread's main post
+  [Features.PostThreadKnownLikersEnable]: false,
   [Features.FollowSortEnable]: false,
   // Bluesky beta, on in Horizon: "Keep your place in the Following feed" (native only)
   [Features.FollowingV2Enable]: true,

@@ -383,6 +383,14 @@ export const POSTING_AS: boolean = true
 export const ACT_AS_CONTROLS: boolean = true
 
 /**
+ * "Suggested for you" on profile pages (skydeval, 2026-10-25): the row of
+ * suggested accounts in a profile's posts and the panel that opens under the
+ * header after Follow. `false`: neither shows, and the suggestions aren't
+ * requested. The home feed's suggestions are unchanged.
+ */
+export const PROFILE_SUGGESTED_FOLLOWS: boolean = false
+
+/**
  * System accounts (system accounts design SA-16, section 10;
  * `system-accounts/`): the "System accounts" section in Edit Profile's
  * Plurality tab (add by signing in as the account, remove, re-verify, the

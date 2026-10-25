@@ -149,6 +149,13 @@ summary in `docs/design/pronouns-and-plural-systems.md`).
   the list, or that needs a sign-in here, says so, and removing the account
   you're posting as holds Post, then switches back to you. With the
   `SYSTEM_ACCOUNTS` switch off, they offer the current account only.
+- **No "Suggested for you" on profile pages.** Neither the row of suggested
+  accounts among a profile's posts nor the panel that opens under the header
+  after Follow shows, and the suggestions aren't requested
+  (`PROFILE_SUGGESTED_FOLLOWS`). The home feed's suggestions are unchanged.
+- **No "Liked by …" row under posts, on trial.** Bluesky's "social proofing"
+  beta is off in Horizon's flag table, in feeds and on a thread's main post,
+  so posts show the like count only.
 - **"AppViews", written as one word.** The Settings row and dialog read
   "AppViews", with "Horizon AppView" and "Public AppView" inside and an
   "AppView address" field; the sign-in form's quiet button reads "AppView",

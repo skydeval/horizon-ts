@@ -39,6 +39,8 @@ import {ProgressGuideList} from '#/components/ProgressGuide/List'
 import {Text} from '#/components/Typography'
 import {type Metrics, useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: profile suggestions switch import
+import {PROFILE_SUGGESTED_FOLLOWS} from '#/horizon/switches'
 import {type app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
 import {FollowDialogWithoutGuide} from './ProgressGuide/FollowDialog'
@@ -112,7 +114,8 @@ export function SuggestedFollows({feed}: {feed: FeedDescriptor}) {
   const {currentAccount} = useSession()
   const [feedType, feedUriOrDid] = feed.split('|')
   if (feedType === 'author') {
-    if (currentAccount?.did === feedUriOrDid) {
+    // HORIZON: no "Suggested for you" on profiles (PROFILE_SUGGESTED_FOLLOWS)
+    if (currentAccount?.did === feedUriOrDid || !PROFILE_SUGGESTED_FOLLOWS) {
       return null
     } else {
       return <SuggestedFollowsProfile did={feedUriOrDid} />

@@ -48,6 +48,8 @@ import {ActAsFollowDialog, useActAsProfile} from '#/horizon/posting-as/ActAs'
 import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
+// HORIZON: profile suggestions switch import
+import {PROFILE_SUGGESTED_FOLLOWS} from '#/horizon/switches'
 import {type app} from '#/lexicons'
 import {GermButton, isGermButtonShown} from '../components/GermButton'
 import {ProfileHeaderDisplayName} from './DisplayName'
@@ -220,11 +222,14 @@ let ProfileHeaderStandard = ({
         />
       </ProfileHeaderShell>
 
-      <ProfileHeaderSuggestedFollows
-        isExpanded={!hasSeenAllSuggestedFollows && showSuggestedFollows}
-        actorDid={profile.did}
-        onRequestHide={onRequestHide}
-      />
+      {/* HORIZON: no "Suggested for you" on profiles (PROFILE_SUGGESTED_FOLLOWS) */}
+      {PROFILE_SUGGESTED_FOLLOWS ? (
+        <ProfileHeaderSuggestedFollows
+          isExpanded={!hasSeenAllSuggestedFollows && showSuggestedFollows}
+          actorDid={profile.did}
+          onRequestHide={onRequestHide}
+        />
+      ) : null}
     </>
   )
 }
