@@ -332,12 +332,12 @@ function ItemPressable({
       accessibilityLabel={label}
       onPress={e => {
         /*
-         * Enter reaches a choice twice: Radix's keydown clicks the item, and
-         * react-native-web's Pressable presses it again on keyup. Radix's
+         * Enter reaches every item twice: Radix's keydown clicks the item,
+         * and react-native-web's Pressable presses it again on keyup. Radix's
          * click covers Enter and Space, so the keyup press is dropped, or a
-         * checkbox would toggle back.
+         * toggle would flip back and an action would run twice.
          */
-        if (choice && e.type === 'keyup') return
+        if (e.type === 'keyup') return
 
         onPress(e)
 
