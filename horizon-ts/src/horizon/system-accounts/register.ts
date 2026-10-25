@@ -363,7 +363,10 @@ export function beginRegistration(
 ): Registration | undefined {
   if (hasPendingAttempt(registration)) return registration
   const addingFor = env.currentDid()
-  if (!addingFor) return undefined
+  if (!addingFor) {
+    logger.warn('system accounts: registration not started, no current account')
+    return undefined
+  }
   const current = getCurrentClients()
   registration = {
     id: nextId++,
@@ -441,7 +444,11 @@ export function abandonPendingAttempt() {
   const reg = registration
   if (!reg) return
   for (const attempt of reg.attempts) attempt.abandoned = true
-  if (reg.outcome.kind === 'waiting') reg.outcome = {kind: 'idle'}
+  // The popup's own states don't carry over to the app password step.
+  const kind = reg.outcome.kind
+  if (kind === 'waiting' || kind === 'blocked' || kind === 'timeout') {
+    reg.outcome = {kind: 'idle'}
+  }
   changed()
 }
 

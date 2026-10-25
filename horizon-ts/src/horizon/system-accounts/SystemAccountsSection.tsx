@@ -31,7 +31,7 @@ import {
   useRowHandles,
   useSystemAccountRows,
 } from './hooks'
-import {getList, MAX_SYSTEM_ACCOUNTS} from './list-store'
+import {MAX_SYSTEM_ACCOUNTS, useCachedLists} from './list-store'
 import {systemAccountsStubActive} from './prism'
 import {removeSystemAccount} from './register'
 import {RemoveSystemAccountDialog} from './RemoveSystemAccountDialog'
@@ -87,7 +87,8 @@ function Section({did}: {did: string}) {
   const load = useListLoadState(did)
   // Not listed, or prism answered 501 MethodNotImplemented (its reply).
   const served = useServed(did) && load !== 'unavailable'
-  const hasCache = !!getList(did)
+  // From the store's snapshot, so it updates (a plain read would be memoised).
+  const hasCache = !!useCachedLists()[did]
   const addControl = Dialog.useDialogControl()
   const reverifyControl = Dialog.useDialogControl()
   const removeControl = Dialog.useDialogControl()

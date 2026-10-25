@@ -185,6 +185,11 @@ summary in `docs/design/pronouns-and-plural-systems.md`).
   front indicator, "Set front", or a "Change front" fallback while the front
   loads or can't be read, and from the member list; focus returns to what
   opened it.
+- **Adding a system account no longer goes blank after Next.** The dialog
+  showed only its title once a handle was entered; it now shows the sign-in
+  step. A step that ever loses its registration says "Something went wrong.
+  Start again." and logs an error instead of going blank, and switching to
+  an app password clears the pop-up's own messages.
 - **Signing out in another tab no longer shows "session expired" here.** A
   session is treated as dead only on this window's own refresh or token
   failure, never on a deletion passed on from another window.

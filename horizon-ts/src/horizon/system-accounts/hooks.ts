@@ -101,6 +101,8 @@ export function useSystemAccountRows(
   registrar: string | undefined,
   switcher: readonly SessionAccount[],
 ): SystemAccountRow[] {
+  // Rows are read from mutable stores; memoising them would keep stale rows.
+  'use no memo'
   const key = useSyncExternalStore(subscribeAll, () => snapshotKey(registrar))
   void key
   if (!SYSTEM_ACCOUNTS) return []

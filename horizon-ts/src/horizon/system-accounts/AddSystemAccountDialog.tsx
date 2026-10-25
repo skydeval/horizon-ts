@@ -15,6 +15,7 @@ import {View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {isNetworkError} from '#/lib/strings/errors'
+import {logger} from '#/logger'
 import {atoms as a, useTheme, web} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
@@ -64,7 +65,13 @@ function popupAvailable(): boolean {
   return IS_WEB && OAUTH_AVAILABLE && !isInstalledMobileWebApp()
 }
 
+/*
+ * The registration is one mutable object (its outcome changes in place), so
+ * the components reading it opt out of React Compiler: memoised reads would
+ * keep the first value (`undefined`) and the dialog went blank after Next.
+ */
 function useRegistration(): Registration | undefined {
+  'use no memo'
   useSyncExternalStore(subscribeRegistration, getRegistrationVersion)
   return getRegistration()
 }
@@ -107,6 +114,7 @@ function Inner({
   reverify?: Target
   onDone?: (did: string) => void
 }) {
+  'use no memo'
   const t = useTheme()
   const {t: l} = useLingui()
   const reg = useRegistration()
@@ -186,6 +194,27 @@ function Inner({
   const lala = target ? accountName(target.handle, target.did) : ''
   const message = mine ? outcomeMessage(mine) : undefined
   const failure = message && message.kind === 'alert' ? message.text : undefined
+
+  // A step with no registration behind it must never render blank.
+  const lost = step !== 'identify' && !mine && !otherPending
+  const lostText = l`Something went wrong. Start again.`
+  useEffect(() => {
+    if (!lost) return
+    logger.error('system accounts: dialog step has no registration', {
+      step,
+      hasRegistration: !!getRegistration(),
+      reverify: !!reverify,
+    })
+  }, [lost, step, reverify])
+  const restart = () => {
+    setError('')
+    if (reverify) {
+      beginRegistration(reverify, 'reverify')
+    } else {
+      setTarget(undefined)
+      setStep('identify')
+    }
+  }
 
   const onNext = async () => {
     if (busy) return
@@ -479,6 +508,22 @@ function Inner({
           </View>
         ) : null}
 
+        {lost ? (
+          <View style={[a.gap_md]}>
+            <AlertMessage testID="systemAccountsLost">{lostText}</AlertMessage>
+            <Button
+              testID="systemAccountsRestart"
+              label={l`Start again`}
+              color="primary"
+              size="large"
+              onPress={restart}>
+              <ButtonText>
+                <Trans>Start again</Trans>
+              </ButtonText>
+            </Button>
+          </View>
+        ) : null}
+
         {!otherPending && step === 'password' && mine ? (
           <AppPasswordStep reg={mine} lala={lala} failure={failure} />
         ) : null}
@@ -497,6 +542,7 @@ function AppPasswordStep({
   lala: string
   failure: string | undefined
 }) {
+  'use no memo'
   const t = useTheme()
   const {t: l} = useLingui()
   const [password, setPassword] = useState('')
