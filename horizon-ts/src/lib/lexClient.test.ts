@@ -26,30 +26,16 @@ function requestHeaders(call: number): Headers {
 describe('createLexClient', () => {
   beforeEach(() => {
     fetchHandler.mockClear()
-  })
-
-  it('sends the current device and session identifiers on every request', async () => {
     jest.mocked(getDeviceId).mockReturnValue('device-123')
     jest.mocked(getSessionId).mockReturnValue('session-123')
+  })
+
+  // HORIZON: the analytics ids are never sent, even when a caller asks
+  it('never sends the device or session identifier, even when asked', async () => {
     const client = createLexClient(
       {fetchHandler},
       {includeDeviceSessionHeaders: true},
     )
-
-    await client.call(app.bsky.actor.getProfile, {actor: 'alice.test'})
-    jest.mocked(getSessionId).mockReturnValue('session-456')
-    await client.call(app.bsky.actor.getProfile, {actor: 'alice.test'})
-
-    expect(requestHeaders(0).get('x-atproto-device-id')).toBe('device-123')
-    expect(requestHeaders(0).get('x-atproto-session-id')).toBe('session-123')
-    expect(requestHeaders(1).get('x-atproto-device-id')).toBe('device-123')
-    expect(requestHeaders(1).get('x-atproto-session-id')).toBe('session-456')
-  })
-
-  it('omits identifiers unless the destination explicitly opts in', async () => {
-    jest.mocked(getDeviceId).mockReturnValue('device-123')
-    jest.mocked(getSessionId).mockReturnValue('session-123')
-    const client = createLexClient({fetchHandler})
 
     await client.call(app.bsky.actor.getProfile, {actor: 'alice.test'})
 
@@ -57,17 +43,12 @@ describe('createLexClient', () => {
     expect(requestHeaders(0).get('x-atproto-session-id')).toBeNull()
   })
 
-  it('omits the device identifier before initialization', async () => {
-    jest.mocked(getDeviceId).mockReturnValue(undefined)
-    jest.mocked(getSessionId).mockReturnValue('session-123')
-    const client = createLexClient(
-      {fetchHandler},
-      {includeDeviceSessionHeaders: true},
-    )
+  it('omits identifiers by default', async () => {
+    const client = createLexClient({fetchHandler})
 
     await client.call(app.bsky.actor.getProfile, {actor: 'alice.test'})
 
     expect(requestHeaders(0).get('x-atproto-device-id')).toBeNull()
-    expect(requestHeaders(0).get('x-atproto-session-id')).toBe('session-123')
+    expect(requestHeaders(0).get('x-atproto-session-id')).toBeNull()
   })
 })

@@ -58,14 +58,14 @@ describe('prism clients', () => {
     expect(sent[0].headers.has('atproto-proxy')).toBe(false)
   })
 
-  it('the device headers would be sent by a client that asked for them', async () => {
-    // Guards the test above against passing for the wrong reason.
+  it('no client sends the device headers, even one that asks for them', async () => {
     const withHeaders = createLexClient(
       {service: PRISM_URL, fetch: mockRecord},
       {includeDeviceSessionHeaders: true},
     )
     await withHeaders.call(app.bsky.feed.getTimeline, {limit: 1})
-    expect(sent[0].headers.get('x-atproto-device-id')).toBe('device-id-1')
+    expect(sent[0].headers.has('x-atproto-device-id')).toBe(false)
+    expect(sent[0].headers.has('x-atproto-session-id')).toBe(false)
   })
 
   it('the signed-in client proxies through the PDS agent to prism, cached per PDS client', async () => {

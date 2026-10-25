@@ -1,45 +1,17 @@
 import {
   type Agent,
   type AgentOptions,
-  buildAgent,
   Client,
   type ClientOptions,
 } from '@atproto/lex'
 
-import {getDeviceId, getSessionId} from '#/analytics/identifiers'
-
 type CreateLexClientOptions = ClientOptions & {
   /**
-   * Include the stable device ID and current session ID on every request.
-   * Enable only when the request is bound for a trusted service.
+   * HORIZON: ignored. Horizon never sends the stable device ID or the analytics
+   * session ID (`x-atproto-device-id`, `x-atproto-session-id`) to any server.
+   * Kept so stock call sites still compile.
    */
   includeDeviceSessionHeaders?: boolean
-}
-
-/**
- * Adds the current analytics identifiers to every AT Protocol request. Values
- * are read at dispatch time so session rotation does not require rebuilding
- * long-lived clients.
- */
-function withDeviceSessionHeaders(agentOptions: Agent | AgentOptions): Agent {
-  const agent = buildAgent(agentOptions)
-  return {
-    get did() {
-      return agent.did
-    },
-    fetchHandler(path, init) {
-      const headers = new Headers(init.headers)
-      const deviceId = getDeviceId()
-      const sessionId = getSessionId()
-      if (deviceId) {
-        headers.set('x-atproto-device-id', deviceId)
-      }
-      if (sessionId) {
-        headers.set('x-atproto-session-id', sessionId)
-      }
-      return agent.fetchHandler(path, {...init, headers})
-    },
-  }
 }
 
 /**
@@ -59,14 +31,12 @@ export function createLexClient(
   agent: Agent | AgentOptions,
   options: CreateLexClientOptions = {},
 ): Client {
-  const {includeDeviceSessionHeaders, ...clientOptions} = options
-  return new Client(
-    includeDeviceSessionHeaders ? withDeviceSessionHeaders(agent) : agent,
-    {
-      strictResponseProcessing: false,
-      ...clientOptions,
-    },
-  )
+  // HORIZON: no analytics ids on any request, whatever the caller asks
+  const {includeDeviceSessionHeaders: _ignored, ...clientOptions} = options
+  return new Client(agent, {
+    strictResponseProcessing: false,
+    ...clientOptions,
+  })
 }
 
 /**
@@ -85,8 +55,7 @@ export function createLexClient(
  * input, and a typo'd or dead service must not be reported as the app losing
  * network reachability.
  *
- * The default `includeDeviceSessionHeaders: false` keeps stable analytics IDs
- * off these requests. `appLabelers: null` also suppresses the global
+ * `appLabelers: null` also suppresses the global
  * `Client.appLabelers` static: these are `com.atproto.server` calls to a host the
  * user typed, which have no use for moderation labels, and the header would
  * disclose the app's configured moderation authorities to an arbitrary
