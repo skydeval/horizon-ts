@@ -22,8 +22,37 @@ jest.mock('../toasts', () => ({}))
 jest.mock('../gates', () => ({
   choosePostingAccount: () => {},
   togglePostingMember: () => {},
+  onPostingReverifyRequested: () => () => {},
 }))
 jest.mock('../temp-client', () => ({canActAs: () => true}))
+// The other accounts here stand for the current account's system accounts.
+jest.mock('#/horizon/system-accounts/hooks', () => ({
+  useSystemAccountRows: (
+    did: string | undefined,
+    accounts: {did: string; handle: string}[],
+  ) =>
+    accounts
+      .filter(account => account.did !== did)
+      .map(account => ({...account, addedAt: '', state: 'ready'})),
+}))
+jest.mock('#/horizon/system-accounts/AddSystemAccountDialog', () => ({
+  AddSystemAccountDialog: () => null,
+}))
+jest.mock('#/horizon/system-accounts/SystemAccountsSection', () => ({
+  requestSystemAccountsFocus: () => {},
+}))
+jest.mock('#/horizon/system-accounts/announce', () => ({
+  holdAnnouncements: () => () => {},
+}))
+jest.mock('#/horizon/system-accounts/sync', () => ({
+  readList: () => Promise.resolve(true),
+}))
+jest.mock('#/horizon/routing/current-clients', () => ({
+  getCurrentClients: () => undefined,
+}))
+jest.mock('#/screens/Profile/Header/EditProfileDialog', () => ({
+  EditProfileDialog: () => null,
+}))
 jest.mock('../fronters', () => ({PUBLIC_FRONTERS_KEPT: false}))
 const mockAccounts: {did: string; handle: string}[] = []
 jest.mock('#/state/session', () => ({
@@ -35,11 +64,11 @@ jest.mock('#/state/queries/profile', () => ({
 jest.mock('#/horizon/switches', () => ({
   POSTING_AS: true,
   PLURAL_EDITING: false,
+  SYSTEM_ACCOUNTS: true,
 }))
 jest.mock('#/view/com/util/UserAvatar', () => {
-  const {View} = jest.requireActual<typeof import('react-native')>(
-    'react-native',
-  )
+  const {View} =
+    jest.requireActual<typeof import('react-native')>('react-native')
   return {
     UserAvatar: (props: {style?: unknown}) => (
       <View testID="postingAvatar" style={props.style as never} />
@@ -54,9 +83,8 @@ jest.mock('#/alf', () => ({
   }),
 }))
 jest.mock('#/components/Button', () => {
-  const {View} = jest.requireActual<typeof import('react-native')>(
-    'react-native',
-  )
+  const {View} =
+    jest.requireActual<typeof import('react-native')>('react-native')
   return {
     Button: (props: {
       testID?: string
@@ -76,11 +104,11 @@ jest.mock('#/components/Button', () => {
   }
 })
 jest.mock('#/components/Menu', () => ({
+  useMenuControl: () => ({isOpen: false}),
   Root: (props: {children?: React.ReactNode}) => <>{props.children}</>,
   Trigger: (props: {
     children: (arg: unknown) => React.ReactNode
-  }): React.ReactNode =>
-    props.children({props: {}, state: {focused: false}}),
+  }): React.ReactNode => props.children({props: {}, state: {focused: false}}),
   Outer: () => null,
 }))
 jest.mock('#/components/Dialog', () => ({useDialogControl: () => ({})}))
@@ -153,6 +181,7 @@ beforeEach(() => {
     active: true,
     did: 'did:plc:main',
     currentDid: 'did:plc:main',
+    currentHandle: 'main.test',
     handle: 'main.test',
     members: [],
     hold: {kind: 'none'},
@@ -194,9 +223,7 @@ describe('the "Posting as" control keeps the stock avatar’s slot (PA-1)', () =
     // The handle is wrapped in direction isolates, as every shown handle is.
     expect(
       String(trigger.props.accessibilityLabel).replace(/[‪-‮⁦-⁩]/g, ''),
-    ).toBe(
-      'Posting as @main.test, change account or members',
-    )
+    ).toBe('Posting as @main.test, change account or members')
   })
 
   it('a later post in a thread shows the posting avatar alone in the same place', () => {

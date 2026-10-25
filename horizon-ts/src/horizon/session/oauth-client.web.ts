@@ -7,6 +7,8 @@
 import {
   atprotoLoopbackClientMetadata,
   BrowserOAuthClient,
+  TokenInvalidError,
+  TokenRefreshError,
   TokenRevokedError,
 } from '@atproto/oauth-client-browser'
 
@@ -57,8 +59,10 @@ const deletedListeners = new Set<DeletedListener>()
 
 /**
  * Listen for the library deleting a stored session, in this tab or (through
- * the library's broadcast channel) in another one. Returns the unsubscribe
- * function.
+ * the library's broadcast channel) in another one. A deletion from another
+ * window arrives with its cause structured-cloned, so it is never an instance
+ * of a library error class here (see {@link isOAuthRefreshFailure}). Returns
+ * the unsubscribe function.
  */
 export function addOAuthSessionDeletedListener(listener: DeletedListener) {
   deletedListeners.add(listener)
@@ -74,6 +78,21 @@ export function addOAuthSessionDeletedListener(listener: DeletedListener) {
  */
 export function isOAuthRevocationCause(cause: unknown): boolean {
   return cause instanceof TokenRevokedError
+}
+
+/**
+ * Whether a deletion cause is a refresh failure the library raised in this
+ * window: a `TokenRefreshError` or `TokenInvalidError` of this realm (system
+ * accounts design SA-25). Only such a deletion is read as the session's
+ * death. A deletion broadcast from another window carries a structured clone
+ * of its cause, which is only ever a built-in error type, so it never counts:
+ * another window's sign-out or re-authorization is not a death here, and a
+ * real death is found at this window's next request.
+ */
+export function isOAuthRefreshFailure(cause: unknown): boolean {
+  return (
+    cause instanceof TokenRefreshError || cause instanceof TokenInvalidError
+  )
 }
 
 const clients = new Map<string, BrowserOAuthClient>()

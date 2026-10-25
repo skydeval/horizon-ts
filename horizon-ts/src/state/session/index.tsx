@@ -362,12 +362,13 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       store.dispatch({
         type: 'logged-out-current-account',
       })
-      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session)
+      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session); the accounts after the dispatch go to the system accounts' sweep
       if (HORIZON_SIGN_OUT)
         void horizonSignOut(
           prevState.accounts.filter(
             a => a.did === prevState.currentBundleState.did,
           ),
+          store.getState().accounts,
         )
       ax.metric(
         'account:loggedOut',
@@ -403,8 +404,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       store.dispatch({
         type: 'logged-out-every-account',
       })
-      // HORIZON: sign every account out at its server (push, then OAuth revocation or the password session)
-      if (HORIZON_SIGN_OUT) void horizonSignOut(prevState.accounts)
+      // HORIZON: sign every account out at its server (push, then OAuth revocation or the password session); the accounts after the dispatch go to the system accounts' sweep
+      if (HORIZON_SIGN_OUT)
+        void horizonSignOut(prevState.accounts, store.getState().accounts)
       ax.metric(
         'account:loggedOut',
         {logContext, scope: 'every'},
@@ -577,8 +579,9 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         type: 'removed-account',
         accountDid: account.did,
       })
-      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session)
-      if (HORIZON_SIGN_OUT) void horizonSignOut([account])
+      // HORIZON: sign the account out at its server (push, then OAuth revocation or the password session); the accounts after the dispatch go to the system accounts' sweep
+      if (HORIZON_SIGN_OUT)
+        void horizonSignOut([account], store.getState().accounts)
       addSessionDebugLog({
         type: 'method:end',
         method: 'removeAccount',

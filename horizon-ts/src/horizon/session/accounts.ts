@@ -5,6 +5,7 @@
  * (`canAttemptSessionResume`): one predicate that knows both session kinds.
  */
 
+import {isJwtExpired} from '#/lib/jwt'
 import {type SessionAccount} from '#/state/session/types'
 
 /**
@@ -36,6 +37,18 @@ export function isSignedInAccount(
     return !isOAuthSignedOut(account)
   }
   return passwordRule
+}
+
+/**
+ * Whether a stored account can act from this device (Phase 1 4.5's
+ * predicates): an OAuth account not marked signed out, a password account
+ * with an unexpired refresh token.
+ */
+export function canAccountAct(account: SessionAccount): boolean {
+  return isSignedInAccount(
+    account,
+    !!account.refreshJwt && !isJwtExpired(account.refreshJwt),
+  )
 }
 
 /**

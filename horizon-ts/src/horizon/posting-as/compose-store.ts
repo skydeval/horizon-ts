@@ -25,12 +25,21 @@ import {useSyncExternalStore} from 'react'
 import {type ListedMember} from '#/horizon/identity/reads'
 import {type app} from '#/lexicons'
 
-/** What keeps Publish off while the posting account is read. */
+/**
+ * What keeps Publish off while the posting account is read. A `signedOut`
+ * draft's account either needs a sign-in on this device (`signIn`) or is not
+ * one of the current account's system accounts (`notListed`, system
+ * accounts design 8.3).
+ */
 export type PostingHold =
   | {kind: 'none'}
   | {kind: 'pending'}
   | {kind: 'failed'}
-  | {kind: 'signedOut'; handle: string | undefined}
+  | {
+      kind: 'signedOut'
+      handle: string | undefined
+      reason?: 'signIn' | 'notListed'
+    }
 
 /** The posting account's plural records, read for that account. */
 export type PostingAccountData = {
@@ -65,6 +74,17 @@ export type PostingState = {
   draftNote: PostingDraftNote | undefined
   /** A video is attached to some post of the compose (8.5). */
   hasVideo: boolean
+  /**
+   * The posting account is being removed from the system list (system
+   * accounts design 4.5): Post is held with "Removing @lala...".
+   */
+  removing: boolean
+  /**
+   * The handle of a chosen account the list dropped: the compose went back
+   * to the current account with "@lala is no longer one of your system
+   * accounts." (4.5, 5.5).
+   */
+  droppedHandle: string | undefined
   /** Bumped by every account change and restore; stale reads are dropped. */
   generation: number
 }
@@ -84,6 +104,8 @@ const IDLE: PostingState = {
   settings: undefined,
   draftNote: undefined,
   hasVideo: false,
+  removing: false,
+  droppedHandle: undefined,
   generation: 0,
 }
 
@@ -155,7 +177,9 @@ export function isPostingAsOther(s: PostingState = state): boolean {
  */
 export function postingAllowsFor(s: PostingState): boolean {
   if (!s.active) return true
-  return s.hold.kind === 'none' && !s.resetPending && !s.heldMembers
+  return (
+    s.hold.kind === 'none' && !s.resetPending && !s.heldMembers && !s.removing
+  )
 }
 
 function getPostingAllows(): boolean {

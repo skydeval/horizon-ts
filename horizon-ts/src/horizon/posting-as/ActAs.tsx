@@ -11,6 +11,14 @@
  *
  * Absent with `ACT_AS_CONTROLS` off, signed out, and with no other account
  * that can act.
+ *
+ * System accounts (system accounts design 8.1, SA-H4, SA-20): the rows are
+ * the current account's registered system accounts, never the other
+ * switcher accounts. Opening the list reads nothing; a row's own state is
+ * read when it gets focus (web) or is pressed in (native), and its client
+ * is held from then. A row is enabled while unloaded, and a press waits for
+ * its one read. An account that needs a sign-in here is an enabled "Sign in
+ * as @lala on this device" button.
  */
 
 import {useEffect, useRef, useState} from 'react'
@@ -29,22 +37,28 @@ import {Repost_Stroke2_Corner2_Rounded as RepostIcon} from '#/components/icons/R
 import * as Menu from '#/components/Menu'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+import {IS_WEB} from '#/env'
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {ACT_AS_CONTROLS} from '#/horizon/switches'
+import {AddSystemAccountDialog} from '#/horizon/system-accounts/AddSystemAccountDialog'
+import {
+  type RowState,
+  useSystemAccountRows,
+} from '#/horizon/system-accounts/hooks'
 import {
   type ActAsEntry,
   type ActAsKind,
   type ActAsPost,
   ActAsRefusedError,
+  getActAs,
   holdActAsClients,
   loadActAsPost,
   loadActAsProfile,
   toggleActAs,
   useActAs,
 } from './act-as'
-import {canActAs} from './temp-client'
 
-type Account = {did: string; handle: string}
+type Account = {did: string; handle: string; state: RowState}
 
 /** What a hook site holds: whether to offer act-as, and its list. */
 export type ActAsControl = {
@@ -55,76 +69,114 @@ export type ActAsControl = {
   kind: ActAsKind
   control: Dialog.DialogControlProps
   open: (kind: ActAsKind) => void
+  /**
+   * Read one account's state and hold its client until the list closes
+   * (SA-20): on a row's focus or press. Resolves once read.
+   */
+  prepare: (did: string) => Promise<void>
   /** The list closed: its accounts' clients are let go. */
   release: () => void
+  /** The current account, whose list the rows are. */
+  registrar: string | undefined
 }
 
 /**
- * The other signed-in accounts that can act, leaving out `exclude` (a
- * profile cannot be followed by itself).
+ * The current account's system accounts (8.1), leaving out `exclude` (a
+ * profile cannot be followed by itself). Never another switcher account.
  */
-function useOtherAccounts(exclude?: string): Account[] {
+function useOtherAccounts(exclude?: string): {
+  accounts: Account[]
+  registrar: string | undefined
+} {
   const {accounts, currentAccount, hasSession} = useSession()
-  if (!ACT_AS_CONTROLS || !hasSession || !currentAccount) return []
-  return accounts
-    .filter(canActAs)
-    .filter(
-      account => account.did !== currentAccount.did && account.did !== exclude,
-    )
-    .map(account => ({did: account.did, handle: account.handle}))
+  const rows = useSystemAccountRows(currentAccount?.did, accounts)
+  if (!ACT_AS_CONTROLS || !hasSession || !currentAccount) {
+    return {accounts: [], registrar: undefined}
+  }
+  return {
+    registrar: currentAccount.did,
+    accounts: rows
+      .filter(row => row.did !== exclude && row.state !== 'adding')
+      .map(row => ({
+        did: row.did,
+        handle: row.handle ?? row.did,
+        state: row.state,
+      })),
+  }
 }
 
 function useControl(
-  accounts: Account[],
+  {accounts, registrar}: {accounts: Account[]; registrar: string | undefined},
   available: boolean,
-  load: (did: string) => void,
+  load: (did: string) => Promise<void>,
 ): ActAsControl {
   const control = Dialog.useDialogControl()
   const [mounted, setMounted] = useState(false)
   const [kind, setKind] = useState<ActAsKind>('like')
-  const held = useRef<(() => void) | undefined>(undefined)
+  const held = useRef(new Map<string, () => void>())
+  const reads = useRef(new Map<string, Promise<void>>())
+  const releaseAll = () => {
+    held.current.forEach(release => release())
+    held.current.clear()
+    reads.current.clear()
+  }
   // A host unmounting with the list open lets its clients go too.
-  useEffect(() => () => held.current?.(), [])
+  useEffect(() => {
+    const holds = held.current
+    return () => {
+      holds.forEach(release => release())
+      holds.clear()
+    }
+  }, [])
   return {
     available,
     accounts,
     mounted,
     kind,
     control,
+    registrar,
     open(next) {
       if (!available) return
       setKind(next)
       setMounted(true)
-      held.current?.()
-      held.current = holdActAsClients(accounts.map(account => account.did))
-      for (const account of accounts) load(account.did)
+      // Nothing is read on open (SA-20): no burst across every account.
+      releaseAll()
       // The list mounts on first open; open it once that render is in.
       setTimeout(() => control.open())
     },
+    prepare(did) {
+      const running = reads.current.get(did)
+      if (running) return running
+      if (!held.current.has(did)) {
+        held.current.set(did, holdActAsClients([did]))
+      }
+      const read = load(did)
+      reads.current.set(did, read)
+      return read
+    },
     release() {
-      held.current?.()
-      held.current = undefined
+      releaseAll()
     },
   }
 }
 
 /** Act as on a post (like, repost): PA-6, PA-7. */
 export function useActAsPost(post: ActAsPost) {
-  const accounts = useOtherAccounts()
+  const others = useOtherAccounts()
   // A visitor-form restored view writes no like or repost, as stock.
   const hidden = useRestoredActionsHidden(post)
-  const available = accounts.length > 0 && !hidden
-  return useControl(accounts, available, did => {
-    void loadActAsPost(did, {uri: post.uri, cid: post.cid})
-  })
+  const available = others.accounts.length > 0 && !hidden
+  return useControl(others, available, did =>
+    loadActAsPost(did, {uri: post.uri, cid: post.cid}),
+  )
 }
 
 /** Act as on a profile (follow): PA-8. */
 export function useActAsProfile(subject: string) {
-  const accounts = useOtherAccounts(subject)
-  return useControl(accounts, accounts.length > 0, did => {
-    void loadActAsProfile(did, subject)
-  })
+  const others = useOtherAccounts(subject)
+  return useControl(others, others.accounts.length > 0, did =>
+    loadActAsProfile(did, subject),
+  )
 }
 
 /** The account list for a post, mounted on first open. */
@@ -183,47 +235,111 @@ function ActAsDialog({
 }) {
   const {t: l} = useLingui()
   const t = useTheme()
+  const reverifyControl = Dialog.useDialogControl()
+  const [reverify, setReverify] = useState<Account>()
   return (
-    <Dialog.Outer
-      control={actAs.control}
-      onClose={actAs.release}
-      nativeOptions={{preventExpansion: true}}>
-      <Dialog.Handle />
-      <Dialog.ScrollableInner
-        label={l`Choose an account to act as`}
-        style={web({maxWidth: 400})}>
-        <View style={[a.gap_md]}>
-          <Text style={[a.text_xl, a.font_bold]}>{title}</Text>
-          <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            <Trans>
-              Only the account you choose acts. This account’s likes, reposts
-              and follows don’t change.
-            </Trans>
-          </Text>
-          <View style={[a.gap_xs]}>
-            {actAs.accounts.map(account => (
-              <AccountRow
-                key={account.did}
-                account={account}
-                kind={actAs.kind}
-                subject={subject}
-                target={target}
-              />
-            ))}
+    <>
+      <Dialog.Outer
+        control={actAs.control}
+        onClose={actAs.release}
+        nativeOptions={{preventExpansion: true}}>
+        <Dialog.Handle />
+        <Dialog.ScrollableInner
+          label={l`Choose an account to act as`}
+          style={web({maxWidth: 400})}>
+          <View style={[a.gap_md]}>
+            <Text style={[a.text_xl, a.font_bold]}>{title}</Text>
+            <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+              <Trans>
+                Only the account you choose acts. This account’s likes, reposts
+                and follows don’t change.
+              </Trans>
+            </Text>
+            <View style={[a.gap_xs]}>
+              {actAs.accounts.map(account =>
+                account.state === 'ready' ? (
+                  <AccountRow
+                    key={account.did}
+                    account={account}
+                    kind={actAs.kind}
+                    subject={subject}
+                    target={target}
+                    prepare={actAs.prepare}
+                  />
+                ) : (
+                  <SignInRow
+                    key={account.did}
+                    account={account}
+                    onPress={() => {
+                      setReverify(account)
+                      actAs.control.close(() => reverifyControl.open())
+                    }}
+                  />
+                ),
+              )}
+            </View>
+            <Button
+              label={l`Done`}
+              onPress={() => actAs.control.close()}
+              size="large"
+              color="secondary">
+              <ButtonText>
+                <Trans>Done</Trans>
+              </ButtonText>
+            </Button>
           </View>
-          <Button
-            label={l`Done`}
-            onPress={() => actAs.control.close()}
-            size="large"
-            color="secondary">
-            <ButtonText>
-              <Trans>Done</Trans>
-            </ButtonText>
-          </Button>
-        </View>
-        <Dialog.Close />
-      </Dialog.ScrollableInner>
-    </Dialog.Outer>
+          <Dialog.Close />
+        </Dialog.ScrollableInner>
+      </Dialog.Outer>
+      {reverify && actAs.registrar ? (
+        <AddSystemAccountDialog
+          control={reverifyControl}
+          registrar={actAs.registrar}
+          reverify={{did: reverify.did, handle: reverify.handle}}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** A listed account that needs a sign-in here (8.1): an enabled button. */
+function SignInRow({
+  account,
+  onPress,
+}: {
+  account: Account
+  onPress: () => void
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const handle = sanitizeHandle(account.handle, '@')
+  const label =
+    account.state === 'signInAgain'
+      ? l`Sign in again as ${handle}`
+      : l`Sign in as ${handle} on this device`
+  return (
+    <Button
+      testID={`actAsSignIn-${account.handle}`}
+      label={label}
+      accessibilityHint={l`Opens your server’s sign-in`}
+      onPress={onPress}
+      style={[a.justify_start, a.px_md, a.py_sm, a.gap_md, a.rounded_md]}
+      size="large"
+      color="secondary">
+      <Text
+        emoji
+        style={[a.flex_1, a.text_md, a.font_semi_bold]}
+        numberOfLines={1}>
+        {handle}
+      </Text>
+      <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
+        {account.state === 'signInAgain' ? (
+          <Trans>Sign in again</Trans>
+        ) : (
+          <Trans>Sign in on this device</Trans>
+        )}
+      </Text>
+    </Button>
   )
 }
 
@@ -240,11 +356,13 @@ function AccountRow({
   kind,
   subject,
   target,
+  prepare,
 }: {
   account: Account
   kind: ActAsKind
   subject: string
   target: ActAsPost | string
+  prepare: (did: string) => Promise<void>
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -252,6 +370,9 @@ function AccountRow({
   const handle = sanitizeHandle(account.handle, '@')
   const on = isOn(entry, kind)
   const ready = entry?.status === 'ready'
+  const [waiting, setWaiting] = useState(false)
+  // Unloaded or loading: enabled, so focus or a press can start the read.
+  const loading = !entry || entry.status === 'loading'
 
   const label = (() => {
     if (kind === 'like')
@@ -273,7 +394,7 @@ function AccountRow({
     return on ? l`Following` : l`Follow`
   })()
 
-  const onPress = () => {
+  const act = () => {
     toggleActAs(account.did, kind, target).catch((error: unknown) => {
       if (error instanceof ActAsRefusedError) {
         Toast.show(error.message, {type: 'warning'})
@@ -299,12 +420,32 @@ function AccountRow({
         ? t.palette.positive_500
         : t.palette.primary_500
 
+  // SA-20: the read starts on focus (web) or press-in (native), one row only.
+  const start = () => void prepare(account.did)
+  const onPress = async () => {
+    if (ready) {
+      act()
+      return
+    }
+    // A press waits for this row's one read, then acts (SAR2-N9).
+    setWaiting(true)
+    try {
+      await prepare(account.did)
+    } finally {
+      setWaiting(false)
+    }
+    if (getActAs(account.did, subject)?.status === 'ready') act()
+  }
+
   return (
     <Button
       testID={`actAs-${kind}-${account.handle}`}
       label={label}
-      disabled={!ready}
-      onPress={onPress}
+      // Disabled only once loaded, for the reasons it was before (8.1).
+      disabled={!loading && !ready}
+      onFocus={IS_WEB ? start : undefined}
+      onPressIn={IS_WEB ? undefined : start}
+      onPress={() => void onPress()}
       style={[a.justify_start, a.px_md, a.py_sm, a.gap_md, a.rounded_md]}
       size="large"
       color="secondary">
@@ -314,9 +455,13 @@ function AccountRow({
         numberOfLines={1}>
         {handle}
       </Text>
-      {!entry || entry.status === 'loading' ? (
-        <ActivityIndicator size="small" />
-      ) : (
+      {waiting || entry?.status === 'loading' ? (
+        <ActivityIndicator
+          size="small"
+          accessibilityLabel={l`Checking ${handle}…`}
+          accessibilityHint=""
+        />
+      ) : !entry ? null : (
         <View style={[a.flex_row, a.align_center, a.gap_xs]}>
           {ready ? (
             <Icon

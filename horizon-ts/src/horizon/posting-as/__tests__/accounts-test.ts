@@ -101,6 +101,7 @@ import {
   registerStoredAccountSink,
   updatedStoredAccount,
 } from '#/horizon/session/stored-account'
+import {putEntry} from '#/horizon/system-accounts/session-store'
 import {app, chat, com} from '#/lexicons'
 import {postingRoutesFor} from '../routes'
 import {
@@ -113,6 +114,7 @@ import {
 import {
   fakeAccount,
   jwt,
+  listSystemAccounts,
   LOCUS_URL,
   MAIN,
   OTHER,
@@ -273,6 +275,23 @@ describe('the private write path refuses behind the composer (8.5, P5R6-N3)', ()
 })
 
 describe('the temporary client (PP-16)', () => {
+  beforeEach(() => {
+    // The other accounts are the current account's system accounts (S-1).
+    publishCurrent(fakeAccount(MAIN), LOCUS_URL, 'main.test')
+  })
+
+  it('a switcher account that is not on the current account’s list is not found (system accounts S-1)', () => {
+    listSystemAccounts(MAIN, [STOCKY])
+    // OTHER is usable in the switcher and has its own entry (as left by a
+    // list another account keeps), so only the list check can refuse it.
+    putEntry({did: OTHER, kind: 'switcher'})
+    expect(() => acquireTemporaryClient(OTHER)).toThrow(
+      TemporaryClientUnavailableError,
+    )
+    expect(acquireTemporaryClient(STOCKY).did).toBe(STOCKY)
+    releaseTemporaryClient(STOCKY)
+  })
+
   it('writes as the chosen account and reads its identity from its own PDS while held', () => {
     const clients = acquireTemporaryClient(OTHER)
     expect(clients.did).toBe(OTHER)

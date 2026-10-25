@@ -14,12 +14,10 @@ import {type SessionAccount} from '#/state/session/types'
 import {IS_NATIVE} from '#/env'
 import {clearMuteCache} from '#/horizon/mutes/cache'
 import {isOauthAccount, isOAuthSignedOut} from '#/horizon/session/accounts'
-import {isAuthError} from '#/horizon/session/auth-errors'
-import {
-  createOAuthTransport,
-  restoreOAuthSession,
-} from '#/horizon/session/oauth-transport'
+import {createOAuthTransport} from '#/horizon/session/oauth-transport'
+import {revokeOAuthGrant} from '#/horizon/session/revoke'
 import {THREAD_LENS} from '#/horizon/switches'
+import {signOutSystemAccounts} from '#/horizon/system-accounts/sign-out'
 import {clearLensRefusals, clearLensWaits} from '#/horizon/thread-lens/api'
 import {clearLensRegistry} from '#/horizon/thread-lens/registry'
 
@@ -35,21 +33,13 @@ function describe(e: unknown) {
   return e instanceof Error ? e.message : String(e)
 }
 
-/**
- * Revoke the OAuth grant for `did` where the server offers revocation, and
- * delete the stored session and its DPoP key. A session that is not stored
- * counts as success.
+/*
+ * The library's own `revoke` (system accounts design 6.5, SA-H5): it deletes
+ * the stored session in a `finally`, so an offline sign-out still forgets
+ * the grant. The old restore-then-sign-out deleted nothing when the restore
+ * threw.
  */
-export async function revokeOAuthGrant(did: string) {
-  try {
-    const session = await restoreOAuthSession(did, false)
-    await session.signOut()
-  } catch (e) {
-    if (!isAuthError(e)) {
-      logger.warn('sign-out: OAuth revocation failed', {message: describe(e)})
-    }
-  }
-}
+export {revokeOAuthGrant}
 
 async function signOutOAuthAccount(account: SessionAccount) {
   if (isOAuthSignedOut(account)) return
@@ -111,9 +101,15 @@ async function signOutPasswordAccount(account: SessionAccount) {
 /**
  * Sign the accounts out at their servers, each in order: unregister push
  * through the account's own session, then revoke the OAuth grant (OAuth) or
- * end the server session (password). Never throws.
+ * end the server session (password). `accountsAfter` is the switcher as the
+ * stock dispatch left it: the system accounts' seam clears the signed-out
+ * accounts' lists and graces first and starts its own revocations alongside
+ * the stock ones (system accounts design 6.5). Never throws.
  */
-export async function horizonSignOut(accounts: SessionAccount[]) {
+export async function horizonSignOut(
+  accounts: SessionAccount[],
+  accountsAfter?: readonly SessionAccount[],
+) {
   /*
    * Thread Lens's per-account stores (Phase 4 design 8.4, 11.5, 12.1): the
    * gap registry, the refusal record and the 429 wait with its timer.
@@ -128,7 +124,15 @@ export async function horizonSignOut(accounts: SessionAccount[]) {
     // The reader's mutes kept on the device for the lens (`mutes/cache.ts`).
     clearMuteCache(dids)
   }
-  await Promise.all(
+  // Steps 1 and 2 of the seam, before the first await (SAR2-L3).
+  let system: ReturnType<typeof signOutSystemAccounts>
+  try {
+    system = signOutSystemAccounts(accounts, accountsAfter)
+  } catch (e) {
+    logger.warn('sign-out: system accounts failed', {message: describe(e)})
+    system = {revocations: Promise.resolve(), afterStock: async () => {}}
+  }
+  const stock = Promise.all(
     accounts.map(async account => {
       try {
         if (isOauthAccount(account)) {
@@ -141,4 +145,7 @@ export async function horizonSignOut(accounts: SessionAccount[]) {
       }
     }),
   )
+  await Promise.all([stock, system.revocations])
+  // Step 3: once more, with the store as it is now.
+  await system.afterStock()
 }

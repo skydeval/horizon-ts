@@ -112,6 +112,14 @@ export const PRISM_FEATURES = [
    */
   'plural.read',
   'plural.fronters',
+  /*
+   * System accounts (system accounts design 5.2, SP-1): the five
+   * `app.nearhorizon.account.*` methods, listed for members and non-members.
+   * Read only while the `SYSTEM_ACCOUNTS` switch is on; without it the
+   * section says the feature isn't available and the device cache is used
+   * as it stands.
+   */
+  'account.systemAccounts',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

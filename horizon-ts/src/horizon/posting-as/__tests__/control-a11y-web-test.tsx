@@ -79,9 +79,19 @@ const mockToggleMember = jest.fn((rkey: string) => {
 })
 const mockAccounts = [
   {did: 'did:plc:main', handle: 'main.test'},
-  {did: 'did:plc:lala', handle: 'lala.test'},
-  {did: 'did:plc:wren', handle: 'wren.test'},
+  {did: 'did:plc:other', handle: 'other.test'},
 ]
+/*
+ * System accounts (system accounts design 8.1, 8.2): the current account's
+ * listed accounts, two ready and one that needs a sign-in here. The
+ * switcher's other account is never offered.
+ */
+const mockRows = [
+  {did: 'did:plc:lala', handle: 'lala.test', addedAt: '', state: 'ready'},
+  {did: 'did:plc:wren', handle: 'wren.test', addedAt: '', state: 'ready'},
+  {did: 'did:plc:pip', handle: 'pip.test', addedAt: '', state: 'signInAgain'},
+]
+const mockReverifyListeners = new Set<(did: string) => boolean>()
 const mockMembers = [
   {rkey: 'm1', value: {name: 'Ash'}},
   {rkey: 'm2', value: {name: 'Birch'}},
@@ -101,9 +111,34 @@ jest.mock('../toasts', () => ({}))
 jest.mock('../gates', () => ({
   choosePostingAccount: (did: string) => mockChooseAccount(did),
   togglePostingMember: (rkey: string) => mockToggleMember(rkey),
+  onPostingReverifyRequested: (listener: (did: string) => boolean) => {
+    mockReverifyListeners.add(listener)
+    return () => mockReverifyListeners.delete(listener)
+  },
 }))
 jest.mock('../temp-client', () => ({canActAs: () => true}))
 jest.mock('../fronters', () => ({PUBLIC_FRONTERS_KEPT: true}))
+jest.mock('#/horizon/system-accounts/hooks', () => ({
+  useSystemAccountRows: () => mockRows,
+}))
+jest.mock('#/horizon/system-accounts/AddSystemAccountDialog', () => ({
+  AddSystemAccountDialog: () => null,
+}))
+jest.mock('#/horizon/system-accounts/SystemAccountsSection', () => ({
+  requestSystemAccountsFocus: () => {},
+}))
+jest.mock('#/horizon/system-accounts/announce', () => ({
+  holdAnnouncements: () => () => {},
+}))
+jest.mock('#/horizon/system-accounts/sync', () => ({
+  readList: () => Promise.resolve(true),
+}))
+jest.mock('#/horizon/routing/current-clients', () => ({
+  getCurrentClients: () => undefined,
+}))
+jest.mock('#/screens/Profile/Header/EditProfileDialog', () => ({
+  EditProfileDialog: () => null,
+}))
 jest.mock('#/state/session', () => ({
   useSession: () => ({accounts: mockAccounts}),
 }))
@@ -116,6 +151,7 @@ jest.mock('#/state/a11y', () => ({
 jest.mock('#/horizon/switches', () => ({
   POSTING_AS: true,
   PLURAL_EDITING: true,
+  SYSTEM_ACCOUNTS: true,
 }))
 jest.mock('#/view/com/util/UserAvatar', () => ({UserAvatar: () => null}))
 jest.mock('#/alf', () => {
@@ -218,6 +254,7 @@ beforeEach(() => {
     active: true,
     did: 'did:plc:main',
     currentDid: 'did:plc:main',
+    currentHandle: 'main.test',
     handle: 'main.test',
     members: [],
     hold: {kind: 'none'},
@@ -263,6 +300,11 @@ function byTestId(testID: string) {
   return node
 }
 
+/** A label without the direction isolates every shown handle is wrapped in. */
+function plain(label: string | null) {
+  return label?.replace(/[‪-‮⁦-⁩]/g, '')
+}
+
 function account(handle: string) {
   return byTestId(`composerPostingAs-${handle}`)
 }
@@ -302,6 +344,36 @@ describe('the "Posting as" menu on web exposes its choices (SAR2-L5)', () => {
     expect(account('lala.test').getAttribute('aria-checked')).toBe('false')
     expect(account('wren.test').getAttribute('aria-checked')).toBe('false')
     expect(checkedRadios()).toEqual(['composerPostingAs-main.test'])
+    // Each item is labelled "@x"; the group says "Post from" (SA-H11).
+    expect(plain(account('lala.test').getAttribute('aria-label'))).toBe(
+      '@lala.test',
+    )
+  })
+
+  it('offers the current account and its system accounts only, never another switcher account (S-1)', async () => {
+    await openMenu()
+    expect(
+      document.querySelector('[data-testid="composerPostingAs-other.test"]'),
+    ).toBeNull()
+  })
+
+  it('a listed account that needs a sign-in is a plain menuitem after the radio group, and opens the sign-in (8.2)', async () => {
+    await openMenu()
+    const item = byTestId('composerPostingAsSignIn-did:plc:pip')
+    expect(item.getAttribute('role')).toBe('menuitem')
+    expect(plain(item.getAttribute('aria-label'))).toBe(
+      'Sign in again as @pip.test',
+    )
+    const group = document.querySelector(
+      '[role="group"][aria-label="Post from"]',
+    )
+    expect(group!.contains(item)).toBe(false)
+    expect(
+      document.querySelector('[data-testid="composerPostingAs-pip.test"]'),
+    ).toBeNull()
+    expect(byTestId('composerPostingAsManage').getAttribute('role')).toBe(
+      'menuitem',
+    )
   })
 
   it('members are menuitemcheckboxes in a labelled group, unchecked by default', async () => {

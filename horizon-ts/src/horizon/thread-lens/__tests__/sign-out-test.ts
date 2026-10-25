@@ -28,6 +28,16 @@ jest.mock('#/horizon/session/oauth-transport', () => ({
   restoreOAuthSession: () => Promise.resolve({signOut: async () => {}}),
 }))
 jest.mock('#/lib/lexClient', () => ({createLexClient: () => ({})}))
+// The system accounts' part of sign-out has its own suite.
+jest.mock('#/horizon/system-accounts/sign-out', () => ({
+  signOutSystemAccounts: () => ({
+    revocations: Promise.resolve(),
+    afterStock: () => Promise.resolve(),
+  }),
+}))
+jest.mock('#/horizon/session/revoke', () => ({
+  revokeOAuthGrant: () => Promise.resolve(),
+}))
 jest.mock('#/state/session/network', () => ({networkAwareFetch: fetch}))
 
 import {type SessionAccount} from '#/state/session/types'

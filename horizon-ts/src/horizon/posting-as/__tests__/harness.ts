@@ -19,6 +19,17 @@ import {
   clearCurrentClients,
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
+import {writeDevice} from '#/horizon/system-accounts/device'
+import {
+  applyListAnswer,
+  LISTS_KEY,
+  resetListStoreForTests,
+} from '#/horizon/system-accounts/list-store'
+import {
+  putEntry,
+  resetSessionStoreForTests,
+  SESSIONS_KEY,
+} from '#/horizon/system-accounts/session-store'
 
 /** The current account: on locus. */
 export const MAIN = 'did:plc:mainaaaaaaaaaaaaaaaaaaaa'
@@ -218,7 +229,30 @@ export function fakeAccount(
   return account
 }
 
-/** Publish `account` as the current account, with a query client. */
+/**
+ * System accounts (system accounts design 6.1, S-1): Posting as and Act as
+ * reach only the current account's listed accounts. `dids` go on
+ * `registrar`'s cached list, each with a `switcher` entry, so they act
+ * through their stored switcher accounts as 5D's "other signed-in accounts"
+ * did. The device stores are emptied first.
+ */
+export function listSystemAccounts(registrar: string, dids: string[]) {
+  writeDevice(LISTS_KEY, undefined)
+  writeDevice(SESSIONS_KEY, undefined)
+  resetListStoreForTests()
+  resetSessionStoreForTests()
+  applyListAnswer(registrar, {
+    accounts: dids.map(did => ({did, addedAt: '2026-10-24T00:00:00Z'})),
+    rev: '1',
+  })
+  for (const did of dids) putEntry({did, kind: 'switcher'})
+}
+
+/**
+ * Publish `account` as the current account, with the user's other test
+ * accounts (`MAIN`, `OTHER`, `STOCKY`) as its system accounts. `STRANGER`
+ * is never one.
+ */
 export function publishCurrent(
   account: FakeAccount,
   pdsUrl: string,
@@ -226,6 +260,10 @@ export function publishCurrent(
   prism: Client = account.client,
   queryClient = new QueryClient(),
 ) {
+  listSystemAccounts(
+    account.did,
+    [MAIN, OTHER, STOCKY].filter(did => did !== account.did),
+  )
   clearCurrentClients()
   publishCurrentClients({
     did: account.did,

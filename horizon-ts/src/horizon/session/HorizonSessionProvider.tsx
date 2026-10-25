@@ -14,6 +14,7 @@ import {
   type HorizonSessionStore,
 } from '#/horizon/session/session-store'
 import {registerStoredAccountSink} from '#/horizon/session/stored-account'
+import {startSystemAccounts} from '#/horizon/system-accounts/runtime'
 import {com} from '#/lexicons'
 
 /**
@@ -84,8 +85,9 @@ async function refreshAccountFields(
 
 /**
  * Mounted inside the stock session provider, around its children: OAuth
- * login, the remote session-death listener, and the account refresh after an
- * OAuth resume.
+ * login, the remote session-death listener, the account refresh after an
+ * OAuth resume, and the system accounts' runtime (the sweep and the death
+ * marks; their list read and announcer mount in `HorizonHost`).
  */
 export function HorizonSessionProvider({
   store,
@@ -97,6 +99,9 @@ export function HorizonSessionProvider({
   children: React.ReactNode
 }) {
   useEffect(() => watchOAuthSessionDeath(store), [store])
+
+  // System accounts: the sweep, the death marks and the list reads (6.4, 6.5).
+  useEffect(() => startSystemAccounts(store), [store])
 
   // A temporary client's rotated tokens (Phase 5, PA-4).
   useEffect(

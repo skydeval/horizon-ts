@@ -8,7 +8,8 @@
  * reader's mutes on the device (for a lens member), the identity
  * reads' `getRecords` and `listMembers` tokens' prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
- * the "spoilers from other apps" choice, the launch-time
+ * the "spoilers from other apps" choice, the system accounts' list read
+ * and announcer, the launch-time
  * check for a sign-in that never came back, the notice for a resume that
  * found its OAuth session busy in another tab, and the cross-tab reload after an
  * AppView change. Mounted inside the account-keyed tree, so it remounts on
@@ -36,6 +37,7 @@ import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
 import {WriteRouteResolver} from '#/horizon/routing/WriteRouteResolver'
 import {OAuthBusyNotice} from '#/horizon/session/oauth-busy-notice'
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
+import {SystemAccountsHost} from '#/horizon/system-accounts/SystemAccountsHost'
 import {ThreadLensTokenPrefetch} from '#/horizon/thread-lens/TokenPrefetch'
 
 /**
@@ -92,6 +94,7 @@ export function HorizonHost() {
       <OutboxHost />
       <AppearanceSync />
       <OtherAppSpoilersSync />
+      <SystemAccountsHost />
       <InPlaceSignInWindow />
       <PasswordGateDialog />
     </>

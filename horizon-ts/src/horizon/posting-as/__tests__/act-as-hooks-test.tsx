@@ -78,6 +78,19 @@ jest.mock('#/components/Typography', () => ({Text: () => null}))
 jest.mock('#/components/icons/Heart2', () => ({}))
 jest.mock('#/components/icons/Person', () => ({}))
 jest.mock('#/components/icons/Repost', () => ({}))
+/*
+ * System accounts (system accounts design 8.1, SA-20): the rows are the
+ * current account's listed accounts, never the switcher's others.
+ */
+let mockRows: {did: string; handle?: string; addedAt: string; state: string}[] =
+  []
+jest.mock('#/horizon/system-accounts/hooks', () => ({
+  useSystemAccountRows: () => mockRows,
+}))
+jest.mock('#/horizon/system-accounts/AddSystemAccountDialog', () => ({
+  AddSystemAccountDialog: () => null,
+}))
+const mockHolds: string[] = []
 const mockLoads: string[] = []
 jest.mock('#/horizon/posting-as/act-as', () => ({
   ...jest.requireActual<object>('#/horizon/posting-as/act-as'),
@@ -88,6 +101,10 @@ jest.mock('#/horizon/posting-as/act-as', () => ({
   loadActAsProfile: (did: string, subject: string) => {
     mockLoads.push(`${did} ${subject}`)
     return Promise.resolve()
+  },
+  holdActAsClients: (dids: string[]) => {
+    mockHolds.push(...dids)
+    return () => {}
   },
 }))
 
@@ -114,6 +131,7 @@ beforeEach(() => {
   mockSwitch = true
   mockRestoredHidden = false
   mockLoads.length = 0
+  mockHolds.length = 0
   const main = account(MAIN, 'main.test')
   mockSession = {
     hasSession: true,
@@ -124,36 +142,51 @@ beforeEach(() => {
       account(STOCKY, 'stocky.test', false),
     ],
   }
+  mockRows = [
+    {did: OTHER, handle: 'other.test', addedAt: '', state: 'ready'},
+    {did: STRANGER, handle: 'stranger.test', addedAt: '', state: 'signIn'},
+  ]
 })
 
-describe('who is offered (8.6)', () => {
-  it('the other signed-in accounts that can act, never the current one', () => {
+describe('who is offered (8.6, system accounts 8.1)', () => {
+  it('the current account’s system accounts with their states, never another switcher account', () => {
     const {result} = renderHook(() => useActAsPost(POST))
     expect(result.current.available).toBe(true)
     expect(result.current.accounts).toEqual([
-      {did: OTHER, handle: 'other.test'},
+      {did: OTHER, handle: 'other.test', state: 'ready'},
+      {did: STRANGER, handle: 'stranger.test', state: 'signIn'},
     ])
+    // STOCKY is in the switcher but not listed: not offered (S-1).
+    expect(result.current.accounts.map(a => a.did)).not.toContain(STOCKY)
   })
 
-  it('opening the list reads each listed account’s own state, and only theirs', () => {
+  it('opening the list reads nothing; a row’s focus or press reads that row only (SA-20)', async () => {
     jest.useFakeTimers()
     const {result} = renderHook(() => useActAsPost(POST))
     result.current.open('like')
+    expect(mockLoads).toEqual([])
+    expect(mockHolds).toEqual([])
+    await result.current.prepare(OTHER)
     expect(mockLoads).toEqual([`${OTHER} ${POST.uri}`])
+    expect(mockHolds).toEqual([OTHER])
+    // A second focus shares the read and the hold.
+    await result.current.prepare(OTHER)
+    expect(mockLoads).toHaveLength(1)
+    expect(mockHolds).toHaveLength(1)
     jest.useRealTimers()
   })
 
   it('follow leaves out the profile’s own account', () => {
-    mockSession.accounts.push(account(STRANGER, 'stranger.test'))
     const {result} = renderHook(() => useActAsProfile(OTHER))
     expect(result.current.accounts.map(a => a.did)).toEqual([STRANGER])
   })
 
-  it('absent with one account, signed out, and on a visitor-form restored view', () => {
-    mockSession.accounts = [mockSession.accounts[0]]
+  it('absent with no system accounts, signed out, and on a visitor-form restored view', () => {
+    mockRows = []
     expect(renderHook(() => useActAsPost(POST)).result.current.available).toBe(
       false,
     )
+    mockRows = [{did: OTHER, handle: 'other.test', addedAt: '', state: 'ready'}]
     mockSession = {hasSession: false, currentAccount: undefined, accounts: []}
     expect(
       renderHook(() => useActAsProfile(STRANGER)).result.current.available,

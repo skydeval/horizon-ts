@@ -42,6 +42,13 @@ export function isOAuthRevocationCause(_cause: unknown): boolean {
 }
 
 /**
+ * Unused on this platform.
+ */
+export function isOAuthRefreshFailure(_cause: unknown): boolean {
+  return false
+}
+
+/**
  * Throws: OAuth is not available on this platform.
  */
 export function getOAuthClient(): BrowserOAuthClient {

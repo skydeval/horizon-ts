@@ -22,6 +22,10 @@
  * while the app is in the foreground (PA-29, `startDirectTokenPrefetch`).
  * The prefetch takes its methods and routes as parameters, so chainlink #5
  * widens both without restructuring, and moves the other prism methods here.
+ *
+ * System accounts' writes and proofs (system accounts design SA-18) take the
+ * one-shot mode instead (`mintOneShotPrismToken`, `getOneShotPrismClient`):
+ * uncached, no `exp`, no same-body resend.
  */
 
 import {type Client, type FetchHandler, XrpcResponseError} from '@atproto/lex'
@@ -350,6 +354,73 @@ export function getDirectPrismClient(pdsClient: Client): Client {
       {appLabelers: null},
     )
     directClients.set(pdsClient, client)
+  }
+  return client
+}
+
+/**
+ * A one-shot service token for calling (or proving) `lxm` on prism as the
+ * account of `pdsClient` (system accounts design SA-18, 5.2, SA-H8): minted
+ * with no `exp`, so the PDS's own default lifetime applies (60 s on the
+ * PDSes in use) and a skewed device clock cannot cause a `BadExpiration`;
+ * never taken from or put in the token cache, and never the 1,800 s
+ * fallback. Any account's PDS client may mint, not only the current one's.
+ * A 429 is honoured as for cached tokens (PA-36).
+ */
+export async function mintOneShotPrismToken(
+  pdsClient: Client,
+  lxm: NsidString,
+): Promise<string> {
+  const did = didOf(pdsClient)
+  const retryAt = limitedUntil.get(did)
+  if (retryAt !== undefined) {
+    if (retryAt > Date.now()) throw new DirectPrismRateLimitedError(retryAt)
+    limitedUntil.delete(did)
+  }
+  try {
+    return await getServiceAuthToken({
+      client: pdsClient,
+      aud: PRISM_SERVICE,
+      lxm,
+    })
+  } catch (error) {
+    if (error instanceof XrpcResponseError && error.status === 429) {
+      const at =
+        Date.now() +
+        rateLimitWaitMs(error.headers, SERVICE_AUTH_LIMIT_DEFAULT_MS)
+      limitedUntil.set(did, at)
+      throw new DirectPrismRateLimitedError(at)
+    }
+    throw error
+  }
+}
+
+const oneShotClients = new WeakMap<Client, Client>()
+
+/**
+ * The client that calls prism directly as the account of `pdsClient` with a
+ * fresh one-shot token on every request (SA-H8): no `atproto-proxy`, no
+ * token cache, and no resend on a 401 (the generic handler resends the same
+ * body, which would replay a one-shot proof; the caller re-mints instead,
+ * SAR3-N5).
+ */
+export function getOneShotPrismClient(pdsClient: Client): Client {
+  let client = oneShotClients.get(pdsClient)
+  if (!client) {
+    const did = didOf(pdsClient)
+    const fetchHandler: FetchHandler = async (path, init) => {
+      const lxm = methodOf(path)
+      const token = await mintOneShotPrismToken(pdsClient, lxm)
+      const headers = new Headers(init.headers)
+      headers.delete('atproto-proxy')
+      headers.set('authorization', `Bearer ${token}`)
+      return networkAwareFetch(new URL(path, PRISM_URL), {...init, headers})
+    }
+    client = createLexClient(
+      {did: did as DidString, fetchHandler},
+      {appLabelers: null},
+    )
+    oneShotClients.set(pdsClient, client)
   }
   return client
 }

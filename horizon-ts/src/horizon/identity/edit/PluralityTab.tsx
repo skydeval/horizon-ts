@@ -9,6 +9,8 @@
  * - **Front:** who is fronting now and "Switch front" (7.3).
  * - **Members:** the list in ascending rkey order (creation order, with
  *   TIDs) and "Add member"; a member opens the member editor in place.
+ * - **System accounts** (system accounts design 4.1): below Members, or
+ *   under "Set up a plural system"; a list needs no system record.
  * - **Remove plural system:** a confirm, then the system record first and
  *   everything else after (`removePluralSystem`). The dialog states the
  *   residual (P5R1-Q2); a failure after the system record is gone shows
@@ -26,6 +28,7 @@ import {atoms as a, useTheme} from '#/alf'
 import {Admonition} from '#/components/Admonition'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
+import * as Toggle from '#/components/forms/Toggle'
 import {PlusLarge_Stroke2_Corner0_Rounded as PlusIcon} from '#/components/icons/Plus'
 import {Loader} from '#/components/Loader'
 import * as Prompt from '#/components/Prompt'
@@ -47,6 +50,10 @@ import {
   type SystemInput,
   systemProblem,
 } from '#/horizon/identity/writes'
+import {SYSTEM_ACCOUNTS} from '#/horizon/switches'
+import {useCachedLists} from '#/horizon/system-accounts/list-store'
+import {removeSystemAccount} from '#/horizon/system-accounts/register'
+import {SystemAccountsSection} from '#/horizon/system-accounts/SystemAccountsSection'
 
 export function PluralityTab({did}: {did: string}) {
   const t = useTheme()
@@ -61,6 +68,12 @@ export function PluralityTab({did}: {did: string}) {
   const [incomplete, setIncomplete] = useState(false)
   const removeControl = useDialogControl()
   const frontControl = useDialogControl()
+  // System accounts stay unless also removed (system accounts design 13.4, SQ-6).
+  const [alsoRemoveAccounts, setAlsoRemoveAccounts] = useState(false)
+  const cachedLists = useCachedLists()
+  const systemAccounts = SYSTEM_ACCOUNTS
+    ? (cachedLists[did]?.accounts ?? [])
+    : []
 
   const memberList = members.state === 'ready' ? members.answer.members : []
 
@@ -98,6 +111,13 @@ export function PluralityTab({did}: {did: string}) {
         await removePluralSystem(writer)
         setIncomplete(false)
         Toast.show(l({message: 'Plural system removed', context: 'toast'}))
+        if (alsoRemoveAccounts) {
+          setAlsoRemoveAccounts(false)
+          // Each as "Remove" does (4.5), one at a time.
+          for (const account of systemAccounts) {
+            await removeSystemAccount(did, account.did, account.handle)
+          }
+        }
       } catch (e) {
         if (e instanceof PluralRemovalIncompleteError) {
           setIncomplete(true)
@@ -142,6 +162,8 @@ export function PluralityTab({did}: {did: string}) {
           </ButtonText>
           {busy && <ButtonIcon icon={Loader} />}
         </Button>
+        {/* System accounts need no system record (SA-1). */}
+        <SystemAccountsSection did={did} />
       </View>
     )
   } else {
@@ -295,6 +317,8 @@ export function PluralityTab({did}: {did: string}) {
           )}
         </View>
 
+        <SystemAccountsSection did={did} />
+
         <View style={[a.gap_sm]}>
           <Button
             testID="pluralityRemove"
@@ -354,6 +378,25 @@ export function PluralityTab({did}: {did: string}) {
               names.
             </Trans>
           </Prompt.DescriptionText>
+          {systemAccounts.length > 0 ? (
+            <View style={[a.gap_sm, a.pb_md]}>
+              <Text style={[a.text_md, a.leading_snug]}>
+                <Trans>Your system accounts stay. Also remove them?</Trans>
+              </Text>
+              <Toggle.Item
+                testID="pluralityRemoveSystemAccounts"
+                name="alsoRemoveSystemAccounts"
+                label={l`Also remove your system accounts`}
+                value={alsoRemoveAccounts}
+                onChange={setAlsoRemoveAccounts}
+                hitSlop={HIT_44}>
+                <Toggle.Checkbox />
+                <Toggle.LabelText>
+                  <Trans>Also remove them</Trans>
+                </Toggle.LabelText>
+              </Toggle.Item>
+            </View>
+          ) : null}
         </Prompt.Content>
         <Prompt.Actions>
           <Prompt.Action

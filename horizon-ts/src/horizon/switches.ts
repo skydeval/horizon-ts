@@ -383,6 +383,27 @@ export const POSTING_AS: boolean = true
 export const ACT_AS_CONTROLS: boolean = true
 
 /**
+ * System accounts (system accounts design SA-16, section 10;
+ * `system-accounts/`): the "System accounts" section in Edit Profile's
+ * Plurality tab (add by signing in as the account, remove, re-verify, the
+ * registered account's own status), the list kept on prism and cached on
+ * the device, and system-account sessions, so Posting as and Act as offer
+ * the current account and its registered system accounts. `false`: no
+ * section and no prism call, and Posting as and Act as offer the current
+ * account only (members still), never the other switcher accounts (S-1).
+ * Off until prism ships SP-1 (`account.systemAccounts`).
+ */
+export const SYSTEM_ACCOUNTS: boolean = false
+
+/**
+ * Development builds only, off by default: the five system-account methods
+ * are answered by an in-memory stand-in for prism
+ * (`system-accounts/prism-stub.ts`), so the section and the registration can
+ * be tried before SP-1 is deployed. Ignored outside `__DEV__`.
+ */
+export const SYSTEM_ACCOUNTS_DEV_STUB: boolean = false
+
+/**
  * Development builds only, off by default (refract client design 11.3): the
  * seven refract methods are answered from synthetic fixtures
  * (`refract/dev-fixtures.ts`), so the screens can be checked without reading

@@ -242,9 +242,11 @@ describe('the posting-as entry (PA-10)', () => {
     )
     open()
     applyDraftPostingAs('draft-1')
+    // A listed system account that needs a sign-in here (system accounts 8.3).
     expect(getPostingState().hold).toEqual({
       kind: 'signedOut',
       handle: 'stocky.test',
+      reason: 'signIn',
     })
     expect(postingAllowsFor(getPostingState())).toBe(false)
     await settle()

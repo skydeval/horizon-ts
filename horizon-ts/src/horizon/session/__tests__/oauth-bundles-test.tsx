@@ -18,6 +18,11 @@ jest.mock('#/horizon/session/oauth-client', () => ({
   }),
   addOAuthSessionDeletedListener: () => () => {},
   isOAuthRevocationCause: () => false,
+  isOAuthRefreshFailure: () => false,
+}))
+// System accounts' runtime and announcer: their own suites cover them.
+jest.mock('#/horizon/system-accounts/runtime', () => ({
+  startSystemAccounts: () => () => {},
 }))
 jest.mock('#/horizon/session/oauth-transport', () =>
   jest.requireActual('#/horizon/session/oauth-transport.web'),

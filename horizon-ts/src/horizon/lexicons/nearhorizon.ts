@@ -878,3 +878,96 @@ export const pluralListMembers = l.query(
   }),
   PLURAL_READ_ERRORS,
 )
+
+/*
+ * System accounts (system accounts design 5.2, SP-1): five methods in the
+ * `account.systemAccounts` feature, open to every signed-in account, member
+ * or not. Every call goes direct to prism (SA-18); the three writes use
+ * one-shot tokens. `app.nearhorizon.account.confirmSystemAccount` is a
+ * proof-only method name: no route serves it, it is only an `lxm` a PDS
+ * mints a proof for.
+ */
+
+/**
+ * The errors every system-accounts method may answer (prism's reply):
+ * `MethodNotImplemented` (501) while the feature is off, answered before
+ * auth; `RateLimitExceeded` (429) from the `system_accounts` rate class.
+ */
+const SYSTEM_ACCOUNTS_ERRORS = [
+  'AuthRequired',
+  'InvalidToken',
+  'InvalidRequest',
+  'RateLimitExceeded',
+  'MethodNotImplemented',
+] as const
+
+/**
+ * `app.nearhorizon.account.getSystemAccounts` (as the registering account):
+ * its own list. `rev` is an integer that only grows per list (prism's
+ * reply); an unused list answers `{accounts: [], rev: 0}`.
+ */
+export const accountGetSystemAccounts = l.query(
+  'app.nearhorizon.account.getSystemAccounts',
+  l.params(),
+  l.jsonPayload({
+    accounts: l.array(
+      l.object({
+        did: l.string({format: 'did'}),
+        addedAt: l.string(),
+      }),
+    ),
+    rev: l.integer(),
+  }),
+  SYSTEM_ACCOUNTS_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.account.addSystemAccount` (as the registering account):
+ * `proof` is a service token minted by `account`'s PDS for
+ * `confirmSystemAccount`. Idempotent for an active entry.
+ */
+export const accountAddSystemAccount = l.procedure(
+  'app.nearhorizon.account.addSystemAccount',
+  l.params(),
+  l.jsonPayload({
+    account: l.string({format: 'did'}),
+    proof: l.string(),
+  }),
+  l.jsonPayload({rev: l.integer()}),
+  [...SYSTEM_ACCOUNTS_ERRORS, 'InvalidProof', 'ListFull'],
+)
+
+/**
+ * `app.nearhorizon.account.removeSystemAccount` (as the registering
+ * account): a hard delete; a missing entry is success.
+ */
+export const accountRemoveSystemAccount = l.procedure(
+  'app.nearhorizon.account.removeSystemAccount',
+  l.params(),
+  l.jsonPayload({account: l.string({format: 'did'})}),
+  l.jsonPayload({rev: l.integer()}),
+  SYSTEM_ACCOUNTS_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.account.getSystemAccountStatus` (as the registered
+ * account): whether any list holds it. Never which, never how many (SA-15).
+ */
+export const accountGetSystemAccountStatus = l.query(
+  'app.nearhorizon.account.getSystemAccountStatus',
+  l.params(),
+  l.jsonPayload({registered: l.boolean()}),
+  SYSTEM_ACCOUNTS_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.account.leaveSystemAccounts` (as the registered
+ * account): off every list that holds it.
+ */
+export const accountLeaveSystemAccounts = l.procedure(
+  'app.nearhorizon.account.leaveSystemAccounts',
+  l.params(),
+  l.jsonPayload({}),
+  l.jsonPayload({}),
+  SYSTEM_ACCOUNTS_ERRORS,
+)

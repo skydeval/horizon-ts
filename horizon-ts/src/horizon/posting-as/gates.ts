@@ -54,6 +54,10 @@ import {
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {POSTING_AS} from '#/horizon/switches'
+import {announce} from '#/horizon/system-accounts/announce'
+import {getList} from '#/horizon/system-accounts/list-store'
+import {onRemoving} from '#/horizon/system-accounts/register'
+import {onAccountsDropped} from '#/horizon/system-accounts/sync'
 import {app} from '#/lexicons'
 import {
   endPostingRecord,
@@ -390,10 +394,43 @@ export function visibilityAfterSwitch(
   }
 }
 
+type ReverifyListener = (did: string) => boolean
+const reverifyListeners = new Set<ReverifyListener>()
+
+/**
+ * The "Posting as" control listens here to open the re-verify sign-in over
+ * the composer (system accounts design 6.4, 8.2) when a choice needs one.
+ * Returns the unsubscribe function.
+ */
+export function onPostingReverifyRequested(listener: ReverifyListener) {
+  reverifyListeners.add(listener)
+  return () => {
+    reverifyListeners.delete(listener)
+  }
+}
+
+/**
+ * Ask for the re-verify sign-in of `did`, on the current account's list.
+ * `false` when nothing could open it.
+ */
+export function requestPostingReverify(did: string): boolean {
+  for (const listener of reverifyListeners) {
+    if (listener(did)) return true
+  }
+  return false
+}
+
+/** Whether `did` is on the current compose account's system list. */
+function isListed(did: string): boolean {
+  const current = getPostingState().currentDid
+  return !!current && !!getList(current)?.accounts.some(a => a.did === did)
+}
+
 /**
  * The reset (PA-9, the design's `resetGatesFor`): `did` picked in the
  * control. See the file header. A choice that the chosen account's client
- * cannot be made for keeps the previous choice and offers sign-in.
+ * cannot be made for keeps the previous choice and opens its sign-in (a
+ * listed account needing one, system accounts design 6.4).
  */
 export function choosePostingAccount(did: string) {
   const s = getPostingState()
@@ -407,6 +444,7 @@ export function choosePostingAccount(did: string) {
       handle = acquireTemporaryClient(did).handle
     } catch (error) {
       logger.info('posting as: no temporary client', {safeMessage: error})
+      if (isListed(did) && requestPostingReverify(did)) return
       notifyPosting(t`That account isn’t signed in on this device.`)
       return
     }
@@ -427,6 +465,7 @@ export function choosePostingAccount(did: string) {
     data: undefined,
     settings: undefined,
     draftNote: undefined,
+    droppedHandle: undefined,
     generation: gen,
   })
   void loadPostingAccount(gen, did, 'reset', previous)
@@ -472,7 +511,8 @@ export function restorePostingAccount(
         handle = acquireTemporaryClient(did).handle
       } catch {
         signedOut = true
-        handle = storedAccountFor(did)?.handle ?? savedHandle
+        handle =
+          storedAccountFor(did)?.handle ?? listedHandle(did) ?? savedHandle
       }
     }
   }
@@ -486,7 +526,14 @@ export function restorePostingAccount(
     members: [],
     heldMembers: signedOut ? undefined : [...members],
     touched: true,
-    hold: signedOut ? {kind: 'signedOut', handle} : {kind: 'pending'},
+    // 8.3: a draft "as" an account not on the list says so.
+    hold: signedOut
+      ? {
+          kind: 'signedOut',
+          handle,
+          reason: isListed(did) ? 'signIn' : 'notListed',
+        }
+      : {kind: 'pending'},
     resetPending: false,
     data: undefined,
     settings: undefined,
@@ -512,12 +559,50 @@ export function restartAsCurrentAccount() {
     touched: false,
     hold: {kind: 'none'},
     resetPending: false,
+    removing: false,
     data: undefined,
     settings: undefined,
     generation: gen,
   })
   void loadPostingAccount(gen, s.currentDid, 'start')
 }
+
+/** A listed account's handle from the current compose account's list. */
+function listedHandle(did: string): string | undefined {
+  const current = getPostingState().currentDid
+  return current
+    ? getList(current)?.accounts.find(a => a.did === did)?.handle
+    : undefined
+}
+
+/*
+ * System accounts (system accounts design 4.5, 5.5): while the posting
+ * account is being removed from the list, Post is held ("Removing
+ * @lala..."); when the list drops it (a confirmed remove, or a read after
+ * another device's), the compose goes back to the current account through
+ * the reset (PA-9: an account change, option c), with "@lala is no longer
+ * one of your system accounts."
+ */
+onRemoving((did, removing) => {
+  const s = getPostingState()
+  if (s.active && s.did === did && s.did !== s.currentDid) {
+    updatePosting({removing})
+  } else if (s.active && s.removing && !removing) {
+    updatePosting({removing: false})
+  }
+})
+
+onAccountsDropped((registrar, dids) => {
+  const s = getPostingState()
+  if (!s.active || s.currentDid !== registrar || !s.did) return
+  if (!dids.includes(s.did) || s.did === s.currentDid) return
+  const handle = s.handle
+  updatePosting({removing: false})
+  choosePostingAccount(registrar)
+  updatePosting({droppedHandle: handle})
+  const name = handle ? `@${handle}` : t`That account`
+  announce(t`${name} is no longer one of your system accounts.`)
+})
 
 /**
  * Check or uncheck a member of the posting account. Refused while the

@@ -4,9 +4,16 @@
  * the posting account's avatar (or the single chosen member's) with a small
  * chevron. Its menu has up to two groups:
  *
- * - **Accounts** (radio), when more than one stored account can act. Picking
+ * - **Accounts** (radio), when the current account has system accounts
+ *   (system accounts design 8.1, S-1): the current account, then its
+ *   registered system accounts that are ready on this device, each labelled
+ *   "@x" in the "Post from" group; never other switcher accounts. Picking
  *   one runs the reset (`gates.ts`). While a video is attached the group is
- *   disabled: the video was uploaded as the current account (8.5).
+ *   disabled: the video was uploaded as the current account (8.5). Listed
+ *   accounts that need a sign-in here follow as plain items ("Sign in as
+ *   @lala on this device", "Sign in again as @lala"), which open the
+ *   re-verify sign-in over the composer (8.2), then "Manage system
+ *   accounts...", which opens Edit Profile on the Plurality tab (4.1).
  * - **Members of @account** (checkboxes), when the posting account has a
  *   system: zero to 20, none meaning "post as the account". Held, with its
  *   spinner, until the posting account's reads have applied (P5R4-L1).
@@ -19,6 +26,7 @@
 // Registers the toast for refused choices.
 import './toasts'
 
+import {useEffect, useState} from 'react'
 import {ActivityIndicator, StyleSheet, View} from 'react-native'
 import {Trans, useLingui} from '@lingui/react/macro'
 
@@ -26,6 +34,7 @@ import {sanitizeHandle} from '#/lib/strings/handles'
 import {useProfileQuery} from '#/state/queries/profile'
 import {useSession} from '#/state/session'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
+import {EditProfileDialog} from '#/screens/Profile/Header/EditProfileDialog'
 import {atoms as a, useTheme} from '#/alf'
 import {Button} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
@@ -40,11 +49,23 @@ import {usePluralProfile} from '#/horizon/identity/hooks'
 import {memberImageUrl} from '#/horizon/identity/images'
 import {type ListedMember} from '#/horizon/identity/reads'
 import {MenuCheck} from '#/horizon/private/composer/AudienceMenu'
-import {PLURAL_EDITING, POSTING_AS} from '#/horizon/switches'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {PLURAL_EDITING, POSTING_AS, SYSTEM_ACCOUNTS} from '#/horizon/switches'
+import {AddSystemAccountDialog} from '#/horizon/system-accounts/AddSystemAccountDialog'
+import {holdAnnouncements} from '#/horizon/system-accounts/announce'
+import {
+  type SystemAccountRow,
+  useSystemAccountRows,
+} from '#/horizon/system-accounts/hooks'
+import {readList} from '#/horizon/system-accounts/sync'
+import {requestSystemAccountsFocus} from '#/horizon/system-accounts/SystemAccountsSection'
 import {isPostingAsOther, usePostingState} from './compose-store'
 import {PUBLIC_FRONTERS_KEPT} from './fronters'
-import {choosePostingAccount, togglePostingMember} from './gates'
-import {canActAs} from './temp-client'
+import {
+  choosePostingAccount,
+  onPostingReverifyRequested,
+  togglePostingMember,
+} from './gates'
 
 /** Whether the members group is offered at all (section 10). */
 function membersOffered(): boolean {
@@ -64,13 +85,22 @@ export function PostingAsControl({
 }) {
   const s = usePostingState()
   const {accounts} = useSession()
-  const actable = accounts.filter(canActAs)
-  const multiple = actable.length > 1
+  // The current account's system accounts (8.1), never other switcher ones.
+  const rows = useSystemAccountRows(s.currentDid, accounts)
+  const multiple = rows.length > 0
   const isSystem = membersOffered() && !!s.data?.isSystem
+  // Composer open: the list is read in the background when stale (5.5).
+  const currentDid = s.currentDid
+  useEffect(() => {
+    if (!SYSTEM_ACCOUNTS || !currentDid) return
+    const clients = getCurrentClients()
+    if (clients?.did === currentDid)
+      void readList(currentDid, clients.pdsClient)
+  }, [currentDid])
   if (!POSTING_AS || !s.active || !s.did) return <>{children}</>
   if (!multiple && !isSystem && !isPostingAsOther(s)) return <>{children}</>
   if (!isFirstPost) return <PostingAvatar />
-  return <PostingMenu accounts={actable} multiple={multiple} />
+  return <PostingMenu rows={rows} multiple={multiple} />
 }
 
 /** The posting account's avatar, or its single chosen member's. */
@@ -97,16 +127,54 @@ function PostingAvatar({inTrigger = false}: {inTrigger?: boolean}) {
 }
 
 function PostingMenu({
-  accounts,
+  rows,
   multiple,
 }: {
-  accounts: {did: string; handle: string}[]
+  rows: SystemAccountRow[]
   multiple: boolean
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
   const s = usePostingState()
   const frontControl = Dialog.useDialogControl()
+  const menuControl = Menu.useMenuControl()
+  const reverifyControl = Dialog.useDialogControl()
+  const editControl = Dialog.useDialogControl()
+  const [reverify, setReverify] = useState<SystemAccountRow>()
+  const {data: currentProfile} = useProfileQuery({
+    did: SYSTEM_ACCOUNTS ? s.currentDid : undefined,
+  })
+  const accounts = [
+    ...(s.currentDid
+      ? [{did: s.currentDid, handle: s.currentHandle ?? s.currentDid}]
+      : []),
+    ...rows
+      .filter(row => row.state === 'ready')
+      .map(row => ({did: row.did, handle: row.handle ?? row.did})),
+  ]
+  const needSignIn = rows.filter(
+    row => row.state === 'signIn' || row.state === 'signInAgain',
+  )
+
+  // Announcements wait while the menu's modal hides the page (4.6).
+  const menuOpen = menuControl.isOpen
+  useEffect(() => {
+    if (!menuOpen) return
+    return holdAnnouncements()
+  }, [menuOpen])
+
+  // A choice or a draft that needs a sign-in opens it here (8.2, 6.4).
+  useEffect(
+    () =>
+      onPostingReverifyRequested(did => {
+        const row = rows.find(r => r.did === did)
+        if (!row) return false
+        setReverify(row)
+        reverifyControl.open()
+        return true
+      }),
+    [rows, reverifyControl],
+  )
   // Cached answers, drawn greyed under the spinner until the reads apply.
   const cached = usePluralProfile(membersOffered() ? s.did : undefined, {
     mode: 'post',
@@ -129,7 +197,7 @@ function PostingMenu({
      * taking room in the row.
      */
     <View testID="composerPostingAsSlot" style={[a.mt_xs, styles.slot]}>
-      <Menu.Root>
+      <Menu.Root control={menuControl}>
         <Menu.Trigger label={label}>
           {({props, state}) => (
             <Button
@@ -194,7 +262,8 @@ function PostingMenu({
                       key={account.did}
                       value={account.did}
                       testID={`composerPostingAs-${account.handle}`}
-                      label={l`Post from @${name}`}
+                      // The group says "Post from" (SA-H11, SAR3-N11).
+                      label={`@${name}`}
                       disabled={s.hasVideo && account.did !== s.currentDid}
                       onPress={() => choosePostingAccount(account.did)}>
                       <Menu.ItemText>{`@${name}`}</Menu.ItemText>
@@ -203,6 +272,32 @@ function PostingMenu({
                   )
                 })}
               </Menu.RadioGroup>
+              {needSignIn.length > 0 ? (
+                <Menu.Group>
+                  {needSignIn.map(row => {
+                    const name = row.handle
+                      ? `@${sanitizeHandle(row.handle)}`
+                      : row.did
+                    const label =
+                      row.state === 'signInAgain'
+                        ? l`Sign in again as ${name}`
+                        : l`Sign in as ${name} on this device`
+                    return (
+                      <Menu.Item
+                        key={row.did}
+                        testID={`composerPostingAsSignIn-${row.did}`}
+                        label={label}
+                        accessibilityHint={l`Opens your server’s sign-in`}
+                        onPress={() => {
+                          setReverify(row)
+                          reverifyControl.open()
+                        }}>
+                        <Menu.ItemText>{label}</Menu.ItemText>
+                      </Menu.Item>
+                    )
+                  })}
+                </Menu.Group>
+              ) : null}
             </>
           ) : null}
           {isSystem ? (
@@ -256,10 +351,44 @@ function PostingMenu({
               ) : null}
             </>
           ) : null}
+          {SYSTEM_ACCOUNTS && s.currentDid && currentProfile ? (
+            <>
+              <Menu.Divider />
+              <Menu.Group>
+                <Menu.Item
+                  testID="composerPostingAsManage"
+                  label={l`Manage system accounts…`}
+                  onPress={() => {
+                    requestSystemAccountsFocus()
+                    editControl.open()
+                  }}>
+                  <Menu.ItemText>
+                    <Trans>Manage system accounts…</Trans>
+                  </Menu.ItemText>
+                </Menu.Item>
+              </Menu.Group>
+            </>
+          ) : null}
         </Menu.Outer>
       </Menu.Root>
       {isCurrent && s.currentDid && PLURAL_EDITING ? (
         <FrontSwitcherDialog control={frontControl} did={s.currentDid} />
+      ) : null}
+      {reverify && s.currentDid ? (
+        <AddSystemAccountDialog
+          control={reverifyControl}
+          registrar={s.currentDid}
+          reverify={{did: reverify.did, handle: reverify.handle}}
+          // On success the account becomes a radio item and is chosen (8.2).
+          onDone={did => choosePostingAccount(did)}
+        />
+      ) : null}
+      {SYSTEM_ACCOUNTS && currentProfile ? (
+        <EditProfileDialog
+          profile={currentProfile}
+          control={editControl}
+          initialTab="plurality"
+        />
       ) : null}
     </View>
   )

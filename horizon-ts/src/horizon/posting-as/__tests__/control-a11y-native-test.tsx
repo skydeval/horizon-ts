@@ -30,10 +30,11 @@ const mockToggleMember = jest.fn((rkey: string) => {
   })
 })
 const mockClose = jest.fn()
-const mockAccounts = [
-  {did: 'did:plc:main', handle: 'main.test'},
-  {did: 'did:plc:lala', handle: 'lala.test'},
-  {did: 'did:plc:wren', handle: 'wren.test'},
+const mockAccounts = [{did: 'did:plc:main', handle: 'main.test'}]
+// The current account's system accounts (system accounts design 8.1).
+const mockRows = [
+  {did: 'did:plc:lala', handle: 'lala.test', addedAt: '', state: 'ready'},
+  {did: 'did:plc:wren', handle: 'wren.test', addedAt: '', state: 'ready'},
 ]
 const mockMembers = [
   {rkey: 'm1', value: {name: 'Ash'}},
@@ -61,9 +62,31 @@ jest.mock('../toasts', () => ({}))
 jest.mock('../gates', () => ({
   choosePostingAccount: (did: string) => mockChooseAccount(did),
   togglePostingMember: (rkey: string) => mockToggleMember(rkey),
+  onPostingReverifyRequested: () => () => {},
 }))
 jest.mock('../temp-client', () => ({canActAs: () => true}))
 jest.mock('../fronters', () => ({PUBLIC_FRONTERS_KEPT: true}))
+jest.mock('#/horizon/system-accounts/hooks', () => ({
+  useSystemAccountRows: () => mockRows,
+}))
+jest.mock('#/horizon/system-accounts/AddSystemAccountDialog', () => ({
+  AddSystemAccountDialog: () => null,
+}))
+jest.mock('#/horizon/system-accounts/SystemAccountsSection', () => ({
+  requestSystemAccountsFocus: () => {},
+}))
+jest.mock('#/horizon/system-accounts/announce', () => ({
+  holdAnnouncements: () => () => {},
+}))
+jest.mock('#/horizon/system-accounts/sync', () => ({
+  readList: () => Promise.resolve(true),
+}))
+jest.mock('#/horizon/routing/current-clients', () => ({
+  getCurrentClients: () => undefined,
+}))
+jest.mock('#/screens/Profile/Header/EditProfileDialog', () => ({
+  EditProfileDialog: () => null,
+}))
 jest.mock('#/state/session', () => ({
   useSession: () => ({accounts: mockAccounts}),
 }))
@@ -73,6 +96,7 @@ jest.mock('#/state/queries/profile', () => ({
 jest.mock('#/horizon/switches', () => ({
   POSTING_AS: true,
   PLURAL_EDITING: true,
+  SYSTEM_ACCOUNTS: true,
 }))
 jest.mock('#/view/com/util/UserAvatar', () => ({UserAvatar: () => null}))
 jest.mock('#/alf', () => ({
@@ -155,6 +179,7 @@ beforeEach(() => {
     active: true,
     did: 'did:plc:main',
     currentDid: 'did:plc:main',
+    currentHandle: 'main.test',
     handle: 'main.test',
     members: [],
     hold: {kind: 'none'},
