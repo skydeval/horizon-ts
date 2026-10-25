@@ -33,29 +33,13 @@ import {networkAwareFetch} from './network'
  * No `fetch` option: a client built over a session uses that session's own
  * fetch, which is `networkAwareFetch` wrapped in the disposal kill switch.
  */
-export function buildAppviewClient(
-  agent: Agent,
-  // HORIZON: another account's client sends no per-install ids (SA-12)
-  {deviceHeaders = true}: BuildSessionClientOptions = {},
-): Client {
+export function buildAppviewClient(agent: Agent): Client {
   return createLexClient(agent, {
     // HORIZON: signed-in AppView reads are proxied to the chosen public AppView
     service: getPublicAppviewService(BLUESKY_PROXY_HEADER.get()),
-    includeDeviceSessionHeaders: deviceHeaders,
+    // HORIZON: no per-install analytics ids on any account's requests (SQ-10)
+    includeDeviceSessionHeaders: false,
   })
-}
-
-/**
- * HORIZON: options for the session builders.
- */
-export type BuildSessionClientOptions = {
-  /**
-   * Send the per-install `x-atproto-device-id` and `x-atproto-session-id`.
-   * `false` for every client acting as an account that is not the current
-   * one (System accounts design SA-12): the same install id on two accounts'
-   * requests links them exactly.
-   */
-  deviceHeaders?: boolean
 }
 
 /**
@@ -86,14 +70,11 @@ export function buildPdsClient(agent: Agent): Client {
  * this client reads the global `Client.appLabelers` and receives the account's
  * subscriptions through `configureModerationForAccount`.
  */
-export function buildChatClient(
-  agent: Agent,
-  // HORIZON: another account's client sends no per-install ids (SA-12)
-  {deviceHeaders = true}: BuildSessionClientOptions = {},
-): Client {
+export function buildChatClient(agent: Agent): Client {
   return createLexClient(agent, {
     service: CHAT_PROXY_SERVICE,
-    includeDeviceSessionHeaders: deviceHeaders,
+    // HORIZON: no per-install analytics ids on any account's requests (SQ-10)
+    includeDeviceSessionHeaders: false,
   })
 }
 

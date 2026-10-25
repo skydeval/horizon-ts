@@ -149,7 +149,8 @@ function buildPassword(account: SessionAccount): Built {
 /**
  * The account's clients. None sends the per-install device and session ids
  * (SA-12): they would tie this account's requests to the current account's
- * by an exact id. The PDS and prism clients never carry them.
+ * by an exact id. The session builders leave them off for every account
+ * (SQ-10), and the PDS and prism clients never carried them.
  */
 function clientsOver(account: SessionAccount, agent: Agent): PostingClients {
   const pdsClient = buildPdsClient(agent)
@@ -157,8 +158,8 @@ function clientsOver(account: SessionAccount, agent: Agent): PostingClients {
     did: account.did,
     handle: account.handle,
     pdsClient,
-    appviewClient: buildAppviewClient(agent, {deviceHeaders: false}),
-    chatClient: buildChatClient(agent, {deviceHeaders: false}),
+    appviewClient: buildAppviewClient(agent),
+    chatClient: buildChatClient(agent),
     prismClient: getPrismClient(pdsClient),
   }
 }

@@ -307,7 +307,7 @@ describe('the temporary client (PP-16)', () => {
     expect(acquireTemporaryClient(OTHER, {identity: false})).toBe(held)
   })
 
-  it('sends no per-install device or session id as the other account; the current account’s AppView client still does (SA-12)', async () => {
+  it('sends no per-install device or session id as the other account, nor as the current account (SA-12, SQ-10)', async () => {
     const sent: Headers[] = []
     const ok = () =>
       Promise.resolve(
@@ -338,7 +338,7 @@ describe('the temporary client (PP-16)', () => {
       expect(headers.has('x-atproto-session-id')).toBe(false)
     }
 
-    // The current account's own AppView client keeps them (SQ-10 decides that).
+    // The current account's own AppView client leaves them off too (SQ-10).
     const own: Headers[] = []
     const current = buildAppviewClient({
       did: MAIN,
@@ -347,12 +347,10 @@ describe('the temporary client (PP-16)', () => {
         return ok()
       },
     })
-    await current
-      .call(app.bsky.actor.getProfile, {actor: MAIN})
-      .catch(() => {})
+    await current.call(app.bsky.actor.getProfile, {actor: MAIN}).catch(() => {})
     expect(own).toHaveLength(1)
-    expect(own[0].get('x-atproto-device-id')).toBe('device-id-1')
-    expect(own[0].get('x-atproto-session-id')).toBe('session-id-1')
+    expect(own[0].has('x-atproto-device-id')).toBe(false)
+    expect(own[0].has('x-atproto-session-id')).toBe(false)
   })
 
   it('an account that cannot act is refused', () => {
