@@ -12,8 +12,8 @@
  * the menu and the buttons stays the account's.
  */
 
-import {Fragment} from 'react'
-import {View} from 'react-native'
+import {Fragment, useRef, useState} from 'react'
+import {AccessibilityInfo, findNodeHandle, View} from 'react-native'
 import {type ModerationDecision} from '@bsky/sdk/moderation'
 import {type I18n} from '@lingui/core'
 import {plural} from '@lingui/core/macro'
@@ -27,6 +27,8 @@ import {atoms as a, useTheme} from '#/alf'
 import {Button} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
 import {Text} from '#/components/Typography'
+import {IS_WEB} from '#/env'
+import {focusRing, MIN_TARGET} from '#/horizon/identity/edit/a11y'
 import {FrontSwitcherDialog} from '#/horizon/identity/edit/FrontSwitcherDialog'
 import {
   formatFronterNames,
@@ -176,6 +178,7 @@ export function PluralBadge({
   moderation,
   pressable = true,
   onEdit,
+  onChangeFront,
 }: {
   did: string
   profile: PluralProfile
@@ -183,6 +186,8 @@ export function PluralBadge({
   pressable?: boolean
   /** Opens Edit Profile on the Plurality tab; one's own system only. */
   onEdit?: () => void
+  /** Opens the front switcher; one's own system only. */
+  onChangeFront?: () => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -233,6 +238,7 @@ export function PluralBadge({
         profile={profile}
         moderation={moderation}
         onEdit={onEdit}
+        onChangeFront={onChangeFront}
       />
     </>
   )
@@ -285,49 +291,118 @@ function indicatorMembers(
   return out
 }
 
+/** A front switcher trigger's node, for focus to return to on close. */
+type TriggerNode = React.ComponentRef<typeof View>
+
+/**
+ * A button that opens the front switcher (7.3): labelled, keyboard
+ * focusable, a visible focus ring on web, and at least 44 by 44.
+ */
+function FrontTrigger({
+  testID,
+  label,
+  onPress,
+  triggerRef,
+  children,
+}: {
+  testID: string
+  label: string
+  onPress: () => void
+  triggerRef?: React.Ref<TriggerNode>
+  children: React.ReactElement
+}) {
+  const t = useTheme()
+  const {t: l} = useLingui()
+  const [focused, setFocused] = useState(false)
+  return (
+    <Button
+      ref={triggerRef}
+      testID={testID}
+      label={label}
+      accessibilityHint={l`Opens the front switcher`}
+      onPress={onPress}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={[
+        a.self_start,
+        a.justify_start,
+        a.rounded_sm,
+        {minWidth: MIN_TARGET, minHeight: MIN_TARGET},
+        focusRing(t.palette.primary_500, focused),
+      ]}>
+      {children}
+    </Button>
+  )
+}
+
+/** A trigger's own text, for "Set front" and "Change front". */
+function TriggerText({children}: {children: React.ReactNode}) {
+  const t = useTheme()
+  return (
+    <Text style={[a.text_sm, a.font_semi_bold, t.atoms.text_contrast_medium]}>
+      {children}
+    </Text>
+  )
+}
+
 /**
  * The front indicator beside the badge: the state, the members in front
  * other than the header's (with emoji, name, pronouns, and status when not
  * engaging), and the comment. "Nobody fronting" for an empty front; absent
  * when there is no front record or the answer is unknown (PL "Front
- * states"). With `onPress` (one's own profile, 7.3) it is a button that
- * opens the front switcher, and a missing front reads "Set front".
+ * states"). With `onPress` (one's own profile, 7.3) there is always a
+ * button that opens the front switcher: the indicator itself; "Set front"
+ * with no front record; and "Change front" whenever the indicator has
+ * nothing to show (the front unknown, its only member the header's, or its
+ * members still loading).
  */
 export function FrontIndicator({
   profile,
   header,
   onPress,
+  triggerRef,
 }: {
   profile: PluralProfile
   header: PostFronter[] | null
   /** Opens the front switcher; one's own profile only. */
   onPress?: () => void
+  /** The trigger shown, for focus to return to when the switcher closes. */
+  triggerRef?: React.Ref<TriggerNode>
 }) {
   const t = useTheme()
   const {t: l, i18n} = useLingui()
   const front = profile.front
   if (!profile.isSystem) return null
+  const change = onPress ? (
+    <FrontTrigger
+      testID="changeFrontButton"
+      label={l`Change who’s fronting`}
+      onPress={onPress}
+      triggerRef={triggerRef}>
+      <TriggerText>
+        <Trans>Change front</Trans>
+      </TriggerText>
+    </FrontTrigger>
+  ) : null
   if (front === null && onPress) {
     return (
-      <Button
+      <FrontTrigger
         testID="setFrontButton"
-        label={l`Set front`}
-        accessibilityHint={l`Opens the front switcher`}
-        hitSlop={HITSLOP_10}
+        label={l`Set front. Change who’s fronting`}
         onPress={onPress}
-        style={[a.self_start]}>
-        <Text style={[a.text_sm, a.font_semi_bold, t.atoms.text]}>
+        triggerRef={triggerRef}>
+        <TriggerText>
           <Trans>Set front</Trans>
-        </Text>
-      </Button>
+        </TriggerText>
+      </FrontTrigger>
     )
   }
-  if (!front) return null
+  if (!front) return change
   const state = frontStateText(i18n, front.state)
   const comment = front.comment?.trim()
   const nobody = front.members.length === 0
   const members = nobody ? [] : indicatorMembers(profile, front, header)
-  if (!nobody && !state && !comment && members.length === 0) return null
+  if (!nobody && !state && !comment && members.length === 0) return change
 
   const words = members.map(({fronter, status}) => {
     const pronouns = formatSets(fronter.member.pronouns)
@@ -392,16 +467,30 @@ export function FrontIndicator({
   )
   if (!onPress) return content
   return (
-    <Button
+    <FrontTrigger
       testID="frontIndicatorButton"
-      label={label}
-      accessibilityHint={l`Opens the front switcher`}
-      hitSlop={HITSLOP_10}
+      label={`${label}. ${l`Change who’s fronting`}`}
       onPress={onPress}
-      style={[a.self_start]}>
+      triggerRef={triggerRef}>
       {content}
-    </Button>
+    </FrontTrigger>
   )
+}
+
+/**
+ * Move focus to `node` after a dialog closes: keyboard focus on web, the
+ * screen reader's focus on native. The trigger that opened the switcher may
+ * have been replaced by another ("Set front" by the indicator), so this
+ * lands on whichever is shown now.
+ */
+function focusTrigger(node: TriggerNode | null) {
+  if (!node) return
+  if (IS_WEB) {
+    ;(node as unknown as {focus?: () => void}).focus?.()
+    return
+  }
+  const handle = findNodeHandle(node)
+  if (handle) AccessibilityInfo.setAccessibilityFocus(handle)
 }
 
 /**
@@ -422,6 +511,8 @@ export function ProfileHeaderIdentity({
   const {currentAccount} = useSession()
   const frontSwitcher = useDialogControl()
   const editProfile = useDialogControl()
+  const trigger = useRef<TriggerNode>(null)
+  const openSwitcher = () => frontSwitcher.open()
   // One's own front opens 5C's switcher (7.3); everyone else's is text.
   const own = PLURAL_EDITING && currentAccount?.did === profile.did
   const single = fronters?.length === 1 ? fronters[0] : undefined
@@ -447,23 +538,33 @@ export function ProfileHeaderIdentity({
             profile={plural}
             moderation={moderation}
             onEdit={own ? () => editProfile.open() : undefined}
+            onChangeFront={own ? openSwitcher : undefined}
           />
           <FrontIndicator
             profile={plural}
             header={fronters}
-            onPress={own ? () => frontSwitcher.open() : undefined}
+            onPress={own ? openSwitcher : undefined}
+            triggerRef={trigger}
           />
           {own ? (
-            <>
-              <FrontSwitcherDialog control={frontSwitcher} did={profile.did} />
-              <EditProfileDialog
-                profile={profile}
-                control={editProfile}
-                initialTab="plurality"
-              />
-            </>
+            <EditProfileDialog
+              profile={profile}
+              control={editProfile}
+              initialTab="plurality"
+            />
           ) : null}
         </View>
+      ) : null}
+      {/*
+       * Mounted apart from whichever trigger shows, so a save that swaps
+       * "Set front" for the indicator never unmounts the open switcher.
+       */}
+      {own ? (
+        <FrontSwitcherDialog
+          control={frontSwitcher}
+          did={profile.did}
+          onClose={() => setTimeout(() => focusTrigger(trigger.current), 0)}
+        />
       ) : null}
     </>
   )

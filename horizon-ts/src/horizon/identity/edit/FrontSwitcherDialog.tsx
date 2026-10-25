@@ -47,13 +47,19 @@ import {
 export function FrontSwitcherDialog({
   control,
   did,
+  onClose,
 }: {
   control: Dialog.DialogControlProps
   /** The current account's DID (one's own system only). */
   did: string
+  /** After the dialog has closed, e.g. to return focus to its trigger. */
+  onClose?: () => void
 }) {
   return (
-    <Dialog.Outer control={control} nativeOptions={{fullHeight: true}}>
+    <Dialog.Outer
+      control={control}
+      onClose={onClose}
+      nativeOptions={{fullHeight: true}}>
       <Dialog.Handle />
       <SwitcherLoader control={control} did={did} />
     </Dialog.Outer>

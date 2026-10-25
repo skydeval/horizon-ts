@@ -5,7 +5,8 @@
  * pronouns, roles, member types, age presentation, proxy note and
  * description; members in front are marked. Read-only; on one's own
  * system an "Edit" button closes it and opens Edit Profile on the Plurality
- * tab (`onEdit`, 6.2).
+ * tab (`onEdit`, 6.2), and "Change front" closes it and opens the front
+ * switcher (`onChangeFront`, 7.3).
  *
  * Moderation is the account's (U-8, 6.2): names go through
  * `sanitizeDisplayName` with the account's `displayName` moderation, and
@@ -36,6 +37,7 @@ export function MemberListDialog({
   profile,
   moderation,
   onEdit,
+  onChangeFront,
 }: {
   control: Dialog.DialogControlProps
   did: string
@@ -43,6 +45,8 @@ export function MemberListDialog({
   moderation: ModerationDecision
   /** One's own system only: opens Edit Profile on the Plurality tab. */
   onEdit?: () => void
+  /** One's own system only: opens the front switcher (7.3). */
+  onChangeFront?: () => void
 }) {
   return (
     <Dialog.Outer control={control}>
@@ -52,6 +56,7 @@ export function MemberListDialog({
         profile={profile}
         moderation={moderation}
         onEdit={onEdit}
+        onChangeFront={onChangeFront}
       />
     </Dialog.Outer>
   )
@@ -62,11 +67,13 @@ function MemberListInner({
   profile,
   moderation,
   onEdit,
+  onChangeFront,
 }: {
   did: string
   profile: PluralProfile
   moderation: ModerationDecision
   onEdit?: () => void
+  onChangeFront?: () => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
@@ -86,6 +93,19 @@ function MemberListInner({
           <Text emoji style={[a.flex_1, a.text_2xl, a.font_bold, t.atoms.text]}>
             {title}
           </Text>
+          {onChangeFront ? (
+            <Button
+              testID="pluralMemberListChangeFront"
+              size="small"
+              color="secondary"
+              label={l`Change who’s fronting`}
+              accessibilityHint={l`Opens the front switcher`}
+              onPress={() => control.close(() => onChangeFront())}>
+              <ButtonText>
+                <Trans>Change front</Trans>
+              </ButtonText>
+            </Button>
+          ) : null}
           {onEdit ? (
             <Button
               testID="pluralMemberListEdit"

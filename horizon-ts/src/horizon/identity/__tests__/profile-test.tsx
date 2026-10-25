@@ -134,9 +134,17 @@ jest.mock('#/horizon/identity/edit/FrontSwitcherDialog', () => ({
   },
 }))
 /** The member lists mounted, with their "Edit" callback. */
-const mockMemberLists: {did: string; onEdit?: () => void}[] = []
+const mockMemberLists: {
+  did: string
+  onEdit?: () => void
+  onChangeFront?: () => void
+}[] = []
 jest.mock('#/horizon/identity/MemberListDialog', () => ({
-  MemberListDialog: (props: {did: string; onEdit?: () => void}) => {
+  MemberListDialog: (props: {
+    did: string
+    onEdit?: () => void
+    onChangeFront?: () => void
+  }) => {
     mockMemberLists.push(props)
     return null
   },
@@ -336,9 +344,7 @@ describe('the profile header (ID-17, ID-17a, 6.2)', () => {
     world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN]))
     header()
     await advance()
-    expect(textOf(screen.getByTestId('profileHeaderDisplayName'))).toBe(
-      'Wren ',
-    )
+    expect(textOf(screen.getByTestId('profileHeaderDisplayName'))).toBe('Wren ')
     expect(textOf(screen.getByTestId('profilePronouns'))).toBe('she/her')
     expect(textOf(screen.getByTestId('pluralBadge'))).toBe(
       'The Flock \u00B7 2 members',
@@ -443,6 +449,101 @@ describe('the front switcher from the indicator (6.2, 7.3, 5C)', () => {
     expect(screen.queryByTestId('frontIndicator')).toBeNull()
     fireEvent.press(screen.getByTestId('setFrontButton'))
     expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('after a front is set to one member, with no state, the switcher is still reachable', async () => {
+    /*
+     * The front "Set front" writes most often: one engaging member, no
+     * state or comment. The header shows the member, so the indicator has
+     * nothing of its own to show; a trigger must stay all the same.
+     */
+    mockIsMe = true
+    world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN]))
+    header()
+    await advance()
+    expect(textOf(screen.getByTestId('profileHeaderDisplayName'))).toBe('Wren ')
+    expect(screen.queryByTestId('setFrontButton')).toBeNull()
+    const trigger =
+      screen.queryByTestId('frontIndicatorButton') ??
+      screen.getByTestId('changeFrontButton')
+    expect(trigger.props.accessibilityLabel).toContain('Change who’s fronting')
+    fireEvent.press(trigger)
+    expect(mockSwitchers.at(-1)?.did).toBe(AUTHOR)
+    expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('"Nobody fronting" on one`s own profile is a trigger', async () => {
+    mockIsMe = true
+    world.records.set(uriOf(AUTHOR, FRONT), records.front([]))
+    header()
+    await advance()
+    const trigger = screen.getByTestId('frontIndicatorButton')
+    expect(textOf(trigger)).toContain('Nobody fronting')
+    expect(trigger.props.accessibilityLabel).toBe(
+      'Front: nobody fronting. Change who’s fronting',
+    )
+    fireEvent.press(trigger)
+    expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('while the front`s members load, "Change front" opens it', async () => {
+    mockIsMe = true
+    world.records.set(uriOf(AUTHOR, FRONT), records.front([SPARROW, WREN]))
+    world.unknown.add(uriOf(AUTHOR, MEMBER, SPARROW))
+    world.unknown.add(uriOf(AUTHOR, MEMBER, WREN))
+    world.listStatus.set(AUTHOR, 'unknown')
+    header()
+    await advance()
+    expect(screen.queryByTestId('frontIndicatorButton')).toBeNull()
+    const trigger = screen.getByTestId('changeFrontButton')
+    expect(trigger.props.accessibilityLabel).toBe('Change who’s fronting')
+    fireEvent.press(trigger)
+    expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('while the front itself is unknown, "Change front" opens it', async () => {
+    mockIsMe = true
+    world.unknown.add(uriOf(AUTHOR, FRONT))
+    header()
+    await advance()
+    expect(screen.queryByTestId('setFrontButton')).toBeNull()
+    fireEvent.press(screen.getByTestId('changeFrontButton'))
+    expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('the member list offers "Change front" on one`s own system, opening the switcher', async () => {
+    mockIsMe = true
+    world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN]))
+    header()
+    await advance()
+    const list = mockMemberLists.at(-1)
+    expect(list?.onChangeFront).toBeInstanceOf(Function)
+    act(() => list?.onChangeFront?.())
+    expect(mockOpened).toContain(mockSwitchers.at(-1)?.control)
+  })
+
+  it('on another account`s profile no front state offers a trigger', async () => {
+    for (const setUp of [
+      () => world.records.set(uriOf(AUTHOR, FRONT), records.front([WREN])),
+      () => world.records.set(uriOf(AUTHOR, FRONT), records.front([])),
+      () => world.unknown.add(uriOf(AUTHOR, FRONT)),
+      () => {},
+    ]) {
+      resetIdentityReads()
+      resetIdentitySchedule()
+      qc.clear()
+      world.records.delete(uriOf(AUTHOR, FRONT))
+      world.unknown.clear()
+      setUp()
+      const view = header()
+      await advance()
+      expect(screen.queryByTestId('frontIndicatorButton')).toBeNull()
+      expect(screen.queryByTestId('changeFrontButton')).toBeNull()
+      expect(screen.queryByTestId('setFrontButton')).toBeNull()
+      view.unmount()
+    }
+    expect(mockSwitchers).toHaveLength(0)
+    expect(mockMemberLists.every(m => m.onChangeFront === undefined)).toBe(true)
   })
 
   it('on another account`s profile the indicator is text, with no switcher', async () => {
