@@ -199,6 +199,10 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **Threads appear sooner on the web.** The first replies draw at once and
+  the rest follow straight after; a thread link opened before on this
+  device no longer waits to look up the handle (the list is cleared on
+  sign-out).
 - **Threads no longer redraw themselves hundreds of times while loading.**
   On a fresh load the thread screen re-rendered continuously until the
   thread arrived, which also held the thread back.
