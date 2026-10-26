@@ -59,7 +59,6 @@ import {
   type LensSnapshot,
 } from '#/horizon/thread-lens/snapshot'
 import {
-  BRIDGING_LIMITED,
   BRIDGING_OFF,
   FALLBACK_NOTE,
   GAP_ONLY_NOTE,
@@ -261,17 +260,27 @@ describe('the notice (10, 11.3)', () => {
   const ids = (state: LensState) =>
     lensNoticeLines(state).map(line => [line.text.id, line.retry])
 
-  it('words bridging, with Try again on the main off', () => {
+  it('words bridging off, with Try again; limited shows nothing (2026-10-26)', () => {
     expect(ids(lens({kind: 'snapshot', bridging: 'full'}))).toEqual([])
-    expect(ids(lens({kind: 'snapshot', bridging: 'limited'}))).toEqual([
-      [BRIDGING_LIMITED.id, false],
-    ])
+    expect(ids(lens({kind: 'snapshot', bridging: 'limited'}))).toEqual([])
     expect(ids(lens({kind: 'snapshot', bridging: 'off'}))).toEqual([
       [BRIDGING_OFF.id, true],
     ])
   })
 
-  it('puts a kept failure first, then bridging', () => {
+  it('puts a kept failure first, then bridging off', () => {
+    expect(
+      ids(
+        lens({
+          kind: 'snapshot',
+          bridging: 'off',
+          note: {reason: '429', retryAt: 5, autoRetry: 'pending'},
+        }),
+      ),
+    ).toEqual([
+      [KEPT_NOTE['429'].id, true],
+      [BRIDGING_OFF.id, true],
+    ])
     expect(
       ids(
         lens({
@@ -280,10 +289,7 @@ describe('the notice (10, 11.3)', () => {
           note: {reason: '429', retryAt: 5, autoRetry: 'pending'},
         }),
       ),
-    ).toEqual([
-      [KEPT_NOTE['429'].id, true],
-      [BRIDGING_LIMITED.id, false],
-    ])
+    ).toEqual([[KEPT_NOTE['429'].id, true]])
   })
 
   it('words fallbacks, gap-only and unverified answers', () => {

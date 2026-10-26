@@ -7,7 +7,6 @@ import {type MessageDescriptor} from '@lingui/core'
 
 import {type LensState} from '#/horizon/thread-lens/adapt'
 import {
-  BRIDGING_LIMITED,
   BRIDGING_OFF,
   FALLBACK_NOTE,
   GAP_ONLY_NOTE,
@@ -34,9 +33,12 @@ export function lensNoticeLines(lens: LensState): Line[] {
     if (note && failed(note.reason)) {
       lines.push({text: KEPT_NOTE[note.reason], retry: true})
     }
-    if (lens.bridging === 'limited') {
-      lines.push({text: BRIDGING_LIMITED, retry: false})
-    } else if (lens.bridging === 'off') {
+    /*
+     * `limited` shows nothing (skydeval, 2026-10-26): the posts prism could
+     * not check stay held back, but a notice the reader can do nothing
+     * about, on nearly every thread, is only noise.
+     */
+    if (lens.bridging === 'off') {
       lines.push({text: BRIDGING_OFF, retry: true})
     }
   }

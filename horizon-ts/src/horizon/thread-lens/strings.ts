@@ -100,12 +100,7 @@ export const TRY_AGAIN = msg({
   comment: 'Thread Lens: read the thread through Thread Lens again',
 })
 
-/** The "incomplete" notice (10). */
-export const BRIDGING_LIMITED = msg({
-  message:
-    'Thread Lens can’t check every post right now, so some may be missing.',
-  comment: 'Thread Lens: the thread may be missing posts',
-})
+/** The "as it normally appears" notice (10). */
 export const BRIDGING_OFF = msg({
   message:
     'Thread Lens can’t see around blocks right now. This is the thread as it normally appears.',
