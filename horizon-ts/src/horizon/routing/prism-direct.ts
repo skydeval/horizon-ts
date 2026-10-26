@@ -162,6 +162,11 @@ type CachedToken = {
   lifetimeMs: number
   /** The token's own `exp` (the PDS's clock), when readable. */
   expSecs?: number
+  /**
+   * Asked with no `exp` (the PDS's clock not yet known): the prefetch
+   * replaces it with a long one as soon as the clock is known.
+   */
+  upgradable?: true
 }
 
 /** Tokens by DID, then by method. */
@@ -227,6 +232,11 @@ function remainingMs(entry: CachedToken, now: number): number {
     return (entry.expSecs - pdsNow) * 1000
   }
   return entry.receivedAt + entry.lifetimeMs - now
+}
+
+/** A short token the prefetch can now replace with a long one. */
+function upgradeDue(entry: CachedToken): boolean {
+  return !!entry.upgradable && pdsNowSecs(entry.did) !== undefined
 }
 
 function usable(entry: CachedToken | undefined, now: number): boolean {
@@ -343,7 +353,12 @@ async function mint(
   }
 }
 
-function cacheToken(did: string, lxm: string, token: string) {
+function cacheToken(
+  did: string,
+  lxm: string,
+  token: string,
+  {short, upgraded}: {short: boolean; upgraded: boolean},
+) {
   let byMethod = tokens.get(did)
   if (!byMethod) {
     byMethod = new Map()
@@ -356,6 +371,8 @@ function cacheToken(did: string, lxm: string, token: string) {
     receivedAt: Date.now(),
     lifetimeMs: tokenLifetimeMs(token),
     ...(typeof exp === 'number' ? {expSecs: exp} : {}),
+    // A short token from an upgrade stays until its natural refresh: no loop.
+    ...(short && !upgraded ? {upgradable: true} : {}),
   })
 }
 
@@ -372,7 +389,7 @@ function cacheToken(did: string, lxm: string, token: string) {
 export function getDirectPrismToken(
   pdsClient: Client,
   lxm: NsidString,
-  {fresh = false}: {fresh?: boolean} = {},
+  {fresh = false, upgrade = false}: {fresh?: boolean; upgrade?: boolean} = {},
 ): Promise<string> {
   watchAccount()
   const did = didOf(pdsClient)
@@ -394,8 +411,10 @@ export function getDirectPrismToken(
 
   const startedIn = epoch
   const request = mint(pdsClient, did, lxm)
-    .then(({token}) => {
-      if (epoch === startedIn) cacheToken(did, lxm, token)
+    .then(({token, long}) => {
+      if (epoch === startedIn) {
+        cacheToken(did, lxm, token, {short: !long, upgraded: upgrade})
+      }
       return token
     })
     .finally(() => {
@@ -597,10 +616,11 @@ export function startDirectTokenPrefetch(
     for (const lxm of options.methods) {
       const cached = tokens.get(did)?.get(lxm)
       if (!cached) continue
-      const at =
-        now +
-        remainingMs(cached, now) -
-        Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2)
+      const at = upgradeDue(cached)
+        ? now
+        : now +
+          remainingMs(cached, now) -
+          Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2)
       next = Math.min(next, at)
     }
     if (next === Number.POSITIVE_INFINITY) return
@@ -617,15 +637,18 @@ export function startDirectTokenPrefetch(
     const now = Date.now()
     const asks = options.methods.map(lxm => {
       const cached = tokens.get(current.did)?.get(lxm)
+      const upgrade = !!cached && upgradeDue(cached)
       const due =
         !cached ||
         !usable(cached, now) ||
+        upgrade ||
         (refresh &&
           remainingMs(cached, now) <=
             Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2))
       if (!due) return Promise.resolve()
       return getDirectPrismToken(current.pdsClient, lxm, {
         fresh: !!cached,
+        upgrade,
       }).then(
         () => undefined,
         () => undefined,
@@ -640,11 +663,18 @@ export function startDirectTokenPrefetch(
     subscribeWriteRoutes(() => tick()),
     env.subscribe(() => tick()),
   ]
-  // On web the first mint waits briefly for the site's clock (a long exp).
+  /*
+   * Nothing waits on the clock (2026-10-26, round 4): the first mint goes
+   * now (no exp while the clock is unknown, so a short token), the site's
+   * clock is read beside it on web, and the short token is replaced with a
+   * long one as soon as either clock answers.
+   */
+  tick()
   if (ORIGIN_CLOCK_AVAILABLE && originOffsetSecs === undefined) {
-    void learnOriginClock().then(() => tick())
-  } else {
-    tick()
+    void learnOriginClock().then(() => {
+      const did = getCurrentClients()?.did
+      if (did && !stopped) schedule(did)
+    })
   }
   return () => {
     stopped = true

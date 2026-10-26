@@ -65,6 +65,11 @@ import {
   lensQueryKey,
   runIdOf,
 } from '#/horizon/thread-lens/snapshot'
+import {
+  lensTimingNow,
+  lensTimingOn,
+  noteLensDetail,
+} from '#/horizon/thread-lens/timing'
 import {type app} from '#/lexicons'
 
 type PostView = app.bsky.feed.defs.PostView
@@ -206,8 +211,22 @@ export function createThreadLens(
         findPlaceholder: uri => getThreadPlaceholder(qc, uri),
         signal: ctx.signal,
       }),
-    select: data =>
-      key ? selectLensAnswer(data, {sort, view, below, queueId}) : data,
+    select: data => {
+      if (!key) return data
+      if (!lensTimingOn()) {
+        return selectLensAnswer(data, {sort, view, below, queueId})
+      }
+      // The timing log (round 4): what turning the snapshot into items costs.
+      const began = lensTimingNow()
+      const selected = selectLensAnswer(data, {sort, view, below, queueId})
+      const items = (selected as {thread?: unknown[]} | undefined)?.thread
+      noteLensDetail(
+        inputs.anchor ?? '',
+        `select: ${items?.length ?? 0} items in ` +
+          `${Math.round(lensTimingNow() - began)} ms`,
+      )
+      return selected
+    },
     otherReplies: async <T extends OtherOutput>(
       fetchStock: () => Promise<T>,
       ctx?: Pick<QueryFunctionContext, 'signal'>,

@@ -169,11 +169,12 @@ describe('signed out (P5R1-L9, L6)', () => {
 })
 
 describe('signed in (4.4, P5R4-L3, P5R2-Q1)', () => {
-  it('sends getRecords and listMembers with a token of that method, minted once by the prefetch', async () => {
+  it('sends getRecords and listMembers with a token of that method, minted by the prefetch', async () => {
     signIn()
     const stop = startDirectTokenPrefetch(IDENTITY_DIRECT_PREFETCH, FOREGROUND)
     await settle()
-    expect(serviceAuthCalls()).toHaveLength(2)
+    // Each method's short token at once, then its long one (no clock wait).
+    expect(serviceAuthCalls()).toHaveLength(4)
 
     const read = readActorRecords(AUTHOR)
     const list = readMemberList(AUTHOR)
@@ -181,7 +182,8 @@ describe('signed in (4.4, P5R4-L3, P5R2-Q1)', () => {
     await read
     await list
     stop()
-    expect(serviceAuthCalls()).toHaveLength(2)
+    // The reads mint nothing more.
+    expect(serviceAuthCalls()).toHaveLength(4)
     const [getRecords] = callsOf('getRecords')
     const [listMembers] = callsOf('listMembers')
     expect(lxmOf(getRecords.headers.get('authorization'))).toBe(GET_RECORDS_LXM)
@@ -213,9 +215,12 @@ describe('signed in (4.4, P5R4-L3, P5R2-Q1)', () => {
     await settle()
     await read
     stop()
+    // The read joined the prefetch's short mint; only the long one followed.
     expect(
-      serviceAuthCalls().filter(c => c.params.get('lxm') === GET_RECORDS_LXM),
-    ).toHaveLength(1)
+      serviceAuthCalls()
+        .filter(c => c.params.get('lxm') === GET_RECORDS_LXM)
+        .map(c => c.params.has('exp')),
+    ).toEqual([false, true])
     expect(callsOf('getRecords')[0].headers.get('authorization')).toMatch(
       /^Bearer /,
     )

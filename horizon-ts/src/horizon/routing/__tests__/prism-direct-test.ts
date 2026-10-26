@@ -512,11 +512,15 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
     mockPostingRoute = 'encode'
   })
 
-  it('on posting route encode, mints exactly one getPosts token at sign-in, and none again while it lasts', async () => {
+  it('on posting route encode, mints a getPosts token at sign-in at once, its long one after it, and none again while it lasts', async () => {
     publishAccount(pdsClientFor())
     const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
     await flush()
-    expect(serviceAuthCalls()).toHaveLength(1)
+    // Nothing waits on the clock: a short token now, then the long one.
+    expect(serviceAuthCalls().map(call => call.params.get('exp'))).toEqual([
+      null,
+      String(START_MS / 1000 + 3000),
+    ])
     expect(serviceAuthCalls()[0].params.get('lxm')).toBe(
       'app.nearhorizon.private.getPosts',
     )
@@ -524,7 +528,27 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
     setForeground(true)
     mockRouteListeners.forEach(listener => listener())
     await flush()
-    expect(serviceAuthCalls()).toHaveLength(1)
+    expect(serviceAuthCalls()).toHaveLength(2)
+    stop()
+  })
+
+  it('upgrades a short token once: a second short answer stays until its refresh', async () => {
+    // The PDS answers only with its default lifetime.
+    serviceAuthAnswer = call =>
+      call.params.has('exp')
+        ? json({error: 'BadExpiration', message: 'skew'}, 400)
+        : json({token: token({secs: 60})})
+    publishAccount(pdsClientFor())
+    const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    await flush()
+    await flush()
+    await flush()
+    // Short; the upgrade (refused, then short again); no third round.
+    expect(serviceAuthCalls().map(call => call.params.get('exp'))).toEqual([
+      null,
+      String(START_MS / 1000 + 3000),
+      null,
+    ])
     stop()
   })
 
