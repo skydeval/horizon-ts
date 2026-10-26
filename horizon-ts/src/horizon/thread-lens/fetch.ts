@@ -447,6 +447,30 @@ async function readLens(
           return resolved.uri
         },
       )
+  const ask = (anchor: string, inHandleForm = false) => {
+    noteLensStep(
+      params.anchor,
+      inHandleForm ? 'getThread sent (handle form)' : 'getThread sent',
+      started,
+    )
+    return getLensThread(
+      clients.prismClient,
+      did,
+      lensThreadBody({kind: 'first', anchor, depth}),
+      options.signal,
+      {handleForm: inHandleForm},
+    )
+  }
+  let warmed = false
+  /** getThread in DID form: the press-in pre-warm's answer, else a new ask. */
+  const askByDid = (anchorUri: string) => {
+    const body = lensThreadBody({kind: 'first', anchor: anchorUri, depth})
+    const warm = takeWarmLensThread(did, body)
+    warmed = !!warm
+    return warm ? warm.catch(() => ask(anchorUri)) : ask(anchorUri)
+  }
+  // A known anchor's getThread goes first, before the early reads (2026-10-26).
+  const sentFirst = known && !handleForm ? askByDid(known) : undefined
   /*
    * The anchor's public views and its private branch page start as soon as
    * its DID form is known, beside getThread (speed pass; 2026-10-26). The
@@ -475,22 +499,7 @@ async function readLens(
   const onBranchStep = lensTimingOn()
     ? (step: string) => noteLensStep(params.anchor, step, started)
     : undefined
-  const ask = (anchor: string, inHandleForm = false) => {
-    noteLensStep(
-      params.anchor,
-      inHandleForm ? 'getThread sent (handle form)' : 'getThread sent',
-      started,
-    )
-    return getLensThread(
-      clients.prismClient,
-      did,
-      lensThreadBody({kind: 'first', anchor, depth}),
-      options.signal,
-      {handleForm: inHandleForm},
-    )
-  }
   let answer: Awaited<ReturnType<typeof getLensThread>>
-  let warmed = false
   if (handleForm) {
     try {
       answer = await ask(params.anchor, true)
@@ -510,17 +519,7 @@ async function readLens(
     const host = didOfUri(answer.anchor)
     if (host) rememberHandleDid(new AtUri(params.anchor).host, host)
   } else {
-    const body = lensThreadBody({
-      kind: 'first',
-      anchor: await ownAnchor,
-      depth,
-    })
-    // The press-in pre-warm's answer when one is in flight for this read.
-    const warm = takeWarmLensThread(did, body)
-    warmed = !!warm
-    answer = warm
-      ? await warm.catch(() => ask(body.anchor))
-      : await ask(body.anchor)
+    answer = await (sentFirst ?? askByDid(await ownAnchor))
   }
   noteLensStep(
     params.anchor,
