@@ -43,6 +43,10 @@ import {
   resolveLens,
 } from '#/horizon/thread-lens/api'
 import {
+  cachedHandleDid,
+  rememberHandleDid,
+} from '#/horizon/thread-lens/handle-cache'
+import {
   type CheckedNode,
   checkLensNodes,
   EMPTY_BASE,
@@ -339,20 +343,37 @@ async function resolveLensAnchor(
   qc: QueryClient,
   appview: Client,
   anchor: string,
-): Promise<string> {
+): Promise<{uri: string; from: string}> {
   const urip = new AtUri(anchor)
-  if (urip.host.startsWith('did:')) return anchor
+  if (urip.host.startsWith('did:')) return {uri: anchor, from: 'a DID'}
   const handle = urip.host
+  const uriFor = (did: string) => `at://${did}/${urip.collection}/${urip.rkey}`
+  const noteDid = (did: string) => {
+    if (qc.getQueryData(['resolved-did', handle]) === undefined) {
+      qc.setQueryData(['resolved-did', handle], did)
+    }
+  }
+  // Known on this device: answer now, check again in the background.
+  const cached = cachedHandleDid(handle)
+  if (cached) {
+    noteDid(cached)
+    void publicHandleResolver?.(handle).then(
+      fresh => {
+        if (fresh.startsWith('did:')) rememberHandleDid(handle, fresh)
+      },
+      () => {},
+    )
+    return {uri: uriFor(cached), from: 'device cache'}
+  }
   const did = publicHandleResolver
     ? await publicHandleResolver(handle).catch(() => undefined)
     : undefined
   if (did?.startsWith('did:')) {
-    if (qc.getQueryData(['resolved-did', handle]) === undefined) {
-      qc.setQueryData(['resolved-did', handle], did)
-    }
-    return `at://${did}/${urip.collection}/${urip.rkey}`
+    noteDid(did)
+    rememberHandleDid(handle, did)
+    return {uri: uriFor(did), from: 'public AppView'}
   }
-  return resolveAnchor(appview, anchor)
+  return {uri: await resolveAnchor(appview, anchor), from: "account's AppView"}
 }
 
 /** A first lens read: the lens, the public-view pass, the private part. */
@@ -372,14 +393,13 @@ async function readLens(
   const started = lensTimingNow()
   noteLensStep(params.anchor, 'read started', started)
   const known = knownLensAnchor(options.qc, params.anchor, options.placeholder)
-  const anchorUri =
-    known ??
-    (await resolveLensAnchor(options.qc, clients.appviewClient, params.anchor))
+  const resolved = known
+    ? undefined
+    : await resolveLensAnchor(options.qc, clients.appviewClient, params.anchor)
+  const anchorUri = known ?? resolved!.uri
   noteLensStep(
     params.anchor,
-    known
-      ? 'anchor known'
-      : `anchor resolved (resolveHandle, ${publicHandleResolver ? 'public AppView' : "account's AppView"})`,
+    known ? 'anchor known' : `anchor resolved (${resolved!.from})`,
     started,
   )
   // The anchor's public views start now, beside `getThread` (speed pass).

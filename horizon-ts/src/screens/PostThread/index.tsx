@@ -82,6 +82,11 @@ import {
   ThreadLensNotice,
   useThreadLensScreen,
 } from '#/horizon/thread-lens/thread-screen'
+// HORIZON: a small first reply chunk on web
+import {
+  firstChildrenCount,
+  useGrowFirstChunk,
+} from '#/horizon/thread-render/first-chunk'
 
 const PARENT_CHUNK_SIZE = IS_NATIVE ? 5 : 20
 const CHILDREN_CHUNK_SIZE = 50
@@ -182,7 +187,10 @@ export function PostThread({uri}: {uri: string}) {
   const isRoot = !!anchor && anchor.value.post.record.reply === undefined
   const canReply = !anchor?.value.post?.viewer?.replyDisabled
   const [maxParentCount, setMaxParentCount] = useState(PARENT_CHUNK_SIZE)
-  const [maxChildrenCount, setMaxChildrenCount] = useState(CHILDREN_CHUNK_SIZE)
+  // HORIZON: a small first reply chunk on web, raised to the stock chunk after the first paint
+  const [maxChildrenCount, setMaxChildrenCount] = useState(() =>
+    firstChildrenCount(CHILDREN_CHUNK_SIZE),
+  )
   const totalParentCount = useRef(0) // recomputed below
   const totalChildrenCount = useRef(thread.data.items.length) // recomputed below
   const listRef = useRef<ListMethods>(null)
@@ -336,6 +344,13 @@ export function PostThread({uri}: {uri: string}) {
   }, [setDeferParents, setMaxChildrenCount])
   // HORIZON: Thread Lens TH-6: the params reset on a change of data kind, the focus and 429 refetches
   useThreadLensScreen({prepareForParamsUpdate, thread, anchor: uri})
+  // HORIZON: the rest of the first reply chunk, after the first paint
+  useGrowFirstChunk({
+    ready: !thread.state.isPlaceholderData,
+    count: maxChildrenCount,
+    chunk: CHILDREN_CHUNK_SIZE,
+    setCount: setMaxChildrenCount,
+  })
 
   const setSortWrapped = useCallback(
     (sort: string) => {

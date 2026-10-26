@@ -19,6 +19,7 @@ import {revokeOAuthGrant} from '#/horizon/session/revoke'
 import {THREAD_LENS} from '#/horizon/switches'
 import {signOutSystemAccounts} from '#/horizon/system-accounts/sign-out'
 import {clearLensRefusals, clearLensWaits} from '#/horizon/thread-lens/api'
+import {clearHandleCache} from '#/horizon/thread-lens/handle-cache'
 import {clearLensRegistry} from '#/horizon/thread-lens/registry'
 
 /**
@@ -123,6 +124,8 @@ export async function horizonSignOut(
     clearLensWaits(dids)
     // The reader's mutes kept on the device for the lens (`mutes/cache.ts`).
     clearMuteCache(dids)
+    // The handles the lens resolved on this device (`handle-cache.ts`).
+    clearHandleCache()
   }
   // Steps 1 and 2 of the seam, before the first await (SAR2-L3).
   let system: ReturnType<typeof signOutSystemAccounts>

@@ -10,9 +10,16 @@ jest.mock('#/horizon/routing/membership', () => ({
   reportPrismError: () => {},
   isPrivateMember: (did?: string) => !!did && mockMember,
 }))
+// The device store is empty, but for the lens's handle cache, which keeps.
+const mockHandles = new Map<string, string>()
 jest.mock('#/horizon/session/local-store', () => ({
-  readLocal: () => undefined,
-  writeLocal: () => {},
+  readLocal: (key: string) =>
+    key === 'horizon:lensHandles' ? mockHandles.get(key) : undefined,
+  writeLocal: (key: string, value: string | undefined) => {
+    if (key !== 'horizon:lensHandles') return
+    if (value === undefined) mockHandles.delete(key)
+    else mockHandles.set(key, value)
+  },
   subscribeLocal: () => () => {},
 }))
 jest.mock('#/horizon/switches', () => ({
@@ -42,6 +49,10 @@ import {
   retryLensGaps,
   runLens,
 } from '#/horizon/thread-lens/fetch'
+import {
+  cachedHandleDid,
+  clearHandleCache,
+} from '#/horizon/thread-lens/handle-cache'
 import {resetLensViewPool} from '#/horizon/thread-lens/public-views'
 import {
   getLensGapKind,
@@ -268,6 +279,7 @@ describe('the first read (5, 6, 7.1)', () => {
   })
 
   it('resolves a handle anchor on the public AppView, not the account`s, and caches it for the stock screen', async () => {
+    clearHandleCache()
     serveThread()
     const handles: string[] = []
     installLensHandleResolver(handle => {
@@ -294,6 +306,44 @@ describe('the first read (5, 6, 7.1)', () => {
       expect(getThread?.body?.anchor).toBe(ANCHOR)
     } finally {
       installLensHandleResolver(undefined)
+    }
+  })
+
+  it('answers a handle it resolved before from the device at once, and checks it again in the background', async () => {
+    clearHandleCache()
+    serveThread()
+    const asked: string[] = []
+    let answer!: (did: string) => void
+    installLensHandleResolver(handle => {
+      asked.push(handle)
+      return asked.length === 1
+        ? Promise.resolve(AUTHOR)
+        : new Promise<string>(resolve => {
+            answer = resolve
+          })
+    })
+    try {
+      const key = keyOf({
+        anchor: 'at://author.test/app.bsky.feed.post/3kanchor22222',
+      })
+      // A fresh page each time: the stock handle cache starts empty.
+      const fresh = () => {
+        const qc = setup()
+        qc.removeQueries({queryKey: ['resolved-did']})
+        return qc
+      }
+      await load(fresh(), key)
+      expect(cachedHandleDid('author.test')).toBe(AUTHOR)
+      // The device answers while the check is still out.
+      const {snapshot} = await load(fresh(), key)
+      expect(snapshot?.form).toBe('snapshot')
+      expect(asked).toEqual(['author.test', 'author.test'])
+      // The check moves the handle; the next read takes it.
+      answer(OTHER_READER)
+      await until(() => cachedHandleDid('author.test') === OTHER_READER)
+    } finally {
+      installLensHandleResolver(undefined)
+      clearHandleCache()
     }
   })
 
