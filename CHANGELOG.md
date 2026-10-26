@@ -199,6 +199,10 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **A device clock that's off no longer slows threads.** The app's requests
+  to Horizon's server were refused and retried when the device clock ran
+  ahead; they now go by the server's clock. Opening a thread from a link
+  also no longer waits on your account's server to look up the handle.
 - **The Thread Lens timing log prints in production builds.** Turned on
   with `horizon:lensTiming`, its lines were stripped from every build but
   development.
