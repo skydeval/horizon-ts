@@ -196,6 +196,9 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **The Thread Lens timing log prints in production builds.** Turned on
+  with `horizon:lensTiming`, its lines were stripped from every build but
+  development.
 - **The front switcher is always reachable on your own profile**, from the
   front indicator, "Set front", or a "Change front" fallback while the front
   loads or can't be read, and from the member list; focus returns to what

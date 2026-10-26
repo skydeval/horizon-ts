@@ -61,9 +61,14 @@ export function lensTimingStart(uri: string | undefined): {
     : {at: now, from: 'screen mount'}
 }
 
+/*
+ * Through `globalThis` so production builds keep it: their
+ * `transform-remove-console` strips only calls on the bare `console`, and
+ * this log is for measuring the preview and production builds.
+ */
 function write(line: string) {
   // eslint-disable-next-line no-console
-  console.info(`[thread lens timing] ${line}`)
+  globalThis.console.info(`[thread lens timing] ${line}`)
 }
 
 /** One step of a read of `anchor`, timed from `since`. */
