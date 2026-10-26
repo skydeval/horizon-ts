@@ -31,10 +31,12 @@ import {
   getCurrentClients,
   getCurrentDid,
 } from '#/horizon/routing/current-clients'
+import {getPrismFeatures} from '#/horizon/routing/features'
 import {THREAD_LENS} from '#/horizon/switches'
 import {
   getLensThread,
   getLensWaitUntil,
+  isHandleFormRetry,
   LENS_RESOLVE_BATCH,
   type LensFailure,
   lensFailureOf,
@@ -376,6 +378,38 @@ async function resolveLensAnchor(
   return {uri: await resolveAnchor(appview, anchor), from: "account's AppView"}
 }
 
+/** prism's feature for handle-form getThread anchors (2026-10-26). */
+export const HANDLE_ANCHOR_FEATURE = 'threadLens.handleAnchor'
+
+/**
+ * Whether `anchor` goes to getThread in handle form for `did`: a post with a
+ * handle authority this device has not resolved before, and prism listing
+ * {@link HANDLE_ANCHOR_FEATURE} (other operators' prisms may not).
+ */
+function sendsHandleAnchor(did: string, anchor: string): boolean {
+  let urip: AtUri
+  try {
+    urip = new AtUri(anchor)
+  } catch {
+    return false
+  }
+  if (urip.host.startsWith('did:')) return false
+  if (urip.collection !== 'app.bsky.feed.post' || !urip.rkey) return false
+  if (cachedHandleDid(urip.host)) return false
+  const features = getPrismFeatures(did)
+  return Array.isArray(features) && features.includes(HANDLE_ANCHOR_FEATURE)
+}
+
+/** The DID authority of an AT-URI, or `undefined`. */
+function didOfUri(uri: string): string | undefined {
+  try {
+    const host = new AtUri(uri).host
+    return host.startsWith('did:') ? host : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** A first lens read: the lens, the public-view pass, the private part. */
 async function readLens(
   params: LensKeyParams,
@@ -393,43 +427,115 @@ async function readLens(
   const started = lensTimingNow()
   noteLensStep(params.anchor, 'read started', started)
   const known = knownLensAnchor(options.qc, params.anchor, options.placeholder)
-  const resolved = known
-    ? undefined
-    : await resolveLensAnchor(options.qc, clients.appviewClient, params.anchor)
-  const anchorUri = known ?? resolved!.uri
-  noteLensStep(
-    params.anchor,
-    known ? 'anchor known' : `anchor resolved (${resolved!.from})`,
-    started,
-  )
-  // The anchor's public views start now, beside `getThread` (speed pass).
-  warmPublicViews(
-    clients.appviewClient,
-    did,
-    earlyPublicUris(params, anchorUri, options),
-  )
   /*
-   * The private branch page starts now too (2026-10-26): used once the
-   * answer shows the anchor, as asked, to be a post; else dropped.
+   * prism resolves a handle anchor itself when it serves
+   * `threadLens.handleAnchor` (2026-10-26): getThread goes at once in handle
+   * form while our own resolution runs beside it, for the early reads and
+   * the fallbacks of prism's design 5.
    */
-  const earlyBranches =
-    getCurrentDid() === did ? startLensBranches(anchorUri, depth) : undefined
+  const handleForm = !known && sendsHandleAnchor(did, params.anchor)
+  if (known) noteLensStep(params.anchor, 'anchor known', started)
+  const ownAnchor: Promise<string> = known
+    ? Promise.resolve(known)
+    : resolveLensAnchor(options.qc, clients.appviewClient, params.anchor).then(
+        resolved => {
+          noteLensStep(
+            params.anchor,
+            `anchor resolved (${resolved.from})`,
+            started,
+          )
+          return resolved.uri
+        },
+      )
+  /*
+   * The anchor's public views and its private branch page start as soon as
+   * its DID form is known, beside getThread (speed pass; 2026-10-26). The
+   * branch page is used once the answer shows that anchor to be a post.
+   */
+  const early: {
+    read?: {anchorUri: string; branches: ReturnType<typeof startLensBranches>}
+  } = {}
+  ownAnchor.then(
+    anchorUri => {
+      warmPublicViews(
+        clients.appviewClient,
+        did,
+        earlyPublicUris(params, anchorUri, options),
+      )
+      early.read = {
+        anchorUri,
+        branches:
+          getCurrentDid() === did
+            ? startLensBranches(anchorUri, depth)
+            : undefined,
+      }
+    },
+    () => {},
+  )
   const onBranchStep = lensTimingOn()
     ? (step: string) => noteLensStep(params.anchor, step, started)
     : undefined
-  const body = lensThreadBody({kind: 'first', anchor: anchorUri, depth})
-  // The press-in pre-warm's answer when one is in flight for this read.
-  const warm = takeWarmLensThread(did, body)
-  const ask = () => {
-    noteLensStep(params.anchor, 'getThread sent', started)
-    return getLensThread(clients.prismClient, did, body, options.signal)
+  const ask = (anchor: string, inHandleForm = false) => {
+    noteLensStep(
+      params.anchor,
+      inHandleForm ? 'getThread sent (handle form)' : 'getThread sent',
+      started,
+    )
+    return getLensThread(
+      clients.prismClient,
+      did,
+      lensThreadBody({kind: 'first', anchor, depth}),
+      options.signal,
+      {handleForm: inHandleForm},
+    )
   }
-  const answer = warm ? await warm.catch(ask) : await ask()
+  let answer: Awaited<ReturnType<typeof getLensThread>>
+  let warmed = false
+  if (handleForm) {
+    try {
+      answer = await ask(params.anchor, true)
+    } catch (error) {
+      // HandleNotFound, UpstreamFailure, a 429: our own resolution, DID form.
+      if (!isHandleFormRetry(error)) throw error
+      answer = await ask(await ownAnchor)
+    }
+    const node = answer.nodes.find(
+      raw => (raw as {uri?: unknown}).uri === answer.anchor,
+    ) as {gap?: unknown} | undefined
+    if (node?.gap === 'not-found') {
+      // prism's stored handle can lag a DNS-only move: ask by our own.
+      const own = await ownAnchor.catch(() => undefined)
+      if (own && own !== answer.anchor) answer = await ask(own)
+    }
+    const host = didOfUri(answer.anchor)
+    if (host) rememberHandleDid(new AtUri(params.anchor).host, host)
+  } else {
+    const body = lensThreadBody({
+      kind: 'first',
+      anchor: await ownAnchor,
+      depth,
+    })
+    // The press-in pre-warm's answer when one is in flight for this read.
+    const warm = takeWarmLensThread(did, body)
+    warmed = !!warm
+    answer = warm
+      ? await warm.catch(() => ask(body.anchor))
+      : await ask(body.anchor)
+  }
   noteLensStep(
     params.anchor,
-    warm ? 'getThread (pre-warmed)' : 'getThread',
+    warmed ? 'getThread (pre-warmed)' : 'getThread',
     started,
   )
+  /*
+   * The early reads as far as they started: a handle-form read never waits
+   * for its own resolution here (the pass and the private part read for
+   * themselves); one that started for another DID form is not used.
+   */
+  const earlyBranches =
+    early.read && early.read.anchorUri === answer.anchor
+      ? early.read.branches
+      : undefined
   const checked = checkLensNodes(answer.nodes)
   const anchorNode = checked.find(node => node.uri === answer.anchor)
   if (!anchorNode) {
@@ -489,7 +595,7 @@ async function readLens(
             return {cidOf: uri => cids.get(uri), anchorPost: outcome.view}
           },
           resyncMute: () => !rootIsGap && getCurrentDid() === did,
-          page: answer.anchor === anchorUri ? earlyBranches : undefined,
+          page: earlyBranches,
           onStep: onBranchStep,
         }).catch((error: unknown) => {
           logger.warn('thread lens: private branches unavailable', {

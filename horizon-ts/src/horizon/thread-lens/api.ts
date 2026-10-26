@@ -427,6 +427,12 @@ export async function getLensThread(
   did: string,
   body: LensThreadBody,
   signal?: AbortSignal,
+  /**
+   * The anchor is in handle form (prism's `threadLens.handleAnchor`,
+   * 2026-10-26): a 429 may be prism's identity budget, not the lens's rate
+   * class, so it records no wait; the caller retries once in DID form.
+   */
+  {handleForm = false}: {handleForm?: boolean} = {},
 ): Promise<LensThreadAnswer> {
   throwIfWaiting(did)
   const input = {
@@ -463,9 +469,25 @@ export async function getLensThread(
     })
     return res.body
   } catch (error) {
-    noteLensError(did, error, Date.now())
+    if (!(handleForm && isHandleFormRetry(error))) {
+      noteLensError(did, error, Date.now())
+    }
     throw error
   }
+}
+
+/**
+ * A handle-form `getThread`'s failure that the read retries in DID form
+ * with its own resolution (prism's design 5): `HandleNotFound`,
+ * `UpstreamFailure`, or a 429.
+ */
+export function isHandleFormRetry(error: unknown): boolean {
+  return (
+    error instanceof XrpcResponseError &&
+    (error.status === 429 ||
+      error.error === 'HandleNotFound' ||
+      error.error === 'UpstreamFailure')
+  )
 }
 
 /** The most URIs one `resolve` takes. */

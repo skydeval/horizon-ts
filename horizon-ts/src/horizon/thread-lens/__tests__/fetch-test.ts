@@ -41,7 +41,11 @@ import {
 } from '#/horizon/routing/features'
 import {resetPrismHealth} from '#/horizon/routing/health'
 import {type LensSelected, selectLensAnswer} from '#/horizon/thread-lens/adapt'
-import {resetLensRefusals, resetLensWaits} from '#/horizon/thread-lens/api'
+import {
+  getLensWaitUntil,
+  resetLensRefusals,
+  resetLensWaits,
+} from '#/horizon/thread-lens/api'
 import {
   installLensHandleResolver,
   loadEarlierLensPosts,
@@ -345,6 +349,111 @@ describe('the first read (5, 6, 7.1)', () => {
       installLensHandleResolver(undefined)
       clearHandleCache()
     }
+  })
+
+  describe("prism's handle-form anchors (threadLens.handleAnchor)", () => {
+    const HANDLE_ANCHOR = 'at://author.test/app.bsky.feed.post/3kanchor22222'
+
+    function anchorsSent() {
+      return prism.calls
+        .filter(call => call.nsid === 'app.nearhorizon.threadLens.getThread')
+        .map(call => (call.body as {anchor?: string} | undefined)?.anchor)
+    }
+
+    async function withHandles<T>(run: (resolved: string[]) => Promise<T>) {
+      clearHandleCache()
+      const resolved: string[] = []
+      installLensHandleResolver(handle => {
+        resolved.push(handle)
+        return Promise.resolve(AUTHOR)
+      })
+      answerPrismFeatures(READER, [
+        'private',
+        'private.paging',
+        'threadLens',
+        'threadLens.handleAnchor',
+      ])
+      try {
+        return await run(resolved)
+      } finally {
+        installLensHandleResolver(undefined)
+        clearHandleCache()
+      }
+    }
+
+    function fresh() {
+      const qc = setup()
+      qc.removeQueries({queryKey: ['resolved-did']})
+      return qc
+    }
+
+    it('sends the handle form at once and keys the read on the DID-form answer', async () => {
+      await withHandles(async () => {
+        serveThread()
+        const {snapshot} = await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(snapshot?.form).toBe('snapshot')
+        expect(anchorsSent()).toEqual([HANDLE_ANCHOR])
+        expect(cachedHandleDid('author.test')).toBe(AUTHOR)
+      })
+    })
+
+    it('without the feature, sends the DID form', async () => {
+      await withHandles(async () => {
+        answerPrismFeatures(READER, ['private', 'private.paging', 'threadLens'])
+        serveThread()
+        await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(anchorsSent()).toEqual([ANCHOR])
+      })
+    })
+
+    it('HandleNotFound: retries in DID form with its own resolution', async () => {
+      await withHandles(async resolved => {
+        serveThread()
+        const answer = handlers.getThread!
+        handlers.getThread = body =>
+          body.anchor === HANDLE_ANCHOR
+            ? {status: 400, body: {error: 'HandleNotFound'}}
+            : answer(body)
+        const {snapshot} = await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(snapshot?.form).toBe('snapshot')
+        expect(anchorsSent()).toEqual([HANDLE_ANCHOR, ANCHOR])
+        expect(resolved).toEqual(['author.test'])
+      })
+    })
+
+    it('a 429 in handle form records no lens wait and retries once in DID form', async () => {
+      await withHandles(async () => {
+        serveThread()
+        const answer = handlers.getThread!
+        handlers.getThread = body =>
+          body.anchor === HANDLE_ANCHOR
+            ? {
+                status: 429,
+                body: {error: 'RateLimitExceeded'},
+                headers: {'retry-after': '30'},
+              }
+            : answer(body)
+        const {snapshot} = await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(snapshot?.form).toBe('snapshot')
+        expect(anchorsSent()).toEqual([HANDLE_ANCHOR, ANCHOR])
+        expect(getLensWaitUntil(READER)).toBeUndefined()
+      })
+    })
+
+    it('a not-found anchor for another DID than ours: asks again by ours', async () => {
+      await withHandles(async () => {
+        serveThread()
+        const answer = handlers.getThread!
+        const STALE = uriOf('3kanchor22222', OTHER_READER)
+        handlers.getThread = body =>
+          body.anchor === HANDLE_ANCHOR
+            ? lensAnswer(STALE, [gapNode(STALE, 'not-found')])
+            : answer(body)
+        const {snapshot} = await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(snapshot?.form).toBe('snapshot')
+        expect(anchorsSent()).toEqual([HANDLE_ANCHOR, ANCHOR])
+      })
+    })
   })
 
   it('makes no request and reads the registry for a gap-only key', async () => {
