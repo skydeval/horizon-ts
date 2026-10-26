@@ -199,6 +199,9 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **Threads no longer redraw themselves hundreds of times while loading.**
+  On a fresh load the thread screen re-rendered continuously until the
+  thread arrived, which also held the thread back.
 - **A device clock that's off no longer slows threads.** The app's requests
   to Horizon's server were refused and retried when the device clock ran
   ahead; they now go by the server's clock. Opening a thread from a link
