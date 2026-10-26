@@ -133,7 +133,7 @@ web and waiting on its live checks.
 
 - **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
   the favicons and the web app manifest replace Bluesky's butterfly and
-  logotype wherever the app draws them.
+  logotype wherever the app draws them, including the web loading splash.
 - **New icons.** Every UI icon is now from Phosphor Icons (MIT): Bold
   outlines, and Fill for selected and filled states, under the same names,
   so nothing that uses an icon changed.
