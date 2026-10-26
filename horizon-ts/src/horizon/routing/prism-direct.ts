@@ -50,6 +50,7 @@ import {
   type PrivateWriteRoute,
   subscribeWriteRoutes,
 } from '#/horizon/routing/write-route'
+import {readLocal, writeLocal} from '#/horizon/session/local-store'
 
 /**
  * prism's own-post read, the method 2K calls directly.
@@ -171,6 +172,85 @@ type CachedToken = {
 
 /** Tokens by DID, then by method. */
 const tokens = new Map<string, Map<string, CachedToken>>()
+
+/*
+ * The tokens and the PDS clocks, kept on the device across reloads
+ * (skydeval, 2026-10-26), so a reload's first prism call does not wait on
+ * `getServiceAuth`: each token is good for one method on prism only, for at
+ * most {@link DIRECT_TOKEN_SECS}, beside the account session the device
+ * already keeps. Read once at first use; written on every change; cleared
+ * with every drop (sign-out, account switch, a 401).
+ */
+const PERSIST_KEY = 'horizon:prismTokens'
+
+type Persisted = {
+  v: 1
+  tokens: CachedToken[]
+  offsets: Record<string, number>
+}
+
+let restored = false
+
+function restorePersisted() {
+  if (restored) return
+  restored = true
+  let stored: Persisted | undefined
+  try {
+    const raw = readLocal(PERSIST_KEY)
+    stored = raw ? (JSON.parse(raw) as Persisted) : undefined
+  } catch {
+    stored = undefined
+  }
+  if (!stored || stored.v !== 1) return
+  for (const [did, offset] of Object.entries(stored.offsets ?? {})) {
+    if (typeof offset === 'number' && !serverOffsets.has(did)) {
+      serverOffsets.set(did, offset)
+    }
+  }
+  const now = Date.now()
+  for (const entry of stored.tokens ?? []) {
+    if (
+      typeof entry?.token !== 'string' ||
+      typeof entry.did !== 'string' ||
+      !usable(entry, now)
+    ) {
+      continue
+    }
+    const lxm = lxmOfToken(entry.token)
+    if (!lxm) continue
+    let byMethod = tokens.get(entry.did)
+    if (!byMethod) {
+      byMethod = new Map()
+      tokens.set(entry.did, byMethod)
+    }
+    if (!byMethod.has(lxm)) byMethod.set(lxm, entry)
+  }
+}
+
+function persist() {
+  const all: CachedToken[] = []
+  for (const byMethod of tokens.values()) all.push(...byMethod.values())
+  try {
+    writeLocal(
+      PERSIST_KEY,
+      all.length === 0
+        ? undefined
+        : JSON.stringify({
+            v: 1,
+            tokens: all,
+            offsets: Object.fromEntries(serverOffsets),
+          } satisfies Persisted),
+    )
+  } catch {
+    // A device that cannot store keeps the tokens in memory only.
+  }
+}
+
+/** The `lxm` a token was minted for, from its claims. */
+function lxmOfToken(token: string): string | undefined {
+  const lxm = (tokenClaims(token) as {lxm?: unknown} | undefined)?.lxm
+  return typeof lxm === 'string' ? lxm : undefined
+}
 /** Mints in flight, by `did lxm`. */
 const pending = new Map<string, Promise<string>>()
 /** No `getServiceAuth` for this DID before this time (PA-36). */
@@ -215,10 +295,14 @@ export function dropDirectPrismTokens(did?: string) {
     }
     limitedUntil.delete(did)
   }
+  // The kept copy goes with them (sign-out, account switch).
+  restored = true
+  persist()
 }
 
 function dropToken(did: string, lxm: string) {
   tokens.get(did)?.delete(lxm)
+  persist()
 }
 
 /**
@@ -374,6 +458,7 @@ function cacheToken(
     // A short token from an upgrade stays until its natural refresh: no loop.
     ...(short && !upgraded ? {upgradable: true} : {}),
   })
+  persist()
 }
 
 /**
@@ -391,6 +476,7 @@ export function getDirectPrismToken(
   lxm: NsidString,
   {fresh = false, upgrade = false}: {fresh?: boolean; upgrade?: boolean} = {},
 ): Promise<string> {
+  restorePersisted()
   watchAccount()
   const did = didOf(pdsClient)
   const now = Date.now()
@@ -592,6 +678,8 @@ export function startDirectTokenPrefetch(
   options: DirectPrefetchOptions,
   env: ForegroundEnv,
 ): () => void {
+  // Tokens kept from before a reload count as cached.
+  restorePersisted()
   let timer: ReturnType<typeof setTimeout> | undefined
   let stopped = false
 
@@ -694,8 +782,26 @@ export function startDirectTokenPrefetch(
 export function resetDirectPrism() {
   dropDirectPrismTokens()
   serverOffsets.clear()
+  writeLocal(PERSIST_KEY, undefined)
+  restored = false
   originOffsetSecs = undefined
   originClock = undefined
+  unwatch?.()
+  unwatch = undefined
+  watchedDid = undefined
+}
+
+/**
+ * Tests: forget everything held in memory, as a reload does, keeping what
+ * the device stored.
+ */
+export function forgetDirectPrismMemory() {
+  epoch++
+  tokens.clear()
+  pending.clear()
+  limitedUntil.clear()
+  serverOffsets.clear()
+  restored = false
   unwatch?.()
   unwatch = undefined
   watchedDid = undefined

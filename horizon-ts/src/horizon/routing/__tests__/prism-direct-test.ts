@@ -61,6 +61,7 @@ import {
   DIRECT_PREFETCH_2K,
   DirectPrismRateLimitedError,
   dropDirectPrismTokens,
+  forgetDirectPrismMemory,
   getDirectPrismClient,
   getDirectPrismToken,
   learnOriginClock,
@@ -300,6 +301,43 @@ describe('the getPosts token', () => {
     expect(serviceAuthCalls()).toHaveLength(2)
 
     clearCurrentClients()
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    expect(serviceAuthCalls()).toHaveLength(3)
+  })
+
+  it('a reload reuses the kept token: no getServiceAuth', async () => {
+    const pds = pdsClientFor()
+    publishCurrentClients({did: DID} as CurrentClients)
+    const first = await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    forgetDirectPrismMemory()
+    now += 60_000
+    expect(await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)).toBe(first)
+    expect(serviceAuthCalls()).toHaveLength(1)
+  })
+
+  it('a kept token past its life is not reused after a reload', async () => {
+    const pds = pdsClientFor()
+    publishCurrentClients({did: DID} as CurrentClients)
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    forgetDirectPrismMemory()
+    now += 3_540_000
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    expect(serviceAuthCalls()).toHaveLength(2)
+  })
+
+  it('sign-out and an account switch clear the kept tokens too', async () => {
+    const pds = pdsClientFor()
+    publishCurrentClients({did: DID} as CurrentClients)
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    clearCurrentClients()
+    forgetDirectPrismMemory()
+    publishCurrentClients({did: DID} as CurrentClients)
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    expect(serviceAuthCalls()).toHaveLength(2)
+
+    publishCurrentClients({did: OTHER_DID} as CurrentClients)
+    forgetDirectPrismMemory()
+    publishCurrentClients({did: DID} as CurrentClients)
     await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
     expect(serviceAuthCalls()).toHaveLength(3)
   })
