@@ -21,10 +21,17 @@ import {
   type TreeNode,
 } from '#/horizon/private/thread/fetch'
 import {
+  type BranchPage,
   type BranchPublicViews,
+  type BranchSender,
   readPrivateBranches,
+  startPrivateBranchPage,
 } from '#/horizon/private/thread/replies'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {
+  LENS_PRIVATE_REPLIES_LXM,
+  sendLensCall,
+} from '#/horizon/thread-lens/direct'
 import {type LensNode, viewOf} from '#/horizon/thread-lens/nodes'
 import {
   type LensSnapshot,
@@ -73,16 +80,25 @@ export async function readLensPrivatePart({
   depth,
   publicViews,
   resyncMute,
+  page,
+  onStep,
 }: {
   anchor: string
   depth: number
   publicViews: () => Promise<BranchPublicViews>
   resyncMute: () => boolean
+  /** The page read started at the read's start ({@link startLensBranches}). */
+  page?: Promise<BranchPage>
+  /** The timing log's steps. */
+  onStep?: (step: string) => void
 }): Promise<LensPrivatePart | undefined> {
   const part = await readPrivateBranches(anchor, {
     below: depth,
     cidOf: publicViews,
     resyncMute,
+    page,
+    send: lensBranchSender(),
+    onStep,
   })
   if (!part || 'failed' in part) return undefined
   return {
@@ -97,6 +113,39 @@ export async function readLensPrivatePart({
         }
       : {}),
   }
+}
+
+/**
+ * A lens read's `getReplies` sent to prism directly, as `getThread` is
+ * (`direct.ts`: the PDS-proxied client the fallback), for the current
+ * account; `undefined` (the proxy) without one.
+ */
+function lensBranchSender(): BranchSender | undefined {
+  const clients = getCurrentClients()
+  if (!clients) return undefined
+  const {did, prismClient} = clients
+  return call =>
+    sendLensCall(
+      prismClient,
+      did,
+      LENS_PRIVATE_REPLIES_LXM,
+      new AbortController().signal,
+      call,
+    )
+}
+
+/**
+ * Start a lens read's private branch page at the read's start, beside
+ * `getThread` (2026-10-26, Prism's round 2): `anchor` in DID form, `depth`
+ * the request depth. `undefined` when there is nothing to read (not a
+ * member, prism not paging replies). Unused when the anchor turns out not
+ * to be a post; never rejects.
+ */
+export function startLensBranches(
+  anchor: string,
+  depth: number,
+): Promise<BranchPage> | undefined {
+  return startPrivateBranchPage(anchor, depth, lensBranchSender())
 }
 
 /** The most `getReplies` pages one "other replies" read takes. */

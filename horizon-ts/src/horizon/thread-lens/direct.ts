@@ -67,6 +67,13 @@ export const LENS_GET_THREAD_LXM =
 export const LENS_RESOLVE_LXM =
   'app.nearhorizon.threadLens.resolve' as NsidString
 
+/**
+ * The private replies' method (a lens read's private branches, 2026-10-26),
+ * the token's `lxm`: sent directly like `getThread`, the proxy the fallback.
+ */
+export const LENS_PRIVATE_REPLIES_LXM =
+  'app.nearhorizon.private.getReplies' as NsidString
+
 /** How long direct calls pause for an account after a transport failure. */
 export const LENS_DIRECT_PAUSE_MS = 5 * 60_000
 

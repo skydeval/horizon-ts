@@ -14,6 +14,7 @@ import {useLensServed} from '#/horizon/thread-lens/availability'
 import {
   installLensDirect,
   LENS_GET_THREAD_LXM,
+  LENS_PRIVATE_REPLIES_LXM,
 } from '#/horizon/thread-lens/direct'
 import {preconnectPrism} from '#/horizon/thread-lens/preconnect'
 import {useThreadLensPreference} from '#/horizon/thread-lens/preference'
@@ -31,7 +32,8 @@ installLensDirect({
  * lens serves non-members too). `resolve` (Retry) mints on first use.
  */
 export const LENS_DIRECT_PREFETCH: DirectPrefetchOptions = {
-  methods: [LENS_GET_THREAD_LXM],
+  // getReplies too: a member's lens read sends it directly (2026-10-26).
+  methods: [LENS_GET_THREAD_LXM, LENS_PRIVATE_REPLIES_LXM],
   routes: 'any',
 }
 

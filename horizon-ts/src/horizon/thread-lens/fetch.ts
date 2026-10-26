@@ -54,7 +54,10 @@ import {
   type PublicOutcome,
 } from '#/horizon/thread-lens/nodes'
 import {takeWarmLensThread} from '#/horizon/thread-lens/prewarm'
-import {readLensPrivatePart} from '#/horizon/thread-lens/private-part'
+import {
+  readLensPrivatePart,
+  startLensBranches,
+} from '#/horizon/thread-lens/private-part'
 import {
   bookmarkedInCache,
   formatPassStats,
@@ -325,20 +328,36 @@ async function readLens(
   }
   const started = lensTimingNow()
   noteLensStep(params.anchor, 'read started', started)
+  const known = knownLensAnchor(options.qc, params.anchor, options.placeholder)
   const anchorUri =
-    knownLensAnchor(options.qc, params.anchor, options.placeholder) ??
-    (await resolveAnchor(clients.appviewClient, params.anchor))
+    known ?? (await resolveAnchor(clients.appviewClient, params.anchor))
+  noteLensStep(
+    params.anchor,
+    known ? 'anchor known' : 'anchor resolved (resolveHandle)',
+    started,
+  )
   // The anchor's public views start now, beside `getThread` (speed pass).
   warmPublicViews(
     clients.appviewClient,
     did,
     earlyPublicUris(params, anchorUri, options),
   )
+  /*
+   * The private branch page starts now too (2026-10-26): used once the
+   * answer shows the anchor, as asked, to be a post; else dropped.
+   */
+  const earlyBranches =
+    getCurrentDid() === did ? startLensBranches(anchorUri, depth) : undefined
+  const onBranchStep = lensTimingOn()
+    ? (step: string) => noteLensStep(params.anchor, step, started)
+    : undefined
   const body = lensThreadBody({kind: 'first', anchor: anchorUri, depth})
   // The press-in pre-warm's answer when one is in flight for this read.
   const warm = takeWarmLensThread(did, body)
-  const ask = () =>
-    getLensThread(clients.prismClient, did, body, options.signal)
+  const ask = () => {
+    noteLensStep(params.anchor, 'getThread sent', started)
+    return getLensThread(clients.prismClient, did, body, options.signal)
+  }
   const answer = warm ? await warm.catch(ask) : await ask()
   noteLensStep(
     params.anchor,
@@ -404,6 +423,8 @@ async function readLens(
             return {cidOf: uri => cids.get(uri), anchorPost: outcome.view}
           },
           resyncMute: () => !rootIsGap && getCurrentDid() === did,
+          page: answer.anchor === anchorUri ? earlyBranches : undefined,
+          onStep: onBranchStep,
         }).catch((error: unknown) => {
           logger.warn('thread lens: private branches unavailable', {
             safeMessage: error,

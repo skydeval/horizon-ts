@@ -19,6 +19,7 @@
  *   they need only a member, not `private.paging`.
  */
 
+import {type Client} from '@atproto/lex'
 import {type QueryClient, type QueryKey} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
@@ -203,9 +204,22 @@ function branchDepth(below: number): number {
   return Math.max(0, Math.min(below - 1, MAX_REPLIES_DEPTH))
 }
 
-/** The branch page read: its anchor, items and cursor, or its failure. */
-type BranchPage =
-  {anchorUri: string; items: unknown[]; cursor?: string} | {failed: unknown}
+/**
+ * The branch page read: its anchor, items, cursor and how many `getReplies`
+ * pages it took, or its failure.
+ */
+export type BranchPage =
+  | {anchorUri: string; items: unknown[]; cursor?: string; pages?: number}
+  | {failed: unknown}
+
+/**
+ * How a branch page reaches prism: `call` run on the client to use. The
+ * default is the account's PDS-proxied prism client; Thread Lens sends it
+ * to prism directly (`thread-lens/direct.ts`).
+ */
+export type BranchSender = <T>(
+  call: (prism: Client) => Promise<T>,
+) => Promise<T>
 
 /**
  * The anchor's private replies, paged until some come, within
@@ -216,20 +230,21 @@ function readBranchPage(
   clients: CurrentClients,
   anchor: string,
   depth: number,
+  send?: BranchSender,
 ): Promise<BranchPage> {
   return withDeadline(
     (async () => {
       const anchorUri = await resolveAnchor(clients.appviewClient, anchor)
+      let pages = 0
       const loaded = await fetchUntilItems<unknown>(async cursor => {
-        const page = await getPrivateReplies(clients.prismClient, {
-          uri: anchorUri,
-          limit: BRANCH_PAGE_LIMIT,
-          depth,
-          cursor,
-        })
+        const params = {uri: anchorUri, limit: BRANCH_PAGE_LIMIT, depth, cursor}
+        const page = send
+          ? await send(prism => getPrivateReplies(prism, params))
+          : await getPrivateReplies(clients.prismClient, params)
+        pages++
         return {items: page.replies, cursor: page.cursor}
       }, undefined)
-      return {anchorUri, ...loaded}
+      return {anchorUri, ...loaded, pages}
     })(),
     BRANCH_DEADLINE_MS,
   ).catch((error: unknown) => {
@@ -300,10 +315,22 @@ export async function readPrivateBranches(
     below,
     cidOf,
     resyncMute,
+    page: started,
+    send,
+    onStep,
   }: {
     below: number
     cidOf: () => Promise<BranchPublicViews>
     resyncMute: () => boolean
+    /**
+     * The page read already started ({@link startPrivateBranchPage}, Thread
+     * Lens: at the read's start), else one is started here.
+     */
+    page?: Promise<BranchPage>
+    /** How the page read reaches prism, when it is started here. */
+    send?: BranchSender
+    /** The timing log's steps (Thread Lens); names and counts only. */
+    onStep?: (step: string) => void
   },
 ): Promise<PrivateBranches | {failed: unknown} | undefined> {
   const clients = PRIVATE_READING ? getCurrentClients() : undefined
@@ -311,8 +338,19 @@ export async function readPrivateBranches(
     return undefined
   }
   const depth = branchDepth(below)
-  const page = readBranchPage(clients, anchor, depth)
+  const page = (started ?? readBranchPage(clients, anchor, depth, send)).then(
+    part => {
+      onStep?.(
+        'failed' in part
+          ? 'getReplies failed'
+          : `getReplies answered (${part.pages ?? 1} pages, ` +
+              `${part.items.length} replies)`,
+      )
+      return part
+    },
+  )
   const [part, held] = await Promise.all([page, cidOf()])
+  onStep?.('branches joined the public views')
   if ('failed' in part) return part
   if (!held) return undefined
   const nodes = part.items
@@ -322,10 +360,28 @@ export async function readPrivateBranches(
     nodes.length > 0
       ? await adaptTree(nodes, clients.appviewClient, held.cidOf)
       : new Map<string, PostView>()
+  if (nodes.length > 0) onStep?.('branches adapted')
   if (nodes.length > 0 && held.anchorPost && resyncMute()) {
     resyncBranchMute(held.anchorPost, nodes, views)
   }
   return {anchorUri: part.anchorUri, nodes, views, cursor: part.cursor, depth}
+}
+
+/**
+ * Start `anchor`'s branch page read now (Thread Lens, at its read's start,
+ * beside `getThread`), for {@link readPrivateBranches}'s `page`; `undefined`
+ * when {@link readPrivateBranches} would read nothing.
+ */
+export function startPrivateBranchPage(
+  anchor: string,
+  below: number,
+  send?: BranchSender,
+): Promise<BranchPage> | undefined {
+  const clients = PRIVATE_READING ? getCurrentClients() : undefined
+  if (!clients || !isPrivateMember(clients.did) || !privatePagingServed()) {
+    return undefined
+  }
+  return readBranchPage(clients, anchor, branchDepth(below), send)
 }
 
 /**

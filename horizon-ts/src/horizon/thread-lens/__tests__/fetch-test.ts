@@ -317,15 +317,52 @@ describe('the private part (5.5, TL-28)', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
-  it('never reads private replies for a gap anchor', async () => {
+  it('asks for the private replies beside getThread, not after it', async () => {
+    serveThread()
+    const answer = handlers.getThread!
+    let release!: () => void
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    handlers.getThread = async body => {
+      await gate
+      return answer(body)
+    }
+    handlers.getReplies = () => ({
+      status: 200,
+      body: {replies: [privateReply('3kpriv222222')]},
+    })
+    const qc = setup()
+    const loading = load(qc)
+    await until(() =>
+      prism.calls.some(c => c.nsid === 'app.nearhorizon.private.getReplies'),
+    )
+    release()
+    const {snapshot} = await loading
+    expect(snapshot!.nodes.get(privateUriOf('3kpriv222222'))?.kind).toBe(
+      'private',
+    )
+    expect(
+      prism.calls.filter(c => c.nsid === 'app.nearhorizon.private.getReplies'),
+    ).toHaveLength(1)
+  })
+
+  it('never shows private replies for a gap anchor', async () => {
     handlers.getThread = () =>
       lensAnswer(ANCHOR, [gapNode(ANCHOR, 'blocking-you')])
-    handlers.getReplies = () => ({status: 200, body: {replies: []}})
+    // Asked early, beside getThread, of prism only; the answer is dropped.
+    handlers.getReplies = () => ({
+      status: 200,
+      body: {replies: [privateReply('3kpriv222222')]},
+    })
     const qc = setup()
-    await load(qc)
-    expect(
-      prism.calls.some(c => c.nsid === 'app.nearhorizon.private.getReplies'),
-    ).toBe(false)
+    const {snapshot} = await load(qc)
+    for (const node of snapshot?.nodes.values() ?? []) {
+      expect(node.kind).not.toBe('private')
+    }
+    for (const call of appview.calls) {
+      expect(call.params.toString()).not.toContain('postPrivate')
+    }
   })
 
   it('discards private replies when the public pass makes the anchor a gap', async () => {
