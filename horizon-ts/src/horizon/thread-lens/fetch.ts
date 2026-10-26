@@ -57,6 +57,8 @@ import {takeWarmLensThread} from '#/horizon/thread-lens/prewarm'
 import {readLensPrivatePart} from '#/horizon/thread-lens/private-part'
 import {
   bookmarkedInCache,
+  formatPassStats,
+  lensHydrationGate,
   lensHydrationOf,
   readPublicViews,
   warmPublicViews,
@@ -79,7 +81,12 @@ import {
   stopKey,
   withMerged,
 } from '#/horizon/thread-lens/snapshot'
-import {lensTimingNow, noteLensStep} from '#/horizon/thread-lens/timing'
+import {
+  lensTimingNow,
+  lensTimingOn,
+  noteLensDetail,
+  noteLensStep,
+} from '#/horizon/thread-lens/timing'
 import {type app} from '#/lexicons'
 
 type PostView = app.bsky.feed.defs.PostView
@@ -317,6 +324,7 @@ async function readLens(
     throw new Error('Thread Lens: the key is not the current account')
   }
   const started = lensTimingNow()
+  noteLensStep(params.anchor, 'read started', started)
   const anchorUri =
     knownLensAnchor(options.qc, params.anchor, options.placeholder) ??
     (await resolveAnchor(clients.appviewClient, params.anchor))
@@ -346,6 +354,17 @@ async function readLens(
     throw new LensMalformedError()
   }
   const lensLabels = answer.readerLabels === true
+  const served = {servedAs: answer.servedAs, readerLabels: lensLabels}
+  const hydration = lensHydrationOf(did, served, uri =>
+    bookmarkedInCache(options.qc, uri),
+  )
+  if (lensTimingOn()) {
+    const gate = lensHydrationGate(did, served)
+    noteLensDetail(
+      params.anchor,
+      gate ? `member skip off: ${gate}` : 'member skip on',
+    )
+  }
   const publicPass = readPublicViews(
     clients.appviewClient,
     checked,
@@ -353,11 +372,10 @@ async function readLens(
     {
       did,
       lensLabels,
-      hydration: lensHydrationOf(
-        did,
-        {servedAs: answer.servedAs, readerLabels: lensLabels},
-        uri => bookmarkedInCache(options.qc, uri),
-      ),
+      hydration,
+      onStats: lensTimingOn()
+        ? stats => noteLensDetail(params.anchor, formatPassStats(stats))
+        : undefined,
     },
   )
   /*
@@ -426,6 +444,7 @@ async function readLens(
         ? part.privateCursor
         : undefined,
   })
+  noteLensStep(params.anchor, 'snapshot built', started)
   return {snapshot, gaps}
 }
 

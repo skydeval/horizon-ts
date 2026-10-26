@@ -15,6 +15,7 @@ import {
   installLensDirect,
   LENS_GET_THREAD_LXM,
 } from '#/horizon/thread-lens/direct'
+import {preconnectPrism} from '#/horizon/thread-lens/preconnect'
 import {useThreadLensPreference} from '#/horizon/thread-lens/preference'
 
 // The lens's direct transport (`direct.ts`), installed as this module loads.
@@ -49,13 +50,18 @@ export function ThreadLensTokenPrefetch() {
   const active = THREAD_LENS && !!did && on && served
   useEffect(() => {
     if (!active) return
-    return startDirectTokenPrefetch(LENS_DIRECT_PREFETCH, {
+    const unhint = preconnectPrism()
+    const stop = startDirectTokenPrefetch(LENS_DIRECT_PREFETCH, {
       isForeground: () => AppState.currentState === 'active',
       subscribe: listener => {
         const subscription = AppState.addEventListener('change', listener)
         return () => subscription.remove()
       },
     })
+    return () => {
+      stop()
+      unhint()
+    }
   }, [active])
   return null
 }

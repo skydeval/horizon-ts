@@ -29,6 +29,11 @@ import {
 import {type NsidString} from '@atproto/syntax'
 
 import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {
+  lensTimingNow,
+  lensTimingOn,
+  noteLensDetail,
+} from '#/horizon/thread-lens/timing'
 
 /**
  * The direct transport, `routing/prism-direct.ts`'s token and client,
@@ -133,14 +138,31 @@ export async function sendLensCall<T>(
   signal: AbortSignal,
   send: (client: Client) => Promise<T>,
 ): Promise<T> {
+  const timing = lensTimingOn()
+  const began = timing ? lensTimingNow() : 0
   const direct = await directClientFor(proxy, did, lxm)
+  const tokenAt = timing ? lensTimingNow() : 0
+  /** The timing log's split of this call (2026-10-26, Prism's item 4). */
+  const split = (route: string) => {
+    if (!timing) return
+    const name = lxm.split('.').pop() ?? lxm
+    noteLensDetail(
+      name,
+      `call: token ${Math.round(tokenAt - began)} ms, request ` +
+        `${Math.round(lensTimingNow() - tokenAt)} ms (${route})`,
+    )
+  }
   if (direct) {
     try {
-      return await send(direct)
+      const result = await send(direct)
+      split('direct')
+      return result
     } catch (error) {
       if (!isTransportFault(error, signal)) throw error
       pause(did, Date.now() + LENS_DIRECT_PAUSE_MS)
     }
   }
-  return send(proxy)
+  const result = await send(proxy)
+  split(direct ? 'proxy, after a direct transport fault' : 'proxy')
+  return result
 }

@@ -351,6 +351,30 @@ export function getMuteCache(did: string | undefined): MuteLookup | undefined {
   return lookup
 }
 
+/**
+ * Why {@link getMuteCache} answers `undefined` for `did`, for the timing
+ * log: `undefined` when it would answer a lookup.
+ */
+export function muteCacheGate(did: string | undefined): string | undefined {
+  if (!did) return 'no account'
+  if (stopped.has(did)) return 'stopped'
+  if (
+    states
+      .get(did)
+      ?.changes.some(
+        change => change.kind === 'list' && change.muted && !change.entry,
+      )
+  ) {
+    return 'a list muted here still being read'
+  }
+  const stored = readStored(did)
+  if (!stored) {
+    return isMuteCacheRefreshing(did) ? 'first read in flight' : 'none stored'
+  }
+  if (!isComplete(stored)) return 'incomplete (too many pages)'
+  return undefined
+}
+
 /** Ends a change: `true` once the server took it, `false` when it failed. */
 export type SettleMuteChange = (ok: boolean) => void
 

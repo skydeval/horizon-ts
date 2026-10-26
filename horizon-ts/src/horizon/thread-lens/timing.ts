@@ -56,9 +56,28 @@ export function lensTimingStart(uri: string | undefined): {
 } {
   const now = lensTimingNow()
   const tap = uri && lensTimingOn() ? taps.get(rkeyOf(uri)) : undefined
-  return tap !== undefined && now - tap < TAP_KEEP_MS
-    ? {at: tap, from: 'tap'}
-    : {at: now, from: 'screen mount'}
+  const start: LensOrigin =
+    tap !== undefined && now - tap < TAP_KEEP_MS
+      ? {at: tap, from: 'tap'}
+      : {at: now, from: 'screen mount'}
+  if (uri && lensTimingOn()) origins.set(rkeyOf(uri), start)
+  return start
+}
+
+type LensOrigin = {at: number; from: 'tap' | 'screen mount'}
+
+/*
+ * Each screen's origin by record key, so a read's steps are also timed on
+ * the screen's clock (from its tap or its mount) and line up with the
+ * milestones (2026-10-26: steps and milestones had different starts).
+ */
+const origins = new Map<string, LensOrigin>()
+
+/** `, N ms from tap` (or screen mount) for `anchor`'s screen, when known. */
+function onScreenClock(anchor: string, now: number): string {
+  const origin = origins.get(rkeyOf(anchor))
+  if (!origin || now - origin.at > TAP_KEEP_MS) return ''
+  return `, ${Math.round(now - origin.at)} ms from ${origin.from}`
 }
 
 /*
@@ -71,10 +90,26 @@ function write(line: string) {
   globalThis.console.info(`[thread lens timing] ${line}`)
 }
 
-/** One step of a read of `anchor`, timed from `since`. */
+/**
+ * One step of a read of `anchor`, timed from `since` (the read's start) and
+ * on the screen's clock when its screen is known.
+ */
 export function noteLensStep(anchor: string, step: string, since: number) {
   if (!lensTimingOn()) return
-  write(`${rkeyOf(anchor)} ${step}: ${Math.round(lensTimingNow() - since)} ms`)
+  const now = lensTimingNow()
+  write(
+    `${rkeyOf(anchor)} ${step}: ${Math.round(now - since)} ms into the read` +
+      onScreenClock(anchor, now),
+  )
+}
+
+/**
+ * A detail line for `anchor` (counts and reasons, never a URI or DID), or
+ * for a call when `anchor` names it instead.
+ */
+export function noteLensDetail(anchor: string, detail: string) {
+  if (!lensTimingOn()) return
+  write(`${rkeyOf(anchor)} ${detail}`)
 }
 
 /** A screen milestone of `anchor`, timed from its tap or its mount. */

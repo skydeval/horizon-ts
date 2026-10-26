@@ -55,6 +55,7 @@ import {
   resetLensQueues,
   snapshotOf,
 } from '#/horizon/thread-lens/snapshot'
+import {LENS_TIMING_KEY} from '#/horizon/thread-lens/timing'
 import {type app} from '#/lexicons'
 import {
   type Call,
@@ -480,5 +481,102 @@ describe('what the pass gave that prism does not', () => {
     })
     // Nothing more was asked: the root skipped the pass.
     expect(asked()).toEqual([ANCHOR])
+  })
+})
+
+describe('the timing log (2026-10-26, Prism)', () => {
+  let lines: string[]
+  let restore: () => void
+
+  beforeEach(() => {
+    lines = []
+    writeLocal(LENS_TIMING_KEY, '1')
+    const spy = jest
+      .spyOn(globalThis.console, 'info')
+      .mockImplementation((line: unknown) => {
+        lines.push(String(line))
+      })
+    restore = () => spy.mockRestore()
+  })
+
+  afterEach(() => {
+    restore()
+    writeLocal(LENS_TIMING_KEY, undefined)
+  })
+
+  it('says the member skip is on, and why each post kept the pass, as counts', async () => {
+    seedMutes()
+    const root = hydrated('3kroot2222222')
+    const anchor = hydrated('3kanchor22222', {parent: ROOT})
+    const built = hydrated('3kbuilt222222', {parent: ANCHOR}) as Record<
+      string,
+      unknown
+    >
+    delete built.likeCount
+    const quoting = hydrated('3kquoting2222', {
+      parent: ANCHOR,
+      extra: {
+        embed: {
+          $type: 'app.bsky.embed.record#view',
+          record: {
+            $type: 'app.bsky.embed.record#viewNotFound',
+            uri: uriOf('3kgone2222222'),
+            notFound: true,
+          },
+        },
+      },
+    })
+    const ungated = {
+      ...view('3kungated2222', {parent: ANCHOR}),
+      viewer: {},
+    } as PostView
+    const unsafe = [built as unknown as PostView, quoting, ungated]
+    posts = unsafe.map(post => ({...post}))
+    lensReply = () =>
+      answer([root, anchor, ...unsafe].map(post => postNode(post)))
+    await load(setup())
+    expect(lines).toContain('[thread lens timing] 3kanchor22222 member skip on')
+    expect(lines).toContain(
+      '[thread lens timing] 3kanchor22222 public pass: 5 posts, 2 skipped, ' +
+        '3 to the pass (no counts 1, record embed 1, replyDisabled undecided 1), ' +
+        '0 early, 3 fetched',
+    )
+    expect(
+      lines.some(line =>
+        line.startsWith('[thread lens timing] 3kanchor22222 snapshot built: '),
+      ),
+    ).toBe(true)
+    // Record keys only: never a DID or an AT-URI.
+    expect(lines.some(line => /did:|at:\/\//.test(line))).toBe(false)
+  })
+
+  it('names the gate that kept the skip off', async () => {
+    const thread = mutedThread()
+    posts = thread
+    lensReply = () => answer(thread.map(post => postNode(post)))
+    await load(setup())
+    expect(lines).toContain(
+      '[thread lens timing] 3kanchor22222 member skip off: ' +
+        'mutes not whole on the device (none stored)',
+    )
+    expect(lines).toContain(
+      '[thread lens timing] 3kanchor22222 public pass: 4 posts, 0 skipped, ' +
+        '4 to the pass (no hydration 4), 0 early, 4 fetched',
+    )
+  })
+
+  it('names a visitor answer', async () => {
+    seedMutes()
+    const thread = mutedThread()
+    posts = thread
+    lensReply = () =>
+      answer(
+        thread.map(post => postNode(post)),
+        'visitor',
+      )
+    await load(setup())
+    expect(lines).toContain(
+      '[thread lens timing] 3kanchor22222 member skip off: served as visitor',
+    )
   })
 })

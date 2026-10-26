@@ -32,7 +32,11 @@ import {type Client} from '@atproto/lex'
 import {AtUri} from '@atproto/syntax'
 import {type QueryClient} from '@tanstack/react-query'
 
-import {getMuteCache, type MuteLookup} from '#/horizon/mutes/cache'
+import {
+  getMuteCache,
+  muteCacheGate,
+  type MuteLookup,
+} from '#/horizon/mutes/cache'
 import {fetchPublicPosts} from '#/horizon/private/adapt/feed-view'
 import {readRestored} from '#/horizon/refract/marker'
 import {
@@ -308,6 +312,35 @@ export function lensHydrationOf(
   return {mutes, ...(bookmarked ? {bookmarked} : {})}
 }
 
+/**
+ * Why {@link lensHydrationOf} gave no hydration, for the timing log; the
+ * first gate that closed. `undefined` when it gave one.
+ */
+export function lensHydrationGate(
+  did: string,
+  {
+    servedAs,
+    readerLabels,
+  }: {servedAs: string | undefined; readerLabels: boolean},
+): string | undefined {
+  if (servedAs !== 'member') return `served as ${servedAs ?? 'nothing'}`
+  if (!readerLabels) return "the reader's labels not applied"
+  const mutes = getMuteCache(did)
+  if (!mutes || mutes.did !== did) {
+    return `mutes not whole on the device (${muteCacheGate(did) ?? 'unknown'})`
+  }
+  return undefined
+}
+
+/** Why a post node went to the pass ({@link passReasonOf}). */
+export type PassReason =
+  | 'restored'
+  | 'missing fields'
+  | 'no counts'
+  | 'record embed'
+  | 'unknown embed'
+  | 'replyDisabled undecided'
+
 /** The embeds whose posts' views are the pass's only (prism's edge 2). */
 const RECORD_EMBEDS = new Set([
   'app.bsky.embed.record#view',
@@ -337,8 +370,16 @@ const MEDIA_EMBEDS = new Set([
  * per-node marker yet; log, 2026-10-25).
  */
 export function isHydratedSafe(node: CheckedPost): boolean {
+  return passReasonOf(node) === undefined
+}
+
+/**
+ * The first rule of {@link isHydratedSafe} that keeps `node` to the pass,
+ * or `undefined` when prism's view can stand for it.
+ */
+export function passReasonOf(node: CheckedPost): PassReason | undefined {
   const post = node.post
-  if (readRestored(post)) return false
+  if (readRestored(post)) return 'restored'
   const author = post.author
   if (
     typeof post.cid !== 'string' ||
@@ -348,18 +389,55 @@ export function isHydratedSafe(node: CheckedPost): boolean {
     typeof author.did !== 'string' ||
     typeof author.handle !== 'string'
   ) {
-    return false
+    return 'missing fields'
   }
   for (const count of ['likeCount', 'repostCount', 'replyCount']) {
-    if (typeof post[count] !== 'number') return false
+    if (typeof post[count] !== 'number') return 'no counts'
   }
   if (post.embed !== undefined) {
     const type = isObject(post.embed) ? post.embed.$type : undefined
-    if (typeof type !== 'string' || RECORD_EMBEDS.has(type)) return false
-    if (!MEDIA_EMBEDS.has(type)) return false
+    if (typeof type === 'string' && RECORD_EMBEDS.has(type)) {
+      return 'record embed'
+    }
+    if (typeof type !== 'string' || !MEDIA_EMBEDS.has(type)) {
+      return 'unknown embed'
+    }
   }
   const viewer = isObject(post.viewer) ? post.viewer : {}
   return typeof viewer.replyDisabled === 'boolean'
+    ? undefined
+    : 'replyDisabled undecided'
+}
+
+/** What one pass did, for the timing log: counts only. */
+export type PublicPassStats = {
+  /** Post nodes the pass was asked for. */
+  asked: number
+  /** Rendered from prism's view (member skip). */
+  skipped: number
+  /** Skipped, but the early view had answered and was used. */
+  skippedEarly: number
+  /** Kept to the pass, by the first reason ({@link passReasonOf}). */
+  reasons: Partial<Record<PassReason | 'no hydration', number>>
+  /** Taken from the early views. */
+  early: number
+  /** Asked of the AppView by the pass itself. */
+  fetched: number
+}
+
+/** The stats as one log line. */
+export function formatPassStats(stats: PublicPassStats): string {
+  const reasons = Object.entries(stats.reasons)
+    .map(([reason, n]) => `${reason} ${n}`)
+    .join(', ')
+  const kept = stats.asked - stats.skipped
+  return (
+    `public pass: ${stats.asked} posts, ${stats.skipped} skipped` +
+    (stats.skippedEarly ? ` (${stats.skippedEarly} from early views)` : '') +
+    `, ${kept} to the pass` +
+    (reasons ? ` (${reasons})` : '') +
+    `, ${stats.early} early, ${stats.fetched} fetched`
+  )
 }
 
 /**
@@ -437,22 +515,47 @@ export async function readPublicViews(
     did,
     lensLabels = false,
     hydration,
-  }: {did?: string; lensLabels?: boolean; hydration?: LensHydration} = {},
+    onStats,
+  }: {
+    did?: string
+    lensLabels?: boolean
+    hydration?: LensHydration
+    /** Called once with what the pass did (the timing log). */
+    onStats?: (stats: PublicPassStats) => void
+  } = {},
 ): Promise<Map<string, PublicOutcome>> {
   const outcomes = new Map<string, PublicOutcome>()
-  if (uris.length === 0) return outcomes
+  const stats: PublicPassStats = {
+    asked: 0,
+    skipped: 0,
+    skippedEarly: 0,
+    reasons: {},
+    early: 0,
+    fetched: 0,
+  }
+  if (uris.length === 0) {
+    onStats?.(stats)
+    return outcomes
+  }
   const wanted = new Set(uris)
   const posts = new Map<string, CheckedPost>()
   const now = Date.now()
   for (const node of checked) {
     if (node.type !== 'post' || !wanted.has(node.uri)) continue
+    stats.asked++
     const hydrated = hydratedViewOf(node, hydration)
     if (!hydrated) {
+      if (onStats) {
+        const reason = hydration ? passReasonOf(node) : 'no hydration'
+        if (reason) stats.reasons[reason] = (stats.reasons[reason] ?? 0) + 1
+      }
       posts.set(node.uri, node)
       continue
     }
+    stats.skipped++
     const early = did ? takeAnswered(did, node.uri, now) : undefined
     if (early) {
+      stats.skippedEarly++
       // The AppView's own view, already here: as the pass would have it.
       if (early.view) noteEmbeddingChecked(node.uri)
       outcomes.set(node.uri, publicOutcomeOf(node, early.view, {lensLabels}))
@@ -467,6 +570,9 @@ export async function readPublicViews(
     if (view) early.set(uri, view)
     else missing.push(uri)
   }
+  stats.early = early.size
+  stats.fetched = missing.length
+  onStats?.(stats)
   const views = new Map<string, PostView | undefined>()
   const retry: string[] = []
   const [fetched] = await Promise.all([
