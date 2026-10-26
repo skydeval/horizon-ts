@@ -515,6 +515,9 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
   it('on posting route encode, mints a getPosts token at sign-in at once, its long one after it, and none again while it lasts', async () => {
     publishAccount(pdsClientFor())
     const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
+    // The short mint, then the long one after it settles.
+    await flush()
+    await flush()
     await flush()
     // Nothing waits on the clock: a short token now, then the long one.
     expect(serviceAuthCalls().map(call => call.params.get('exp'))).toEqual([
@@ -569,6 +572,9 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
   )
 
   it('mints once when the route becomes encode', async () => {
+    // The clock known from the site: the first token is the long one.
+    mockOriginOffset = 0
+    await learnOriginClock()
     mockPostingRoute = 'checking'
     publishAccount(pdsClientFor())
     const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
@@ -582,6 +588,8 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
   })
 
   it('mints nothing in the background or with no current account; an expired token is refreshed at once on return to the foreground', async () => {
+    mockOriginOffset = 0
+    await learnOriginClock()
     const stopSignedOut = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
     await flush()
     expect(serviceAuthCalls()).toEqual([])
@@ -606,6 +614,8 @@ describe('the getPosts token prefetch and refresh (PA-29, T-25)', () => {
   it('refreshes in the background when 5 minutes are left, while in the foreground', async () => {
     jest.useFakeTimers({doNotFake: ['Date', 'setImmediate', 'nextTick']})
     try {
+      mockOriginOffset = 0
+      await learnOriginClock()
       publishAccount(pdsClientFor())
       const stop = startDirectTokenPrefetch(DIRECT_PREFETCH_2K, env)
       await flush()

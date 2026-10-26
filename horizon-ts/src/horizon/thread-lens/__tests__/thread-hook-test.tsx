@@ -115,6 +115,8 @@ const B1 = uriOf('3kb1222222222', BLOCKED)
 const C1 = view('3kc1222222222', {parent: B1, root: ROOT.uri, minutes: 2})
 
 let lensFails: boolean
+/** Set, getThread waits for it (a read in flight). */
+let lensHold: Promise<void> | undefined
 let prismCalls: Call[]
 let appviewCalls: Call[]
 
@@ -138,11 +140,13 @@ function publish() {
   const prism = server(READER, call => {
     if (call.nsid === 'app.nearhorizon.threadLens.getThread') {
       if (lensFails) return {status: 500, body: {error: 'InternalServerError'}}
-      return lensAnswer(ROOT.uri, [
-        postNode(ROOT),
-        gapNode(B1, 'blocking-you', {parentUri: ROOT.uri}),
-        postNode(C1),
-      ])
+      const answer = () =>
+        lensAnswer(ROOT.uri, [
+          postNode(ROOT),
+          gapNode(B1, 'blocking-you', {parentUri: ROOT.uri}),
+          postNode(C1),
+        ])
+      return lensHold ? lensHold.then(answer) : answer()
     }
     return {status: 501, body: {error: 'MethodNotImplemented'}}
   })
@@ -176,13 +180,21 @@ async function settle() {
   })
 }
 
+let renders = 0
+
 function renderThread(anchor: string) {
   const qc = publish()
-  const hook = renderHook(() => usePostThread({anchor}), {
-    wrapper: ({children}) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-    ),
-  })
+  const hook = renderHook(
+    () => {
+      renders++
+      return usePostThread({anchor})
+    },
+    {
+      wrapper: ({children}) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      ),
+    },
+  )
   return {...hook, qc}
 }
 
@@ -192,6 +204,8 @@ function nsids(calls: Call[]) {
 
 beforeEach(() => {
   lensFails = false
+  lensHold = undefined
+  renders = 0
   resetPrismHealth()
   resetKnown()
   resetPrismFeatures()
@@ -227,6 +241,29 @@ describe('usePostThread with Thread Lens', () => {
       B1,
     )
     expect(nsids(prismCalls)).toContain('app.nearhorizon.threadLens.getThread')
+  })
+
+  it('does not re-render while the lens read is in flight (2026-10-26, the cold-open storm)', async () => {
+    let release!: () => void
+    lensHold = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const {result, qc} = renderThread(ROOT.uri)
+    await settle()
+    const settled = renders
+    let updates = 0
+    const off = qc.getQueryCache().subscribe(() => {
+      updates++
+    })
+    // Nothing changes while getThread is out: no renders, no cache events.
+    await settle()
+    await settle()
+    off()
+    expect(renders - settled).toBeLessThanOrEqual(1)
+    expect(updates).toBe(0)
+    release()
+    await settle()
+    expect(result.current.state.lens.kind).toBe('snapshot')
   })
 
   it('reads the stock thread under the stock key with the lens off', async () => {

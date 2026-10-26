@@ -250,7 +250,8 @@ export function usePostThread({anchor}: {anchor?: string}) {
     ...privateRetryFor(isPrivateRead(anchor)),
     // HORIZON: a held private anchor is read again on the suspect clock
     refetchInterval: () => heldPostRefetchInterval(anchor),
-    placeholderData() {
+    // HORIZON: one placeholder builder per anchor: with structural sharing off, a new one each render rebuilt the placeholder and rendered again, in a loop while a read was in flight
+    placeholderData: useCallback(() => {
       if (!anchor) return
       const placeholder = getThreadPlaceholder(qc, anchor)
       /*
@@ -260,7 +261,7 @@ export function usePostThread({anchor}: {anchor?: string}) {
        */
       const thread = placeholder ? [placeholder] : []
       return {thread, threadgate: undefined, hasOtherReplies: false}
-    },
+    }, [qc, anchor]),
     select(data) {
       // HORIZON: Thread Lens TH-14: a lens snapshot becomes the stock answer for the current sort, view and depth
       data = lens.select(data)

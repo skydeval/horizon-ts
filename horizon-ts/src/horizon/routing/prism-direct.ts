@@ -624,7 +624,12 @@ export function startDirectTokenPrefetch(
       next = Math.min(next, at)
     }
     if (next === Number.POSITIVE_INFINITY) return
-    timer = setTimeout(() => tick({refresh: true}), Math.max(0, next - now))
+    if (next <= now) {
+      // Due now (a short token to upgrade): no timer hop.
+      queueMicrotask(() => tick({refresh: true}))
+      return
+    }
+    timer = setTimeout(() => tick({refresh: true}), next - now)
   }
 
   const tick = ({refresh = false}: {refresh?: boolean} = {}) => {

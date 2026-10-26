@@ -16,7 +16,7 @@
  * the stock types are not widened (R1-N9).
  */
 
-import {useSyncExternalStore} from 'react'
+import {useMemo, useSyncExternalStore} from 'react'
 import {
   hashKey,
   type QueryClient,
@@ -379,5 +379,41 @@ export function useThreadLensRead({
     ...(reason ? {inactiveReason: reason} : {}),
   }
   const runId = useLensRunId(qc, lensKeyFor(inputs))
-  return createThreadLens(qc, inputs, runId)
+  /*
+   * One lens object while its inputs hold (2026-10-26, the cold-open
+   * storm): the thread query's `select` closes over it, and a new `select`
+   * every render made React Query run it again, hand back a new answer and
+   * render again, hundreds of times while the read was in flight.
+   */
+  return useMemo(
+    () =>
+      createThreadLens(
+        qc,
+        {
+          did,
+          anchor,
+          sort,
+          view,
+          below,
+          active,
+          lensOnly,
+          marked,
+          ...(reason ? {inactiveReason: reason} : {}),
+        },
+        runId,
+      ),
+    [
+      qc,
+      did,
+      anchor,
+      sort,
+      view,
+      below,
+      active,
+      lensOnly,
+      marked,
+      reason,
+      runId,
+    ],
+  )
 }
