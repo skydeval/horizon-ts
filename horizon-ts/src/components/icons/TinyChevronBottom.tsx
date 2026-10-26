@@ -3,7 +3,7 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const TinyChevronBottom_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M10.928 18.882a1.95 1.95 0 0 0 2.452-.25l9-9a1.953 1.953 0 0 0-2.76-2.76L12 14.493l-7.62-7.62a1.952 1.952 0 0 0-2.76 2.76l9 9 .308.25Z',
+  path: 'm20.296 9.796-7.5 7.5a1.125 1.125 0 0 1-1.594 0l-7.5-7.5a1.125 1.125 0 0 1 1.594-1.594L12 14.906l6.704-6.705a1.125 1.125 0 0 1 1.594 1.594Z',
   viewBox: '0 0 24 24',
   glyph: 'TinyChevronBottom_Stroke2_Corner0_Rounded',
 })

@@ -3,13 +3,13 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const PlusLarge_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M12 3a1 1 0 0 1 1 1v7h7a1 1 0 1 1 0 2h-7v7a1 1 0 1 1-2 0v-7H4a1 1 0 1 1 0-2h7V4a1 1 0 0 1 1-1Z',
+  path: 'M21.375 12a1.125 1.125 0 0 1-1.125 1.125h-7.125v7.125a1.125 1.125 0 0 1-2.25 0v-7.125H3.75a1.125 1.125 0 0 1 0-2.25h7.125V3.75a1.125 1.125 0 0 1 2.25 0v7.125h7.125A1.125 1.125 0 0 1 21.375 12Z',
   viewBox: '0 0 24 24',
   glyph: 'PlusLarge_Stroke2_Corner0_Rounded',
 })
 
 export const PlusSmall_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M12 6a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H7a1 1 0 1 1 0-2h4V7a1 1 0 0 1 1-1Z',
+  path: 'M21.375 12a1.125 1.125 0 0 1-1.125 1.125h-7.125v7.125a1.125 1.125 0 0 1-2.25 0v-7.125H3.75a1.125 1.125 0 0 1 0-2.25h7.125V3.75a1.125 1.125 0 0 1 2.25 0v7.125h7.125A1.125 1.125 0 0 1 21.375 12Z',
   viewBox: '0 0 24 24',
   glyph: 'PlusSmall_Stroke2_Corner0_Rounded',
 })

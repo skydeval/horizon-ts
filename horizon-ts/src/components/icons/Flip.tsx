@@ -3,13 +3,13 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const FlipHorizontal_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M4 21a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5v2H5v14h4v2H4Zm9-20v22h-2V1h2Zm7.707 2.293A1 1 0 0 1 21 4v1h-2V3h1a1 1 0 0 1 .707.293ZM19 7h2v2h-2V7Zm0 4h2v2h-2v-2Zm0 4h2v2h-2v-2Zm0 4h2v1a1 1 0 0 1-1 1h-1v-2Zm-2 0v2h-2v-2h2ZM15 5h2V3h-2v2Z',
+  path: 'M9.75 1.913a1.86 1.86 0 0 0-2.1 1.108q-.01.021-.018.043L2.013 18.046a1.875 1.875 0 0 0 1.737 2.579h5.625a1.875 1.875 0 0 0 1.875-1.875v-15a1.86 1.86 0 0 0-1.5-1.837ZM9 18.375H4.293L9 5.821Zm12.987-.329L16.37 3.064l-.018-.043a1.875 1.875 0 0 0-3.602.729v15a1.875 1.875 0 0 0 1.875 1.875h5.625a1.875 1.875 0 0 0 1.738-2.579ZM15 18.375V5.821l4.707 12.554Z',
   viewBox: '0 0 24 24',
   glyph: 'FlipHorizontal_Stroke2_Corner0_Rounded',
 })
 
 export const FlipVertical_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v5h-2V5H5v4H3V4Zm20 9H1v-2h22v2Zm-2.293 7.707A1 1 0 0 1 20 21h-1v-2h2v1a1 1 0 0 1-.293.707ZM17 19v2h-2v-2h2Zm-4 0v2h-2v-2h2Zm-4 0v2H7v-2h2Zm-4 0v2H4a1 1 0 0 1-1-1v-1h2Zm0-2H3v-2h2v2Zm14-2v2h2v-2h-2Z',
+  path: 'M5.25 11.25h15a1.875 1.875 0 0 0 .73-3.602l-.043-.018L5.954 2.013A1.875 1.875 0 0 0 3.375 3.75v5.625A1.875 1.875 0 0 0 5.25 11.25Zm.375-6.957L18.179 9H5.625ZM20.25 12.75h-15a1.875 1.875 0 0 0-1.875 1.875v5.625a1.875 1.875 0 0 0 2.579 1.738l14.982-5.617.043-.018a1.875 1.875 0 0 0-.729-3.603ZM5.625 19.708V15h12.554Z',
   viewBox: '0 0 24 24',
   glyph: 'FlipVertical_Stroke2_Corner0_Rounded',
 })

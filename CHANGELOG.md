@@ -131,6 +131,12 @@ web and waiting on its live checks.
 
 ### Changed
 
+- **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
+  the favicons and the web app manifest replace Bluesky's butterfly and
+  logotype wherever the app draws them.
+- **New icons.** Every UI icon is now from Phosphor Icons (MIT): Bold
+  outlines, and Fill for selected and filled states, under the same names,
+  so nothing that uses an icon changed.
 - **Fronters read as a list:** "Wren", "Wren & Sparrow", "Wren, Sparrow &
   Robin", in place of the trailing `&` marker first built ("Wren, Sparrow&").
 - **The Posting as control sits exactly where the composer's avatar was,** at

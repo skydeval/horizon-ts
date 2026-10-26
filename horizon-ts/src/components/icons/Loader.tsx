@@ -3,7 +3,7 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const Loader_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M12 5a7 7 0 0 0-5.218 11.666A1 1 0 0 1 5.292 18a9 9 0 1 1 13.416 0 1 1 0 1 1-1.49-1.334A7 7 0 0 0 12 5Z',
+  path: 'M22.125 12a10.125 10.125 0 0 1-20.25 0c0-3.986 2.318-7.626 5.906-9.272a1.125 1.125 0 1 1 .938 2.045C5.929 6.053 4.125 8.89 4.125 12a7.875 7.875 0 0 0 15.75 0c0-3.11-1.804-5.947-4.594-7.227a1.125 1.125 0 1 1 .938-2.045c3.588 1.646 5.906 5.286 5.906 9.272Z',
   viewBox: '0 0 24 24',
   glyph: 'Loader_Stroke2_Corner0_Rounded',
 })

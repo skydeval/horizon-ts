@@ -3,7 +3,7 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const Bars3_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M3 5a1 1 0 0 0 0 2h18a1 1 0 1 0 0-2H3Zm-1 7a1 1 0 0 1 1-1h18a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1Zm0 6a1 1 0 0 1 1-1h18a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1Z',
+  path: 'M21.375 12a1.125 1.125 0 0 1-1.125 1.125H3.75a1.125 1.125 0 0 1 0-2.25h16.5A1.125 1.125 0 0 1 21.375 12ZM3.75 7.125h16.5a1.125 1.125 0 0 0 0-2.25H3.75a1.125 1.125 0 0 0 0 2.25Zm16.5 9.75H3.75a1.125 1.125 0 0 0 0 2.25h16.5a1.125 1.125 0 0 0 0-2.25Z',
   viewBox: '0 0 24 24',
   glyph: 'Bars3_Stroke2_Corner0_Rounded',
 })

@@ -3,28 +3,25 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const Message_Stroke1_Corner0_Rounded_Filled = createSinglePathSVG({
-  path: 'M9 1h32a8 8 0 0 1 8 8v21.333a8 8 0 0 1-8 8H27.667L14.333 49V38.333H9a8 8 0 0 1-8-8V9a8 8 0 0 1 8-8Z',
-  viewBox: '0 0 50 50',
-  strokeWidth: 2,
-  strokeLinecap: 'square',
-  strokeLinejoin: 'round',
+  path: 'M21.75 11.625A9.385 9.385 0 0 1 12.375 21H4.5A1.5 1.5 0 0 1 3 19.5v-7.875a9.375 9.375 0 0 1 18.75 0Z',
+  viewBox: '0 0 24 24',
   glyph: 'Message_Stroke1_Corner0_Rounded_Filled',
 })
 
 export const Message_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M4 12a8 8 0 1 1 4.445 7.169 1 1 0 0 0-.629-.088l-3.537.662.7-3.415a1 1 0 0 0-.09-.66A7.96 7.96 0 0 1 4 12Zm8-10C6.477 2 2 6.477 2 12a10 10 0 0 0 .951 4.262l-.93 4.537a1 1 0 0 0 1.163 1.184l4.68-.876A10 10 0 0 0 12 22c5.523 0 10-4.477 10-10S17.523 2 12 2ZM7.5 13.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm4.5 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Zm4.5 0a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z',
+  path: 'M12.375 1.875a9.76 9.76 0 0 0-9.75 9.75V19.5A1.875 1.875 0 0 0 4.5 21.375h7.875a9.75 9.75 0 0 0 0-19.5Zm0 17.25h-7.5v-7.5a7.5 7.5 0 1 1 7.5 7.5Z',
   viewBox: '0 0 24 24',
   glyph: 'Message_Stroke2_Corner0_Rounded',
 })
 
 export const Message_Stroke2_Corner0_Rounded_Filled = createSinglePathSVG({
-  path: 'M2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10a10 10 0 0 1-4.136-.893l-4.68.876a1 1 0 0 1-1.164-1.184l.931-4.537A10 10 0 0 1 2 12Zm4.25 0a1.25 1.25 0 1 0 2.5 0 1.25 1.25 0 0 0-2.5 0Zm4.5 0a1.25 1.25 0 1 0 2.5 0 1.25 1.25 0 0 0-2.5 0Zm5.75 1.25a1.25 1.25 0 1 1 0-2.5 1.25 1.25 0 0 1 0 2.5Z',
+  path: 'M21.75 11.625A9.385 9.385 0 0 1 12.375 21H4.5A1.5 1.5 0 0 1 3 19.5v-7.875a9.375 9.375 0 0 1 18.75 0Z',
   viewBox: '0 0 24 24',
   glyph: 'Message_Stroke2_Corner0_Rounded_Filled',
 })
 
 export const MessagePlus_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M12 2c5.523 0 10 4.477 10 10s-4.477 10-10 10a10 10 0 0 1-4.136-.893l-4.68.876A1 1 0 0 1 2.02 20.8l.93-4.537A10 10 0 0 1 2 12C2 6.477 6.477 2 12 2Zm0 2a8 8 0 0 0-7.111 11.668 1 1 0 0 1 .09.66l-.7 3.415 3.537-.662c.214-.04.435-.009.63.088A8 8 0 1 0 12 4Zm0 4a1 1 0 0 1 1 1v2h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2H9a1 1 0 1 1 0-2h2V9a1 1 0 0 1 1-1Z',
+  path: 'M16.5 10.125a1.125 1.125 0 0 1-1.125 1.125H9A1.125 1.125 0 0 1 9 9h6.375a1.125 1.125 0 0 1 1.125 1.125Zm-1.125 2.625H9A1.125 1.125 0 0 0 9 15h6.375a1.125 1.125 0 0 0 0-2.25Zm6.75-1.125a9.76 9.76 0 0 1-9.75 9.75H4.5A1.875 1.875 0 0 1 2.625 19.5v-7.875a9.75 9.75 0 0 1 19.5 0Zm-2.25 0a7.5 7.5 0 0 0-15 0v7.5h7.5a7.51 7.51 0 0 0 7.5-7.5Z',
   viewBox: '0 0 24 24',
   glyph: 'MessagePlus_Stroke2_Corner0_Rounded',
 })

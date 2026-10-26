@@ -3,19 +3,19 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const AspectRatio11_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4Zm2 1v14h14V5H5Z',
+  path: 'M19.5 2.625h-15A1.875 1.875 0 0 0 2.625 4.5v15A1.875 1.875 0 0 0 4.5 21.375h15a1.875 1.875 0 0 0 1.875-1.875v-15A1.875 1.875 0 0 0 19.5 2.625Zm-.375 16.5H4.875V4.875h14.25Z',
   viewBox: '0 0 24 24',
   glyph: 'AspectRatio11_Stroke2_Corner0_Rounded',
 })
 
 export const AspectRatio34_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M4 2c0-.552.41-1 .917-1h14.666c.507 0 .917.448.917 1v20c0 .552-.41 1-.917 1H4.917C4.41 23 4 22.552 4 22V2Zm1.833 1v18h12.834V3H5.833Z',
+  path: 'M18 1.875H6A2.625 2.625 0 0 0 3.375 4.5v15A2.625 2.625 0 0 0 6 22.125h12a2.625 2.625 0 0 0 2.625-2.625v-15A2.625 2.625 0 0 0 18 1.875Zm-12.375 6h12.75v8.25H5.625ZM6 4.125h12a.375.375 0 0 1 .375.375v1.125H5.625V4.5A.375.375 0 0 1 6 4.125Zm12 15.75H6a.375.375 0 0 1-.375-.375v-1.125h12.75V19.5a.375.375 0 0 1-.375.375Z',
   viewBox: '0 0 24 24',
   glyph: 'AspectRatio34_Stroke2_Corner0_Rounded',
 })
 
 export const AspectRatio43_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M2 20.5c-.552 0-1-.41-1-.917V4.917C1 4.41 1.448 4 2 4h20c.552 0 1 .41 1 .917v14.666c0 .507-.448.917-1 .917H2Zm1-1.833h18V5.833H3v12.834Z',
+  path: 'M20.25 3.375H3.75A1.875 1.875 0 0 0 1.875 5.25v13.5a1.875 1.875 0 0 0 1.875 1.875h16.5a1.875 1.875 0 0 0 1.875-1.875V5.25a1.875 1.875 0 0 0-1.875-1.875Zm-.375 15H4.125V5.625h15.75Z',
   viewBox: '0 0 24 24',
   glyph: 'AspectRatio43_Stroke2_Corner0_Rounded',
 })

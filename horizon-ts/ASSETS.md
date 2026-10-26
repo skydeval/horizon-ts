@@ -19,7 +19,8 @@ For the assets Bluesky itself owns, we are not treating anyone's past use as bad
 | Where | Rights holder | Our MIT license covers it? | If you fork |
 |---|---|---|---|
 | [assets/illustrations/ (removed in Horizon)](#1-commissioned-artwork--licensed-to-bluesky-only) | Owen D. Pomery, via Brilliant Artists Ltd | No | Replace |
-| [`assets/icons/ui/`](#2-licensed-icon-system--not-ours-to-pass-on) and Central icon glyphs in `bskyembed/assets/` except the Starter Pack mark | Iconists (David & Storm GbR) | No | Source your own |
+| [Central icon glyphs in `bskyembed/assets/`](#2-licensed-icon-system--not-ours-to-pass-on) except the Starter Pack mark | Iconists (David & Storm GbR) | No | Source your own |
+| [`assets/icons/ui/`](#6-third-party-assets-you-may-redistribute) (Phosphor in Horizon) | Phosphor Icons | Separate — MIT | **Keep, with the notice** |
 | [Bluesky-owned marks](#3-bluesky-trademarks-and-brand-assets) — app icons, logos, favicons, Attie | Bluesky Social PBC | No | Replace |
 | [assets/kawaii.png, assets/kawaii_smol.png (removed in Horizon)](#4-community-and-contest-artwork--credited-but-not-ours-to-license) | [@sawaratsuki.bsky.social](https://bsky.app/profile/sawaratsuki.bsky.social) | No | Replace or remove |
 | [`assets/icons/brands/AppleLogo.svg`](#5-third-party-trademarks) | Apple Inc. | No | Rests on your own basis |
@@ -54,9 +55,11 @@ The folder's README was removed in Horizon with the artwork.
 
 ## 2. Licensed icon system — not ours to pass on
 
-**`assets/icons/ui/` and the Central icon glyphs in `bskyembed/assets/`, except `bskyembed/assets/starterPack.svg`**
+<!-- HORIZON: Horizon replaced the Central glyphs in assets/icons/ui/ with Phosphor (MIT, Section 6); only the embed copies remain -->
 
-**Rights holder: Iconists (David & Storm GbR).** The user-interface glyphs in `assets/icons/ui/`, plus copies of several in `bskyembed/assets/`, come from their [Central icon system](https://iconists.co/central). Bluesky Social PBC licenses them for use in our own products. **That license is for our own use. It does not include the right to pass any rights to the icons on to you.**
+**The Central icon glyphs in `bskyembed/assets/`, except `bskyembed/assets/starterPack.svg`**
+
+**Rights holder: Iconists (David & Storm GbR).** The icon glyphs in `bskyembed/assets/` come from their [Central icon system](https://iconists.co/central). Bluesky Social PBC licenses them for use in our own products. **That license is for our own use. It does not include the right to pass any rights to the icons on to you.**
 
 The fact that we have our own license does not mean that you cannot use these icons. It means that any right you have to use them has to come from Iconists, not us. Licenses are available from [iconists.co](https://iconists.co), and there are openly licensed alternatives if you prefer that.
 
@@ -139,6 +142,7 @@ These are licensed on terms that permit redistribution. Nothing in this document
 | Noto Sans families (OG card service) | Downloaded by `bskyogcard/scripts/install-fonts.ts` | Adobe, Google LLC, and The Noto Project Authors | SIL Open Font License 1.1 | [`README.md`](./bskyogcard/src/assets/fonts/README.md) |
 | country-flag-icons | `assets/icons/flags/` | @catamphetamine | MIT | [`LICENSE`](./assets/icons/flags/LICENSE) |
 | Material Icons | `bskyweb/static/media/MaterialIcons.*.ttf` | Google, Inc. | Apache License 2.0 | [`NOTICE.md`](./NOTICE.md) |
+| Phosphor Icons (Horizon's UI icons) | `assets/icons/ui/` | Phosphor Icons | MIT | [`NOTICE.md`](./NOTICE.md) |
 
 Build output under `bskyweb/static/media/` also contains compiled Inter files. They are the same OFL-licensed typeface, emitted by the web build. The bundled Inter license does not designate a Reserved Font Name.
 

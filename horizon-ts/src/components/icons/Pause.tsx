@@ -3,25 +3,25 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const Pause_Filled_Corner0_Rounded = createSinglePathSVG({
-  path: 'M4 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4Zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4Z',
+  path: 'M20.25 4.5v15a1.5 1.5 0 0 1-1.5 1.5H15a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 15 3h3.75a1.5 1.5 0 0 1 1.5 1.5ZM9 3H5.25a1.5 1.5 0 0 0-1.5 1.5v15a1.5 1.5 0 0 0 1.5 1.5H9a1.5 1.5 0 0 0 1.5-1.5v-15A1.5 1.5 0 0 0 9 3Z',
   viewBox: '0 0 24 24',
   glyph: 'Pause_Filled_Corner0_Rounded',
 })
 
 export const Pause_Filled_Corner2_Rounded = createSinglePathSVG({
-  path: 'M4 6a3 3 0 0 1 6 0v12a3 3 0 1 1-6 0V6Zm10 0a3 3 0 1 1 6 0v12a3 3 0 1 1-6 0V6Z',
+  path: 'M20.25 4.5v15a1.5 1.5 0 0 1-1.5 1.5H15a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 15 3h3.75a1.5 1.5 0 0 1 1.5 1.5ZM9 3H5.25a1.5 1.5 0 0 0-1.5 1.5v15a1.5 1.5 0 0 0 1.5 1.5H9a1.5 1.5 0 0 0 1.5-1.5v-15A1.5 1.5 0 0 0 9 3Z',
   viewBox: '0 0 24 24',
   glyph: 'Pause_Filled_Corner2_Rounded',
 })
 
 export const Pause_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M4 4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4Zm2 1v14h2V5H6Zm8-1a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4Zm2 1v14h2V5h-2Z',
+  path: 'M18.75 2.625H15A1.875 1.875 0 0 0 13.125 4.5v15A1.875 1.875 0 0 0 15 21.375h3.75a1.875 1.875 0 0 0 1.875-1.875v-15a1.875 1.875 0 0 0-1.875-1.875Zm-.375 16.5h-3V4.875h3ZM9 2.625H5.25A1.875 1.875 0 0 0 3.375 4.5v15a1.875 1.875 0 0 0 1.875 1.875H9a1.875 1.875 0 0 0 1.875-1.875v-15A1.875 1.875 0 0 0 9 2.625Zm-.375 16.5h-3V4.875h3Z',
   viewBox: '0 0 24 24',
   glyph: 'Pause_Stroke2_Corner0_Rounded',
 })
 
 export const Pause_Stroke2_Corner2_Rounded = createSinglePathSVG({
-  path: 'M4 6a3 3 0 0 1 6 0v12a3 3 0 1 1-6 0V6Zm3-1a1 1 0 0 0-1 1v12a1 1 0 1 0 2 0V6a1 1 0 0 0-1-1Zm7 1a3 3 0 1 1 6 0v12a3 3 0 1 1-6 0V6Zm3-1a1 1 0 0 0-1 1v12a1 1 0 1 0 2 0V6a1 1 0 0 0-1-1Z',
+  path: 'M18.75 2.625H15A1.875 1.875 0 0 0 13.125 4.5v15A1.875 1.875 0 0 0 15 21.375h3.75a1.875 1.875 0 0 0 1.875-1.875v-15a1.875 1.875 0 0 0-1.875-1.875Zm-.375 16.5h-3V4.875h3ZM9 2.625H5.25A1.875 1.875 0 0 0 3.375 4.5v15a1.875 1.875 0 0 0 1.875 1.875H9a1.875 1.875 0 0 0 1.875-1.875v-15A1.875 1.875 0 0 0 9 2.625Zm-.375 16.5h-3V4.875h3Z',
   viewBox: '0 0 24 24',
   glyph: 'Pause_Stroke2_Corner2_Rounded',
 })

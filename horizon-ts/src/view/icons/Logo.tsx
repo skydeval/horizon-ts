@@ -1,18 +1,11 @@
 import {forwardRef} from 'react'
 import {type TextProps} from 'react-native'
-import Svg, {
-  Defs,
-  LinearGradient,
-  Path,
-  type PathProps,
-  Stop,
-  type SvgProps,
-} from 'react-native-svg'
+import {type PathProps, type SvgProps} from 'react-native-svg'
 
 // HORIZON: the kawaii artwork is not covered by MIT and was removed, with its Image and useLogoVariant imports
-import {flatten, useTheme} from '#/alf'
-
-const ratio = 57 / 64
+import {flatten} from '#/alf'
+// HORIZON: branding import
+import {HorizonMark} from '#/horizon/branding/marks'
 
 type Props = {
   allowVariants?: boolean
@@ -20,39 +13,20 @@ type Props = {
   style?: TextProps['style']
 } & Omit<SvgProps, 'style'>
 
-export const Logo = forwardRef(function LogoImpl(props: Props, ref) {
-  const t = useTheme()
-  const {allowVariants = true, fill, ...rest} = props
-  const gradient = fill === 'sky'
+export const Logo = forwardRef(function LogoImpl(props: Props, _ref) {
+  const {allowVariants: _allowVariants, fill, width, height: _height, ...rest} =
+    props
   const styles = flatten(props.style)
-  const _fill = gradient
-    ? 'url(#sky)'
-    : fill || styles?.color || t.palette.primary_500
   // @ts-expect-error it's fiiiiine
-  const size = parseInt(rest.width || 32, 10)
+  const size = parseInt(width || 32, 10)
 
-  // HORIZON: the kawaii variant was removed with its artwork
+  // HORIZON: branding: Horizon's mark in place of Bluesky's butterfly; full colour, or one colour when a fill is given ('sky' keeps full colour)
   return (
-    <Svg
-      fill="none"
-      // @ts-expect-error it's fiiiiine
-      ref={ref}
-      viewBox="0 0 64 57"
+    <HorizonMark
       {...rest}
-      style={[{width: size, height: size * ratio}, styles]}>
-      {gradient && (
-        <Defs>
-          <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#0A7AFF" stopOpacity="1" />
-            <Stop offset="1" stopColor="#59B9FF" stopOpacity="1" />
-          </LinearGradient>
-        </Defs>
-      )}
-
-      <Path
-        fill={_fill}
-        d="M13.873 3.805C21.21 9.332 29.103 20.537 32 26.55v15.882c0-.338-.13.044-.41.867-1.512 4.456-7.418 21.847-20.923 7.944-7.111-7.32-3.819-14.64 9.125-16.85-7.405 1.264-15.73-.825-18.014-9.015C1.12 23.022 0 8.51 0 6.55 0-3.268 8.579-.182 13.873 3.805ZM50.127 3.805C42.79 9.332 34.897 20.537 32 26.55v15.882c0-.338.13.044.41.867 1.512 4.456 7.418 21.847 20.923 7.944 7.111-7.32 3.819-14.64-9.125-16.85 7.405 1.264 15.73-.825 18.014-9.015C62.88 23.022 64 8.51 64 6.55c0-9.818-8.578-6.732-13.873-2.745Z"
-      />
-    </Svg>
+      size={size}
+      fill={fill && fill !== 'sky' ? String(fill) : undefined}
+      style={styles}
+    />
   )
 })

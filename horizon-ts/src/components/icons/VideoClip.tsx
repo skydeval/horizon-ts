@@ -3,16 +3,13 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const VideoClip_Stroke1_Corner0_Rounded = createSinglePathSVG({
-  path: 'M1 23h10.667M1 23V12m0 11v11m10.667-11h22.666m-22.666 0v11m0-11V12m22.666 11H45m-10.667 0v12.222m0-12.222V12M45 23V12m0 11v12.222M34.333 45h5.334A5.333 5.333 0 0 0 45 39.667v-4.445M34.333 45v-9.778m0 9.778H11.667M34.333 1h5.334A5.333 5.333 0 0 1 45 6.333V12M34.333 1v11m0-11H11.667m22.666 11H45M34.333 35.222H45M11.667 45H6.333A5.333 5.333 0 0 1 1 39.667V34m10.667 11V34m0-33H6.333A5.333 5.333 0 0 0 1 6.333V12M11.667 1v11M1 12h10.667M1 34h10.667',
-  viewBox: '0 0 46 46',
-  strokeWidth: 2,
-  strokeLinecap: 'square',
-  strokeLinejoin: 'round',
+  path: 'M20.25 3.75H3.75a1.5 1.5 0 0 0-1.5 1.5v13.5a1.5 1.5 0 0 0 1.5 1.5h16.5a1.5 1.5 0 0 0 1.5-1.5V5.25a1.5 1.5 0 0 0-1.5-1.5Zm-16.5 4.5h7.5v7.5h-7.5Zm9-1.5v-1.5h3v1.5Zm-1.5 0h-3v-1.5h3Zm0 10.5v1.5h-3v-1.5Zm1.5 0h3v1.5h-3Zm0-1.5v-7.5h7.5v7.5Zm7.5-9h-3v-1.5h3Zm-13.5-1.5v1.5h-3v-1.5Zm-3 12h3v1.5h-3Zm16.5 1.5h-3v-1.5h3v1.5Z',
+  viewBox: '0 0 24 24',
   glyph: 'VideoClip_Stroke1_Corner0_Rounded',
 })
 
 export const VideoClip_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M3 4a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4Zm2 1v2h2V5H5Zm4 0v6h6V5H9Zm8 0v2h2V5h-2Zm2 4h-2v2h2V9Zm0 4h-2v2.444h2V13Zm0 4.444h-2V19h2v-1.556ZM15 19v-6H9v6h6Zm-8 0v-2H5v2h2Zm-2-4h2v-2H5v2Zm0-4h2V9H5v2Z',
+  path: 'M20.25 3.375H3.75A1.875 1.875 0 0 0 1.875 5.25v13.5a1.875 1.875 0 0 0 1.875 1.875h16.5a1.875 1.875 0 0 0 1.875-1.875V5.25a1.875 1.875 0 0 0-1.875-1.875Zm-16.125 6h6.75v5.25h-6.75Zm9-2.25v-1.5h2.25v1.5Zm-2.25 0h-2.25v-1.5h2.25Zm0 9.75v1.5h-2.25v-1.5Zm2.25 0h2.25v1.5h-2.25Zm0-2.25v-5.25h6.75v5.25Zm6.75-7.5h-2.25v-1.5h2.25Zm-13.5-1.5v1.5h-2.25v-1.5Zm-2.25 11.25h2.25v1.5h-2.25Zm13.5 1.5v-1.5h2.25v1.5Z',
   viewBox: '0 0 24 24',
   glyph: 'VideoClip_Stroke2_Corner0_Rounded',
 })

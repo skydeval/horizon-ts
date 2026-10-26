@@ -3,7 +3,7 @@
 import {createSinglePathSVG} from './TEMPLATE'
 
 export const Crop_Stroke2_Corner0_Rounded = createSinglePathSVG({
-  path: 'M6 2a1 1 0 0 1 1 1v2h11a1 1 0 0 1 1 1v11h2a1 1 0 1 1 0 2h-2v2a1 1 0 1 1-2 0v-2H6a1 1 0 0 1-1-1V7H3a1 1 0 0 1 0-2h2V3a1 1 0 0 1 1-1Zm1 5v10h10V7H7Z',
+  path: 'M22.875 18a1.125 1.125 0 0 1-1.125 1.125h-2.625v2.625a1.125 1.125 0 0 1-2.25 0v-2.625H6A1.125 1.125 0 0 1 4.875 18V7.125H2.25a1.125 1.125 0 0 1 0-2.25h2.625V2.25a1.125 1.125 0 0 1 2.25 0v14.625H21.75A1.125 1.125 0 0 1 22.875 18ZM9.75 7.125h7.125v7.125a1.125 1.125 0 0 0 2.25 0V6A1.125 1.125 0 0 0 18 4.875H9.75a1.125 1.125 0 0 0 0 2.25Z',
   viewBox: '0 0 24 24',
   glyph: 'Crop_Stroke2_Corner0_Rounded',
 })
