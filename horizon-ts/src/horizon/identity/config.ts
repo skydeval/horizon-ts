@@ -3,15 +3,6 @@
  * section 10). No state, no imports.
  */
 
-/**
- * Development only, committed empty (P5R2-N1, Q16): the DIDs whose records
- * are read from their own PDS when prism's S-2 does not answer them. Only
- * skydeval's own DIDs ever go in it, locally and uncommitted, never another
- * person's (the Refract test account included). A test holds the committed
- * value empty.
- */
-export const IDENTITY_PDS_FALLBACK_DIDS: readonly string[] = []
-
 const SECOND = 1000
 const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
@@ -25,6 +16,13 @@ export const MAX_CALL_MEMBERS = 100
 
 /** Every read's timeout (4.5). */
 export const READ_TIMEOUT_MS = 3 * SECOND
+
+/**
+ * Direct repo reads of other accounts (PP-20 as amended) running at once,
+ * across every author: each is one account's self records, one member, or
+ * one member list, so a cold feed does not burst at people's servers.
+ */
+export const DIRECT_READ_CONCURRENCY = 6
 
 /** `listMembers` and own `listRecords` pages: size and count (4.5). */
 export const MEMBER_PAGE_LIMIT = 100

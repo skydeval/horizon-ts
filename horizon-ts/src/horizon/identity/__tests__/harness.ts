@@ -173,6 +173,11 @@ export const pds = {
   records: new Map<string, unknown>(),
   /** URIs whose `getRecord` answers 500. */
   fail: new Set<string>(),
+  /** Requests answering now, and the most at once (for the direct limit). */
+  inFlight: 0,
+  maxInFlight: 0,
+  /** Set, every request waits for it before answering. */
+  hold: undefined as Promise<void> | undefined,
   serviceAuth: ((params: URLSearchParams) =>
     json({token: token(params.get('lxm') ?? '')})) as (
     params: URLSearchParams,
@@ -196,44 +201,54 @@ export const agents = new Map<Client, {did: DidString | undefined}>()
 export function pdsClientFor(did: string): Client {
   const agent = {
     did: did as DidString | undefined,
-    fetchHandler: (path: string) => {
-      const url = new URL(path, 'https://pds.example')
-      pds.calls.push({did, path: url.pathname, params: url.searchParams})
-      if (url.pathname === '/xrpc/com.atproto.server.getServiceAuth') {
-        return Promise.resolve(pds.serviceAuth(url.searchParams))
+    fetchHandler: async (path: string) => {
+      pds.inFlight++
+      pds.maxInFlight = Math.max(pds.maxInFlight, pds.inFlight)
+      try {
+        if (pds.hold) await pds.hold
+        return await answerPds(path)
+      } finally {
+        pds.inFlight--
       }
-      if (url.pathname === '/xrpc/com.atproto.repo.getRecord') {
-        const p = url.searchParams
-        const uri = uriOf(
-          p.get('repo') ?? '',
-          p.get('collection') ?? '',
-          p.get('rkey') ?? '',
-        )
-        if (pds.fail.has(uri)) {
-          return Promise.resolve(json({error: 'InternalServerError'}, 500))
-        }
-        const value = pds.records.get(uri)
-        if (value === undefined) {
-          return Promise.resolve(
-            json(
-              {error: 'RecordNotFound', message: 'Could not locate record'},
-              400,
-            ),
-          )
-        }
-        return Promise.resolve(json({uri, cid: CID, value}))
-      }
-      if (url.pathname === '/xrpc/com.atproto.repo.listRecords') {
-        const p = url.searchParams
-        const prefix = `at://${p.get('repo')}/${p.get('collection')}/`
-        const records = Array.from(pds.records.entries())
-          .filter(([uri]) => uri.startsWith(prefix))
-          .map(([uri, value]) => ({uri, cid: CID, value}))
-          .reverse()
-        return Promise.resolve(json({records}))
-      }
-      return Promise.resolve(json({error: 'Unexpected'}, 500))
     },
+  }
+  function answerPds(path: string): Promise<Response> {
+    const url = new URL(path, 'https://pds.example')
+    pds.calls.push({did, path: url.pathname, params: url.searchParams})
+    if (url.pathname === '/xrpc/com.atproto.server.getServiceAuth') {
+      return Promise.resolve(pds.serviceAuth(url.searchParams))
+    }
+    if (url.pathname === '/xrpc/com.atproto.repo.getRecord') {
+      const p = url.searchParams
+      const uri = uriOf(
+        p.get('repo') ?? '',
+        p.get('collection') ?? '',
+        p.get('rkey') ?? '',
+      )
+      if (pds.fail.has(uri)) {
+        return Promise.resolve(json({error: 'InternalServerError'}, 500))
+      }
+      const value = pds.records.get(uri)
+      if (value === undefined) {
+        return Promise.resolve(
+          json(
+            {error: 'RecordNotFound', message: 'Could not locate record'},
+            400,
+          ),
+        )
+      }
+      return Promise.resolve(json({uri, cid: CID, value}))
+    }
+    if (url.pathname === '/xrpc/com.atproto.repo.listRecords') {
+      const p = url.searchParams
+      const prefix = `at://${p.get('repo')}/${p.get('collection')}/`
+      const records = Array.from(pds.records.entries())
+        .filter(([uri]) => uri.startsWith(prefix))
+        .map(([uri, value]) => ({uri, cid: CID, value}))
+        .reverse()
+      return Promise.resolve(json({records}))
+    }
+    return Promise.resolve(json({error: 'Unexpected'}, 500))
   }
   const client = createLexClient(agent, {appLabelers: null})
   agents.set(client, agent)
@@ -299,6 +314,9 @@ export function resetHarness() {
   pds.calls.length = 0
   pds.records.clear()
   pds.fail.clear()
+  pds.inFlight = 0
+  pds.maxInFlight = 0
+  pds.hold = undefined
   agents.clear()
   pds.serviceAuth = params => json({token: token(params.get('lxm') ?? '')})
   minted = 0

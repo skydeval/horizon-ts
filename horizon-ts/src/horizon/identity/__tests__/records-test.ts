@@ -3,7 +3,7 @@ import {describe, expect, it, jest} from '@jest/globals'
 /*
  * Phase 5 design 13, the pure parts of 5A: parsers, format, the fronters
  * field, the display rule, the three pronoun states, the batcher's caps,
- * the 429 wait and the committed development constant.
+ * and the 429 wait.
  */
 
 // The modules under test reach the session through prism's clients.
@@ -12,7 +12,6 @@ jest.mock('#/state/queries/pds-detection', () => ({
   resolvePdsForIdentifier: () => Promise.resolve(undefined),
 }))
 
-import {IDENTITY_PDS_FALLBACK_DIDS} from '#/horizon/identity/config'
 import {
   formatFronterNames,
   formatFrontState,
@@ -457,11 +456,5 @@ describe('the 429 wait (P5R5-N5)', () => {
       identityRateLimitWaitMs(headers({'ratelimit-reset': reset}), now),
     ).toBe(45_000)
     expect(identityRateLimitWaitMs(headers({}), now)).toBe(30_000)
-  })
-})
-
-describe('the development constant', () => {
-  it('IDENTITY_PDS_FALLBACK_DIDS is committed empty (P5R2-N1)', () => {
-    expect(IDENTITY_PDS_FALLBACK_DIDS).toEqual([])
   })
 })

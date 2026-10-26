@@ -7,7 +7,11 @@ import {
   type DirectPrefetchOptions,
   startDirectTokenPrefetch,
 } from '#/horizon/routing/prism-direct'
-import {PLURAL_DISPLAY, PRONOUNS} from '#/horizon/switches'
+import {
+  IDENTITY_PRISM_READS,
+  PLURAL_DISPLAY,
+  PRONOUNS,
+} from '#/horizon/switches'
 
 /**
  * S-2's direct tokens: `getRecords` and `listMembers`, on every posting
@@ -28,7 +32,10 @@ export const IDENTITY_DIRECT_PREFETCH: DirectPrefetchOptions = {
  */
 export function IdentityTokenPrefetch() {
   const {currentAccount} = useSession()
-  const active = (PRONOUNS || PLURAL_DISPLAY) && !!currentAccount?.did
+  const active =
+    IDENTITY_PRISM_READS &&
+    (PRONOUNS || PLURAL_DISPLAY) &&
+    !!currentAccount?.did
   useEffect(() => {
     if (!active) return
     return startDirectTokenPrefetch(IDENTITY_DIRECT_PREFETCH, {

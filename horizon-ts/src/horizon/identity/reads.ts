@@ -1,12 +1,20 @@
 /*
  * The identity reads (Phase 5 design 4.4, 4.5, 5.1, B-3), with no cache of
  * their own: the S-2 batch call to prism and its batcher, the own-PDS reads,
- * and the development PDS fallback. Every answer is one of three: a record,
- * none, or unknown (PP-8); a failed own-PDS record read is an error of its
- * own, so one record's failure never marks another.
+ * and the direct repo reads. Every answer is one of three: a record, none,
+ * or unknown (PP-8); a failed repo record read is an error of its own, so
+ * one record's failure never marks another.
  *
- * Other accounts' records come from prism only (PP-20), on
- * `prism.nearhorizon.app` directly, never through a PDS:
+ * Other accounts' records come from prism first (PP-20 as amended,
+ * skydeval 2026-10-26), and from the author's own repo whenever prism gives
+ * no answer at all: S-2 not served (a 501 or 404, or features without
+ * `plural.read`), a failed call (network, timeout, 5xx), or
+ * `IDENTITY_PRISM_READS` off. An `unknown` that prism does answer stands
+ * (a hidden account or member stays hidden), and a 429 pauses as before.
+ * The direct reads go at most {@link DIRECT_READ_CONCURRENCY} at a time,
+ * through the author's PDS from the DID document, with no auth.
+ *
+ * prism is asked on `prism.nearhorizon.app` directly, never through a PDS:
  *
  * - Signed in, with a service token of the current account through
  *   `getDirectPrismClient` (charged to prism's `plural_auth`, by DID). The
@@ -54,7 +62,7 @@ import {resolvePdsForIdentifier} from '#/state/queries/pds-detection'
 import {networkAwareFetch} from '#/state/session/network'
 import {
   BATCH_WINDOW_MS,
-  IDENTITY_PDS_FALLBACK_DIDS,
+  DIRECT_READ_CONCURRENCY,
   MAX_CALL_DIDS,
   MAX_CALL_MEMBERS,
   MEMBER_PAGE_LIMIT,
@@ -94,6 +102,7 @@ import {
   getDirectPrismClient,
   getDirectPrismToken,
 } from '#/horizon/routing/prism-direct'
+import {IDENTITY_PRISM_READS} from '#/horizon/switches'
 import {com} from '#/lexicons'
 
 /** S-2's batch read, the token's `lxm`. */
@@ -171,6 +180,17 @@ export class IdentityReadError extends Error {
 
 /** Not served here (501 `MethodNotImplemented`, or a 404). */
 const NOT_SERVED = Symbol('not served')
+
+/**
+ * Answers made up because prism gave none (not served, or not asked), as
+ * against prism's own `unknown`: only these are read from the repo.
+ */
+const unanswered = new WeakSet<object>()
+
+function markUnanswered<T extends object>(value: T): T {
+  unanswered.add(value)
+  return value
+}
 
 let pausedUntil = 0
 /** Reader DID -> no token for S-2 before this time (P5R5-N4). */
@@ -258,11 +278,12 @@ function isTokenFailure(error: unknown): boolean {
 }
 
 /**
- * Whether S-2 may be asked at all: signed out always (the method answering
- * is the discovery), signed in unless the reader's features are known and
- * leave out `plural.read`.
+ * Whether S-2 may be asked at all: never with `IDENTITY_PRISM_READS` off;
+ * signed out always (the method answering is the discovery), signed in
+ * unless the reader's features are known and leave out `plural.read`.
  */
 function s2Served(): boolean {
+  if (!IDENTITY_PRISM_READS) return false
   const current = getCurrentClients()
   if (!current) return true
   const features = getPrismFeatures(current.did)
@@ -630,8 +651,12 @@ function settle(
     body?: unknown
     authed: boolean
     error?: unknown
+    /** prism gave no answer: every ask is marked for the repo read. */
+    unanswered?: boolean
   },
 ) {
+  const mark = <T extends object>(value: T): T =>
+    outcome.unanswered ? markUnanswered(value) : value
   const actors = call ? call.actors : Array.from(batch.actors.keys())
   const members = call ? call.members : Array.from(batch.members.keys())
   if (outcome.error !== undefined) {
@@ -654,22 +679,26 @@ function settle(
   for (const did of actors) {
     const row = actorRows.get(did)
     batch.actors.get(did)?.resolve(
-      row
-        ? {
-            did,
-            pronouns: fromS2('pronouns', row.pronouns),
-            system: fromS2('system', row.system),
-            front: fromS2('front', row.front),
-            authed: outcome.authed,
-          }
-        : unknownActor(did, outcome.authed),
+      mark(
+        row
+          ? {
+              did,
+              pronouns: fromS2('pronouns', row.pronouns),
+              system: fromS2('system', row.system),
+              front: fromS2('front', row.front),
+              authed: outcome.authed,
+            }
+          : unknownActor(did, outcome.authed),
+      ),
     )
   }
   for (const uri of members) {
-    batch.members.get(uri)?.deferred.resolve({
-      answer: fromS2('member', memberRows.get(uri)),
-      authed: outcome.authed,
-    })
+    batch.members.get(uri)?.deferred.resolve(
+      mark({
+        answer: fromS2('member', memberRows.get(uri)),
+        authed: outcome.authed,
+      }),
+    )
   }
 }
 
@@ -683,7 +712,11 @@ function flush(batch: Batch) {
     return
   }
   if (!s2Served()) {
-    settle(batch, undefined, {authed: !!getCurrentClients(), body: {}})
+    settle(batch, undefined, {
+      authed: !!getCurrentClients(),
+      body: {},
+      unanswered: true,
+    })
     return
   }
   const calls = planIdentityCalls(
@@ -697,7 +730,11 @@ function flush(batch: Batch) {
     callS2(nearhorizon.pluralGetRecords, GET_RECORDS_LXM, params).then(
       result => {
         if (result === NOT_SERVED) {
-          settle(batch, call, {authed: !!getCurrentClients(), body: {}})
+          settle(batch, call, {
+            authed: !!getCurrentClients(),
+            body: {},
+            unanswered: true,
+          })
         } else {
           settle(batch, call, {authed: result.authed, body: result.body})
         }
@@ -774,11 +811,17 @@ function fromPds<K extends 'pronouns' | 'system' | 'front' | 'member'>(
 }
 
 const ownActorReads = new Map<string, Promise<ActorAnswers>>()
+const repoActorReads = new Map<string, Promise<ActorAnswers>>()
 
-/** One's own self-keyed records, from one's own PDS. */
-function readOwnActor(did: string, client: Client): Promise<ActorAnswers> {
-  const inFlight = ownActorReads.get(did)
-  if (inFlight) return inFlight
+/** `did`'s self-keyed records from a repo client: never unknown. */
+function readRepoActor(
+  did: string,
+  client: Client,
+  authed: boolean,
+  inFlight: Map<string, Promise<ActorAnswers>>,
+): Promise<ActorAnswers> {
+  const joined = inFlight.get(did)
+  if (joined) return joined
   const promise = Promise.all([
     pdsRecord(client, did, PRONOUNS_COLLECTION, PLURAL_SELF_RKEY),
     pdsRecord(client, did, PLURAL_SYSTEM_COLLECTION, PLURAL_SELF_RKEY),
@@ -789,17 +832,51 @@ function readOwnActor(did: string, client: Client): Promise<ActorAnswers> {
       pronouns: fromPds('pronouns', pronouns),
       system: fromPds('system', system) as ReadAnswer<PluralSystem>,
       front: fromPds('front', front) as ReadAnswer<PluralFront>,
-      authed: true,
+      authed,
     }))
     .finally(() => {
-      if (ownActorReads.get(did) === promise) ownActorReads.delete(did)
+      if (inFlight.get(did) === promise) inFlight.delete(did)
     })
-  ownActorReads.set(did, promise)
+  inFlight.set(did, promise)
   return promise
 }
 
-/** A PDS client for a development fallback DID (section 10, 5.4). */
-async function fallbackClient(
+/** One's own self-keyed records, from one's own PDS. */
+function readOwnActor(did: string, client: Client): Promise<ActorAnswers> {
+  return readRepoActor(did, client, true, ownActorReads)
+}
+
+/*
+ * The direct reads' limit: a slot is handed straight to the next waiter, so
+ * no more than DIRECT_READ_CONCURRENCY run at once.
+ */
+let directActive = 0
+const directQueue: (() => void)[] = []
+
+async function limited<T>(task: () => Promise<T>): Promise<T> {
+  if (directActive < DIRECT_READ_CONCURRENCY) {
+    directActive++
+  } else {
+    await new Promise<void>(resolve => directQueue.push(resolve))
+  }
+  try {
+    return await task()
+  } finally {
+    const next = directQueue.shift()
+    if (next) next()
+    else directActive--
+  }
+}
+
+/** One client per PDS URL for the direct reads, without auth. */
+const repoClients = new Map<string, Client>()
+
+/**
+ * A client for `did`'s own PDS, from its DID document (cached with the
+ * private adapter's author PDS entries); `undefined` when it cannot be
+ * resolved.
+ */
+async function repoClient(
   did: string,
   queryClient: QueryClient | undefined,
 ): Promise<Client | undefined> {
@@ -817,26 +894,40 @@ async function fallbackClient(
           queryFn: resolve,
         })
       : await resolve()
-    return createServiceClient(url)
+    let client = repoClients.get(url)
+    if (!client) {
+      client = createServiceClient(url)
+      repoClients.set(url, client)
+    }
+    return client
   } catch {
     return undefined
   }
 }
 
-function usesFallback(did: string): boolean {
-  return IDENTITY_PDS_FALLBACK_DIDS.includes(did)
-}
-
 /** Options every read takes. */
 export type ReadOptions = {
-  /** The hooks' query client, for the development fallback's PDS URL. */
+  /** The hooks' query client, for the author's PDS URL. */
   queryClient?: QueryClient
+}
+
+/** `did`'s self-keyed records from its own repo; `undefined` if unreachable. */
+async function directActor(
+  did: string,
+  queryClient: QueryClient | undefined,
+): Promise<ActorAnswers | undefined> {
+  const client = await repoClient(did, queryClient)
+  if (!client) return undefined
+  return limited(() =>
+    readRepoActor(did, client, !!getCurrentClients(), repoActorReads),
+  )
 }
 
 /**
  * `did`'s pronouns, system and front: from the own PDS for one's own
- * account, else S-2, batched. Throws {@link IdentityRateLimitedError} while
- * paused and {@link IdentityReadError} when the call failed.
+ * account, else S-2, batched, else the author's repo when prism gave no
+ * answer. Throws {@link IdentityRateLimitedError} while paused and
+ * {@link IdentityReadError} when prism's call and the repo read both failed.
  */
 export async function readActorRecords(
   did: string,
@@ -848,31 +939,36 @@ export async function readActorRecords(
   try {
     answers = await askActor(did)
   } catch (error) {
-    if (!usesFallback(did) || error instanceof IdentityRateLimitedError) {
-      throw error
-    }
-    answers = unknownActor(did, false)
+    if (error instanceof IdentityRateLimitedError) throw error
+    const direct = await directActor(did, queryClient)
+    if (direct) return direct
+    throw error
   }
-  if (!usesFallback(did)) return answers
-  const parts = ['pronouns', 'system', 'front'] as const
-  if (parts.every(part => answers[part].status !== 'unknown')) return answers
-  const client = await fallbackClient(did, queryClient)
-  if (!client) return answers
-  const fallback = await readOwnActor(did, client)
+  if (!unanswered.has(answers)) return answers
+  return (await directActor(did, queryClient)) ?? answers
+}
+
+/** One member record from its author's repo; `undefined` if unreachable. */
+async function directMember(
+  did: string,
+  rkey: string,
+  queryClient: QueryClient | undefined,
+): Promise<MemberRead | undefined> {
+  const client = await repoClient(did, queryClient)
+  if (!client) return undefined
+  const read = await limited(() =>
+    pdsRecord(client, did, PLURAL_MEMBER_COLLECTION, rkey),
+  )
   return {
-    did,
-    pronouns:
-      answers.pronouns.status === 'unknown'
-        ? fallback.pronouns
-        : answers.pronouns,
-    system:
-      answers.system.status === 'unknown' ? fallback.system : answers.system,
-    front: answers.front.status === 'unknown' ? fallback.front : answers.front,
-    authed: answers.authed,
+    answer: fromPds('member', read) as ReadAnswer<PluralMember>,
+    authed: !!getCurrentClients(),
   }
 }
 
-/** One member record: own PDS for one's own account, else S-2, batched. */
+/**
+ * One member record: own PDS for one's own account, else S-2, batched, else
+ * the author's repo when prism gave no answer.
+ */
 export async function readMemberRecord(
   did: string,
   rkey: string,
@@ -890,19 +986,13 @@ export async function readMemberRecord(
   try {
     read = await askMember(did, rkey)
   } catch (error) {
-    if (!usesFallback(did) || error instanceof IdentityRateLimitedError) {
-      throw error
-    }
-    read = {answer: {status: 'unknown'}, authed: false}
+    if (error instanceof IdentityRateLimitedError) throw error
+    const direct = await directMember(did, rkey, queryClient)
+    if (direct) return direct
+    throw error
   }
-  if (read.answer.status !== 'unknown' || !usesFallback(did)) return read
-  const client = await fallbackClient(did, queryClient)
-  if (!client) return read
-  const fallback = await pdsRecord(client, did, PLURAL_MEMBER_COLLECTION, rkey)
-  return {
-    answer: fromPds('member', fallback) as ReadAnswer<PluralMember>,
-    authed: read.authed,
-  }
+  if (!unanswered.has(read)) return read
+  return (await directMember(did, rkey, queryClient)) ?? read
 }
 
 function byRkey(a: ListedMember, b: ListedMember): number {
@@ -955,7 +1045,9 @@ async function pdsMemberList(
 
 /** `did`'s member list through S-2's `listMembers`, paged. */
 async function s2MemberList(did: string): Promise<MemberListRead> {
-  if (!s2Served()) return {status: 'unknown', authed: !!getCurrentClients()}
+  if (!s2Served()) {
+    return markUnanswered({status: 'unknown', authed: !!getCurrentClients()})
+  }
   const members: ListedMember[] = []
   let partial = false
   let authed = false
@@ -969,7 +1061,7 @@ async function s2MemberList(did: string): Promise<MemberListRead> {
       params,
     )
     if (result === NOT_SERVED) {
-      return {status: 'unknown', authed: !!getCurrentClients()}
+      return markUnanswered({status: 'unknown', authed: !!getCurrentClients()})
     }
     authed = result.authed
     const body = isObject(result.body) ? result.body : {}
@@ -1009,9 +1101,21 @@ async function s2MemberList(did: string): Promise<MemberListRead> {
   return {status: 'partial', members: members.sort(byRkey), authed}
 }
 
+/** `did`'s member list from its own repo; `undefined` if unreachable. */
+async function directMemberList(
+  did: string,
+  queryClient: QueryClient | undefined,
+): Promise<MemberListRead | undefined> {
+  const client = await repoClient(did, queryClient)
+  if (!client) return undefined
+  const read = await limited(() => pdsMemberList(client, did))
+  return {...read, authed: !!getCurrentClients()}
+}
+
 /**
  * `did`'s member list, ascending rkey, up to 10 pages of 100: from the own
- * PDS for one's own account, else S-2 (not batched: one call per page).
+ * PDS for one's own account, else S-2 (not batched: one call per page), else
+ * the author's repo when prism gave no answer.
  */
 export async function readMemberList(
   did: string,
@@ -1023,14 +1127,18 @@ export async function readMemberList(
   try {
     read = await s2MemberList(did)
   } catch (error) {
-    if (!usesFallback(did) || error instanceof IdentityRateLimitedError) {
-      throw error
+    if (error instanceof IdentityRateLimitedError) throw error
+    let direct: MemberListRead | undefined
+    try {
+      direct = await directMemberList(did, queryClient)
+    } catch {
+      direct = undefined
     }
-    read = {status: 'unknown', authed: false}
+    if (direct) return direct
+    throw error
   }
-  if (read.status !== 'unknown' || !usesFallback(did)) return read
-  const client = await fallbackClient(did, queryClient)
-  return client ? pdsMemberList(client, did) : read
+  if (!unanswered.has(read)) return read
+  return (await directMemberList(did, queryClient)) ?? read
 }
 
 /**
@@ -1045,4 +1153,8 @@ export function resetIdentityReads() {
   actorAsks.clear()
   memberAsks.clear()
   ownActorReads.clear()
+  repoActorReads.clear()
+  repoClients.clear()
+  directActive = 0
+  directQueue.length = 0
 }

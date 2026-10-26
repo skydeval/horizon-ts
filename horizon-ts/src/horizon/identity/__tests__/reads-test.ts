@@ -12,8 +12,19 @@ jest.mock(
   () => jest.requireActual<{networkMock: unknown}>('./harness').networkMock,
 )
 jest.mock('#/state/session', () => ({useMaybePdsClient: () => null}))
+/** The authors' PDS lookup: none unless a test sets one (direct reads). */
+let mockPdsUrl: string | undefined
 jest.mock('#/state/queries/pds-detection', () => ({
-  resolvePdsForIdentifier: () => Promise.resolve(undefined),
+  resolvePdsForIdentifier: (did: string) =>
+    Promise.resolve(mockPdsUrl ? {did, pdsUrl: mockPdsUrl} : undefined),
+}))
+// A direct read's client answers from the harness's PDS records.
+jest.mock('#/lib/lexClient', () => ({
+  ...jest.requireActual<object>('#/lib/lexClient'),
+  createServiceClient: (url: string) =>
+    jest
+      .requireActual<{pdsClientFor: (did: string) => unknown}>('./harness')
+      .pdsClientFor(url),
 }))
 jest.mock('#/horizon/routing/write-route', () => ({
   getWriteRoute: () => ({postingRoute: 'repo'}),
@@ -93,6 +104,7 @@ function lxmOf(authorization: string | null): string | undefined {
 
 beforeEach(() => {
   jest.useFakeTimers({now: START})
+  mockPdsUrl = undefined
   resetHarness()
   resetIdentityReads()
   resetDirectPrism()
@@ -270,6 +282,104 @@ describe('signed in (4.4, P5R4-L3, P5R2-Q1)', () => {
     await settle()
     await again
     expect(prism.calls).toHaveLength(1)
+  })
+})
+
+describe('direct repo reads when prism gives no answer (PP-20 as amended)', () => {
+  const AUTHOR_PDS = 'https://author-pds.example'
+
+  function repoReads() {
+    return pds.calls.filter(
+      c =>
+        c.did === AUTHOR_PDS &&
+        (c.path === '/xrpc/com.atproto.repo.getRecord' ||
+          c.path === '/xrpc/com.atproto.repo.listRecords'),
+    )
+  }
+
+  beforeEach(() => {
+    mockPdsUrl = AUTHOR_PDS
+    pds.records.set(uriOf(AUTHOR, PRONOUNS), records.pronouns([['she', 'her']]))
+    pds.records.set(uriOf(AUTHOR, SYSTEM), records.system())
+    pds.records.set(uriOf(AUTHOR, MEMBER, WREN), records.member('Wren'))
+  })
+
+  it('reads pronouns, system, a member and the member list from the author`s repo when S-2 is not served', async () => {
+    prism.answer = () => json({error: 'MethodNotImplemented'}, 501)
+    const actor = readActorRecords(AUTHOR)
+    const member = readMemberRecord(AUTHOR, WREN)
+    const list = readMemberList(AUTHOR)
+    await settle()
+    const answers = await actor
+    expect(answers.pronouns.status).toBe('record')
+    expect(answers.system.status).toBe('record')
+    expect(answers.front.status).toBe('none')
+    expect((await member).answer.status).toBe('record')
+    const listed = await list
+    expect(listed.status).toBe('complete')
+    if (listed.status !== 'unknown') {
+      expect(listed.members.map(m => m.rkey)).toEqual([WREN])
+    }
+    expect(repoReads().every(c => c.params.get('repo') === AUTHOR)).toBe(true)
+  })
+
+  it('reads the repo when prism`s call fails, and fails only if the repo does too', async () => {
+    prism.answer = () => {
+      throw new TypeError('Failed to fetch')
+    }
+    const read = readActorRecords(AUTHOR)
+    await settle()
+    expect((await read).pronouns.status).toBe('record')
+    mockPdsUrl = undefined
+    const unreachable = readActorRecords(OTHER).catch(error => error)
+    await settle()
+    expect(await unreachable).toBeInstanceOf(IdentityReadError)
+  })
+
+  it('keeps prism`s own unknown: a hidden account is not read from its repo', async () => {
+    world.unknown.add(AUTHOR)
+    const read = readActorRecords(AUTHOR)
+    const member = readMemberRecord(AUTHOR, WREN)
+    const list = readMemberList(AUTHOR)
+    await settle()
+    expect((await read).pronouns.status).toBe('unknown')
+    expect((await member).answer.status).toBe('unknown')
+    expect((await list).status).toBe('unknown')
+    expect(repoReads()).toHaveLength(0)
+  })
+
+  it('does not go round a 429', async () => {
+    prism.answer = () => json({error: 'RateLimitExceeded'}, 429)
+    const read = readActorRecords(AUTHOR).catch(error => error)
+    await settle()
+    expect(await read).toBeInstanceOf(IdentityRateLimitedError)
+    expect(repoReads()).toHaveLength(0)
+  })
+
+  it('reads the repo, asking prism nothing, while the reader`s features leave out plural.read', async () => {
+    signIn(READER)
+    answerPrismFeatures(READER, ['private'])
+    const read = readActorRecords(AUTHOR)
+    await settle()
+    expect((await read).pronouns.status).toBe('record')
+    expect(prism.calls).toHaveLength(0)
+  })
+
+  it('runs at most 6 direct reads at once across authors', async () => {
+    prism.answer = () => json({error: 'MethodNotImplemented'}, 501)
+    let release!: () => void
+    pds.hold = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const reads = Array.from({length: 20}, (_, i) => readActorRecords(did(i)))
+    await settle()
+    // Each read is one account's three records.
+    expect(pds.maxInFlight).toBeLessThanOrEqual(6 * 3)
+    expect(pds.inFlight).toBe(6 * 3)
+    release()
+    await settle()
+    await Promise.all(reads)
+    expect(pds.maxInFlight).toBe(6 * 3)
   })
 })
 

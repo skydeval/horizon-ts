@@ -353,6 +353,16 @@ export const PRONOUNS: boolean = true
 export const PLURAL_DISPLAY: boolean = true
 
 /**
+ * Identity reads through prism (Phase 5 design PP-20 as amended 2026-10-26;
+ * `identity/reads.ts`): other accounts' pronouns and plural records come
+ * from prism's batch read first, and from each author's own repo whenever
+ * prism gives no answer. `false`: prism is never asked (no S-2 call and no
+ * S-2 token), and every account's records are read from its own repo, as a
+ * client with no AppView of its own.
+ */
+export const IDENTITY_PRISM_READS: boolean = true
+
+/**
  * Plural editing (Phase 5 design section 10, 7.2, 7.3; `identity/edit/`):
  * the Plurality tab in Edit Profile (system, members, set up and remove)
  * and the front switcher. `false`: Edit Profile as stock and no plural
