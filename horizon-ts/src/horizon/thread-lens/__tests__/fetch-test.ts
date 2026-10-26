@@ -39,7 +39,7 @@ import {
   answerPrismFeatures,
   resetPrismFeatures,
 } from '#/horizon/routing/features'
-import {resetPrismHealth} from '#/horizon/routing/health'
+import {getPrismHealth, resetPrismHealth} from '#/horizon/routing/health'
 import {type LensSelected, selectLensAnswer} from '#/horizon/thread-lens/adapt'
 import {
   getLensWaitUntil,
@@ -437,6 +437,28 @@ describe('the first read (5, 6, 7.1)', () => {
         expect(snapshot?.form).toBe('snapshot')
         expect(anchorsSent()).toEqual([HANDLE_ANCHOR, ANCHOR])
         expect(getLensWaitUntil(READER)).toBeUndefined()
+      })
+    })
+
+    it('UpstreamFailure in handle form stays out of prism health; the DID-form retry answers', async () => {
+      await withHandles(async () => {
+        serveThread()
+        const answer = handlers.getThread!
+        // Health as the retry arrives: before its success could clear it.
+        let atRetry: ReturnType<typeof getPrismHealth> | undefined
+        handlers.getThread = body => {
+          if (body.anchor === HANDLE_ANCHOR) {
+            return {status: 502, body: {error: 'UpstreamFailure'}}
+          }
+          atRetry = getPrismHealth(READER)
+          return answer(body)
+        }
+        const {snapshot} = await load(fresh(), keyOf({anchor: HANDLE_ANCHOR}))
+        expect(snapshot?.form).toBe('snapshot')
+        expect(anchorsSent()).toEqual([HANDLE_ANCHOR, ANCHOR])
+        expect(atRetry?.failures).toBe(0)
+        expect(atRetry?.causes.size).toBe(0)
+        expect(atRetry?.failedMethods.size).toBe(0)
       })
     })
 

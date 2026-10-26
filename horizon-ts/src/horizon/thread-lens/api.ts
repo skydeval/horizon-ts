@@ -445,6 +445,8 @@ export async function getLensThread(
       did,
       params: input,
       signal,
+      // A handle that did not resolve says nothing of prism's health.
+      ...(handleForm ? {unreported: isHandleFormRetry} : {}),
       send: callSignal =>
         sendLensCall(
           prism,

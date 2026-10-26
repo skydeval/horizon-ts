@@ -107,7 +107,10 @@ export function mergeAnswers(
   answers.forEach((answer, index) => {
     for (const uri of served[index] ?? []) {
       const held = seqs.get(uri)
-      seqs.set(uri, held === undefined ? answer.seq : Math.max(held, answer.seq))
+      seqs.set(
+        uri,
+        held === undefined ? answer.seq : Math.max(held, answer.seq),
+      )
     }
   })
   const unavailable = new Map<string, UnavailablePost>()
@@ -154,6 +157,13 @@ export type PrismRead<T> = {
   signal?: AbortSignal
   /** The account the call is for; default the published one. */
   did?: string
+  /**
+   * A failure that says nothing of prism's health, reported to neither
+   * health nor membership: a handle-form Thread Lens anchor whose handle
+   * did not resolve (2026-10-26, prism's design 5), retried in DID form,
+   * whose own outcome is reported as usual.
+   */
+  unreported?: (error: unknown) => boolean
 }
 
 function answerOf(
@@ -235,8 +245,10 @@ async function sendRead<T>(
     if (typeof error === 'object' && error !== null) {
       errorAnswers.set(error, answerOf(did, method.nsid, seq, undefined))
     }
-    reportReadOutcome(did, {kind: 'failed', method: method.nsid, seq, error})
-    reportPrismError(did, error)
+    if (!request.unreported?.(error)) {
+      reportReadOutcome(did, {kind: 'failed', method: method.nsid, seq, error})
+      reportPrismError(did, error)
+    }
     throw error
   }
 }
@@ -637,8 +649,7 @@ export async function listPrivateNotificationsAnswered(
 export async function getPrivateUnreadCount(prism: Client): Promise<number> {
   const res = await reportedPrismCall(nearhorizon.privateGetUnreadCount, {
     params: {},
-    send: signal =>
-      prism.call(nearhorizon.privateGetUnreadCount, {}, {signal}),
+    send: signal => prism.call(nearhorizon.privateGetUnreadCount, {}, {signal}),
   })
   return res.body.count
 }
