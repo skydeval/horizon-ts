@@ -200,9 +200,10 @@ web and waiting on its live checks.
 ### Fixed
 
 - **Threads appear sooner on the web.** The first replies draw at once and
-  the rest follow straight after; a thread link opened before on this
-  device no longer waits to look up the handle (the list is cleared on
-  sign-out).
+  the rest follow straight after; a thread link no longer waits to look
+  up the handle first (Horizon's server looks it up with the thread, and
+  links opened before on this device are remembered; the list is cleared
+  on sign-out). Quote posts no longer hold a thread back either.
 - **Threads no longer redraw themselves hundreds of times while loading.**
   On a fresh load the thread screen re-rendered continuously until the
   thread arrived, which also held the thread back.
