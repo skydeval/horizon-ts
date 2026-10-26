@@ -71,6 +71,12 @@ export type CheckedPost = CheckedBase & {
   type: 'post'
   rootUri?: string
   post: Record<string, unknown>
+  /**
+   * prism's `embedWhole` (2026-10-26): the post's quote card is whole for
+   * the reader (its labels and author state the reader's), so a member's
+   * quote post can skip the public-view pass. Kept only when exactly `true`.
+   */
+  embedWhole?: true
 }
 
 /** A gap node as prism sent it. */
@@ -183,6 +189,7 @@ export function checkLensNode(raw: unknown): CheckedNode | undefined {
       ...(isLensAtUri(raw.rootUri) ? {rootUri: raw.rootUri} : {}),
       post: raw.post,
       markers: markersOf(raw),
+      ...(raw.embedWhole === true ? {embedWhole: true as const} : {}),
     }
   }
   if (typeof raw.gap === 'string') {

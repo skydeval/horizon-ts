@@ -360,7 +360,9 @@ const MEDIA_EMBEDS = new Set([
  * - a post with no counts (prism built it from its record, so its labels and
  *   its author's can be prism's only: edge 1);
  * - a post with a record embed (the quoted post's labels and author state
- *   are prism's only: edge 2), or an embed of an unknown kind;
+ *   are prism's only: edge 2), unless prism marks it `embedWhole`
+ *   (2026-10-26; a `recordWithMedia` still needs known media, and the
+ *   later rules still apply), or an embed of an unknown kind;
  * - a post whose `viewer.replyDisabled` prism could not decide (its root not
  *   a post node of the answer): the pass's is the AppView's;
  * - a post marked restored (the restored rule compares with the AppView);
@@ -395,11 +397,18 @@ export function passReasonOf(node: CheckedPost): PassReason | undefined {
     if (typeof post[count] !== 'number') return 'no counts'
   }
   if (post.embed !== undefined) {
-    const type = isObject(post.embed) ? post.embed.$type : undefined
+    const embed = isObject(post.embed) ? post.embed : undefined
+    const type = embed?.$type
     if (typeof type === 'string' && RECORD_EMBEDS.has(type)) {
-      return 'record embed'
-    }
-    if (typeof type !== 'string' || !MEDIA_EMBEDS.has(type)) {
+      // prism's mark (2026-10-26): the quote card is whole; later rules still run.
+      if (node.embedWhole !== true) return 'record embed'
+      if (type === 'app.bsky.embed.recordWithMedia#view') {
+        const media = isObject(embed?.media) ? embed.media.$type : undefined
+        if (typeof media !== 'string' || !MEDIA_EMBEDS.has(media)) {
+          return 'unknown embed'
+        }
+      }
+    } else if (typeof type !== 'string' || !MEDIA_EMBEDS.has(type)) {
       return 'unknown embed'
     }
   }
@@ -475,7 +484,56 @@ export function hydratedViewOf(
     ...post,
     author: {...post.author, viewer: authorViewer},
     viewer,
+    ...(post.embed
+      ? {embed: withQuotedMutes(post.embed, hydration.mutes)}
+      : {}),
   }
+}
+
+/** A quoted `#viewRecord` with its author's mute state from the device. */
+function mutedQuote(record: unknown, mutes: MuteLookup): unknown {
+  if (
+    !isObject(record) ||
+    record.$type !== 'app.bsky.embed.record#viewRecord' ||
+    !isObject(record.author) ||
+    typeof record.author.did !== 'string'
+  ) {
+    return record
+  }
+  const mute = mutes.stateOf(record.author.did)
+  const viewer: Record<string, unknown> = {
+    ...(isObject(record.author.viewer) ? record.author.viewer : {}),
+    muted: mute.muted,
+  }
+  if (mute.mutedByList) viewer.mutedByList = mute.mutedByList
+  else delete viewer.mutedByList
+  return {...record, author: {...record.author, viewer}}
+}
+
+/**
+ * The embed with the device's mutes on its quoted author (prism's
+ * `embedWhole`, 2026-10-26): `embed.record` for a `record#view`,
+ * `embed.record.record` for a `recordWithMedia#view`.
+ */
+function withQuotedMutes(
+  embed: PostView['embed'],
+  mutes: MuteLookup,
+): PostView['embed'] {
+  const raw: unknown = embed
+  if (!isObject(raw)) return embed
+  if (raw.$type === 'app.bsky.embed.record#view') {
+    return {...raw, record: mutedQuote(raw.record, mutes)} as PostView['embed']
+  }
+  if (
+    raw.$type === 'app.bsky.embed.recordWithMedia#view' &&
+    isObject(raw.record)
+  ) {
+    return {
+      ...raw,
+      record: {...raw.record, record: mutedQuote(raw.record.record, mutes)},
+    } as PostView['embed']
+  }
+  return embed
 }
 
 /**

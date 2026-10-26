@@ -580,3 +580,116 @@ describe('the timing log (2026-10-26, Prism)', () => {
     )
   })
 })
+
+describe("prism's embedWhole on quote posts (2026-10-26)", () => {
+  /** A quote card of a post by `author`. */
+  function quoteOf(author: string) {
+    return {
+      $type: 'app.bsky.embed.record#viewRecord',
+      uri: uriOf('3kquoted22222', author),
+      cid: RECORD_CID,
+      author: {did: author, handle: 'quoted.test', viewer: {muted: false}},
+      value: {$type: 'app.bsky.feed.post', text: 'q', createdAt: 'x'},
+      indexedAt: '2026-10-26T00:00:00.000Z',
+    }
+  }
+
+  function quoting(
+    rkey: string,
+    embed: Record<string, unknown>,
+    viewer: Record<string, unknown> = {replyDisabled: false},
+  ): PostView {
+    const base = view(rkey, {parent: ANCHOR, extra: {embed}})
+    return {...base, viewer: {...base.viewer, ...viewer}}
+  }
+
+  it('a marked quote skips the pass, with the device`s mute on the quoted author; an unmarked one keeps it', async () => {
+    seedMutes()
+    const root = hydrated('3kroot2222222')
+    const anchor = hydrated('3kanchor22222', {parent: ROOT})
+    const marked = quoting('3kmarked22222', {
+      $type: 'app.bsky.embed.record#view',
+      record: quoteOf(MUTED),
+    })
+    const withMedia = quoting('3kmedia222222', {
+      $type: 'app.bsky.embed.recordWithMedia#view',
+      record: {$type: 'app.bsky.embed.record#view', record: quoteOf(LISTED)},
+      media: {$type: 'app.bsky.embed.images#view', images: []},
+    })
+    const unmarked = quoting('3kunmarked222', {
+      $type: 'app.bsky.embed.record#view',
+      record: quoteOf(PLAIN),
+    })
+    posts = [unmarked]
+    lensReply = () =>
+      answer([
+        postNode(root),
+        postNode(anchor),
+        postNode(marked, {embedWhole: true}),
+        postNode(withMedia, {embedWhole: true}),
+        postNode(unmarked),
+      ])
+    const snapshot = await load(setup())
+    expect(asked()).toEqual([unmarked.uri])
+    const quoted = (
+      shown(snapshot, marked.uri).embed as {
+        record: {author: {viewer: {muted: boolean}}}
+      }
+    ).record
+    expect(quoted.author.viewer.muted).toBe(true)
+    const nested = (
+      shown(snapshot, withMedia.uri).embed as {
+        record: {record: {author: {viewer: Record<string, unknown>}}}
+      }
+    ).record.record
+    expect(nested.author.viewer).toMatchObject({
+      muted: true,
+      mutedByList: {uri: SPAM_LIST},
+    })
+  })
+
+  it('the mark skips only the record-embed rule: replyDisabled undecided and unknown media still go to the pass', async () => {
+    seedMutes()
+    const root = hydrated('3kroot2222222')
+    const anchor = hydrated('3kanchor22222', {parent: ROOT})
+    const undecided = quoting(
+      '3kundecided22',
+      {$type: 'app.bsky.embed.record#view', record: quoteOf(PLAIN)},
+      {},
+    )
+    const oddMedia = quoting('3koddmedia222', {
+      $type: 'app.bsky.embed.recordWithMedia#view',
+      record: {$type: 'app.bsky.embed.record#view', record: quoteOf(PLAIN)},
+      media: {$type: 'app.bsky.embed.somethingNew#view'},
+    })
+    posts = [undecided, oddMedia]
+    lensReply = () =>
+      answer([
+        postNode(root),
+        postNode(anchor),
+        postNode(undecided, {embedWhole: true}),
+        postNode(oddMedia, {embedWhole: true}),
+      ])
+    await load(setup())
+    expect(asked().sort()).toEqual([undecided.uri, oddMedia.uri].sort())
+  })
+
+  it('takes the mark only when it is exactly true', async () => {
+    seedMutes()
+    const root = hydrated('3kroot2222222')
+    const anchor = hydrated('3kanchor22222', {parent: ROOT})
+    const truthy = quoting('3ktruthy22222', {
+      $type: 'app.bsky.embed.record#view',
+      record: quoteOf(PLAIN),
+    })
+    posts = [truthy]
+    lensReply = () =>
+      answer([
+        postNode(root),
+        postNode(anchor),
+        postNode(truthy, {embedWhole: 'yes'}),
+      ])
+    await load(setup())
+    expect(asked()).toEqual([truthy.uri])
+  })
+})
