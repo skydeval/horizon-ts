@@ -199,6 +199,9 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **Thread Lens no longer warns that posts may be missing.** The notice
+  showed on nearly every thread and there was nothing to do about it; posts
+  Thread Lens can't check are still kept back as before.
 - **Threads appear sooner on the web.** The first replies draw at once and
   the rest follow straight after; a thread link no longer waits to look
   up the handle first (Horizon's server looks it up with the thread, and
