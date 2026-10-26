@@ -18,6 +18,7 @@
  * only for the key's account, and a lens-only anchor never falls back.
  */
 
+import {type Client} from '@atproto/lex'
 import {AtUri} from '@atproto/syntax'
 import {type QueryClient, type QueryKey} from '@tanstack/react-query'
 
@@ -312,6 +313,48 @@ function earlyPublicUris(
   return uris
 }
 
+/**
+ * A handle's DID from the public AppView, without the account's session
+ * (2026-10-26, Prism's cold-open finding: through the account's AppView
+ * client a cold open waited 2.5 s on the PDS). Installed by
+ * `TokenPrefetch.tsx`, which reaches the session module this one stays free
+ * of; without it the account's AppView client resolves, as before.
+ */
+let publicHandleResolver: ((handle: string) => Promise<string>) | undefined
+
+/** Install (or, with `undefined`, remove) the public handle resolver. */
+export function installLensHandleResolver(
+  next: ((handle: string) => Promise<string>) | undefined,
+) {
+  publicHandleResolver = next
+}
+
+/**
+ * `anchor` with a DID authority, for an anchor the caches did not know: the
+ * public AppView first, else the account's AppView client. The DID is
+ * written to the stock handle cache (`resolved-did`), so the stock screen's
+ * own lookup takes it.
+ */
+async function resolveLensAnchor(
+  qc: QueryClient,
+  appview: Client,
+  anchor: string,
+): Promise<string> {
+  const urip = new AtUri(anchor)
+  if (urip.host.startsWith('did:')) return anchor
+  const handle = urip.host
+  const did = publicHandleResolver
+    ? await publicHandleResolver(handle).catch(() => undefined)
+    : undefined
+  if (did?.startsWith('did:')) {
+    if (qc.getQueryData(['resolved-did', handle]) === undefined) {
+      qc.setQueryData(['resolved-did', handle], did)
+    }
+    return `at://${did}/${urip.collection}/${urip.rkey}`
+  }
+  return resolveAnchor(appview, anchor)
+}
+
 /** A first lens read: the lens, the public-view pass, the private part. */
 async function readLens(
   params: LensKeyParams,
@@ -330,10 +373,13 @@ async function readLens(
   noteLensStep(params.anchor, 'read started', started)
   const known = knownLensAnchor(options.qc, params.anchor, options.placeholder)
   const anchorUri =
-    known ?? (await resolveAnchor(clients.appviewClient, params.anchor))
+    known ??
+    (await resolveLensAnchor(options.qc, clients.appviewClient, params.anchor))
   noteLensStep(
     params.anchor,
-    known ? 'anchor known' : 'anchor resolved (resolveHandle)',
+    known
+      ? 'anchor known'
+      : `anchor resolved (resolveHandle, ${publicHandleResolver ? 'public AppView' : "account's AppView"})`,
     started,
   )
   // The anchor's public views start now, beside `getThread` (speed pass).

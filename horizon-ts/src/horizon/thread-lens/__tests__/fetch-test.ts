@@ -36,6 +36,7 @@ import {resetPrismHealth} from '#/horizon/routing/health'
 import {type LensSelected, selectLensAnswer} from '#/horizon/thread-lens/adapt'
 import {resetLensRefusals, resetLensWaits} from '#/horizon/thread-lens/api'
 import {
+  installLensHandleResolver,
   loadEarlierLensPosts,
   loadMoreLensReplies,
   retryLensGaps,
@@ -264,6 +265,36 @@ describe('the first read (5, 6, 7.1)', () => {
     expect(node?.kind === 'post' && node.view.viewer?.knownLikers).toEqual(
       likers,
     )
+  })
+
+  it('resolves a handle anchor on the public AppView, not the account`s, and caches it for the stock screen', async () => {
+    serveThread()
+    const handles: string[] = []
+    installLensHandleResolver(handle => {
+      handles.push(handle)
+      return Promise.resolve(AUTHOR)
+    })
+    try {
+      const qc = setup()
+      const {snapshot} = await load(
+        qc,
+        keyOf({anchor: 'at://author.test/app.bsky.feed.post/3kanchor22222'}),
+      )
+      expect(snapshot?.form).toBe('snapshot')
+      expect(handles).toEqual(['author.test'])
+      expect(
+        appview.calls.some(
+          call => call.nsid === 'com.atproto.identity.resolveHandle',
+        ),
+      ).toBe(false)
+      expect(qc.getQueryData(['resolved-did', 'author.test'])).toBe(AUTHOR)
+      const getThread = prism.calls.find(
+        call => call.nsid === 'app.nearhorizon.threadLens.getThread',
+      )
+      expect(getThread?.body?.anchor).toBe(ANCHOR)
+    } finally {
+      installLensHandleResolver(undefined)
+    }
   })
 
   it('makes no request and reads the registry for a gap-only key', async () => {

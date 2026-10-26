@@ -11,7 +11,8 @@
  * - The token is a service token from `com.atproto.server.getServiceAuth` on
  *   the account's own PDS (that one call goes through the PDS client, as any
  *   PDS call does), with `aud` prism's `#bsky_appview` service, `lxm` the exact
- *   method and `exp` now + 3,540 s.
+ *   method and `exp` now + 2,700 s on the PDS's clock (learned from the last
+ *   token's `iat`).
  * - Tokens are kept in memory per `(did, lxm)` for the token's own
  *   `exp - iat`, counted from receipt, never compared with the device clock;
  *   dropped on an account switch, on sign-out and on a 401. Never persisted
@@ -32,16 +33,17 @@ import {type Client, type FetchHandler, XrpcResponseError} from '@atproto/lex'
 import {type DidString, type NsidString} from '@atproto/syntax'
 
 import {createLexClient} from '#/lib/lexClient'
-import {
-  getServiceAuthToken,
-  serviceAuthExp,
-} from '#/lib/media/video/upload.shared'
+import {getServiceAuthToken} from '#/lib/media/video/upload.shared'
 import {networkAwareFetch} from '#/state/session/network'
 import {
   getCurrentClients,
   PrivateClientUnavailableError,
   subscribeCurrentClients,
 } from '#/horizon/routing/current-clients'
+import {
+  ORIGIN_CLOCK_AVAILABLE,
+  readOriginClockOffsetSecs,
+} from '#/horizon/routing/origin-clock'
 import {PRISM_SERVICE, PRISM_URL} from '#/horizon/routing/prism'
 import {
   getWriteRoute,
@@ -56,15 +58,69 @@ export const PRIVATE_GET_POSTS_LXM =
   'app.nearhorizon.private.getPosts' as NsidString
 
 /**
- * The token lifetime asked for: under prism's 3,600 s bound (PR-8).
+ * The token lifetime asked for, on the PDS's own clock: under prism's
+ * 3,600 s `exp - iat` bound (PR-8) and the PDS's one-hour cap.
+ *
+ * The device clock never decides an `exp` (2026-10-26, skydeval; a device a
+ * minute ahead had `now + 3,540 s` refused with `BadExpiration`, a round
+ * trip on every cold open). As the stock proxy path does, it goes by the
+ * PDS's clock: the first token for an account asks no `exp` (the PDS's
+ * default, about 60 s on its own clock, which cannot be refused), its `iat`
+ * gives the PDS's clock against the device's, and later tokens ask
+ * `exp` = the PDS's now + this. A `BadExpiration` anyway asks again with no
+ * `exp` and learns the clock again.
  */
-export const DIRECT_TOKEN_SECS = 3_540
+export const DIRECT_TOKEN_SECS = 3_000
 
 /**
- * The lifetime asked for after a `BadExpiration` (a skewed device clock);
- * after a second one, the PDS's default.
+ * The PDS's clock minus the device's, in whole seconds, by account (each
+ * account's own PDS), learned from the last token's `iat`: the PDS's time
+ * when it signed it. The round trip makes it a little behind, which only
+ * errs toward an earlier `exp` and an earlier refresh.
  */
-export const DIRECT_TOKEN_FALLBACK_SECS = 1_800
+const serverOffsets = new Map<string, number>()
+
+/**
+ * The server clock minus the device's, in whole seconds, from Horizon's own
+ * site's `Date` header at app load (web; skydeval, 2026-10-26): a
+ * same-origin header script can read, so the first token can already ask a
+ * long `exp`. Servers' clocks agree (NTP); a learned PDS offset replaces it.
+ */
+let originOffsetSecs: number | undefined
+let originClock: Promise<void> | undefined
+
+/**
+ * Learn the server clock from Horizon's own site, once; resolves when known
+ * or given up on (native, a failure, or {@link ORIGIN_CLOCK_WAIT_MS}).
+ */
+export function learnOriginClock(): Promise<void> {
+  originClock ??= Promise.race([
+    readOriginClockOffsetSecs().then(
+      offset => {
+        if (offset !== undefined) originOffsetSecs = offset
+      },
+      () => {},
+    ),
+    new Promise<void>(resolve => setTimeout(resolve, ORIGIN_CLOCK_WAIT_MS)),
+  ])
+  return originClock
+}
+
+/** How long the prefetch waits for the site's clock before minting. */
+export const ORIGIN_CLOCK_WAIT_MS = 1_500
+
+/** The PDS's clock now for `did`, in seconds, once learned. */
+function pdsNowSecs(did: string, now = Date.now()): number | undefined {
+  const offset = serverOffsets.get(did) ?? originOffsetSecs
+  return offset === undefined ? undefined : Math.floor(now / 1000) + offset
+}
+
+/** Learn `did`'s PDS clock from a token it just signed. */
+function learnServerClock(did: string, token: string, receivedAt: number) {
+  const iat = tokenClaims(token)?.iat
+  if (typeof iat !== 'number') return
+  serverOffsets.set(did, iat - Math.floor(receivedAt / 1000))
+}
 
 /**
  * The wait after a `getServiceAuth` 429 whose headers are missing or not
@@ -100,8 +156,12 @@ export class DirectPrismRateLimitedError extends Error {
 
 type CachedToken = {
   token: string
+  /** The account the token is for, whose PDS clock its `exp` is on. */
+  did: string
   receivedAt: number
   lifetimeMs: number
+  /** The token's own `exp` (the PDS's clock), when readable. */
+  expSecs?: number
 }
 
 /** Tokens by DID, then by method. */
@@ -156,10 +216,23 @@ function dropToken(did: string, lxm: string) {
   tokens.get(did)?.delete(lxm)
 }
 
+/**
+ * How much of `entry`'s life is left: its own `exp` against the PDS's clock
+ * now, never the device's; for a token whose claims cannot be read, its
+ * lifetime counted from receipt.
+ */
+function remainingMs(entry: CachedToken, now: number): number {
+  const pdsNow = pdsNowSecs(entry.did, now)
+  if (entry.expSecs !== undefined && pdsNow !== undefined) {
+    return (entry.expSecs - pdsNow) * 1000
+  }
+  return entry.receivedAt + entry.lifetimeMs - now
+}
+
 function usable(entry: CachedToken | undefined, now: number): boolean {
   if (!entry) return false
   const margin = Math.min(EXPIRY_MARGIN_MS, entry.lifetimeMs / 2)
-  return now - entry.receivedAt < entry.lifetimeMs - margin
+  return remainingMs(entry, now) > margin
 }
 
 function didOf(pdsClient: Client): string {
@@ -175,21 +248,29 @@ function didOf(pdsClient: Client): string {
  * not verified (prism verifies it).
  */
 export function tokenLifetimeMs(token: string): number {
+  const claims = tokenClaims(token)
+  if (!claims) return UNREADABLE_TOKEN_MS
+  const {exp, iat} = claims
+  if (typeof exp !== 'number' || typeof iat !== 'number' || exp <= iat) {
+    return UNREADABLE_TOKEN_MS
+  }
+  return (exp - iat) * 1000
+}
+
+/** A token's claims, read, not verified; `undefined` when unreadable. */
+function tokenClaims(
+  token: string,
+): {exp?: unknown; iat?: unknown} | undefined {
   try {
     const payload = token.split('.')[1]
-    if (!payload) return UNREADABLE_TOKEN_MS
+    if (!payload) return undefined
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
     const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
     const claims: unknown = JSON.parse(atob(padded))
-    if (typeof claims !== 'object' || claims === null)
-      return UNREADABLE_TOKEN_MS
-    const {exp, iat} = claims as {exp?: unknown; iat?: unknown}
-    if (typeof exp !== 'number' || typeof iat !== 'number' || exp <= iat) {
-      return UNREADABLE_TOKEN_MS
-    }
-    return (exp - iat) * 1000
+    if (typeof claims !== 'object' || claims === null) return undefined
+    return claims
   } catch {
-    return UNREADABLE_TOKEN_MS
+    return undefined
   }
 }
 
@@ -219,21 +300,34 @@ export function rateLimitWaitMs(
   return defaultMs
 }
 
-async function mint(pdsClient: Client, did: string, lxm: NsidString) {
-  // now + 3,540 s; after a BadExpiration now + 1,800 s; then the PDS's default.
-  const lifetimes = [DIRECT_TOKEN_SECS, DIRECT_TOKEN_FALLBACK_SECS, undefined]
+/**
+ * A new token for `lxm`: with `exp` the PDS's now + {@link DIRECT_TOKEN_SECS}
+ * once its clock is known, else (and after a `BadExpiration`) with no `exp`.
+ * `long` says the `exp` was asked for. A short one is replaced by a long one
+ * when the prefetch refreshes it, at half its life, or by the next ask.
+ */
+async function mint(
+  pdsClient: Client,
+  did: string,
+  lxm: NsidString,
+): Promise<{token: string; long: boolean}> {
+  const pdsNow = pdsNowSecs(did)
+  const exps =
+    pdsNow === undefined ? [undefined] : [pdsNow + DIRECT_TOKEN_SECS, undefined]
   for (let i = 0; ; i++) {
-    const secs = lifetimes[i]
+    const exp = exps[i]
     try {
-      return await getServiceAuthToken({
+      const token = await getServiceAuthToken({
         client: pdsClient,
         aud: PRISM_SERVICE,
         lxm,
-        exp: secs === undefined ? undefined : serviceAuthExp(secs),
+        exp,
       })
+      learnServerClock(did, token, Date.now())
+      return {token, long: exp !== undefined}
     } catch (error) {
       if (error instanceof XrpcResponseError) {
-        if (error.error === 'BadExpiration' && i < lifetimes.length - 1) {
+        if (error.error === 'BadExpiration' && i < exps.length - 1) {
           continue
         }
         if (error.status === 429) {
@@ -247,6 +341,22 @@ async function mint(pdsClient: Client, did: string, lxm: NsidString) {
       throw error
     }
   }
+}
+
+function cacheToken(did: string, lxm: string, token: string) {
+  let byMethod = tokens.get(did)
+  if (!byMethod) {
+    byMethod = new Map()
+    tokens.set(did, byMethod)
+  }
+  const exp = tokenClaims(token)?.exp
+  byMethod.set(lxm, {
+    token,
+    did,
+    receivedAt: Date.now(),
+    lifetimeMs: tokenLifetimeMs(token),
+    ...(typeof exp === 'number' ? {expSecs: exp} : {}),
+  })
 }
 
 /**
@@ -284,19 +394,8 @@ export function getDirectPrismToken(
 
   const startedIn = epoch
   const request = mint(pdsClient, did, lxm)
-    .then(token => {
-      if (epoch === startedIn) {
-        let byMethod = tokens.get(did)
-        if (!byMethod) {
-          byMethod = new Map()
-          tokens.set(did, byMethod)
-        }
-        byMethod.set(lxm, {
-          token,
-          receivedAt: Date.now(),
-          lifetimeMs: tokenLifetimeMs(token),
-        })
-      }
+    .then(({token}) => {
+      if (epoch === startedIn) cacheToken(did, lxm, token)
       return token
     })
     .finally(() => {
@@ -494,20 +593,18 @@ export function startDirectTokenPrefetch(
     clear()
     if (stopped) return
     let next = Number.POSITIVE_INFINITY
+    const now = Date.now()
     for (const lxm of options.methods) {
       const cached = tokens.get(did)?.get(lxm)
       if (!cached) continue
       const at =
-        cached.receivedAt +
-        cached.lifetimeMs -
+        now +
+        remainingMs(cached, now) -
         Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2)
       next = Math.min(next, at)
     }
     if (next === Number.POSITIVE_INFINITY) return
-    timer = setTimeout(
-      () => tick({refresh: true}),
-      Math.max(0, next - Date.now()),
-    )
+    timer = setTimeout(() => tick({refresh: true}), Math.max(0, next - now))
   }
 
   const tick = ({refresh = false}: {refresh?: boolean} = {}) => {
@@ -524,9 +621,8 @@ export function startDirectTokenPrefetch(
         !cached ||
         !usable(cached, now) ||
         (refresh &&
-          now - cached.receivedAt >=
-            cached.lifetimeMs -
-              Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2))
+          remainingMs(cached, now) <=
+            Math.min(DIRECT_REFRESH_BEFORE_MS, cached.lifetimeMs / 2))
       if (!due) return Promise.resolve()
       return getDirectPrismToken(current.pdsClient, lxm, {
         fresh: !!cached,
@@ -544,7 +640,12 @@ export function startDirectTokenPrefetch(
     subscribeWriteRoutes(() => tick()),
     env.subscribe(() => tick()),
   ]
-  tick()
+  // On web the first mint waits briefly for the site's clock (a long exp).
+  if (ORIGIN_CLOCK_AVAILABLE && originOffsetSecs === undefined) {
+    void learnOriginClock().then(() => tick())
+  } else {
+    tick()
+  }
   return () => {
     stopped = true
     clear()
@@ -557,6 +658,9 @@ export function startDirectTokenPrefetch(
  */
 export function resetDirectPrism() {
   dropDirectPrismTokens()
+  serverOffsets.clear()
+  originOffsetSecs = undefined
+  originClock = undefined
   unwatch?.()
   unwatch = undefined
   watchedDid = undefined

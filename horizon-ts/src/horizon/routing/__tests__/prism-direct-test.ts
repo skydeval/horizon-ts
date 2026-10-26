@@ -39,6 +39,12 @@ jest.mock('#/analytics/identifiers', () => ({
   getDeviceId: () => 'device-id-1',
   getSessionId: () => 'session-id-1',
 }))
+/** The site's clock (web), as `origin-clock.web.ts` would read it. */
+let mockOriginOffset: number | undefined
+jest.mock('#/horizon/routing/origin-clock', () => ({
+  ORIGIN_CLOCK_AVAILABLE: false,
+  readOriginClockOffsetSecs: () => Promise.resolve(mockOriginOffset),
+}))
 
 import {type Client} from '@atproto/lex'
 import {type DidString} from '@atproto/syntax'
@@ -57,6 +63,7 @@ import {
   dropDirectPrismTokens,
   getDirectPrismClient,
   getDirectPrismToken,
+  learnOriginClock,
   PRIVATE_GET_POSTS_LXM,
   rateLimitWaitMs,
   resetDirectPrism,
@@ -145,6 +152,7 @@ let now = START_MS
 
 beforeEach(() => {
   now = START_MS
+  mockOriginOffset = undefined
   jest.spyOn(Date, 'now').mockImplementation(() => now)
   mockPrismCalls.length = 0
   pdsCalls = []
@@ -160,13 +168,60 @@ afterEach(() => {
 })
 
 describe('the getPosts token', () => {
-  it('is asked of the PDS with prism`s #bsky_appview aud, the exact lxm and now + 3,540 s', async () => {
-    now = START_MS + 456 // a fraction of a second, floored
+  it('is asked of the PDS with prism`s #bsky_appview aud and the exact lxm; the first with no exp', async () => {
+    now = START_MS + 456
     await getDirectPrismToken(pdsClientFor(), PRIVATE_GET_POSTS_LXM)
     const [call] = serviceAuthCalls()
     expect(call.params.get('aud')).toBe(AUD)
     expect(call.params.get('lxm')).toBe('app.nearhorizon.private.getPosts')
-    expect(call.params.get('exp')).toBe(String(START_MS / 1000 + 3540))
+    // The PDS's clock is not known yet: its own default, never BadExpiration.
+    expect(call.params.has('exp')).toBe(false)
+  })
+
+  it('asks later exps on the PDS`s clock, learned from the last token`s iat, never the device`s', async () => {
+    // The device is 90 s ahead of the PDS: the PDS signs with its own time.
+    serviceAuthAnswer = () =>
+      json({token: token({iatSecs: Math.floor(now / 1000) - 90})})
+    const pds = pdsClientFor()
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    await getDirectPrismToken(pds, 'app.nearhorizon.private.getTimeline')
+    const exps = serviceAuthCalls().map(call => call.params.get('exp'))
+    expect(exps).toEqual([null, String(START_MS / 1000 - 90 + 3000)])
+  })
+
+  it('a device hours off still asks an exp the PDS accepts', async () => {
+    // The device is three hours behind the PDS.
+    serviceAuthAnswer = () =>
+      json({token: token({iatSecs: Math.floor(now / 1000) + 3 * 3600})})
+    const pds = pdsClientFor()
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    await getDirectPrismToken(pds, 'app.nearhorizon.private.getTimeline')
+    expect(serviceAuthCalls()[1].params.get('exp')).toBe(
+      String(START_MS / 1000 + 3 * 3600 + 3000),
+    )
+  })
+
+  it('with the site`s clock learned at load, even the first token asks a long exp', async () => {
+    mockOriginOffset = -120
+    await learnOriginClock()
+    await getDirectPrismToken(pdsClientFor(), PRIVATE_GET_POSTS_LXM)
+    expect(serviceAuthCalls()[0].params.get('exp')).toBe(
+      String(START_MS / 1000 - 120 + 3000),
+    )
+  })
+
+  it('judges a token`s freshness by its own exp on the PDS`s clock', async () => {
+    // The PDS is an hour ahead; its token lives 300 s on its clock.
+    serviceAuthAnswer = () =>
+      json({token: token({secs: 300, iatSecs: Math.floor(now / 1000) + 3600})})
+    const pds = pdsClientFor()
+    const first = await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    now += 200_000
+    expect(await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)).toBe(first)
+    // Within its last minute on the PDS's clock: replaced.
+    now += 50_000
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    expect(serviceAuthCalls()).toHaveLength(2)
   })
 
   it('is cached for its own exp - iat from receipt, not against the device clock', async () => {
@@ -208,16 +263,26 @@ describe('the getPosts token', () => {
     expect(serviceAuthCalls()).toHaveLength(1)
   })
 
-  it('BadExpiration: now + 1,800 s, then no exp', async () => {
+  it('BadExpiration anyway: asks again with no exp and learns the clock again', async () => {
+    const pds = pdsClientFor()
+    // The first token teaches a clock 100 s ahead of the device.
+    serviceAuthAnswer = () =>
+      json({token: token({iatSecs: Math.floor(now / 1000) + 100})})
+    await getDirectPrismToken(pds, PRIVATE_GET_POSTS_LXM)
+    // The PDS's clock has since moved: any exp is refused, none is not.
     serviceAuthAnswer = call =>
       call.params.has('exp')
         ? json({error: 'BadExpiration', message: 'skew'}, 400)
-        : json({token: token({secs: 60})})
-    await getDirectPrismToken(pdsClientFor(), PRIVATE_GET_POSTS_LXM)
+        : json({token: token({secs: 60, iatSecs: Math.floor(now / 1000)})})
+    await getDirectPrismToken(pds, 'app.nearhorizon.private.getTimeline')
+    // The clock learned from the no-exp token: the device's own now.
+    await getDirectPrismToken(pds, 'app.nearhorizon.private.getAuthorFeed')
     const exps = serviceAuthCalls().map(call => call.params.get('exp'))
     expect(exps).toEqual([
-      String(START_MS / 1000 + 3540),
-      String(START_MS / 1000 + 1800),
+      null,
+      String(START_MS / 1000 + 100 + 3000),
+      null,
+      String(START_MS / 1000 + 3000),
       null,
     ])
   })

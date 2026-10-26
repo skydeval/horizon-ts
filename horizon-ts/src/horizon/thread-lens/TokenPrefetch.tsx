@@ -1,7 +1,9 @@
 import {useEffect} from 'react'
 import {AppState} from 'react-native'
+import {type HandleString} from '@atproto/syntax'
 
 import {useSession} from '#/state/session'
+import {getPublicAppviewClient} from '#/state/session/clients'
 import {
   type DirectPrefetchOptions,
   DirectPrismRateLimitedError,
@@ -16,8 +18,10 @@ import {
   LENS_GET_THREAD_LXM,
   LENS_PRIVATE_REPLIES_LXM,
 } from '#/horizon/thread-lens/direct'
+import {installLensHandleResolver} from '#/horizon/thread-lens/fetch'
 import {preconnectPrism} from '#/horizon/thread-lens/preconnect'
 import {useThreadLensPreference} from '#/horizon/thread-lens/preference'
+import {com} from '#/lexicons'
 
 // The lens's direct transport (`direct.ts`), installed as this module loads.
 installLensDirect({
@@ -25,6 +29,15 @@ installLensDirect({
   client: getDirectPrismClient,
   limitedUntil: error =>
     error instanceof DirectPrismRateLimitedError ? error.retryAt : undefined,
+})
+
+// Handles resolved on the public AppView, with no session (`fetch.ts`).
+installLensHandleResolver(async handle => {
+  const data = await getPublicAppviewClient().call(
+    com.atproto.identity.resolveHandle,
+    {handle: handle as HandleString},
+  )
+  return data.did
 })
 
 /**
