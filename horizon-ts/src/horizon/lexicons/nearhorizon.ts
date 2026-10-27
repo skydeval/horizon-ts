@@ -66,7 +66,7 @@ const answerSignals = {
  * copies undeclared keys unchanged, and are checked one by one where they are
  * adapted, so one malformed field never fails a page.
  */
-export const privatePostView = l.object({
+const strictPrivatePostView = l.object({
   uri: l.string({format: 'at-uri'}),
   cid: l.string({format: 'cid'}),
   author: app.bsky.actor.defs.profileViewBasic,
@@ -79,7 +79,33 @@ export const privatePostView = l.object({
   labels: l.array(com.atproto.label.defs.label),
 })
 
-export type PrivatePostView = l.InferOutput<typeof privatePostView>
+/*
+ * What is checked at run time: the post's own fields strictly, its author
+ * and labels only as far as Horizon needs them. A strict author check threw
+ * whole posts out over one label (2026-10-27): prism builds a self-label's
+ * `cts` from the labelled record's `createdAt`, and a profile record with
+ * none gives a label without `cts`, which `com.atproto.label.defs#label`
+ * requires. One such author dropped the parent of a reply (the chain stops
+ * there) and would fail any list answer holding one of their posts.
+ * Moderation reads `src`, `uri`, `val`, `neg` and `exp`, never `cts`.
+ */
+const checkedPrivatePostView = l.object({
+  uri: l.string({format: 'at-uri'}),
+  cid: l.string({format: 'cid'}),
+  author: l.object({did: l.string({format: 'did'}), handle: l.string()}),
+  record: l.lexMap(),
+  indexedAt: l.string({format: 'datetime'}),
+  labels: l.array(l.lexMap()),
+})
+
+/**
+ * `privatePostView` typed as the lexicon's view; a label on it (the post's
+ * or its author's) may lack `cts`, see above.
+ */
+export const privatePostView =
+  checkedPrivatePostView as unknown as typeof strictPrivatePostView
+
+export type PrivatePostView = l.InferOutput<typeof strictPrivatePostView>
 
 /**
  * `app.nearhorizon.private.defs#publicParent`.

@@ -214,6 +214,12 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **Private replies from some people no longer vanish.** A private post
+  whose author's profile carries a self-label written without a date was
+  thrown out whole: above a reply it showed "Private post – Only its
+  audience can see this post." to someone in the audience, and a list of
+  private posts holding one could fail to load. Horizon now checks only the
+  parts of a post's author and labels it uses.
 - **Thread Lens no longer warns that posts may be missing.** The notice
   showed on nearly every thread and there was nothing to do about it; posts
   Thread Lens can't check are still kept back as before.
