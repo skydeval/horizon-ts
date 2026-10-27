@@ -20,9 +20,9 @@ web and waiting on its live checks.
   line, a quoted post, up to four images or a playable video or GIF, and the
   reply, repost and like counts. A kryphocron post's link always shows the
   same "Private post" card with nothing about the post on it. Content
-  warnings show only their line, spoilers and adult-labelled media are left
-  out, and accounts that ask not to be shown to signed-out people get a
-  plain card.
+  warnings show only their line, and spoilers and adult-labelled media are
+  left out. As on bsky.app, posts from accounts that hide from signed-out
+  people still get a full card.
 - **Descriptions for your avatar and banner.** Edit Profile has "Add avatar
   description" and "Add banner description" buttons, which open the same
   alt-text box as post images. Screen readers hear the description on your profile header and

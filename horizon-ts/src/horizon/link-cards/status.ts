@@ -10,9 +10,9 @@
  * the app's path aliases.
  *
  * Nothing hidden in Horizon is shown here: a content warning shows only its
- * line, spoilers and flagged media are left out, adult-labelled media is
- * left out, and an author who asked not to be shown to signed-out readers
- * gets a card with nothing of theirs on it.
+ * line, spoilers and flagged media are left out, and adult-labelled media is
+ * left out. Like bsky.app's cards, a post shows whatever its author's
+ * signed-out setting (skydeval, 2026-10-27).
  */
 
 import {CW_SELF_LABEL, MEDIA_SPOILER_FIELD} from '../media-spoilers/nsid'
@@ -32,9 +32,6 @@ export const CARD_THEME_COLOR = '#3f9b5a'
 
 /** Labels whose media never goes on a card. */
 const ADULT_LABELS = new Set(['porn', 'sexual', 'nudity', 'graphic-media'])
-
-/** The author's opt-out from being shown to signed-out readers. */
-const NO_UNAUTHENTICATED = '!no-unauthenticated'
 
 /** At most this many media items, as Discord's grid. */
 const MAX_MEDIA = 4
@@ -112,7 +109,7 @@ export type PostCard = {
 
 /** The card for a post that can't be shown. */
 export type BlankCard = {
-  kind: 'hidden' | 'signedInOnly' | 'missing'
+  kind: 'hidden' | 'missing'
   url: string
 }
 
@@ -129,12 +126,6 @@ export function blankCardText(kind: BlankCard['kind']): {
         title: '🔒 Private post',
         description:
           'Only the people it was shared with can see this. Open it in Horizon.',
-      }
-    case 'signedInOnly':
-      return {
-        title: 'Post on Horizon',
-        description:
-          'This account asks to be shown only to signed-in people. Open it in Horizon.',
       }
     case 'missing':
       return {
@@ -197,10 +188,6 @@ function selfLabelValues(record: Obj | undefined): string[] {
     .filter((val): val is string => !!val)
 }
 
-/** The author asked not to be shown to signed-out readers. */
-export function isSignedInOnly(author: unknown): boolean {
-  return labelValues(obj(author)?.labels).includes(NO_UNAUTHENTICATED)
-}
 
 function authorOf(view: Obj | undefined, pronouns?: string): CardAuthor {
   return {
@@ -316,7 +303,6 @@ function quoteOf(embedView: Obj | undefined): PostCard['quote'] {
     return undefined
   }
   const author = obj(record.author)
-  if (isSignedInOnly(author)) return undefined
   const value = obj(record.value)
   if (selfLabelValues(value).includes(CW_SELF_LABEL)) {
     return {
@@ -350,8 +336,11 @@ export function buildPostCard({
   const threadView = obj(thread)
   const post = obj(threadView?.post)
   if (!post) return {kind: 'missing', url}
+  /*
+   * An author's `!no-unauthenticated` label doesn't stop the card: bsky.app's
+   * own cards show those posts too (skydeval, 2026-10-27).
+   */
   const author = obj(post.author)
-  if (isSignedInOnly(author)) return {kind: 'signedInOnly', url}
   const record = obj(post.record)
   const text = str(record?.text) ?? ''
   const labels = [...labelValues(post.labels), ...selfLabelValues(record)]

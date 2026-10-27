@@ -212,15 +212,17 @@ describe('the post card', () => {
     expect(card.mediaNote).toBe('Media hidden: marked as adult content.')
   })
 
-  it('shows nothing of an author who asked not to be shown signed out', () => {
-    const card = buildPostCard({
-      thread: post({authorLabels: ['!no-unauthenticated']}),
-      url: URL_,
-    })
-    expect(card).toEqual({kind: 'signedInOnly', url: URL_})
+  it('shows a signed-in-only author’s post in full, as bsky.app does', () => {
+    // skydeval, 2026-10-27: cards show regardless of the sign-in setting
+    const card = asPost(
+      buildPostCard({
+        thread: post({authorLabels: ['!no-unauthenticated']}),
+        url: URL_,
+      }),
+    )
     const page = linkCardPage(card, ORIGIN)
-    expect(page).not.toContain('Wren')
-    expect(page).not.toContain('first warm')
+    expect(page).toContain('Wren')
+    expect(page).toContain('first warm')
   })
 
   it('plays a video from the author’s repo, and shows a Tenor GIF', () => {
