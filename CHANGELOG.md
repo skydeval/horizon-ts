@@ -15,9 +15,9 @@ web and waiting on its live checks.
 
 ### Added
 
-- **Descriptions for your avatar and banner.** Edit Profile has "Describe
-  avatar" and "Describe banner" buttons, which open the same alt-text box as
-  post images. Screen readers hear the description on your profile header and
+- **Descriptions for your avatar and banner.** Edit Profile has "Add avatar
+  description" and "Add banner description" buttons, which open the same
+  alt-text box as post images. Screen readers hear the description on your profile header and
   hover card, and anyone can read it from the ALT badge when the image is
   opened full size. A description belongs to one image: picking a new avatar
   or banner drops the old text, and an image changed in another app shows

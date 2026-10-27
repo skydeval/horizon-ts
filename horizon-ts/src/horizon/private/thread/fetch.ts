@@ -188,7 +188,13 @@ function fromServed(thread: PrivateThreadView): RawThread | undefined {
     }
     if (!isObject(parent)) break
     const view = asPrivateView(parent.post)
-    if (!view) break
+    if (!view) {
+      // The chain stops here, and the reader sees the stand-in above.
+      logger.warn('private thread parent dropped: not a private post view', {
+        uri: isObject(parent.post) ? String(parent.post.uri) : undefined,
+      })
+      break
+    }
     parents.unshift({view})
     parent = parent.parent
   }

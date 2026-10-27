@@ -1,5 +1,5 @@
 /*
- * "Describe avatar" and "Describe banner" in the stock Edit Profile dialog,
+ * "Add avatar description" and "Add banner description" in the stock Edit Profile dialog,
  * under the images. The state is `useProfileAltEditParts` (`edit-parts.ts`).
  */
 
@@ -23,7 +23,7 @@ import {ProfileAltDialog} from '#/horizon/profile-alt/ProfileAltDialog'
 export {useProfileAltEditParts} from '#/horizon/profile-alt/edit-parts'
 
 /**
- * "Describe avatar" and "Describe banner", under the images; each only
+ * "Add avatar description" and "Add banner description", under the images; each only
  * while there is an image to describe.
  */
 export function ProfileAltFields({
@@ -109,9 +109,9 @@ function DescribeButton({
   const described = alt.trim().length > 0
   let label: string
   if (slot === 'avatar') {
-    label = described ? l`Edit avatar description` : l`Describe avatar`
+    label = described ? l`Edit avatar description` : l`Add avatar description`
   } else {
-    label = described ? l`Edit banner description` : l`Describe banner`
+    label = described ? l`Edit banner description` : l`Add banner description`
   }
 
   return (
@@ -122,6 +122,7 @@ function DescribeButton({
         accessibilityHint={l`Opens a field to write alt text for this image`}
         onPress={() => control.open()}
         size="small"
+        shape="rectangular"
         color={described ? 'secondary' : 'primary_subtle'}>
         <ButtonText>{label}</ButtonText>
       </Button>
