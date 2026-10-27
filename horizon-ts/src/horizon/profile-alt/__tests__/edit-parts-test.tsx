@@ -35,7 +35,7 @@ jest.mock('#/horizon/identity/edit/own', () => ({
   useOwnWriter: () => mockState.writer,
 }))
 jest.mock('#/horizon/profile-alt/query', () => ({
-  ...jest.requireActual('#/horizon/profile-alt/query'),
+  ...jest.requireActual<object>('#/horizon/profile-alt/query'),
   useProfileAltQuery: () => ({
     data: mockState.answer,
     isError: false,

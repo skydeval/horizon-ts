@@ -6,15 +6,17 @@ import * as FocusGuards from '@radix-ui/react-focus-guards'
 import * as FocusScope from '@radix-ui/react-focus-scope'
 
 import {useLoggedOutViewControls} from '#/state/shell/logged-out'
-import {Logo} from '#/view/icons/Logo'
 import {atoms as a, flatten, useBreakpoints, web} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {type WelcomeModalControl} from '#/components/hooks/useWelcomeModal.shared'
 import {TimesLarge_Stroke2_Corner0_Rounded as XIcon} from '#/components/icons/Times'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
+// HORIZON: branding: the meadow welcome window
+import {WELCOME, WelcomeWordmark} from '#/horizon/branding/welcome'
 
-const welcomeModalBg = require('../../assets/images/welcome-modal-bg.jpg')
+// HORIZON: branding: Horizon's meadow photo in place of Bluesky's clouds
+const welcomeModalBg = require('../horizon/branding/welcome-meadow.jpg')
 
 interface WelcomeModalProps {
   control: WelcomeModalControl
@@ -86,68 +88,43 @@ export function WelcomeModal({control}: WelcomeModalProps) {
               maxHeight: 600,
               width: '90%',
               height: '90%',
-              backgroundColor: '#C0DCF0',
+              // HORIZON: branding: the photo's sky while it loads
+              backgroundColor: WELCOME.backdrop,
             },
             a.rounded_lg,
             a.overflow_hidden,
             a.zoom_in,
           ])}>
+          {/* HORIZON: branding: the column starts from the top, in the photo's sky */}
           <ImageBackground
             source={welcomeModalBg}
-            style={[a.flex_1, a.justify_center]}
+            style={[a.flex_1, a.justify_start]}
             contentFit="cover">
-            <View style={[a.gap_2xl, a.align_center, a.p_4xl]}>
+            <View
+              style={[
+                a.align_center,
+                a.px_4xl,
+                {paddingTop: WELCOME.topPadding},
+              ]}>
+              {/* HORIZON: branding: the "Horizon" wordmark in place of the typed "Bluesky" */}
+              <WelcomeWordmark />
+              {/* HORIZON: branding: Horizon's tagline, one line, in the brand's ink */}
               <View
                 style={[
-                  a.flex_row,
                   a.align_center,
-                  a.justify_center,
-                  a.w_full,
-                  a.p_0,
-                ]}>
-                <View style={[a.flex_row, a.align_center, a.gap_xs]}>
-                  <Logo allowVariants={false} width={26} />
-                  <Text
-                    style={[
-                      a.text_2xl,
-                      a.font_semi_bold,
-                      a.user_select_none,
-                      {color: '#354358', letterSpacing: -0.5},
-                    ]}>
-                    Bluesky
-                  </Text>
-                </View>
-              </View>
-              <View
-                style={[
-                  a.gap_sm,
-                  a.align_center,
-                  a.pt_5xl,
-                  a.pb_3xl,
-                  a.mt_2xl,
+                  {
+                    marginTop: WELCOME.wordmarkGap,
+                    marginBottom: WELCOME.taglineGap,
+                  },
                 ]}>
                 <Text
                   style={[
                     gtMobile ? a.text_4xl : a.text_3xl,
                     a.font_semi_bold,
                     a.text_center,
-                    {color: '#354358'},
-                    web({
-                      backgroundImage:
-                        'linear-gradient(180deg, #313F54 0%, #667B99 83.65%, rgba(102, 123, 153, 0.50) 100%)',
-                      backgroundClip: 'text',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      color: 'transparent',
-                      lineHeight: 1.2,
-                      letterSpacing: -0.5,
-                    }),
+                    {color: WELCOME.ink, letterSpacing: -0.5},
                   ]}>
-                  <Trans>Real people.</Trans>
-                  {'\n'}
-                  <Trans>Real conversations.</Trans>
-                  {'\n'}
-                  <Trans>Social media you control.</Trans>
+                  <Trans>Your corner of the open social web.</Trans>
                 </Text>
               </View>
               <View style={[a.gap_md, a.align_center]}>
@@ -159,7 +136,8 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                     color="primary"
                     style={{
                       width: 200,
-                      backgroundColor: '#006AFF',
+                      // HORIZON: branding: the brand's green
+                      backgroundColor: WELCOME.accent,
                     }}>
                     <ButtonText>
                       <Trans>Create account</Trans>
@@ -175,7 +153,11 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                     hoverStyle={[a.bg_transparent]}>
                     {({hovered}) => (
                       <ButtonText
-                        style={[hovered && [a.underline], {color: '#006AFF'}]}>
+                        // HORIZON: branding: the brand's green
+                        style={[
+                          hovered && [a.underline],
+                          {color: WELCOME.accent},
+                        ]}>
                         <Trans>Explore the app</Trans>
                       </ButtonText>
                     )}
@@ -186,7 +168,8 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                     style={[
                       a.text_md,
                       a.text_center,
-                      {color: '#405168', lineHeight: 24},
+                      // HORIZON: branding: readable over the photo's sky
+                      {color: WELCOME.quiet, lineHeight: 24},
                     ]}>
                     <Trans>Already have an account?</Trans>{' '}
                     <Pressable
@@ -200,7 +183,8 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                         style={[
                           a.font_medium,
                           {
-                            color: '#006AFF',
+                            // HORIZON: branding: the brand's green
+                            color: WELCOME.accent,
                             fontSize: undefined,
                           },
                           signInLinkHovered && a.underline,
@@ -235,7 +219,8 @@ export function WelcomeModal({control}: WelcomeModalProps) {
                 <XIcon
                   size="md"
                   style={{
-                    color: '#354358',
+                    // HORIZON: branding: the brand's ink
+                    color: WELCOME.ink,
                     opacity: hovered || pressed || focused ? 1 : 0.7,
                   }}
                 />

@@ -164,6 +164,9 @@ When this is resolved, one of two things will happen: this section will name the
 
 If you are forking, replace these or ship without them. See [`assets/images/README.md`](./assets/images/README.md).
 
+<!-- HORIZON: the welcome window's photo -->
+Horizon no longer uses `assets/images/welcome-modal-bg.jpg`. Its signed-out welcome window shows `src/horizon/branding/welcome-meadow.jpg` instead, a meadow photo generated for Horizon with Google Gemini. It is not Bluesky's and is not covered by this section.
+
 ---
 
 ## If you are forking

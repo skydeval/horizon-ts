@@ -143,6 +143,10 @@ web and waiting on its live checks.
 - **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
   the favicons and the web app manifest replace Bluesky's butterfly and
   logotype wherever the app draws them, including the web loading splash.
+- **A Horizon welcome window.** Opening Horizon signed out shows a meadow
+  under open sky in place of Bluesky's clouds, the "Horizon" wordmark, the
+  line "Your corner of the open social web." and green buttons. The window
+  used to say "Bluesky".
 - **Threads open faster on a fresh load (web):** the browser connects to
   Horizon's server ahead of the first thread while Thread Lens is on. The
   Thread Lens timing log also says where a read's time goes.
