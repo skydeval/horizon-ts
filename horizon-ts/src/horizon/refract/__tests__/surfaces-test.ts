@@ -166,42 +166,40 @@ describe('reply fallback', () => {
 describe('the quote slot', () => {
   const URI = rfUri('rf1')
 
-  it('loads, then shows the post, never "Deleted" first', () => {
-    expect(quoteStatusOf(URI, undefined, undefined, false).kind).toBe('loading')
-    expect(
-      quoteStatusOf(URI, undefined, {kind: 'author', author: 'pending'}, false)
-        .kind,
-    ).toBe('loading')
-  })
-
-  it('"Deleted" only for a definitive answer; "Blocked" for blocks', () => {
-    expect(quoteStatusOf(URI, undefined, {kind: 'gone'}, false).kind).toBe(
-      'deleted',
-    )
-    expect(quoteStatusOf(URI, undefined, {kind: 'missing'}, false).kind).toBe(
-      'deleted',
-    )
-    expect(quoteStatusOf(URI, undefined, {kind: 'blocked'}, false).kind).toBe(
-      'blocked',
-    )
-    seedOwnRelations({blocks: {[RF_DID]: 'at://reader/app.bsky.graph.block/1'}})
-    expect(quoteStatusOf(URI, undefined, undefined, false).kind).toBe('blocked')
-  })
-
-  it('after the deadline, a failure or an unresolved author: "Couldn’t load right now"', () => {
-    expect(quoteStatusOf(URI, undefined, undefined, true).kind).toBe(
-      'unavailable',
-    )
+  /*
+   * skydeval 2026-10-27: "Deleted" at once, as stock shows it; a restored
+   * post replaces it when one comes back.
+   */
+  it('"Deleted" before any answer, while pending, and on every failure', () => {
     for (const outcome of [
+      undefined,
+      {kind: 'author', author: 'pending'},
+      {kind: 'author', author: 'unavailable'},
+      {kind: 'gone'},
+      {kind: 'missing'},
       {kind: 'unresolved'},
       {kind: 'unavailable'},
       {kind: 'failed', error: new Error('x')},
-      {kind: 'author', author: 'unavailable'},
     ] as const) {
-      expect(quoteStatusOf(URI, undefined, outcome, false).kind).toBe(
-        'unavailable',
-      )
+      expect(quoteStatusOf(URI, undefined, outcome).kind).toBe('deleted')
     }
+  })
+
+  it('a restored post replaces "Deleted" when it comes back', () => {
+    const post = rfPost('rf1') as unknown as app.bsky.feed.defs.PostView
+    expect(quoteStatusOf(URI, post, undefined)).toEqual({kind: 'post', post})
+    expect(quoteStatusOf(URI, undefined, {kind: 'positive', post})).toEqual({
+      kind: 'post',
+      post,
+    })
+  })
+
+  it('"Blocked" for blocks', () => {
+    expect(quoteStatusOf(URI, undefined, {kind: 'blocked'}).kind).toBe(
+      'blocked',
+    )
+    seedOwnRelations({blocks: {[RF_DID]: 'at://reader/app.bsky.graph.block/1'}})
+    expect(quoteStatusOf(URI, undefined, undefined).kind).toBe('blocked')
   })
 })
 

@@ -32,7 +32,6 @@ import {
   rfProfile,
   rfUri,
 } from '#/horizon/refract/fixtures'
-import {quoteStatusOf} from '#/horizon/refract/quote-status'
 import {deferred, type Harness, setupRefract} from './harness'
 
 /*
@@ -278,7 +277,7 @@ describe('slots', () => {
    * author was `pending`, and the card then waited for the 7 s deadline,
    * since a slot made no call of its own after `pending`.
    */
-  it('an on-screen card asks again soon after pending, and shows Deleted on the final answer', async () => {
+  it('an on-screen card asks again soon after pending, until the answer is final', async () => {
     let n = 0
     h.respond(() => (++n === 1 ? pending() : rfFillAnswer({withheld: []})))
     let outcome: UriOutcome | undefined
@@ -296,9 +295,8 @@ describe('slots', () => {
     expect(h.fills().length).toBe(3)
     expect(settledAt).toBeGreaterThan(0)
     expect(settledAt).toBeLessThan(600)
-    expect(quoteStatusOf(rfUri('rf1'), undefined, outcome, false)).toEqual({
-      kind: 'deleted',
-    })
+    // Final: not restored, so the card's "Deleted" stands.
+    expect(outcome?.kind).toBe('gone')
   })
 
   it('stops asking once the card is gone', async () => {
@@ -313,6 +311,30 @@ describe('slots', () => {
     card.mounted = false
     await jest.advanceTimersByTimeAsync(10_000)
     expect(h.fills().length).toBe(1)
+  })
+
+  /*
+   * 2026-10-27: the stock pre-check went to prism (the reader's AppView),
+   * which answers every app.bsky.* read 501 with public indexing off.
+   */
+  it('an on-screen card skips the stock pre-check; a background ask keeps it', async () => {
+    h.respond(() => rfFillAnswer({withheld: []}))
+    const fresh = 'did:plc:freshauthoraaaaaaaaaaaaa'
+    void askSlot(`at://${fresh}/app.bsky.feed.post/3mysq7a7eik2t`, {
+      foreground: false,
+      now: true,
+      live: () => true,
+    }).catch(() => {})
+    await jest.advanceTimersByTimeAsync(50)
+    expect(h.precheckCalls).toEqual([])
+    expect(h.fills().length).toBe(1)
+    const other = 'did:plc:otherauthoraaaaaaaaaaaaa'
+    void askSlot(`at://${other}/app.bsky.feed.post/3mysq7a7eik2t`, {
+      foreground: false,
+      live: () => true,
+    }).catch(() => {})
+    await jest.advanceTimersByTimeAsync(1_000)
+    expect(h.precheckCalls).toEqual([[other]])
   })
 
   it('cards asking in the same frame share one call', async () => {

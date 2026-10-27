@@ -773,7 +773,9 @@ async function sendChunk(
   }
   const seq = ++state.seq
   const gen = state.gen
+  const queuedAt = Date.now()
   await acquire(state, own)
+  const sentAt = Date.now()
   let answer: RefractAnswer<unknown>
   try {
     answer = await refractCall<unknown>(
@@ -789,6 +791,7 @@ async function sendChunk(
     return result
   } finally {
     release(state, own)
+    logSlowFill(sentAt - queuedAt, Date.now() - sentAt)
   }
   if (account !== state || state.gen !== gen) throw new RefractClearedError()
   const read = readFillAnswer(answer.body, chunk, {
@@ -810,6 +813,22 @@ async function sendChunk(
   }
   result.lateVisitor = answer.lateVisitor
   return result
+}
+
+/** A fill slower than this in all gets a timing line in the console. */
+const SLOW_FILL_MS = 1_000
+
+/*
+ * The timing line (2026-10-27), like Thread Lens's: how long a fill waited
+ * for one of the two in-flight places, and how long the call took (the
+ * token mint included). In the console in production builds too, so a slow
+ * quote card can be read without a debugger. No DID or URI.
+ */
+function logSlowFill(waitedMs: number, callMs: number) {
+  if (waitedMs + callMs < SLOW_FILL_MS) return
+  globalThis.console.info(
+    `refract fill: waited ${waitedMs} ms for a place, call took ${callMs} ms`,
+  )
 }
 
 /** One sealed set of ids: send its chunks, then the confirming re-asks. */
@@ -1478,7 +1497,11 @@ function withDeadline<T>(promise: Promise<T>, deadline: number): Promise<T> {
  * prism's agreement 2026-10-27) sends the call within the frame, merged with
  * the frame's other asks, instead of waiting for a background slot: the
  * queue held a deleted author's quote on "Loading" for 2-3 s while `fill`
- * itself answers in about 5 ms. With `now`, a `pending` author (prism
+ * itself answers in about 5 ms. `now` also skips the stock pre-check (5.3):
+ * the card would otherwise wait on a `getProfiles` through the reader's
+ * AppView, batched with every unclassified DID on screen, before its fill;
+ * a stock-served author just comes back not restored. With `now`, a
+ * `pending` author (prism
  * still resolving it, usually done in well under a second) is asked again
  * at {@link FILL_TIMING.slotPendingReaskMs} until the answer is final, the
  * card unmounts, or the offsets run out; without it, a `pending` author
@@ -1536,7 +1559,14 @@ async function askSlotOnce(
   }
   const outcome = await askFill(
     {uris: [uri]},
-    {kind: 'slot', foreground: foreground || now, live: mounted, screen: true},
+    {
+      kind: 'slot',
+      foreground: foreground || now,
+      // An on-screen card never waits on stock's getProfiles (5.3) first.
+      skipPrecheck: now,
+      live: mounted,
+      screen: true,
+    },
   )
   const verdict = outcome.uris.get(uri)
   if (

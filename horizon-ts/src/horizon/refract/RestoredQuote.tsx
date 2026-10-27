@@ -1,34 +1,25 @@
 /*
- * The quote slot (refract client design 4.4, RF-B6a). While Refract is
- * active, the record embed's `post_not_found` branch and the
- * `recordWithMedia` record render `RestoredQuoteSlot` in place of stock's
- * "Deleted" box:
+ * The quote slot (refract client design 4.4, RF-B6a, as changed by skydeval
+ * 2026-10-27). While Refract is active, the record embed's `post_not_found`
+ * branch and the `recordWithMedia` record render `RestoredQuoteSlot` in
+ * place of stock's "Deleted" box:
  *
- * - while an answer is pending, `QuotePlaceholder` ("Loading quoted post"),
- *   up to the background deadline counted from the ask; for an author
- *   already stock-served or "not restored", stock's "Deleted" at once. A
- *   restored quote never shows "Deleted" first.
- * - a returned post renders as a `viewRecord` built from it, through the
- *   stock `QuoteEmbed` and its moderation (passed in as `render`, so this
- *   module doesn't import it).
- * - "Deleted" needs a definitive answer; "Blocked" shows for an author in
- *   the reader's own block set, an author whose profile in the answer has a
- *   block flag, or a URI `withheld` as `blocked`.
- * - after a transient failure, the deadline, an "unresolved" author or
- *   `unavailable`, a quote-sized "Couldn’t load right now" with Try again (a
- *   foreground ask). It never claims a deletion it can't confirm.
+ * - "Deleted" at once, as stock shows it, while one background ask runs
+ *   (`askSlot` with `now`: within the frame, merged with the frame's other
+ *   cards, re-asked while the author is pending);
+ * - a returned post replaces it, as a `viewRecord` built from it, through
+ *   the stock `QuoteEmbed` and its moderation (passed in as `render`, so
+ *   this module doesn't import it);
+ * - "Blocked" for an author in the reader's own block set, an author whose
+ *   profile in the answer has a block flag, or a URI `withheld` as
+ *   `blocked`.
+ *
+ * Rules in `quote-status.ts`.
  */
 
-import {useEffect, useState, useSyncExternalStore} from 'react'
-import {View} from 'react-native'
-import {Trans, useLingui} from '@lingui/react/macro'
+import {useEffect, useSyncExternalStore} from 'react'
 
-import {atoms as a, useTheme} from '#/alf'
-import {Button, ButtonText} from '#/components/Button'
-import {Text} from '#/components/Typography'
-import {QuotePlaceholder} from '#/horizon/private/render/PrivateQuote'
 import {authorOfUri} from '#/horizon/refract/answer'
-import {REFRACT_TIMING} from '#/horizon/refract/api'
 import {
   askSlot,
   refractStateVersion,
@@ -86,10 +77,7 @@ export function restoredQuoteSlotActive(uri: string): boolean {
 }
 
 /** The slot's status, re-rendering on store and answer changes. */
-export function useRestoredPost(uri: string): {
-  status: RestoredQuoteStatus
-  retry: () => void
-} {
+export function useRestoredPost(uri: string): RestoredQuoteStatus {
   const storeVersion = useSyncExternalStore(subscribeRestoredStore, () =>
     restoredStoreVersion([uri]),
   )
@@ -97,91 +85,24 @@ export function useRestoredPost(uri: string): {
     subscribeRefractState,
     refractStateVersion,
   )
-  const [attempt, setAttempt] = useState(0)
-  const key = `${uri} ${attempt}`
-  // The ask this key made has answered, or its deadline passed.
-  const [doneFor, setDoneFor] = useState<string | undefined>(undefined)
-  const [timedOutFor, setTimedOutFor] = useState<string | undefined>(undefined)
 
   useEffect(() => {
+    if (readRestoredPost(uri)) return
     let mounted = true
-    const timer = setTimeout(() => {
-      if (mounted) setTimedOutFor(key)
-    }, REFRACT_TIMING.backgroundDeadlineMs)
-    if (!readRestoredPost(uri)) {
-      // The card is on screen: its ask goes within the frame (askSlot `now`).
-      askSlot(uri, {
-        foreground: attempt > 0,
-        now: true,
-        live: () => mounted,
-      }).then(
-        () => {
-          if (mounted) setDoneFor(key)
-        },
-        () => {
-          if (mounted) setTimedOutFor(key)
-        },
-      )
-    }
+    askSlot(uri, {
+      foreground: false,
+      now: true,
+      live: () => mounted,
+    }).catch(() => {})
     return () => {
       mounted = false
-      clearTimeout(timer)
     }
-  }, [uri, attempt, key])
+  }, [uri])
 
   // The versions are read so the status follows the store and the answers.
   void storeVersion
   void answerVersion
-  const deadlinePassed = timedOutFor === key
-  // Try again shows the placeholder until its own ask answers.
-  const retrying = attempt > 0 && doneFor !== key && !deadlinePassed
-  const status: RestoredQuoteStatus = retrying
-    ? readRestoredPost(uri)
-      ? quoteStatusOf(uri, readRestoredPost(uri), undefined, false)
-      : {kind: 'loading'}
-    : quoteStatusOf(
-        uri,
-        readRestoredPost(uri),
-        refractUriState(uri),
-        deadlinePassed,
-      )
-  return {status, retry: () => setAttempt(n => n + 1)}
-}
-
-/** "Couldn’t load right now" with Try again, in the quote card's space. */
-function QuoteUnavailable({onRetry}: {onRetry: () => void}) {
-  const t = useTheme()
-  const {t: l} = useLingui()
-  return (
-    <View
-      testID="restoredQuoteUnavailable"
-      style={[
-        a.flex_row,
-        a.align_center,
-        a.gap_md,
-        a.p_md,
-        a.mt_sm,
-        a.rounded_md,
-        a.border,
-        t.atoms.border_contrast_low,
-      ]}>
-      <View style={[a.flex_1]}>
-        <Text style={[a.text_md, a.font_semi_bold, t.atoms.text]}>
-          <Trans>Couldn’t load right now</Trans>
-        </Text>
-      </View>
-      <Button
-        testID="restoredQuoteRetry"
-        label={l`Try again`}
-        size="small"
-        color="secondary"
-        onPress={onRetry}>
-        <ButtonText>
-          <Trans>Try again</Trans>
-        </ButtonText>
-      </Button>
-    </View>
-  )
+  return quoteStatusOf(uri, readRestoredPost(uri), refractUriState(uri))
 }
 
 /**
@@ -197,17 +118,13 @@ export function RestoredQuoteSlot({
   render: (quote: EmbedType<'post'>) => React.ReactNode
   placeholder: (kind: 'deleted' | 'blocked') => React.ReactNode
 }) {
-  const {status, retry} = useRestoredPost(uri)
+  const status = useRestoredPost(uri)
   switch (status.kind) {
-    case 'loading':
-      return <QuotePlaceholder />
     case 'post':
       return render(toRestoredQuoteEmbed(status.post))
     case 'deleted':
       return placeholder('deleted')
     case 'blocked':
       return placeholder('blocked')
-    case 'unavailable':
-      return <QuoteUnavailable onRetry={retry} />
   }
 }

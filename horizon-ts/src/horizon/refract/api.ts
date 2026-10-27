@@ -195,12 +195,40 @@ function callWith(
 }
 
 /** The direct client, or the proxied one when no token can be minted (7.1). */
+/**
+ * `promise`, or a rejection when `signal` aborts first. The call's deadline
+ * aborts its signal; without this, a token mint that never answered kept the
+ * call (and its in-flight place in the batcher) waiting past the deadline.
+ */
+export function untilAborted<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return promise
+  if (signal.aborted) return Promise.reject(new Error('aborted'))
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error('aborted'))
+    signal.addEventListener('abort', onAbort, {once: true})
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      },
+    )
+  })
+}
+
 const defaultTransport: RefractTransport = async (method, params, {signal}) => {
   const clients = getCurrentClients()
   if (!clients) throw new RefractClearedError()
   try {
-    await getDirectPrismToken(clients.pdsClient, method)
+    await untilAborted(getDirectPrismToken(clients.pdsClient, method), signal)
   } catch {
+    if (signal?.aborted) throw new Error('aborted')
     const body = await callWith(clients.prismClient, method, params, signal)
     return {body, proxied: true}
   }
