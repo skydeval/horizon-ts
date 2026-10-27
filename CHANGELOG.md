@@ -15,6 +15,14 @@ web and waiting on its live checks.
 
 ### Added
 
+- **Link cards in Discord and other chat apps.** A Horizon post link now
+  shows a card: the author's name and pronouns, the text, a "replying to"
+  line, a quoted post, up to four images or a playable video or GIF, and the
+  reply, repost and like counts. A kryphocron post's link always shows the
+  same "Private post" card with nothing about the post on it. Content
+  warnings show only their line, spoilers and adult-labelled media are left
+  out, and accounts that ask not to be shown to signed-out people get a
+  plain card.
 - **Descriptions for your avatar and banner.** Edit Profile has "Add avatar
   description" and "Add banner description" buttons, which open the same
   alt-text box as post images. Screen readers hear the description on your profile header and

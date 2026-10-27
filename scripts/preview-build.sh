@@ -122,7 +122,8 @@ deploy() {
   fi
   load_credentials
   echo "Deploying $OUT (for $(cat "$ORIGIN_FILE" 2>/dev/null || echo unknown)) to Pages project $project"
-  cd "$BASE"
+  # From the app: wrangler bundles its functions/ (link cards) with the upload.
+  cd "$APP"
   npx --yes "$WRANGLER" pages deploy "$OUT" \
     --project-name "$project" --branch main --commit-dirty=true
 }
