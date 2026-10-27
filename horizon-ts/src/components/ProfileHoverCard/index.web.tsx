@@ -48,6 +48,10 @@ import {LiveStatus} from '#/features/liveNow/components/LiveStatusDialog'
 // HORIZON: identity import
 import {HoverCardIdentity} from '#/horizon/identity/HoverCardIdentity'
 // HORIZON: C-8, a restored view's community labeler for members
+// HORIZON: profile image descriptions
+import {labelWithAlt} from '#/horizon/profile-alt/labels'
+// HORIZON: profile image descriptions
+import {useProfileImageAlts} from '#/horizon/profile-alt/query'
 import {restoredModerationOpts} from '#/horizon/refract/labeler'
 // HORIZON: a visitor-form restored view hides follow
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
@@ -476,11 +480,18 @@ function Inner({
     [currentAccount, profile],
   )
   const isLabeler = profile.associated?.labeler
+  // HORIZON: profile image descriptions: the avatar's, unless moderation blurs it
+  const imageAlts = useProfileImageAlts(profile.did, {avatar: profile.avatar})
+  const avatarAlt = moderation.ui('avatar').blur ? undefined : imageAlts.avatar
 
   return (
     <View>
       <View style={[a.flex_row, a.justify_between, a.align_start]}>
-        <Link to={profileURL} label={_(msg`View profile`)} onPress={hide}>
+        <Link
+          to={profileURL}
+          // HORIZON: profile image descriptions
+          label={labelWithAlt(_(msg`View profile`), avatarAlt)}
+          onPress={hide}>
           <UserAvatar
             size={64}
             avatar={profile.avatar}

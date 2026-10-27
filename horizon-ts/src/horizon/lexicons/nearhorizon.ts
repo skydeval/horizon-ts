@@ -818,6 +818,35 @@ export const pluralFrontRecord = l.record(
 
 export type PluralFrontRecord = l.InferInput<typeof pluralFrontRecord>
 
+/** `app.nearhorizon.actor.profileAlt`, rkey `self` (atproto-profile-alt). */
+export const PROFILE_ALT_COLLECTION = 'app.nearhorizon.actor.profileAlt'
+
+/**
+ * `app.nearhorizon.actor.profileAlt#imageAlt`: one image's description.
+ * `image` is the CID string of the blob it describes.
+ */
+const imageAlt = l.object({
+  image: l.string({format: 'cid'}),
+  alt: l.string({minLength: 1, maxLength: 20000, maxGraphemes: 2000}),
+})
+
+/**
+ * `app.nearhorizon.actor.profileAlt`, rkey `self`: descriptions of the
+ * profile's avatar and banner, each shown only while its `image` is the
+ * current one. No slot means no description.
+ */
+export const profileAltRecord = l.record(
+  'literal:self',
+  PROFILE_ALT_COLLECTION,
+  l.object({
+    avatar: l.optional(imageAlt),
+    banner: l.optional(imageAlt),
+    updatedAt: l.string({format: 'datetime'}),
+  }),
+)
+
+export type ProfileAltRecord = l.InferInput<typeof profileAltRecord>
+
 /**
  * `app.nearhorizon.plural.fronters` (Phase 5 design 4.2, Horizon's spec
  * addition): the members who wrote a post, by rkey in the author's own

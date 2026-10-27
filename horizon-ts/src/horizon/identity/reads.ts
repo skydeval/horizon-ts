@@ -948,6 +948,34 @@ export async function readActorRecords(
   return (await directActor(did, queryClient)) ?? answers
 }
 
+/** A repo's self-keyed record (JSON form, its CID) or a proven none. */
+export type RepoSelfRead =
+  {status: 'record'; value: unknown; cid?: string} | {status: 'none'}
+
+/**
+ * `did`'s record of `collection` at `self`, straight from its repo (no
+ * prism): the own PDS for one's own account, else the author's PDS, within
+ * the direct reads' limit. Throws {@link IdentityReadError} when the PDS
+ * cannot be resolved or the read fails.
+ */
+export async function readRepoSelfRecord(
+  did: string,
+  collection: string,
+  {queryClient}: ReadOptions = {},
+): Promise<RepoSelfRead> {
+  const own = ownClientFor(did)
+  const client = own ?? (await repoClient(did, queryClient))
+  if (!client) throw new IdentityReadError(new Error('PDS not resolved'))
+  const ask = () => pdsRecord(client, did, collection, PLURAL_SELF_RKEY)
+  const read = own ? await ask() : await limited(ask)
+  if (read.status === 'error') throw new IdentityReadError(read.error)
+  if (read.status === 'none') return read
+  const value = jsonForm(read.value)
+  return read.cid === undefined
+    ? {status: 'record', value}
+    : {status: 'record', value, cid: read.cid}
+}
+
 /** One member record from its author's repo; `undefined` if unreachable. */
 async function directMember(
   did: string,

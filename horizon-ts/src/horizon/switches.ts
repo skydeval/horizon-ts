@@ -438,3 +438,13 @@ export const SYSTEM_ACCOUNTS_DEV_STUB: boolean = false
  * a real account. Ignored outside `__DEV__`.
  */
 export const REFRACT_DEV_FIXTURES: boolean = false
+
+/**
+ * Profile image descriptions (`profile-alt/`, design
+ * `docs/internal/design/profile-alt-text.md`): the
+ * `app.nearhorizon.actor.profileAlt` record read from the account's own
+ * repo and shown on the profile header, the hover card and the full-size
+ * view, and the "Describe" buttons in Edit Profile. `false`: nothing is
+ * read, written or shown.
+ */
+export const PROFILE_ALT_TEXT: boolean = true

@@ -15,6 +15,15 @@ web and waiting on its live checks.
 
 ### Added
 
+- **Descriptions for your avatar and banner.** Edit Profile has "Describe
+  avatar" and "Describe banner" buttons, which open the same alt-text box as
+  post images. Screen readers hear the description on your profile header and
+  hover card, and anyone can read it from the ALT badge when the image is
+  opened full size. A description belongs to one image: picking a new avatar
+  or banner drops the old text, and an image changed in another app shows
+  none. Descriptions are kept in their own record in your repo, in the open
+  [atproto-profile-alt](https://github.com/skydeval/atproto-profile-alt)
+  format, so any app can show them.
 - **Pronouns beside every name**, for everyone, signed in or out, member or
   not: muted after the handle on post author lines (in feeds, threads, quotes
   and notifications), and below the name on the profile and the hover card.

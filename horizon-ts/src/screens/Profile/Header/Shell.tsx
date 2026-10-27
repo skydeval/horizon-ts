@@ -33,6 +33,10 @@ import {LiveIndicator} from '#/features/liveNow/components/LiveIndicator'
 import {LiveStatusDialog} from '#/features/liveNow/components/LiveStatusDialog'
 // HORIZON: identity import
 import {usePluralHeaderImages} from '#/horizon/identity/ProfileIdentity'
+// HORIZON: profile image descriptions
+import {labelWithAlt} from '#/horizon/profile-alt/labels'
+// HORIZON: profile image descriptions
+import {useProfileImageAlts} from '#/horizon/profile-alt/query'
 import {type app} from '#/lexicons'
 import {GrowableAvatar} from './GrowableAvatar'
 import {GrowableBanner} from './GrowableBanner'
@@ -68,6 +72,13 @@ let ProfileHeaderShell = ({
   const bannerRef = useAnimatedRef()
   // HORIZON: identity ID-18: one engaging member's avatar and banner, the account's otherwise
   const headerImages = usePluralHeaderImages(profile)
+  /*
+   * HORIZON: profile image descriptions, for the images shown (a member's
+   * image gets none), and not for an image moderation blurs
+   */
+  const imageAlts = useProfileImageAlts(profile.did, headerImages)
+  const avatarAlt = moderation.ui('avatar').blur ? undefined : imageAlts.avatar
+  const bannerAlt = moderation.ui('banner').blur ? undefined : imageAlts.banner
 
   const onPressBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -82,6 +93,8 @@ let ProfileHeaderShell = ({
       uri: string,
       thumbRef: AnimatedRef,
       type: 'circle-avi' | 'rect-avi' | 'image' = 'circle-avi',
+      // HORIZON: profile image descriptions: the ALT badge in the full-size view
+      alt?: string,
     ) => {
       openLightbox({
         images: [
@@ -104,6 +117,8 @@ let ProfileHeaderShell = ({
                   },
             thumbDimensions: null,
             type,
+            // HORIZON: profile image descriptions
+            alt,
           },
         ],
         index: 0,
@@ -136,10 +151,13 @@ let ProfileHeaderShell = ({
       const avatar = headerImages.avatar
       const type = profile.associated?.labeler ? 'rect-avi' : 'circle-avi'
       if (avatar && !(modui.blur && modui.noOverride)) {
-        _openLightbox(avatar, aviRef, type)
+        // HORIZON: profile image descriptions
+        _openLightbox(avatar, aviRef, type, avatarAlt)
       }
     }
   }, [
+    // HORIZON: profile image descriptions
+    avatarAlt,
     ax,
     profile,
     // HORIZON: identity ID-18: the lightbox opens the avatar shown
@@ -157,10 +175,11 @@ let ProfileHeaderShell = ({
     // HORIZON: identity ID-18: the lightbox opens the banner shown
     const banner = headerImages.banner
     if (banner && !(modui.blur && modui.noOverride)) {
-      _openLightbox(banner, bannerRef, 'image')
+      // HORIZON: profile image descriptions
+      _openLightbox(banner, bannerRef, 'image', bannerAlt)
     }
     // HORIZON: identity ID-18: the lightbox opens the banner shown
-  }, [headerImages.banner, moderation, _openLightbox, bannerRef])
+  }, [headerImages.banner, moderation, _openLightbox, bannerRef, bannerAlt])
 
   return (
     <View style={t.atoms.bg} pointerEvents={IS_IOS ? 'auto' : 'box-none'}>
@@ -176,7 +195,8 @@ let ProfileHeaderShell = ({
           label={
             // HORIZON: identity ID-18: the banner shown
             headerImages.banner
-              ? l`View profile banner`
+              ? // HORIZON: profile image descriptions
+                labelWithAlt(l`View profile banner`, bannerAlt)
               : l`Profile banner placeholder`
           }
           onPress={isPlaceholderProfile ? undefined : onPressBanner}
@@ -273,7 +293,11 @@ let ProfileHeaderShell = ({
           testID="profileHeaderAviButton"
           onPress={onPressAvi}
           accessibilityRole="image"
-          accessibilityLabel={l`View ${profile.handle}'s avatar`}
+          // HORIZON: profile image descriptions
+          accessibilityLabel={labelWithAlt(
+            l`View ${profile.handle}'s avatar`,
+            avatarAlt,
+          )}
           accessibilityHint="">
           <View
             style={[

@@ -46,6 +46,11 @@ import {
   PronounsField,
   useIdentityEditParts,
 } from '#/horizon/identity/edit/PronounsField'
+// HORIZON: profile image descriptions
+import {
+  ProfileAltFields,
+  useProfileAltEditParts,
+} from '#/horizon/profile-alt/ProfileAltFields'
 import {type app} from '#/lexicons'
 
 export function EditProfileDialog({
@@ -188,6 +193,8 @@ function DialogInner({
   const sheetDragWasDisabled = useRef(false)
   // HORIZON: identity ID-22: the pronouns field's state, saved with the stock Save
   const identityParts = useIdentityEditParts(profile)
+  // HORIZON: profile image descriptions, saved after the profile
+  const altParts = useProfileAltEditParts(profile)
 
   const profileDirty =
     displayName !== initialDisplayName ||
@@ -199,7 +206,9 @@ function DialogInner({
     !!storedLinks &&
     !sameProfileLinks(editedLinks, storedLinks)
   // HORIZON: identity ID-22: the dirty check includes the pronouns field
-  const dirty = profileDirty || linksDirty || identityParts.dirty
+  // HORIZON: profile image descriptions: the dirty check includes them
+  const dirty =
+    profileDirty || linksDirty || identityParts.dirty || altParts.dirty
 
   useEffect(() => {
     setDirty(dirty)
@@ -208,6 +217,8 @@ function DialogInner({
   const onSelectNewAvatar = useCallback(
     (img: ImageMeta | null) => {
       setImageError('')
+      // HORIZON: profile image descriptions: a new or removed image drops its description
+      altParts.imageChanged('avatar')
       if (img === null) {
         setNewUserAvatar(null)
         setUserAvatar(null)
@@ -220,12 +231,15 @@ function DialogInner({
         setImageError(cleanError(e))
       }
     },
-    [setNewUserAvatar, setUserAvatar, setImageError],
+    // HORIZON: profile image descriptions
+    [setNewUserAvatar, setUserAvatar, setImageError, altParts],
   )
 
   const onSelectNewBanner = useCallback(
     (img: ImageMeta | null) => {
       setImageError('')
+      // HORIZON: profile image descriptions: a new or removed image drops its description
+      altParts.imageChanged('banner')
       if (!img) {
         setNewUserBanner(null)
         setUserBanner(null)
@@ -238,7 +252,8 @@ function DialogInner({
         setImageError(cleanError(e))
       }
     },
-    [setNewUserBanner, setUserBanner, setImageError],
+    // HORIZON: profile image descriptions
+    [setNewUserBanner, setUserBanner, setImageError, altParts],
   )
 
   const onPressSave = useCallback(async () => {
@@ -268,6 +283,8 @@ function DialogInner({
         setOwnProfileLinksCache(profile.did, nextLinks, written.refs)
         await written.deleteRemoved()
       }
+      // HORIZON: profile image descriptions, after the profile (the new images' CIDs)
+      await altParts.save()
       control.close(() => onUpdate?.())
       Toast.show(_(msg({message: 'Profile updated', context: 'toast'})))
     } catch (e: any) {
@@ -292,6 +309,8 @@ function DialogInner({
     setOwnProfileLinksCache,
     // HORIZON: identity ID-22: the pronouns write
     identityParts,
+    // HORIZON: profile image descriptions
+    altParts,
   ])
 
   const displayNameTooLong = isOverMaxGraphemeCount({
@@ -333,7 +352,10 @@ function DialogInner({
           descriptionTooLong ||
           // HORIZON: identity ID-22: held while the pronouns are over a limit or saving
           identityParts.invalid ||
-          identityParts.saving
+          identityParts.saving ||
+          // HORIZON: profile image descriptions: held while over the limit or saving
+          altParts.invalid ||
+          altParts.saving
         }
         size="small"
         color="primary"
@@ -357,6 +379,9 @@ function DialogInner({
       // HORIZON: identity ID-22: the pronouns hold
       identityParts.invalid,
       identityParts.saving,
+      // HORIZON: profile image descriptions
+      altParts.invalid,
+      altParts.saving,
     ],
   )
 
@@ -412,6 +437,11 @@ function DialogInner({
           </View>
         )}
         <View style={[a.mt_4xl, a.px_xl, a.gap_xl]}>
+          {/* HORIZON: profile image descriptions */}
+          <ProfileAltFields
+            parts={altParts}
+            images={{avatar: userAvatar, banner: userBanner}}
+          />
           <View>
             <TextField.LabelText>
               <Trans>Display name</Trans>
