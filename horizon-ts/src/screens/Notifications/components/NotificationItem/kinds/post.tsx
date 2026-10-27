@@ -11,6 +11,8 @@ import {
 } from '#/components/icons/Notification'
 // HORIZON: identity import
 import {PostFrontersScope} from '#/horizon/identity/scope'
+// HORIZON: the conversation badge switch
+import {conversationBadge} from '#/horizon/notifications/badges'
 // HORIZON: a private post's row carries the corner lock
 import {PrivateAuthorRow} from '#/horizon/private/notifications/PrivateAuthorRow'
 import * as Item from '../Item'
@@ -101,7 +103,12 @@ function PostNotification({
         // Actions in the row need to be individually reachable
         accessible={false}
         testID={`notification-${notification.type}-${notification.id}`}>
-        <Item.Avatar profile={post.author} icon={icon} tone="conversation" />
+        {/* HORIZON: no reply, quote or mention badge (skydeval: as the new-post rows) */}
+        <Item.Avatar
+          profile={post.author}
+          icon={conversationBadge(icon)}
+          tone="conversation"
+        />
         <Item.Content style={[a.gap_sm]}>
           <View style={[a.gap_xs]}>
             {/* HORIZON: a private post's row carries the corner lock (start) */}

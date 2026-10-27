@@ -409,6 +409,15 @@ export const PROFILE_SUGGESTED_FOLLOWS: boolean = false
 export const NEW_POST_BADGE: boolean = false
 
 /**
+ * The speech-bubble, quote and @ badges on the redesigned notifications'
+ * reply, quote and mention rows, on the Public and Private tabs alike
+ * (skydeval, 2026-10-27). `false`: those rows show the avatar alone, as the
+ * new-post rows do; the "replied to you" line says what it is. Likes,
+ * reposts and follows keep theirs. `true`: Bluesky's badges.
+ */
+export const CONVERSATION_BADGES: boolean = false
+
+/**
  * System accounts (system accounts design SA-16, section 10;
  * `system-accounts/`): the "System accounts" section in Edit Profile's
  * Plurality tab (add by signing in as the account, remove, re-verify, the

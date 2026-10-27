@@ -140,6 +140,9 @@ web and waiting on its live checks.
 
 ### Changed
 
+- **Reply, quote and mention notifications show the avatar without a
+  badge,** on the Public and Private tabs, as new-post notifications already
+  did. Likes, reposts and follows keep theirs.
 - **No Trending section on Discover,** on the phone or the web layout.
 - **Share links open Horizon.** Sharing or copying a link to a post,
   profile, feed or list now gives a Horizon link (on the preview, the
