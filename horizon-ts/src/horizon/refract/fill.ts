@@ -418,6 +418,15 @@ export function refractStateVersion(): number {
   return stateVersion
 }
 
+/**
+ * How many times every cache was cleared ({@link clearRefractCaches}): a
+ * caller whose ask was rejected by a clear (an account switch, a features
+ * answer that changed, `NotEnabled`) asks again when this moves.
+ */
+export function refractGeneration(): number {
+  return generation
+}
+
 function invalidateRestoreQueries(did: string) {
   const qc = queryClient()
   if (!qc) return

@@ -24,6 +24,7 @@ import {authorOfUri} from '#/horizon/refract/answer'
 import {quoteNeedsFill} from '#/horizon/refract/communities'
 import {
   askSlot,
+  refractGeneration,
   refractStateVersion,
   refractUriState,
   subscribeRefractState,
@@ -94,12 +95,26 @@ export function useRestoredQuoteSlots(): boolean {
 
 /** The slot's status, re-rendering on store and answer changes. */
 export function useRestoredPost(uri: string): RestoredQuoteStatus {
+  /*
+   * The store is read with plain calls below; React Compiler would cache them
+   * on the first render and the card would keep its cold-load "Deleted" after
+   * the answer arrived (2026-10-27). The versions only trigger re-renders.
+   */
+  'use no memo'
   const storeVersion = useSyncExternalStore(subscribeRestoredStore, () =>
     restoredStoreVersion([uri]),
   )
   const answerVersion = useSyncExternalStore(
     subscribeRefractState,
     refractStateVersion,
+  )
+  /*
+   * A clear rejects the ask in flight (a cold load's features answer that
+   * changes after the first one does it), so the card asks again after one.
+   */
+  const generation = useSyncExternalStore(
+    subscribeRefractState,
+    refractGeneration,
   )
 
   useEffect(() => {
@@ -119,7 +134,7 @@ export function useRestoredPost(uri: string): RestoredQuoteStatus {
     return () => {
       mounted = false
     }
-  }, [uri])
+  }, [uri, generation])
 
   // The versions are read so the status follows the store and the answers.
   void storeVersion

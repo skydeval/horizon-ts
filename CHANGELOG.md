@@ -215,9 +215,8 @@ web and waiting on its live checks.
 ### Fixed
 
 - **A quote Horizon can restore shows after a page refresh too.** On a
-  fresh load the quote card was drawn before Horizon knew it could restore
-  posts, said "Deleted", and never looked again; it only worked when the
-  post was reached from inside the app.
+  fresh load the quote card said "Deleted" and kept saying it after the post
+  came back; it only worked when the post was reached from inside the app.
 - **Quotes of deleted posts say "Deleted" at once.** A quoted post Bluesky
   can't find sat on a loading card for seconds while Horizon checked whether
   it could still show it. It now says "Deleted" straight away, as Bluesky's
