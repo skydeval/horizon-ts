@@ -152,7 +152,9 @@ web and waiting on its live checks.
   shows for accounts that have no Horizon pronouns.
 - **New icons.** Every UI icon is now from Phosphor Icons (MIT): Bold
   outlines, and Fill for selected and filled states, under the same names,
-  so nothing that uses an icon changed.
+  so nothing that uses an icon changed. The reply button is a speech bubble
+  (Phosphor's Chat) and Messages a round bubble with dots (Chat Circle Dots)
+  everywhere it appears.
 - **Fronters read as a list:** "Wren", "Wren & Sparrow", "Wren, Sparrow &
   Robin", in place of the trailing `&` marker first built ("Wren, Sparrow&").
 - **The Posting as control sits exactly where the composer's avatar was,** at
