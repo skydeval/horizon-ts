@@ -210,6 +210,8 @@ web and waiting on its live checks.
 - **Threads no longer redraw themselves hundreds of times while loading.**
   On a fresh load the thread screen re-rendered continuously until the
   thread arrived, which also held the thread back.
+- **"New posts from…" notifications have no bell badge,** so likes and
+  replies stand out; the row's text says what it is.
 - **Reloading no longer waits to sign in to Horizon's server again.** The
   short-lived passes for it are kept across reloads and cleared on sign-out
   or an account switch.
