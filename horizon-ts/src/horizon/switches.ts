@@ -401,6 +401,14 @@ export const ACT_AS_CONTROLS: boolean = true
 export const PROFILE_SUGGESTED_FOLLOWS: boolean = false
 
 /**
+ * The bell badge on the redesigned notifications' "New posts from…" rows
+ * (skydeval, 2026-10-26: hard to tell from the like and reply badges at a
+ * glance). `false`: those rows show the avatar alone; the row's text says
+ * what it is. `true`: Bluesky's badge.
+ */
+export const NEW_POST_BADGE: boolean = false
+
+/**
  * System accounts (system accounts design SA-16, section 10;
  * `system-accounts/`): the "System accounts" section in Edit Profile's
  * Plurality tab (add by signing in as the account, remove, re-verify, the

@@ -11,6 +11,8 @@ import {
   NotificationLikeSmall_Filled_Corner0_Rounded as HeartIcon,
   NotificationRepostSmall_Filled_Corner0_Rounded as RepostIcon,
 } from '#/components/icons/Notification'
+// HORIZON: the new-post badge switch
+import {NEW_POST_BADGE} from '#/horizon/switches'
 import * as Item from '../Item'
 import {makeActivityListLink, makePostLink} from '../links'
 import {type NotificationOf} from '../types'
@@ -580,7 +582,12 @@ export function SubscribedPostNotification({
               : l`New ${plural(count, {one: 'post', other: 'posts'})} from ${name}`
       }
       testID={`notification-${notification.type}-${notification.id}`}>
-      <Item.Avatar profile={actor} icon={ActivityIcon} tone="activity" />
+      {/* HORIZON: no bell badge on new posts (skydeval: hard to tell from the like and reply badges) */}
+      <Item.Avatar
+        profile={actor}
+        icon={NEW_POST_BADGE ? ActivityIcon : undefined}
+        tone="activity"
+      />
       <Item.Content>
         <Item.AvatarRow />
         <Item.PrimaryText>
