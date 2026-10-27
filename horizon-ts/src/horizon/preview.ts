@@ -35,3 +35,9 @@ export const PREVIEW_ORIGIN: string | undefined = readPreviewOrigin(
   process.env.EXPO_PUBLIC_OAUTH_CLIENT,
   process.env.EXPO_PUBLIC_PREVIEW_ORIGIN,
 )
+
+/**
+ * The host Horizon's share links point at: nearhorizon.app, or a preview
+ * build's own origin, so a link copied from the preview opens the preview.
+ */
+export const SHARE_ORIGIN = PREVIEW_ORIGIN ?? 'https://nearhorizon.app'

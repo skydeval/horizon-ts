@@ -7,7 +7,7 @@ import {Trans} from '@lingui/react/macro'
 
 import {EMBED_SCRIPT} from '#/lib/constants'
 import {niceDate} from '#/lib/strings/time'
-import {toShareUrl} from '#/lib/strings/url-helpers'
+import {toBskyAppUrl} from '#/lib/strings/url-helpers'
 import {atoms as a, useTheme, web} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as Dialog from '#/components/Dialog'
@@ -69,7 +69,8 @@ function EmbedDialogInner({
 
   const snippet = useMemo(() => {
     function toEmbedUrl(href: string) {
-      return toShareUrl(href) + '?ref_src=embed'
+      // HORIZON: Bluesky's embed service reads bsky.app links
+      return toBskyAppUrl(href) + '?ref_src=embed'
     }
 
     const lang = record.langs && record.langs.length > 0 ? record.langs[0] : ''

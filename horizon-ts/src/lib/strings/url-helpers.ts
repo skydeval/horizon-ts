@@ -6,6 +6,8 @@ import {BSKY_SERVICE} from '#/lib/constants'
 import {isInvalidHandle} from '#/lib/strings/handles'
 import {startUriToStarterPackUri} from '#/lib/strings/starter-pack'
 import {logger} from '#/logger'
+// HORIZON: the host share links point at
+import {SHARE_ORIGIN} from '#/horizon/preview'
 // HORIZON: private post paths and share links
 import {
   isPrivatePostPath,
@@ -98,7 +100,8 @@ export function toShareUrl(url: string): string {
   // HORIZON: a private post is shared on Horizon's own host
   if (isPrivatePostPath(url)) return privateShareUrl(url)
   if (!url.startsWith('https')) {
-    const urlp = new URL('https://bsky.app')
+    // HORIZON: every share link opens Horizon (nearhorizon.app, or the preview)
+    const urlp = new URL(SHARE_ORIGIN)
     urlp.pathname = url
     url = urlp.toString()
   }

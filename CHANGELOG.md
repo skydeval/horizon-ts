@@ -140,6 +140,11 @@ web and waiting on its live checks.
 
 ### Changed
 
+- **Share links open Horizon.** Sharing or copying a link to a post,
+  profile, feed or list now gives a Horizon link (on the preview, the
+  preview's own address) instead of a bsky.app one. The embed code and
+  Bluesky's own report forms still use bsky.app links, since those go to
+  Bluesky.
 - **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
   the favicons and the web app manifest replace Bluesky's butterfly and
   logotype wherever the app draws them, including the web loading splash.

@@ -21,7 +21,8 @@ import {
   type NavigationProp,
 } from '#/lib/routes/types'
 import {richTextToString} from '#/lib/strings/rich-text-helpers'
-import {toShareUrl} from '#/lib/strings/url-helpers'
+// HORIZON: Bluesky's own report forms take bsky.app links, not share links
+import {toBskyAppUrl} from '#/lib/strings/url-helpers'
 import {useTranslate} from '#/lib/translation'
 import {getPostLanguageTags} from '#/locale/helpers'
 import {logger} from '#/logger'
@@ -525,14 +526,14 @@ let PostMenuItems = ({
   }
 
   const onReportMisclassification = () => {
-    const url = `https://docs.google.com/forms/d/e/1FAIpQLSd0QPqhNFksDQf1YyOos7r1ofCLvmrKAH1lU042TaS3GAZaWQ/viewform?entry.1756031717=${toShareUrl(
+    const url = `https://docs.google.com/forms/d/e/1FAIpQLSd0QPqhNFksDQf1YyOos7r1ofCLvmrKAH1lU042TaS3GAZaWQ/viewform?entry.1756031717=${toBskyAppUrl(
       href,
     )}`
     void openLink(url)
   }
 
   const onLabelReply = () => {
-    const url = `https://docs.google.com/forms/d/e/1FAIpQLScWa03XbS_knVbSjnc4DENACN5A2YvBZjtjrpI1XdDbK7d3Ow/viewform?entry.1843100496=${toShareUrl(
+    const url = `https://docs.google.com/forms/d/e/1FAIpQLScWa03XbS_knVbSjnc4DENACN5A2YvBZjtjrpI1XdDbK7d3Ow/viewform?entry.1843100496=${toBskyAppUrl(
       href,
     )}`
     void openLink(url)

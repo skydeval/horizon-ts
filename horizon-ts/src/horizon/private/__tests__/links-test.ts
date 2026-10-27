@@ -11,7 +11,7 @@ jest.mock('#/horizon/routing/membership', () => ({
   isPrivateMember: (did?: string) => !!did && mockMembership === 'member',
 }))
 
-import {toShareUrl} from '#/lib/strings/url-helpers'
+import {toBskyAppUrl, toShareUrl} from '#/lib/strings/url-helpers'
 import {
   clearCurrentClients,
   PrivateClientUnavailableError,
@@ -80,14 +80,28 @@ describe('thread routes', () => {
 })
 
 describe('share links', () => {
-  it('puts a ppost path on nearhorizon.app and leaves a post path as stock', () => {
+  it('puts every path on nearhorizon.app, private posts included', () => {
     expect(toShareUrl('/profile/a.test/ppost/3kaaa')).toBe(
       'https://nearhorizon.app/profile/a.test/ppost/3kaaa',
     )
     expect(toShareUrl('/profile/a.test/ppost/3kaaa/liked-by')).toBe(
       'https://nearhorizon.app/profile/a.test/ppost/3kaaa/liked-by',
     )
+    // 2026-10-27 (skydeval): public posts, profiles, feeds and lists too.
     expect(toShareUrl('/profile/a.test/post/3kaaa')).toBe(
+      'https://nearhorizon.app/profile/a.test/post/3kaaa',
+    )
+    expect(toShareUrl('/profile/a.test')).toBe(
+      'https://nearhorizon.app/profile/a.test',
+    )
+    expect(toShareUrl('/profile/a.test/feed/cats')).toBe(
+      'https://nearhorizon.app/profile/a.test/feed/cats',
+    )
+  })
+
+  it('leaves an absolute link alone, and keeps bsky.app for Bluesky services', () => {
+    expect(toShareUrl('https://example.com/x')).toBe('https://example.com/x')
+    expect(toBskyAppUrl('/profile/a.test/post/3kaaa')).toBe(
       'https://bsky.app/profile/a.test/post/3kaaa',
     )
   })
