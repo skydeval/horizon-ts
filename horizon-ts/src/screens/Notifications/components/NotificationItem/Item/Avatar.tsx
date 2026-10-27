@@ -6,6 +6,8 @@ import {PreviewableUserAvatar} from '#/view/com/util/UserAvatar'
 import {atoms as a, useTheme} from '#/alf'
 import {type Props as SVGIconProps} from '#/components/icons/common'
 import * as Skele from '#/components/Skeleton'
+// HORIZON: the badges a quarter smaller
+import {badgeSize} from '#/horizon/notifications/badges'
 import type * as bsky from '#/types/bsky'
 import {useItemBackgroundColor} from './Root'
 
@@ -31,11 +33,13 @@ const CONVERSATION_PURPLE = '#8679FC'
  * The size of `Item.Avatar`'s avatar, for anything that stands in for it.
  */
 export const AVATAR_SIZE = 44
-const BADGE_SIZE = 24
+// HORIZON: the badges a quarter smaller (horizon/notifications/badges.ts)
+const BADGE_SIZE = badgeSize(24)
 /**
  * Between the icon sizes, so the icon keeps its share of the badge.
  */
-const BADGE_ICON_SIZE = 14
+// HORIZON: the badges a quarter smaller (horizon/notifications/badges.ts)
+const BADGE_ICON_SIZE = badgeSize(14)
 /**
  * The width of the ring around the badge, in the row's background colour,
  * which sets it apart from the avatar.
