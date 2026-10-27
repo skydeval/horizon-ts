@@ -23,7 +23,7 @@ import {Link} from '#/view/com/util/Link'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {Logo} from '#/view/icons/Logo'
 import {Logotype} from '#/view/icons/Logotype'
-import {atoms as a, useTheme, web} from '#/alf'
+import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
 import {SwitchAccountDialog} from '#/components/dialogs/SwitchAccount'
@@ -51,6 +51,8 @@ import {isFollowingV2HomeDotEnabled} from '#/features/followingV2/eligibility'
 import {BarShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the bottom bar's compact frame window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
+// HORIZON: a redraw of the bar when a badge changes (Firefox for Android)
+import {RepaintOnChange} from '#/horizon/backdrops/RepaintOnChange'
 import {styles} from './BottomBarStyles'
 
 type NavItemValue = 'home' | 'search' | 'chat' | 'notifications' | 'profile'
@@ -108,6 +110,10 @@ export function BottomBarWeb() {
         onLayout={event => footerHeight.set(event.nativeEvent.layout.height)}>
         {/* HORIZON: the bottom bar as a window (Phase 3, BD-16) */}
         <FrameWindow kind="bottomBar" />
+        {/* HORIZON: redraws the bar when a badge changes (Firefox for Android) */}
+        <RepaintOnChange
+          value={`${notificationCountStr}|${unreadMessageCount.numUnread ?? ''}|${unreadMessageCount.hasNew}|${hasHomeBadge}`}
+        />
         {hasSession ? (
           <>
             <NavItem
@@ -331,13 +337,7 @@ const NavItem: React.FC<{
   return (
     <Link
       href={href}
-      /*
-       * HORIZON: each tab paints on its own layer. Over the bar's backdrop
-       * window (its own moving layer), a phone browser left the whole
-       * Notifications tab undrawn when its unread badge appeared, until a
-       * scroll repainted the bar (2026-10-27).
-       */
-      style={[styles.ctrl, a.pb_lg, web({willChange: 'transform'})]}
+      style={[styles.ctrl, a.pb_lg]}
       navigationAction={isOnDifferentProfile ? 'push' : 'navigate'}
       aria-role="link"
       aria-label={routeName}

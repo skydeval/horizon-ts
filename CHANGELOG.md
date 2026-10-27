@@ -215,8 +215,9 @@ web and waiting on its live checks.
 ### Fixed
 
 - **The Notifications bell no longer vanishes when a notification
-  arrives** on the phone layout of the web app. Each bottom-bar tab now draws
-  on its own layer, so the unread badge appearing redraws the whole tab.
+  arrives** on the phone layout of the web app in Firefox for Android. The
+  bottom bar is redrawn whenever a badge count changes, as a scroll used to
+  do.
 - **A quote Horizon can restore shows after a page refresh too.** On a
   fresh load the quote card said "Deleted" and kept saying it after the post
   came back; it only worked when the post was reached from inside the app.
