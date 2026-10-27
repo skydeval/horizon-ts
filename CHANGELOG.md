@@ -217,8 +217,9 @@ web and waiting on its live checks.
 - **Quotes of deleted posts say "Deleted" at once.** A quoted post Bluesky
   can't find sat on a loading card for seconds while Horizon checked whether
   it could still show it. It now says "Deleted" straight away, as Bluesky's
-  app does, and checks in the background; the post appears in its place if
-  it turns up.
+  app does. Only when the author's account lives on one of the communities
+  Horizon's server can restore from does it check in the background, and
+  the post appears in its place if it turns up.
 - **Private replies from some people no longer vanish.** A private post
   whose author's profile carries a self-label written without a date was
   thrown out whole: above a reply it showed "Private post – Only its

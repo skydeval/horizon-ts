@@ -37,6 +37,9 @@ function answerOf(
   params: Record<string, unknown>,
 ): {body: unknown; proxied: boolean} {
   switch (method) {
+    // The fixture author's PDS never resolves, so its quotes still go to fill.
+    case 'app.nearhorizon.refract.getCommunities':
+      return {body: {communities: []}, proxied: false}
     case 'app.nearhorizon.refract.fill': {
       const dids = stringsOf(params.dids)
       const uris = stringsOf(params.uris)

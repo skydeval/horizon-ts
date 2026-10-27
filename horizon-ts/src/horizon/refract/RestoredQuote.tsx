@@ -4,9 +4,10 @@
  * branch and the `recordWithMedia` record render `RestoredQuoteSlot` in
  * place of stock's "Deleted" box:
  *
- * - "Deleted" at once, as stock shows it, while one background ask runs
- *   (`askSlot` with `now`: within the frame, merged with the frame's other
- *   cards, re-asked while the author is pending);
+ * - "Deleted" at once, as stock shows it. Only for an author on a refracted
+ *   community's PDS (or one Horizon can't place, `communities.ts`) does one
+ *   background ask run (`askSlot` with `now`: within the frame, merged with
+ *   the frame's other cards, re-asked while the author is pending);
  * - a returned post replaces it, as a `viewRecord` built from it, through
  *   the stock `QuoteEmbed` and its moderation (passed in as `render`, so
  *   this module doesn't import it);
@@ -20,6 +21,7 @@
 import {useEffect, useSyncExternalStore} from 'react'
 
 import {authorOfUri} from '#/horizon/refract/answer'
+import {quoteNeedsFill} from '#/horizon/refract/communities'
 import {
   askSlot,
   refractStateVersion,
@@ -88,12 +90,18 @@ export function useRestoredPost(uri: string): RestoredQuoteStatus {
 
   useEffect(() => {
     if (readRestoredPost(uri)) return
+    const author = authorOfUri(uri)
+    if (!author) return
     let mounted = true
-    askSlot(uri, {
-      foreground: false,
-      now: true,
-      live: () => mounted,
-    }).catch(() => {})
+    // Only a community author's post can come back (communities.ts).
+    void quoteNeedsFill(author).then(needed => {
+      if (!needed || !mounted) return
+      askSlot(uri, {
+        foreground: false,
+        now: true,
+        live: () => mounted,
+      }).catch(() => {})
+    })
     return () => {
       mounted = false
     }

@@ -178,8 +178,30 @@ export const searchActors = l.query(
   [...ERRORS, 'InvalidRequest'],
 )
 
+/**
+ * The enabled communities' PDS host patterns (prism, 2026-10-27, asked for
+ * by skydeval): `*.x` matches any host ending in `.x` with a non-empty label
+ * in front, any other pattern the host exactly; lowercased; cacheable for an
+ * hour.
+ */
+export const getCommunities = l.query(
+  'app.nearhorizon.refract.getCommunities',
+  l.params({}),
+  l.jsonPayload({
+    communities: l.array(
+      l.object({
+        name: l.optional(l.string()),
+        pdsPatterns: l.array(l.string()),
+      }),
+    ),
+    ...answerFields,
+  }),
+  ERRORS,
+)
+
 /** The methods' NSIDs, which share prism's one rate-limit family. */
 export const REFRACT_METHODS = {
+  getCommunities: 'app.nearhorizon.refract.getCommunities',
   fill: 'app.nearhorizon.refract.fill',
   getAuthorFeed: 'app.nearhorizon.refract.getAuthorFeed',
   getPostThread: 'app.nearhorizon.refract.getPostThread',

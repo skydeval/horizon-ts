@@ -167,6 +167,7 @@ export type RefractTransport = (
 ) => Promise<{body: unknown; proxied: boolean}>
 
 const SCHEMAS: Record<RefractMethod, unknown> = {
+  [lexicon.REFRACT_METHODS.getCommunities]: lexicon.getCommunities,
   [lexicon.REFRACT_METHODS.fill]: lexicon.fill,
   [lexicon.REFRACT_METHODS.getAuthorFeed]: lexicon.getAuthorFeed,
   [lexicon.REFRACT_METHODS.getPostThread]: lexicon.getPostThread,
@@ -194,7 +195,6 @@ function callWith(
   return call(SCHEMAS[method], params, {signal})
 }
 
-/** The direct client, or the proxied one when no token can be minted (7.1). */
 /**
  * `promise`, or a rejection when `signal` aborts first. The call's deadline
  * aborts its signal; without this, a token mint that never answered kept the
@@ -222,6 +222,7 @@ export function untilAborted<T>(
   })
 }
 
+/** The direct client, or the proxied one when no token can be minted (7.1). */
 const defaultTransport: RefractTransport = async (method, params, {signal}) => {
   const clients = getCurrentClients()
   if (!clients) throw new RefractClearedError()
