@@ -237,4 +237,50 @@ describe('slots', () => {
     await jest.advanceTimersByTimeAsync(20_000)
     expect(h.fills().length).toBe(1)
   })
+
+  /*
+   * 2026-10-27: a deleted author's quote sat on "Loading" for 2-3 s in the
+   * background queue while fill answers in about 5 ms.
+   */
+  it('an on-screen card asks within the frame, not after a background slot', async () => {
+    h.respond(() => pending())
+    void askSlot(rfUri('rf1'), {foreground: false, live: () => true}).catch(
+      () => {},
+    )
+    await jest.advanceTimersByTimeAsync(50)
+    expect(h.fills().length).toBe(1)
+    void askSlot(rfUri('rf2'), {
+      foreground: false,
+      now: true,
+      live: () => true,
+    }).catch(() => {})
+    await jest.advanceTimersByTimeAsync(50)
+    expect(h.fills().length).toBe(2)
+  })
+
+  it('a background ask still waits for its slot', async () => {
+    h.respond(() => pending())
+    void askSlot(rfUri('rf1'), {foreground: false, live: () => true}).catch(
+      () => {},
+    )
+    await jest.advanceTimersByTimeAsync(50)
+    void askSlot(rfUri('rf2'), {foreground: false, live: () => true}).catch(
+      () => {},
+    )
+    await jest.advanceTimersByTimeAsync(50)
+    expect(h.fills().length).toBe(1)
+  })
+
+  it('cards asking in the same frame share one call', async () => {
+    h.respond(() => pending())
+    for (const rkey of ['rf1', 'rf2', 'rf3']) {
+      void askSlot(rfUri(rkey), {
+        foreground: false,
+        now: true,
+        live: () => true,
+      }).catch(() => {})
+    }
+    await jest.advanceTimersByTimeAsync(50)
+    expect(h.fills().length).toBe(1)
+  })
 })

@@ -109,7 +109,12 @@ export function useRestoredPost(uri: string): {
       if (mounted) setTimedOutFor(key)
     }, REFRACT_TIMING.backgroundDeadlineMs)
     if (!readRestoredPost(uri)) {
-      askSlot(uri, {foreground: attempt > 0, live: () => mounted}).then(
+      // The card is on screen: its ask goes within the frame (askSlot `now`).
+      askSlot(uri, {
+        foreground: attempt > 0,
+        now: true,
+        live: () => mounted,
+      }).then(
         () => {
           if (mounted) setDoneFor(key)
         },

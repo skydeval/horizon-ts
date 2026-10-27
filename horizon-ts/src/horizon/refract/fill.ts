@@ -1468,12 +1468,20 @@ function withDeadline<T>(promise: Promise<T>, deadline: number): Promise<T> {
 /**
  * A quote slot's ask (4.4). A background ask is answered from the memo
  * (positive, or `unavailable` for 60 s) and the negative caches without a
- * call; Try again (`foreground`) skips the memo. A `pending` author rides
- * along in later fills (5.4). Resolves with the URI's outcome.
+ * call; Try again (`foreground`) skips the memo. `now` (a card on screen,
+ * prism's agreement 2026-10-27) sends the call within the frame, merged with
+ * the frame's other asks, instead of waiting for a background slot: the
+ * queue held a deleted author's quote on "Loading" for 2-3 s while `fill`
+ * itself answers in about 5 ms. A `pending` author rides along in later
+ * fills (5.4). Resolves with the URI's outcome.
  */
 export async function askSlot(
   uri: string,
-  {foreground, live: mounted}: {foreground: boolean; live: () => boolean},
+  {
+    foreground,
+    now = false,
+    live: mounted,
+  }: {foreground: boolean; now?: boolean; live: () => boolean},
 ): Promise<UriOutcome | undefined> {
   if (!isValidFillUri(uri)) return undefined
   const state = current()
@@ -1498,7 +1506,7 @@ export async function askSlot(
   }
   const outcome = await askFill(
     {uris: [uri]},
-    {kind: 'slot', foreground, live: mounted, screen: true},
+    {kind: 'slot', foreground: foreground || now, live: mounted, screen: true},
   )
   const verdict = outcome.uris.get(uri)
   if (
