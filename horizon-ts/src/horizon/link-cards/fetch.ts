@@ -90,28 +90,81 @@ export async function resolvePds(
   return undefined
 }
 
+/*
+ * The pronouns spec (atproto-pronouns, `app.nearhorizon.actor.pronouns`), as
+ * `identity/parse.ts` reads it: at most 10 sets, each `{forms}` with 1 to 12
+ * forms, each form at most 24 graphemes and 240 bytes. A record breaking any
+ * limit shows nothing, as in Horizon; a form is never cut. Mirrored here, as
+ * that module pulls in the app's lexicons.
+ */
+const PRONOUNS_COLLECTION = 'app.nearhorizon.actor.pronouns'
+const PRONOUN_LIMITS = {sets: 10, forms: 12, graphemes: 24, bytes: 240}
+
+function graphemeCount(text: string): number {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    return Array.from(new Intl.Segmenter().segment(text)).length
+  }
+  return Array.from(text).length
+}
+
+function formOk(form: unknown): form is string {
+  return (
+    typeof form === 'string' &&
+    new TextEncoder().encode(form).length <= PRONOUN_LIMITS.bytes &&
+    graphemeCount(form) <= PRONOUN_LIMITS.graphemes
+  )
+}
+
+/** The record's sets within the spec's limits, or `undefined`. */
+function pronounSets(value: unknown): string[][] | undefined {
+  const record = value as
+    | {$type?: unknown; sets?: unknown}
+    | null
+    | undefined
+  if (typeof record !== 'object' || record === null) return undefined
+  if (record.$type !== undefined && record.$type !== PRONOUNS_COLLECTION) {
+    return undefined
+  }
+  const sets = record.sets
+  if (!Array.isArray(sets) || sets.length > PRONOUN_LIMITS.sets) return undefined
+  const out: string[][] = []
+  for (const set of sets) {
+    const forms = (set as {forms?: unknown} | null)?.forms
+    if (
+      typeof set !== 'object' ||
+      set === null ||
+      !Array.isArray(forms) ||
+      forms.length < 1 ||
+      forms.length > PRONOUN_LIMITS.forms ||
+      !forms.every(formOk)
+    ) {
+      return undefined
+    }
+    out.push(forms)
+  }
+  return out
+}
+
 /**
- * The author's pronouns (`app.nearhorizon.actor.pronouns`) as Horizon shows
- * them: a set's forms joined with `/`, sets with ` · `, the first set only
- * when the author asked for that. Undefined when unset or malformed.
+ * The author's pronouns as Horizon shows them (`identity/format.ts`): a
+ * set's forms trimmed and joined with `/`, sets with ` · `, the first set
+ * only for `displayMode: firstOnly`. Undefined when unset or invalid.
  */
 export function formatPronounRecord(value: unknown): string | undefined {
-  const record = value as {sets?: unknown; displayMode?: unknown} | undefined
-  if (!record || !Array.isArray(record.sets)) return undefined
-  const sets = record.sets
-    .filter((set): set is unknown[] => Array.isArray(set))
-    .slice(0, 10)
-    .map(set =>
-      set
-        .filter((form): form is string => typeof form === 'string')
-        .slice(0, 12)
-        .map(form => form.trim())
-        .filter(form => form.length > 0 && form.length <= 240)
-        .join('/'),
-    )
+  const sets = pronounSets(value)
+  if (!sets || sets.length === 0) return undefined
+  const formatSet = (forms: string[]) =>
+    forms
+      .map(form => form.trim())
+      .filter(form => form.length > 0)
+      .join('/')
+  const firstOnly =
+    (value as {displayMode?: unknown}).displayMode === 'firstOnly'
+  const shown = (firstOnly ? sets.slice(0, 1) : sets)
+    .map(formatSet)
     .filter(set => set.length > 0)
-  if (sets.length === 0) return undefined
-  return record.displayMode === 'firstOnly' ? sets[0] : sets.join(' · ')
+    .join(' · ')
+  return shown || undefined
 }
 
 async function fetchPronouns(

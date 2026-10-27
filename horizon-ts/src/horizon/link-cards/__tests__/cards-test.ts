@@ -282,15 +282,47 @@ describe('status ids', () => {
 })
 
 describe('pronouns', () => {
-  it('format as Horizon shows them', () => {
-    expect(formatPronounRecord({sets: [['she', 'they'], ['ze', 'zir']]})).toBe(
-      'she/they · ze/zir',
+  it('read the record as stored: each set is {forms}', () => {
+    // skydeval's record shape, 2026-10-27 (pronouns were missing on cards)
+    const record = {
+      $type: 'app.nearhorizon.actor.pronouns',
+      sets: [{forms: ['it', 'its']}, {forms: ['she', 'her']}],
+      displayMode: 'firstOnly',
+    }
+    expect(formatPronounRecord(record)).toBe('it/its')
+    expect(formatPronounRecord({...record, displayMode: 'all'})).toBe(
+      'it/its · she/her',
     )
-    expect(
-      formatPronounRecord({sets: [['she', 'her'], ['they']], displayMode: 'firstOnly'}),
-    ).toBe('she/her')
+  })
+
+  it('follow the spec: a record breaking a limit shows nothing', () => {
+    const set = (...forms: string[]) => ({forms})
+    expect(formatPronounRecord({sets: [set(' ze ', 'zir')]})).toBe('ze/zir')
     expect(formatPronounRecord({sets: []})).toBeUndefined()
     expect(formatPronounRecord(undefined)).toBeUndefined()
+    // Bare lists aren't sets in the spec.
+    expect(formatPronounRecord({sets: [['she', 'her']]})).toBeUndefined()
+    // A set needs 1 to 12 forms; at most 10 sets.
+    expect(formatPronounRecord({sets: [set()]})).toBeUndefined()
+    expect(
+      formatPronounRecord({sets: [set(...Array(13).fill('x'))]}),
+    ).toBeUndefined()
+    expect(
+      formatPronounRecord({sets: Array(11).fill(set('x'))}),
+    ).toBeUndefined()
+    // Over 24 graphemes, or over 240 bytes (24 flags are about 384), breaks it.
+    expect(formatPronounRecord({sets: [set('a'.repeat(25))]})).toBeUndefined()
+    expect(formatPronounRecord({sets: [set('🏳️‍⚧️'.repeat(24))]})).toBeUndefined()
+    expect(formatPronounRecord({sets: [set('🏳️‍⚧️'.repeat(10))]})).toBe(
+      '🏳️‍⚧️'.repeat(10),
+    )
+    expect(formatPronounRecord({sets: [set('ü'.repeat(24))]})).toBe(
+      'ü'.repeat(24),
+    )
+    // Another collection's $type is not a pronouns record.
+    expect(
+      formatPronounRecord({$type: 'app.other.pronouns', sets: [set('she')]}),
+    ).toBeUndefined()
   })
 })
 
@@ -352,7 +384,7 @@ function network() {
       })
     }
     if (url.includes('getRecord')) {
-      return json({value: {sets: [['she', 'they']]}})
+      return json({value: {sets: [{forms: ['she', 'they']}]}})
     }
     return new Response('not found', {status: 404})
   }
