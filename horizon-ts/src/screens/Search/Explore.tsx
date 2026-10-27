@@ -362,14 +362,6 @@ export function Explore({
       }) as const,
     [],
   )
-  const trendingTopicsModule = useMemo(
-    () =>
-      ({
-        type: 'trendingTopics',
-        key: 'trending-topics',
-      }) as const,
-    [],
-  )
   const suggestedFollowsModule = useMemo(() => {
     const i: ExploreScreenItems[] = []
     i.push({
@@ -729,7 +721,7 @@ export function Explore({
     i.push({type: 'liveEventFeedsBanner', key: 'liveEventFeedsBanner'})
 
     if (useFullExperience) {
-      i.push(trendingTopicsModule)
+      // HORIZON: no Trending module on Discover, phone or web (skydeval)
       i.push(...suggestedFeedsModule)
       i.push(...suggestedFollowsModule)
       i.push(...suggestedStarterPacksModule)
@@ -744,7 +736,6 @@ export function Explore({
     suggestedFollowsModule,
     suggestedStarterPacksModule,
     suggestedFeedsModule,
-    trendingTopicsModule,
     feedPreviewsModule,
     interestsNuxModule,
     useFullExperience,

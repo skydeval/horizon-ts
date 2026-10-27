@@ -140,6 +140,7 @@ web and waiting on its live checks.
 
 ### Changed
 
+- **No Trending section on Discover,** on the phone or the web layout.
 - **Share links open Horizon.** Sharing or copying a link to a post,
   profile, feed or list now gives a Horizon link (on the preview, the
   preview's own address) instead of a bsky.app one. The embed code and
