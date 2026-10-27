@@ -73,7 +73,11 @@ import {usePrivateNotificationsMode} from '#/horizon/private/notifications/mode'
 // HORIZON: the Public | Private switch and the Private view for members
 import {NotificationsModeSwitch} from '#/horizon/private/notifications/ModeSwitch'
 // HORIZON: the Public | Private switch and the Private view for members
-import {PrivateNotificationsContent} from '#/horizon/private/notifications/PrivateNotificationsContent'
+import {
+  PrivateNotificationsContent,
+  PrivateNotificationsPills,
+  usePrivateNotificationsTabs,
+} from '#/horizon/private/notifications/PrivateNotificationsContent'
 
 type Props = NativeStackScreenProps<
   NotificationsTabNavigatorParams,
@@ -109,6 +113,8 @@ function NewNotificationsScreenInner() {
   const navigation = useNavigation()
   // HORIZON: the Private view replaces the pills and the pager content
   const privateMode = usePrivateNotificationsMode()
+  // HORIZON: the Private view's pills, shown in the header
+  const privateTabs = usePrivateNotificationsTabs(privateMode)
   const headerMode = useHomeHeaderMode()
   const initialHeaderOffset = useHeaderOffset()
   const [headerOffset, setHeaderOffset] = useState(initialHeaderOffset)
@@ -342,7 +348,8 @@ function NewNotificationsScreenInner() {
         loadingLatestPages={loadingLatestPages}>
         {/* HORIZON: the Public | Private switch above the pills, for members */}
         <NotificationsModeSwitch />
-        {/* HORIZON: the Private view has its own pills */}
+        {/* HORIZON: the Private view has its own pills, in the header too */}
+        {privateMode && <PrivateNotificationsPills state={privateTabs} />}
         {!hasNoNotifications && !privateMode && (
           <Pager.TabBar>
             {({selectedPage, selectPage, dragProgress}) => (
@@ -370,7 +377,10 @@ function NewNotificationsScreenInner() {
       </NotificationsHeader>
       {/* HORIZON: the Private view replaces the pager content (start) */}
       {privateMode ? (
-        <PrivateNotificationsContent headerOffset={headerOffset} />
+        <PrivateNotificationsContent
+          headerOffset={headerOffset}
+          state={privateTabs}
+        />
       ) : (
         <Pager.Content
           manageDrawerGesture

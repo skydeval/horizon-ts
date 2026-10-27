@@ -107,8 +107,8 @@ jest.mock('#/horizon/private/notifications/PrivateNotificationsList', () => {
     Text: React.ComponentType<{children?: React.ReactNode}>
   }>('react-native')
   return {
-    PrivateNotificationsList: (props: {tab: string}) => (
-      <Text>{`list:${props.tab}`}</Text>
+    PrivateNotificationsList: (props: {tab: string; headerOffset?: number}) => (
+      <Text>{`list:${props.tab}@${props.headerOffset ?? 'none'}`}</Text>
     ),
   }
 })
@@ -184,7 +184,11 @@ import {act, render, renderHook} from '@testing-library/react-native'
 
 import {findAllProfilesInQueryData} from '#/state/queries/my-muted-accounts'
 import {fakeClient} from '../../__tests__/fixtures'
-import {PrivateNotificationsContent} from '../../notifications/PrivateNotificationsContent'
+import {
+  PrivateNotificationsContent,
+  PrivateNotificationsPills,
+  usePrivateNotificationsTabs,
+} from '../../notifications/PrivateNotificationsContent'
 import {OFF} from '../common'
 import {
   nextPair,
@@ -213,6 +217,17 @@ async function setList(queryClient: QueryClient, data: unknown) {
 }
 
 i18n.loadAndActivate({locale: 'en', messages: {}})
+
+/** The Private view as the screen draws it: the pills in the header, then the list. */
+function PrivateView() {
+  const state = usePrivateNotificationsTabs(true)
+  return (
+    <>
+      <PrivateNotificationsPills state={state} />
+      <PrivateNotificationsContent headerOffset={0} state={state} />
+    </>
+  )
+}
 
 function show(ui: React.ReactElement, queryClient = new QueryClient()) {
   return render(ui, {
@@ -248,15 +263,15 @@ describe('T-16: the Activity pill', () => {
   const last = () => mockPills[mockPills.length - 1]
 
   it('is absent without the feature', () => {
-    const screen = show(<PrivateNotificationsContent headerOffset={0} />)
+    const screen = show(<PrivateView />)
     expect(last().tabs.map(tab => tab.key)).toEqual(['all', 'replies'])
     expect(mockPrefetch).toHaveBeenLastCalledWith('activity', false)
-    expect(screen.getByText('list:all')).toBeTruthy()
+    expect(screen.getByText('list:all@0')).toBeTruthy()
   })
 
   it('with it: three pills, a 0/1/2 mapping, the soft reset, and a prefetch', () => {
     mockActivity = true
-    const screen = show(<PrivateNotificationsContent headerOffset={0} />)
+    const screen = show(<PrivateView />)
     expect(last().tabs.map(tab => tab.key)).toEqual([
       'all',
       'replies',
@@ -266,7 +281,7 @@ describe('T-16: the Activity pill', () => {
     act(() => last().onSelectTab('activity'))
     expect(last().selectedTab).toBe('activity')
     expect(last().progress.get()).toBe(2)
-    expect(screen.getByText('list:activity')).toBeTruthy()
+    expect(screen.getByText('list:activity@0')).toBeTruthy()
     act(() => last().onSelectTab('replies'))
     expect(last().progress.get()).toBe(1)
     act(() => last().onSelectTab('replies'))
@@ -277,13 +292,29 @@ describe('T-16: the Activity pill', () => {
 
   it('falls back to All when the feature goes while Activity is selected', () => {
     mockActivity = true
-    const screen = show(<PrivateNotificationsContent headerOffset={0} />)
+    const screen = show(<PrivateView />)
     act(() => last().onSelectTab('activity'))
     mockActivity = false
-    screen.rerender(<PrivateNotificationsContent headerOffset={0} />)
+    screen.rerender(<PrivateView />)
     expect(last().selectedTab).toBe('all')
     expect(last().progress.get()).toBe(0)
-    expect(screen.getByText('list:all')).toBeTruthy()
+    expect(screen.getByText('list:all@0')).toBeTruthy()
+  })
+
+  /*
+   * 2026-10-27: on web the pills sat in the page and slid under the fixed
+   * header, peeking out below it. They belong in the header now, so the
+   * content draws none, and the list gets the header's height for its
+   * refresh pill.
+   */
+  it('content draws no pills of its own and passes the header height on', () => {
+    function ContentOnly() {
+      const state = usePrivateNotificationsTabs(true)
+      return <PrivateNotificationsContent headerOffset={96} state={state} />
+    }
+    const screen = show(<ContentOnly />)
+    expect(mockPills).toHaveLength(0)
+    expect(screen.getByText('list:all@96')).toBeTruthy()
   })
 })
 

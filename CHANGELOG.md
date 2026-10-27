@@ -220,6 +220,10 @@ web and waiting on its live checks.
 
 ### Fixed
 
+- **Notifications' Private view keeps its All / Replies / Activity pills in
+  the header,** as the Public view does. On web they slid under the header
+  when the page scrolled, leaving the bottom of the labels peeking out. Its
+  Refresh pill now sits below the header too, not behind it.
 - **The Notifications bell no longer vanishes when a notification
   arrives** on the phone layout of the web app in Firefox for Android. The
   bottom bar is redrawn whenever a badge count changes, as a scroll used to

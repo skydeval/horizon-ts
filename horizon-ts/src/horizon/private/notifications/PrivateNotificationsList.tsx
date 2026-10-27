@@ -110,8 +110,11 @@ export function buildPrivateRows(notifications: NotificationView[]): Row[] {
 
 export function PrivateNotificationsList({
   tab,
+  headerOffset = 0,
 }: {
   tab: PrivateNotificationsTab
+  /** The notifications header's height, pills included: the refresh pill sits below it. */
+  headerOffset?: number
 }) {
   const {t: l} = useLingui()
   const t = useTheme()
@@ -224,7 +227,7 @@ export function PrivateNotificationsList({
     isFetchingTop: isFetching && !isFetchingNextPage,
     stale: liftMark,
   })
-  // The private pills don't hide on scroll, so the pill stays beneath them
+  // The header doesn't hide over the Private view, so the pill stays beneath it
   const pillTitleHeight = useSharedValue(0)
 
   const notifications = data?.pages.flatMap(page => page.notifications) ?? []
@@ -354,7 +357,7 @@ export function PrivateNotificationsList({
       />
       <RefreshPill
         visible={showRefreshPill}
-        headerHeight={0}
+        headerHeight={headerOffset}
         titleHeight={pillTitleHeight}
         onPress={loadLatest}
       />

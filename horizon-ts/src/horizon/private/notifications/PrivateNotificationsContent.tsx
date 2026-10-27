@@ -5,17 +5,23 @@
  * accounts whose bell is on, while prism lists
  * `private.activitySubscriptions` (activity subscriptions design 2.5).
  *
+ * The pills sit in the notifications header, as the public pills do
+ * (`PrivateNotificationsPills`), so they stay put while the list scrolls;
+ * in the page they slid under the fixed header on web and peeked out below
+ * it (2026-10-27). `usePrivateNotificationsTabs` holds the selection both
+ * read.
+ *
  * While prism lists private notifications (`private.notifications`, P-9,
  * 2H design 10.3) each pill is a list of them with the stock notification
  * rows (`PrivateNotificationsList`); the Replies pill asks for replies,
  * quotes and mentions, and Activity for `subscribed-post`, its first page
- * prefetched as the view mounts. Otherwise the pills show the empty state
- * and no request is made.
+ * prefetched while the view is shown. Otherwise the pills show the empty
+ * state and no request is made.
  */
 
 import {useEffect, useState} from 'react'
 import {View} from 'react-native'
-import {useSharedValue} from 'react-native-reanimated'
+import {type SharedValue, useSharedValue} from 'react-native-reanimated'
 import {Trans, useLingui} from '@lingui/react/macro'
 
 import {useBottomBarOffset} from '#/lib/hooks/useBottomBarOffset'
@@ -33,23 +39,28 @@ import {usePrefetchPrivateNotifications} from '#/horizon/private/notifications/q
 
 type PrivateTab = PrivateNotificationsTab
 
+/** The Private view's pills and their selection, shared by header and list. */
+export type PrivateNotificationsTabs = {
+  tabs: {key: PrivateTab; label: string}[]
+  tab: PrivateTab
+  progress: SharedValue<number>
+  served: boolean
+  onSelectTab: (key: string) => void
+}
+
 /**
- * The Private view below the notifications header, whose height is
- * `headerOffset`.
+ * The Private view's pill state. `shown` is whether the view is on screen,
+ * which gates the Activity prefetch.
  */
-export function PrivateNotificationsContent({
-  headerOffset,
-}: {
-  headerOffset: number
-}) {
-  const t = useTheme()
+export function usePrivateNotificationsTabs(
+  shown: boolean,
+): PrivateNotificationsTabs {
   const {t: l} = useLingui()
-  const bottomBarOffset = useBottomBarOffset()
   const [selected, setSelected] = useState<PrivateTab>('all')
   const progress = useSharedValue(0)
   const served = usePrismFeature('private.notifications')
   const activity = useActivitySubscriptionsShown()
-  usePrefetchPrivateNotifications('activity', served && activity)
+  usePrefetchPrivateNotifications('activity', shown && served && activity)
 
   const tabs = privateNotificationTabs(activity, {
     all: l`All`,
@@ -64,6 +75,51 @@ export function PrivateNotificationsContent({
     if (progress.get() > tabs.length - 1) progress.set(index)
   }, [progress, index, tabs.length])
 
+  const onSelectTab = (key: string) => {
+    const next = tabs[Math.max(0, tabs.findIndex(item => item.key === key))]
+    // Re-pressing the current pill scrolls it to the top, as stock
+    if (next.key === tab) {
+      emitSoftReset()
+      return
+    }
+    progress.set(tabs.indexOf(next))
+    setSelected(next.key)
+  }
+
+  return {tabs, tab, progress, served, onSelectTab}
+}
+
+/** The Private view's pills, for the notifications header. */
+export function PrivateNotificationsPills({
+  state,
+}: {
+  state: PrivateNotificationsTabs
+}) {
+  return (
+    <TabPills
+      tabs={state.tabs}
+      selectedTab={state.tab}
+      dragProgress={state.progress}
+      onSelectTab={state.onSelectTab}
+      contentContainerStyle={IS_WEB ? a.pb_sm : a.py_sm}
+    />
+  )
+}
+
+/**
+ * The Private view below the notifications header, whose height (pills
+ * included) is `headerOffset`.
+ */
+export function PrivateNotificationsContent({
+  headerOffset,
+  state,
+}: {
+  headerOffset: number
+  state: PrivateNotificationsTabs
+}) {
+  const t = useTheme()
+  const bottomBarOffset = useBottomBarOffset()
+
   return (
     <View
       testID="privateNotificationsContent"
@@ -74,28 +130,12 @@ export function PrivateNotificationsContent({
         web({minHeight: `calc(100vh - ${bottomBarOffset}px)`}),
       ]}>
       <Layout.Center style={[a.flex_1]}>
-        <TabPills
-          tabs={tabs}
-          selectedTab={tab}
-          dragProgress={progress}
-          onSelectTab={key => {
-            const index = Math.max(
-              0,
-              tabs.findIndex(item => item.key === key),
-            )
-            const next = tabs[index].key
-            // Re-pressing the current pill scrolls it to the top, as stock
-            if (next === tab) {
-              emitSoftReset()
-              return
-            }
-            progress.set(index)
-            setSelected(next)
-          }}
-          contentContainerStyle={IS_WEB ? a.pb_sm : a.py_sm}
-        />
-        {served ? (
-          <PrivateNotificationsList key={tab} tab={tab} />
+        {state.served ? (
+          <PrivateNotificationsList
+            key={state.tab}
+            tab={state.tab}
+            headerOffset={headerOffset}
+          />
         ) : (
           <View style={[a.flex_1, a.justify_center, a.px_lg]}>
             <Text
