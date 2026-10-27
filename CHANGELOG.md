@@ -4,14 +4,10 @@ All notable changes to Horizon, in the spirit of [Keep a
 Changelog](https://keepachangelog.com/en/1.1.0/), grouped by development
 phase, newest first. Horizon has no released version yet.
 
-Convention: new entries go under `## [Unreleased]` and move into a phase when
-that phase closes. Entries say what changed for users; they carry no tracker
-references.
+Convention: new entries go under `## [Unreleased]
 
-## [Unreleased]
-
-Work since Phase 4 closed. Phase 5, pronouns and plural systems, is built on
-web and waiting on its live checks.
+Phase 6, optimisation, branding and tweaks, is under way. Polls and
+fundraisers are paused and have no phase yet.
 
 ### Added
 
@@ -32,6 +28,150 @@ web and waiting on its live checks.
   none. Descriptions are kept in their own record in your repo, in the open
   [atproto-profile-alt](https://github.com/skydeval/atproto-profile-alt)
   format, so any app can show them.
+- **Thread Lens shows your labelers' labels:** it sends your chosen labelers
+  to prism, takes their labels from its answer and merges them with the public
+  AppView's, without repeats. A labeler's hide makes the post a placeholder.
+- **Restored accounts in search:** they appear in the search typeahead and in
+  People results: an exact handle first, other matches after Bluesky's own.
+  Bluesky's results never wait for them.
+- **The public design page says what visitor viewer state shares:** for
+  readers who aren't members, prism asks microcosm's public Constellation
+  service about the reader's own likes, reposts and follows on restored posts,
+  which sends the reader's DID there.
+- **Public docs.** The repository's `README.md` and `docs/` give an overview
+  of Horizon, its architecture, and a design page for each feature, built or
+  planned; the pronouns and plural systems page says it is built.
+
+### Changed
+
+- **Reply, quote and mention notifications show the avatar without a
+  badge,** on the Public and Private tabs, as new-post notifications already
+  did. Likes, reposts and follows keep theirs.
+- **No Trending section on Discover,** on the phone or the web layout.
+- **Share links open Horizon.** Sharing or copying a link to a post,
+  profile, feed or list now gives a Horizon link (on the preview, the
+  preview's own address) instead of a bsky.app one. The embed code and
+  Bluesky's own report forms still use bsky.app links, since those go to
+  Bluesky.
+- **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
+  the favicons and the web app manifest replace Bluesky's butterfly and
+  logotype wherever the app draws them, including the web loading splash.
+- **A Horizon welcome window.** Opening Horizon signed out shows a meadow
+  under open sky in place of Bluesky's clouds, the "Horizon" wordmark, the
+  line "Your corner of the open social web." and green buttons. The window
+  used to say "Bluesky".
+- **Threads open faster on a fresh load (web):** the browser connects to
+  Horizon's server ahead of the first thread while Thread Lens is on. The
+  Thread Lens timing log also says where a read's time goes.
+- **New icons.** Every UI icon is now from Phosphor Icons (MIT): Bold
+  outlines, and Fill for selected and filled states, under the same names,
+  so nothing that uses an icon changed. The reply button is a speech bubble
+  (Phosphor's Chat) and Messages a round bubble with dots (Chat Circle Dots)
+  everywhere it appears.
+- **No "Suggested for you" on profile pages.** Neither the row of suggested
+  accounts among a profile's posts nor the panel that opens under the header
+  after Follow shows, and the suggestions aren't requested
+  (`PROFILE_SUGGESTED_FOLLOWS`). The home feed's suggestions are unchanged.
+- **No "Liked by …" row under posts, on trial.** Bluesky's "social proofing"
+  beta is off in Horizon's flag table, in feeds and on a thread's main post,
+  so posts show the like count only.
+- **"AppViews", written as one word.** The Settings row and dialog read
+  "AppViews", with "Horizon AppView" and "Public AppView" inside and an
+  "AppView address" field; the sign-in form's quiet button reads "AppView",
+  and the errors follow suit. The Settings row has a computer icon.
+- **Members skip the second read on posts prism fully describes.** Your muted
+  accounts and subscribed mute lists are kept on the device (read with your
+  own session, never sent to prism, refreshed on sign-in, on app open, every
+  10 minutes and when you mute or unmute, and cleared on sign-out) and applied
+  to the lens's posts. On such a post, Quote is checked again at send.
+- **Bluesky's social-app is merged up to its 1.136.0 work** (upstream
+  `0cda84abe..4e4ad9c5f`, 186 commits): Expo SDK 58, React Native 0.88, React
+  19.3 and Jest 30, Node 24.22.1 (the silonew scripts follow), and Bluesky's
+  own changes, among them Notifications v2 work, the moderation inbox, tablet
+  layouts, and profile links. Every Horizon hook is re-applied in upstream's
+  new shapes: the removed artwork stays removed, media spoilers sit on the
+  rebuilt image gallery, the Media grid keeps its columns, the notifications
+  screen keeps its Private view, the nav card wraps the restructured left nav,
+  and the email 2FA dialog keeps its password gate. Notification rows now use
+  the stock post controls, which carry the private reply limits. In the flag
+  table, Bluesky's Atmosphere screen stays off and profile links are on, as
+  Bluesky's public default.
+- **Profile links (from upstream) never preview payment links.** A link on a
+  payment or support host (PayPal, Cash App, Venmo, Ko-fi, Patreon, GitHub
+  Sponsors, Stripe, Bluesky's own list of support sites and others) is never
+  sent to the link-card service, so no title, favicon or reachability check is
+  fetched for it, and a title filled in automatically is cleared. Typing in
+  the link editor is debounced. Profile links were switched off in Horizon
+  until this guard was built, because a payment page's title could be saved
+  into the public profile record.
+
+### Fixed
+
+- **Notifications' Private view keeps its All / Replies / Activity pills in
+  the header,** as the Public view does. On web they slid under the header
+  when the page scrolled, leaving the bottom of the labels peeking out. Its
+  Refresh pill now sits below the header too, not behind it.
+- **The Notifications bell no longer vanishes when a notification
+  arrives** on the phone layout of the web app in Firefox for Android. The
+  bottom bar is redrawn whenever a badge count changes, as a scroll used to
+  do.
+- **A quote Horizon can restore shows after a page refresh too.** On a
+  fresh load the quote card said "Deleted" and kept saying it after the post
+  came back; it only worked when the post was reached from inside the app.
+- **Quotes of deleted posts say "Deleted" at once.** A quoted post Bluesky
+  can't find sat on a loading card for seconds while Horizon checked whether
+  it could still show it. It now says "Deleted" straight away, as Bluesky's
+  app does. Only when the author's account lives on one of the communities
+  Horizon's server can restore from does it check in the background, and
+  the post appears in its place if it turns up.
+- **Private replies from some people no longer vanish.** A private post
+  whose author's profile carries a self-label written without a date was
+  thrown out whole: above a reply it showed "Private post – Only its
+  audience can see this post." to someone in the audience, and a list of
+  private posts holding one could fail to load. Horizon now checks only the
+  parts of a post's author and labels it uses.
+- **Thread Lens no longer warns that posts may be missing.** The notice
+  showed on nearly every thread and there was nothing to do about it; posts
+  Thread Lens can't check are still kept back as before.
+- **Threads appear sooner on the web.** The first replies draw at once and
+  the rest follow straight after; a thread link no longer waits to look
+  up the handle first (Horizon's server looks it up with the thread, and
+  links opened before on this device are remembered; the list is cleared
+  on sign-out). Quote posts no longer hold a thread back either.
+- **Threads no longer redraw themselves hundreds of times while loading.**
+  On a fresh load the thread screen re-rendered continuously until the
+  thread arrived, which also held the thread back.
+- **"New posts from…" notifications have no bell badge,** so likes and
+  replies stand out; the row's text says what it is.
+- **Reloading no longer waits to sign in to Horizon's server again.** The
+  short-lived passes for it are kept across reloads and cleared on sign-out
+  or an account switch.
+- **A device clock that's off no longer slows threads.** The app's requests
+  to Horizon's server were refused and retried when the device clock ran
+  ahead; they now go by the server's clock. Opening a thread from a link
+  also no longer waits on your account's server to look up the handle.
+- **The Thread Lens timing log prints in production builds.** Turned on
+  with `horizon:lensTiming`, its lines were stripped from every build but
+  development.
+- **The centre column no longer drops by the scroll offset** when more posts
+  load or the lightbox opens or closes. The safe-area library that came with
+  the upstream merge measured its own position on web, so a scrolled window
+  became a top inset; Horizon patches it to report the window's insets on web,
+  as before.
+- **The repost and quote menu on web no longer locks page scrolling.**
+  Scrolling the page closes it, as do a click outside it and Escape.
+- **Menu items on web fire once on Enter,** in every menu (the browser's
+  key-up no longer presses an item a second time), so toggles in the audience
+  menu no longer flip back.
+
+## Phase 5: Pronouns and plural systems (2026-10-23 – 2026-10-26)
+
+Pronouns and plural systems for every account, members and fronters on
+posts, system accounts, and posting or acting as another of your
+accounts.
+
+### Added
+
 - **Pronouns beside every name**, for everyone, signed in or out, member or
   not: muted after the handle on post author lines (in feeds, threads, quotes
   and notifications), and below the name on the profile and the hover card.
@@ -132,50 +272,13 @@ web and waiting on its live checks.
   says whether some account can post as it, with "Leave every system".
   Status changes are announced to screen readers on every platform. The
   `SYSTEM_ACCOUNTS` switch is on.
-- **Thread Lens shows your labelers' labels:** it sends your chosen labelers
-  to prism, takes their labels from its answer and merges them with the public
-  AppView's, without repeats. A labeler's hide makes the post a placeholder.
-- **Restored accounts in search:** they appear in the search typeahead and in
-  People results: an exact handle first, other matches after Bluesky's own.
-  Bluesky's results never wait for them.
-- **The public design page says what visitor viewer state shares:** for
-  readers who aren't members, prism asks microcosm's public Constellation
-  service about the reader's own likes, reposts and follows on restored posts,
-  which sends the reader's DID there.
-- **Public docs.** The repository's `README.md` and `docs/` give an overview
-  of Horizon, its architecture, and a design page for each feature, built or
-  planned; the pronouns and plural systems page says it is built.
 
 ### Changed
 
-- **Reply, quote and mention notifications show the avatar without a
-  badge,** on the Public and Private tabs, as new-post notifications already
-  did. Likes, reposts and follows keep theirs.
-- **No Trending section on Discover,** on the phone or the web layout.
-- **Share links open Horizon.** Sharing or copying a link to a post,
-  profile, feed or list now gives a Horizon link (on the preview, the
-  preview's own address) instead of a bsky.app one. The embed code and
-  Bluesky's own report forms still use bsky.app links, since those go to
-  Bluesky.
-- **Horizon's own logo.** The sun-and-hills mark, the "Horizon" wordmark,
-  the favicons and the web app manifest replace Bluesky's butterfly and
-  logotype wherever the app draws them, including the web loading splash.
-- **A Horizon welcome window.** Opening Horizon signed out shows a meadow
-  under open sky in place of Bluesky's clouds, the "Horizon" wordmark, the
-  line "Your corner of the open social web." and green buttons. The window
-  used to say "Bluesky".
-- **Threads open faster on a fresh load (web):** the browser connects to
-  Horizon's server ahead of the first thread while Thread Lens is on. The
-  Thread Lens timing log also says where a read's time goes.
 - **Pronouns and plural systems no longer need Horizon's server.** When it
   can't answer, other people's pronouns, systems, fronters and members are
   read straight from their own repo, and Bluesky's pronouns field still
   shows for accounts that have no Horizon pronouns.
-- **New icons.** Every UI icon is now from Phosphor Icons (MIT): Bold
-  outlines, and Fill for selected and filled states, under the same names,
-  so nothing that uses an icon changed. The reply button is a speech bubble
-  (Phosphor's Chat) and Messages a round bubble with dots (Chat Circle Dots)
-  everywhere it appears.
 - **Fronters read as a list:** "Wren", "Wren & Sparrow", "Wren, Sparrow &
   Robin", in place of the trailing `&` marker first built ("Wren, Sparrow&").
 - **The Posting as control sits exactly where the composer's avatar was,** at
@@ -192,91 +295,9 @@ web and waiting on its live checks.
   the list, or that needs a sign-in here, says so, and removing the account
   you're posting as holds Post, then switches back to you. With the
   `SYSTEM_ACCOUNTS` switch off, they offer the current account only.
-- **No "Suggested for you" on profile pages.** Neither the row of suggested
-  accounts among a profile's posts nor the panel that opens under the header
-  after Follow shows, and the suggestions aren't requested
-  (`PROFILE_SUGGESTED_FOLLOWS`). The home feed's suggestions are unchanged.
-- **No "Liked by …" row under posts, on trial.** Bluesky's "social proofing"
-  beta is off in Horizon's flag table, in feeds and on a thread's main post,
-  so posts show the like count only.
-- **"AppViews", written as one word.** The Settings row and dialog read
-  "AppViews", with "Horizon AppView" and "Public AppView" inside and an
-  "AppView address" field; the sign-in form's quiet button reads "AppView",
-  and the errors follow suit. The Settings row has a computer icon.
-- **Members skip the second read on posts prism fully describes.** Your muted
-  accounts and subscribed mute lists are kept on the device (read with your
-  own session, never sent to prism, refreshed on sign-in, on app open, every
-  10 minutes and when you mute or unmute, and cleared on sign-out) and applied
-  to the lens's posts. On such a post, Quote is checked again at send.
-- **Bluesky's social-app is merged up to its 1.136.0 work** (upstream
-  `0cda84abe..4e4ad9c5f`, 186 commits): Expo SDK 58, React Native 0.88, React
-  19.3 and Jest 30, Node 24.22.1 (the silonew scripts follow), and Bluesky's
-  own changes, among them Notifications v2 work, the moderation inbox, tablet
-  layouts, and profile links. Every Horizon hook is re-applied in upstream's
-  new shapes: the removed artwork stays removed, media spoilers sit on the
-  rebuilt image gallery, the Media grid keeps its columns, the notifications
-  screen keeps its Private view, the nav card wraps the restructured left nav,
-  and the email 2FA dialog keeps its password gate. Notification rows now use
-  the stock post controls, which carry the private reply limits. In the flag
-  table, Bluesky's Atmosphere screen stays off and profile links are on, as
-  Bluesky's public default.
-- **Profile links (from upstream) never preview payment links.** A link on a
-  payment or support host (PayPal, Cash App, Venmo, Ko-fi, Patreon, GitHub
-  Sponsors, Stripe, Bluesky's own list of support sites and others) is never
-  sent to the link-card service, so no title, favicon or reachability check is
-  fetched for it, and a title filled in automatically is cleared. Typing in
-  the link editor is debounced. Profile links were switched off in Horizon
-  until this guard was built, because a payment page's title could be saved
-  into the public profile record.
 
 ### Fixed
 
-- **Notifications' Private view keeps its All / Replies / Activity pills in
-  the header,** as the Public view does. On web they slid under the header
-  when the page scrolled, leaving the bottom of the labels peeking out. Its
-  Refresh pill now sits below the header too, not behind it.
-- **The Notifications bell no longer vanishes when a notification
-  arrives** on the phone layout of the web app in Firefox for Android. The
-  bottom bar is redrawn whenever a badge count changes, as a scroll used to
-  do.
-- **A quote Horizon can restore shows after a page refresh too.** On a
-  fresh load the quote card said "Deleted" and kept saying it after the post
-  came back; it only worked when the post was reached from inside the app.
-- **Quotes of deleted posts say "Deleted" at once.** A quoted post Bluesky
-  can't find sat on a loading card for seconds while Horizon checked whether
-  it could still show it. It now says "Deleted" straight away, as Bluesky's
-  app does. Only when the author's account lives on one of the communities
-  Horizon's server can restore from does it check in the background, and
-  the post appears in its place if it turns up.
-- **Private replies from some people no longer vanish.** A private post
-  whose author's profile carries a self-label written without a date was
-  thrown out whole: above a reply it showed "Private post – Only its
-  audience can see this post." to someone in the audience, and a list of
-  private posts holding one could fail to load. Horizon now checks only the
-  parts of a post's author and labels it uses.
-- **Thread Lens no longer warns that posts may be missing.** The notice
-  showed on nearly every thread and there was nothing to do about it; posts
-  Thread Lens can't check are still kept back as before.
-- **Threads appear sooner on the web.** The first replies draw at once and
-  the rest follow straight after; a thread link no longer waits to look
-  up the handle first (Horizon's server looks it up with the thread, and
-  links opened before on this device are remembered; the list is cleared
-  on sign-out). Quote posts no longer hold a thread back either.
-- **Threads no longer redraw themselves hundreds of times while loading.**
-  On a fresh load the thread screen re-rendered continuously until the
-  thread arrived, which also held the thread back.
-- **"New posts from…" notifications have no bell badge,** so likes and
-  replies stand out; the row's text says what it is.
-- **Reloading no longer waits to sign in to Horizon's server again.** The
-  short-lived passes for it are kept across reloads and cleared on sign-out
-  or an account switch.
-- **A device clock that's off no longer slows threads.** The app's requests
-  to Horizon's server were refused and retried when the device clock ran
-  ahead; they now go by the server's clock. Opening a thread from a link
-  also no longer waits on your account's server to look up the handle.
-- **The Thread Lens timing log prints in production builds.** Turned on
-  with `horizon:lensTiming`, its lines were stripped from every build but
-  development.
 - **The front switcher is always reachable on your own profile**, from the
   front indicator, "Set front", or a "Change front" fallback while the front
   loads or can't be read, and from the member list; focus returns to what
@@ -306,16 +327,6 @@ web and waiting on its live checks.
   records the visibility, audience and account when it starts, so closing the
   composer or switching accounts mid-save can't record a private draft as
   Public. Drafts saved before this open once as Private.
-- **The centre column no longer drops by the scroll offset** when more posts
-  load or the lightbox opens or closes. The safe-area library that came with
-  the upstream merge measured its own position on web, so a scrolled window
-  became a top inset; Horizon patches it to report the window's insets on web,
-  as before.
-- **The repost and quote menu on web no longer locks page scrolling.**
-  Scrolling the page closes it, as do a click outside it and Escape.
-- **Menu items on web fire once on Enter,** in every menu (the browser's
-  key-up no longer presses an item a second time), so toggles in the audience
-  menu no longer flip back.
 - **Two accounts used in one page no longer share a record-key clock.** Each
   signed-in account mints record keys from its own clock id and counter, so
   posts and other records written from two accounts in one tab carry nothing a
