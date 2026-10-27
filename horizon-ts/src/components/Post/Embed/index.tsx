@@ -53,6 +53,7 @@ import {restoredModerationOpts} from '#/horizon/refract/labeler'
 import {
   RestoredQuoteSlot,
   restoredQuoteSlotActive,
+  useRestoredQuoteSlots,
 } from '#/horizon/refract/RestoredQuote'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
@@ -243,6 +244,8 @@ function RecordEmbed({
 }: CommonProps & {
   embed: TEmbed
 }) {
+  // HORIZON: a quote Bluesky withholds may be a restored post prism serves; re-renders when refract's gate opens
+  const restoredQuoteSlots = useRestoredQuoteSlots()
   switch (embed.type) {
     case 'feed': {
       return (
@@ -307,7 +310,7 @@ function RecordEmbed({
       }
       // HORIZON: a quoted private post is resolved for readers who may view it (end)
       // HORIZON: a quote Bluesky withholds may be a restored post prism serves (start)
-      if (restoredQuoteSlotActive(embed.view.uri)) {
+      if (restoredQuoteSlotActive(embed.view.uri, restoredQuoteSlots)) {
         if (rest.isWithinQuote && !rest.allowNestedQuotes) {
           return null
         }

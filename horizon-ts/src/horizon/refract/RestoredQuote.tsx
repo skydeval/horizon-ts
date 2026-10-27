@@ -28,7 +28,7 @@ import {
   refractUriState,
   subscribeRefractState,
 } from '#/horizon/refract/fill'
-import {refractActive} from '#/horizon/refract/gate'
+import {useRefractActive} from '#/horizon/refract/gate'
 import {readRestored} from '#/horizon/refract/marker'
 import {
   quoteStatusOf,
@@ -73,9 +73,23 @@ export function toRestoredQuoteEmbed(post: PostView): EmbedType<'post'> {
   return embed
 }
 
-/** Whether the quote slot replaces stock's "Deleted" box for `uri`. */
-export function restoredQuoteSlotActive(uri: string): boolean {
-  return refractActive() && !!authorOfUri(uri)
+/**
+ * Whether the quote slot replaces stock's "Deleted" box for `uri`, given
+ * {@link useRestoredQuoteSlots}. Reads no store itself: a plain store read in
+ * render is cached by React Compiler, and refract's gate is often still
+ * closed at a fresh page load's first render (prism's membership answer not
+ * in yet), which kept a restored quote on "Deleted" after a refresh.
+ */
+export function restoredQuoteSlotActive(
+  uri: string,
+  slotsActive: boolean,
+): boolean {
+  return slotsActive && !!authorOfUri(uri)
+}
+
+/** Whether quote slots are on, re-rendering when refract's gate opens. */
+export function useRestoredQuoteSlots(): boolean {
+  return useRefractActive()
 }
 
 /** The slot's status, re-rendering on store and answer changes. */
