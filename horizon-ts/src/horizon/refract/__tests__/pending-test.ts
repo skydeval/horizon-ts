@@ -22,6 +22,7 @@ import {
   refractRetry,
   resolveForWrite,
   type ScheduleResult,
+  type UriOutcome,
   waitOnSchedule,
 } from '#/horizon/refract/fill'
 import {
@@ -31,6 +32,7 @@ import {
   rfProfile,
   rfUri,
 } from '#/horizon/refract/fixtures'
+import {quoteStatusOf} from '#/horizon/refract/quote-status'
 import {deferred, type Harness, setupRefract} from './harness'
 
 /*
@@ -268,6 +270,48 @@ describe('slots', () => {
       () => {},
     )
     await jest.advanceTimersByTimeAsync(50)
+    expect(h.fills().length).toBe(1)
+  })
+
+  /*
+   * 2026-10-27, after the change above: prism's first answer for a deleted
+   * author was `pending`, and the card then waited for the 7 s deadline,
+   * since a slot made no call of its own after `pending`.
+   */
+  it('an on-screen card asks again soon after pending, and shows Deleted on the final answer', async () => {
+    let n = 0
+    h.respond(() => (++n === 1 ? pending() : rfFillAnswer({withheld: []})))
+    let outcome: UriOutcome | undefined
+    let settledAt = 0
+    void askSlot(rfUri('rf1'), {
+      foreground: false,
+      now: true,
+      live: () => true,
+    }).then(value => {
+      outcome = value
+      settledAt = Date.now() - start
+    })
+    await jest.advanceTimersByTimeAsync(600)
+    // The first ask, the re-ask after pending, and its confirming re-ask.
+    expect(h.fills().length).toBe(3)
+    expect(settledAt).toBeGreaterThan(0)
+    expect(settledAt).toBeLessThan(600)
+    expect(quoteStatusOf(rfUri('rf1'), undefined, outcome, false)).toEqual({
+      kind: 'deleted',
+    })
+  })
+
+  it('stops asking once the card is gone', async () => {
+    h.respond(() => pending())
+    const card = {mounted: true}
+    void askSlot(rfUri('rf1'), {
+      foreground: false,
+      now: true,
+      live: () => card.mounted,
+    }).catch(() => {})
+    await jest.advanceTimersByTimeAsync(50)
+    card.mounted = false
+    await jest.advanceTimersByTimeAsync(10_000)
     expect(h.fills().length).toBe(1)
   })
 

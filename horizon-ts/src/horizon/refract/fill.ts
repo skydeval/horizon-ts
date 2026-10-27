@@ -26,9 +26,10 @@
  *   hold ends by 5.4's end rule, at the latest at t0 + 12 s. `refractRetry`
  *   starts a new schedule and moves the old one's waits onto it, adopting a
  *   call in flight. Write fallbacks keep their own offsets (2 and 5 s inside
- *   10 s), each its own call. Feed and quote slots get no call of their own:
- *   their `pending` DIDs ride along at most twice in fills sent anyway, at
- *   least 10 s apart, then are "unresolved".
+ *   10 s), each its own call. Feed slots, and quote slots not on screen, get
+ *   no call of their own: their `pending` DIDs ride along at most twice in
+ *   fills sent anyway, at least 10 s apart, then are "unresolved". An
+ *   on-screen quote slot re-asks after `pending` (`askSlot`'s `now`).
  * - **Clearing (5.2).** An account switch, a `getMembership` answer that
  *   changes `features`, and `NotEnabled` clear every cache and schedule; an
  *   answer that lands after is dropped, and every waiting caller is rejected
@@ -114,6 +115,11 @@ export const FILL_TIMING = {
   writeDeadlineMs: 10_000,
   rideAlongGapMs: 10_000,
   rideAlongMax: 2,
+  /**
+   * An on-screen quote slot's re-asks after a `pending` author, each from
+   * the last answer (5.5 s in all, inside the 7 s background deadline).
+   */
+  slotPendingReaskMs: [400, 600, 1_000, 1_500, 2_000],
 }
 
 const DID_RE = /^did:[a-z]+:[a-zA-Z0-9._:%-]+$/
@@ -1472,10 +1478,34 @@ function withDeadline<T>(promise: Promise<T>, deadline: number): Promise<T> {
  * prism's agreement 2026-10-27) sends the call within the frame, merged with
  * the frame's other asks, instead of waiting for a background slot: the
  * queue held a deleted author's quote on "Loading" for 2-3 s while `fill`
- * itself answers in about 5 ms. A `pending` author rides along in later
- * fills (5.4). Resolves with the URI's outcome.
+ * itself answers in about 5 ms. With `now`, a `pending` author (prism
+ * still resolving it, usually done in well under a second) is asked again
+ * at {@link FILL_TIMING.slotPendingReaskMs} until the answer is final, the
+ * card unmounts, or the offsets run out; without it, a `pending` author
+ * only rides along in later fills (5.4). Resolves with the URI's last
+ * outcome.
  */
 export async function askSlot(
+  uri: string,
+  options: {foreground: boolean; now?: boolean; live: () => boolean},
+): Promise<UriOutcome | undefined> {
+  let verdict = await askSlotOnce(uri, options)
+  if (!options.now) return verdict
+  for (const delay of FILL_TIMING.slotPendingReaskMs) {
+    if (!isPendingOutcome(verdict) || !options.live()) return verdict
+    await new Promise(resolve => setTimeout(resolve, delay))
+    if (!options.live()) return verdict
+    verdict = await askSlotOnce(uri, {...options, foreground: false})
+  }
+  return verdict
+}
+
+function isPendingOutcome(outcome: UriOutcome | undefined): boolean {
+  return outcome?.kind === 'author' && outcome.author === 'pending'
+}
+
+/** One slot ask: the caches, else one fill call. */
+async function askSlotOnce(
   uri: string,
   {
     foreground,

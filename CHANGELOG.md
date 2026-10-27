@@ -217,8 +217,9 @@ web and waiting on its live checks.
 - **Quotes of deleted posts say "Deleted" at once.** A quoted post Bluesky
   can't find sat on its loading card for a few seconds while Horizon waited
   its turn to ask whether it's a restored post. The card on screen now asks
-  straight away (cards on one screen share one request), and the answer
-  comes back in milliseconds.
+  straight away (cards on one screen share one request), and when Horizon's
+  server is still looking the author up it asks again within half a second
+  instead of waiting out a 7-second deadline.
 - **Private replies from some people no longer vanish.** A private post
   whose author's profile carries a self-label written without a date was
   thrown out whole: above a reply it showed "Private post – Only its
