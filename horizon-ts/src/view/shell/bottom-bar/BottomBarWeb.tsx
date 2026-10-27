@@ -23,7 +23,7 @@ import {Link} from '#/view/com/util/Link'
 import {UserAvatar} from '#/view/com/util/UserAvatar'
 import {Logo} from '#/view/icons/Logo'
 import {Logotype} from '#/view/icons/Logotype'
-import {atoms as a, useTheme} from '#/alf'
+import {atoms as a, useTheme, web} from '#/alf'
 import {Button, ButtonText} from '#/components/Button'
 import {useDialogControl} from '#/components/Dialog'
 import {SwitchAccountDialog} from '#/components/dialogs/SwitchAccount'
@@ -331,7 +331,13 @@ const NavItem: React.FC<{
   return (
     <Link
       href={href}
-      style={[styles.ctrl, a.pb_lg]}
+      /*
+       * HORIZON: each tab paints on its own layer. Over the bar's backdrop
+       * window (its own moving layer), a phone browser left the whole
+       * Notifications tab undrawn when its unread badge appeared, until a
+       * scroll repainted the bar (2026-10-27).
+       */
+      style={[styles.ctrl, a.pb_lg, web({willChange: 'transform'})]}
       navigationAction={isOnDifferentProfile ? 'push' : 'navigate'}
       aria-role="link"
       aria-label={routeName}
