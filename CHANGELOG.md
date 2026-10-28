@@ -44,6 +44,11 @@ fundraisers are paused and have no phase yet.
 
 ### Changed
 
+- **Audience lists are private:** who is on a list that picks a private
+  post's audience is now seen only by you, not kept as a public record in your
+  repo. Existing lists keep working, and their old public copies are removed
+  the next time you open Horizon. Reply lists, moderation lists and blocks stay
+  public, as on Bluesky.
 - **A private post's settings button shows who can see it too:** "👥
   Interaction limited · 🔒 Horizon members", or Followers, People you follow,
   Only me, or the audience's own name, each with its icon, so both settings
