@@ -3,6 +3,7 @@ import {act, useState} from 'react'
 import {type Root as ReactRoot} from 'react-dom/client'
 
 import {type ThreadgateAllowUISetting} from '#/state/queries/threadgate/types'
+import {type ComposeAudience} from '#/horizon/private/composer/state'
 import {type app} from '#/lexicons'
 
 /*
@@ -137,9 +138,14 @@ jest.mock('#/components/icons/Group', () => ({
 }))
 jest.mock('#/components/icons/List', () => ({
   ListPlus_Stroke2_Corner0_Rounded: () => null,
+  ListSparkle_Stroke2_Corner0_Rounded: () => null,
+}))
+jest.mock('#/components/icons/Lock', () => ({
+  Lock_Stroke2_Corner0_Rounded: () => null,
 }))
 jest.mock('#/components/icons/Person', () => ({
   Person_Stroke2_Corner0_Rounded: () => null,
+  PersonCheck_Stroke2_Corner0_Rounded: () => null,
   PersonGroup_Stroke2_Corner2_Rounded: () => null,
 }))
 jest.mock('#/components/icons/Quote', () => ({
@@ -306,6 +312,19 @@ describe('the audience menu on web flips a toggle once per key press', () => {
     },
   )
 
+  it('a public post’s trigger reads the interaction summary alone', async () => {
+    await actAndSettle(() =>
+      root.render(
+        <I18nProvider i18n={i18n}>
+          <Harness />
+        </I18nProvider>,
+      ),
+    )
+    expect(byTestId('composerAudienceButton').textContent).toBe(
+      'Anyone can interact',
+    )
+  })
+
   it('a click flips "Allow quote posts" once', async () => {
     await openMenu()
 
@@ -317,5 +336,67 @@ describe('the audience menu on web flips a toggle once per key press', () => {
     expect(onPostgate).toHaveBeenCalledTimes(1)
     expect(quotesAllowedShown()).toBe(false)
     expect(menu()).not.toBeNull()
+  })
+})
+
+/*
+ * skydeval, 2026-10-27: a private post's trigger shows the interaction
+ * summary and who can see, side by side, so both read at a glance.
+ */
+describe('the private post trigger', () => {
+  const POSTGATE = {
+    $type: 'app.bsky.feed.postgate',
+    createdAt: new Date(0).toISOString(),
+    post: 'at://did:plc:main/app.bsky.feed.post/1',
+    embeddingRules: [],
+  } as app.bsky.feed.postgate.Main
+
+  async function show(
+    audience: ComposeAudience,
+    threadgate: ThreadgateAllowUISetting[] | undefined,
+  ) {
+    await actAndSettle(() =>
+      root.render(
+        <I18nProvider i18n={i18n}>
+          <AudienceMenu
+            visibility="private"
+            audience={audience}
+            onAudience={() => {}}
+            threadgate={threadgate}
+            onThreadgate={() => {}}
+            postgate={POSTGATE}
+            onPostgate={() => {}}
+          />
+        </I18nProvider>,
+      ),
+    )
+    return byTestId('composerAudienceButton')
+  }
+
+  it('reads "Interaction limited · Followers" with limits and an audience', async () => {
+    const button = await show({kind: 'mode', mode: 'followers'}, [
+      {type: 'followers'},
+    ])
+    expect(button.textContent).toBe('Interaction limited·Followers')
+    expect(button.getAttribute('aria-label')).toBe(
+      'Audience: Followers. Interaction limited.',
+    )
+  })
+
+  it('reads "Anyone can interact · Horizon members" by default', async () => {
+    const button = await show({kind: 'mode', mode: 'everyone'}, [
+      {type: 'everybody'},
+    ])
+    expect(button.textContent).toBe('Anyone can interact·Horizon members')
+  })
+
+  it('a private reply, with no reply settings, names the audience alone', async () => {
+    const button = await show({kind: 'mode', mode: 'nobody'}, undefined)
+    expect(button.textContent).toBe('Only me')
+  })
+
+  it('asks for an audience alone while none is chosen', async () => {
+    const button = await show({kind: 'unpicked'}, [{type: 'everybody'}])
+    expect(button.textContent).toBe('Choose who can see this')
   })
 })

@@ -164,22 +164,32 @@ describe('interaction summary and defaults', () => {
   })
 })
 
-describe('the drop-down trigger (round 2 fix 5)', () => {
-  it('reads the interaction summary in both visibilities', () => {
+describe('the drop-down trigger', () => {
+  it('a public post reads the interaction summary', () => {
     expect(
       audienceTriggerReads({isPrivate: false, hasReplySection: true}),
     ).toBe('summary')
+    expect(
+      audienceTriggerReads({isPrivate: false, hasReplySection: false}),
+    ).toBe('summary')
+  })
+
+  it('a private post reads the summary and its audience (skydeval, 2026-10-27)', () => {
     expect(audienceTriggerReads({isPrivate: true, hasReplySection: true})).toBe(
-      'summary',
+      'both',
     )
   })
 
-  it('names the audience only on a private compose with no reply section', () => {
+  it('reads the audience alone with no reply section or none chosen yet', () => {
     expect(
       audienceTriggerReads({isPrivate: true, hasReplySection: false}),
     ).toBe('audience')
     expect(
-      audienceTriggerReads({isPrivate: false, hasReplySection: false}),
-    ).toBe('summary')
+      audienceTriggerReads({
+        isPrivate: true,
+        hasReplySection: true,
+        audiencePicked: false,
+      }),
+    ).toBe('audience')
   })
 })

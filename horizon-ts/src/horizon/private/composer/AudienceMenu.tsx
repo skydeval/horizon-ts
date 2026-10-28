@@ -27,9 +27,14 @@ import {Check_Stroke2_Corner0_Rounded as CheckIcon} from '#/components/icons/Che
 import {TinyChevronBottom_Stroke2_Corner0_Rounded as TinyChevronIcon} from '#/components/icons/Chevron'
 import {Earth_Stroke2_Corner0_Rounded as EarthIcon} from '#/components/icons/Globe'
 import {Group3_Stroke2_Corner0_Rounded as GroupIcon} from '#/components/icons/Group'
-import {ListPlus_Stroke2_Corner0_Rounded as ListPlusIcon} from '#/components/icons/List'
+import {
+  ListPlus_Stroke2_Corner0_Rounded as ListPlusIcon,
+  ListSparkle_Stroke2_Corner0_Rounded as ListIcon,
+} from '#/components/icons/List'
+import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {
   Person_Stroke2_Corner0_Rounded as PersonIcon,
+  PersonCheck_Stroke2_Corner0_Rounded as PersonCheckIcon,
   PersonGroup_Stroke2_Corner2_Rounded as PersonGroupIcon,
 } from '#/components/icons/Person'
 import {CloseQuote_Stroke2_Corner1_Rounded as QuoteIcon} from '#/components/icons/Quote'
@@ -161,6 +166,36 @@ function useAudienceText(
 }
 
 /**
+ * The icon beside a private compose's audience on the trigger: a lock for
+ * Horizon members (or the post being replied to), people for Followers, a
+ * person with a check for People you follow, a list for a named audience, a
+ * person for Only me.
+ */
+export function audienceIconOf(audience: ComposeAudience | undefined) {
+  if (!audience) return LockIcon
+  switch (audience.kind) {
+    case 'mode':
+      switch (audience.mode) {
+        case 'everyone':
+          return LockIcon
+        case 'followers':
+          return PersonGroupIcon
+        case 'following':
+          return PersonCheckIcon
+        case 'nobody':
+          return PersonIcon
+      }
+      return LockIcon
+    case 'list':
+      return ListIcon
+    case 'parent':
+      return LockIcon
+    case 'unpicked':
+      return PersonGroupIcon
+  }
+}
+
+/**
  * The checkbox mark of a menu item: the size of `Menu.ItemRadio`.
  */
 export function MenuCheck({selected}: {selected: boolean}) {
@@ -255,24 +290,23 @@ export function AudienceMenu({
   const summaryText = hasLimits
     ? l`Interaction limited`
     : l`Anyone can interact`
-  // While no audience is chosen, the trigger asks for one (P5R7-L1).
-  const showsAudience =
-    (isPrivate && audience?.kind === 'unpicked') ||
-    audienceTriggerReads({isPrivate, hasReplySection: !!threadgate}) ===
-      'audience'
-  const label = showsAudience ? audienceText : summaryText
+  /*
+   * A private post shows its interaction summary and its audience side by
+   * side (skydeval, 2026-10-27); while no audience is chosen, the trigger
+   * asks for one alone (P5R7-L1).
+   */
+  const reads = audienceTriggerReads({
+    isPrivate,
+    hasReplySection: !!threadgate,
+    audiencePicked: audience?.kind !== 'unpicked',
+  })
   const accessibilityLabel = isPrivate
     ? threadgate
       ? l`Audience: ${audienceText}. ${summaryText}.`
       : l`Audience: ${audienceText}.`
     : summaryText
-  const icon = showsAudience
-    ? audience?.kind === 'mode' && audience.mode === 'everyone'
-      ? EarthIcon
-      : PersonGroupIcon
-    : hasLimits
-      ? GroupIcon
-      : EarthIcon
+  const summaryIcon = hasLimits ? GroupIcon : EarthIcon
+  const audienceIcon = audienceIconOf(audience)
 
   const onDismissTooltip = (visible: boolean) => {
     if (visible) return
@@ -303,10 +337,38 @@ export function AudienceMenu({
           size="small"
           label={accessibilityLabel}
           style={[a.flex_shrink, fullWidth && a.w_full]}>
-          <ButtonIcon icon={icon} />
-          <ButtonText numberOfLines={1} maxFontSizeMultiplier={2}>
-            {label}
-          </ButtonText>
+          {reads !== 'audience' ? (
+            <>
+              <ButtonIcon icon={summaryIcon} />
+              <ButtonText
+                numberOfLines={1}
+                maxFontSizeMultiplier={2}
+                style={[a.flex_shrink]}>
+                {summaryText}
+              </ButtonText>
+            </>
+          ) : null}
+          {reads === 'both' ? (
+            <ButtonText
+              aria-hidden
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              maxFontSizeMultiplier={2}>
+              ·
+            </ButtonText>
+          ) : null}
+          {reads !== 'summary' ? (
+            <>
+              <ButtonIcon icon={audienceIcon} />
+              <ButtonText
+                testID="composerAudienceButtonAudience"
+                numberOfLines={1}
+                maxFontSizeMultiplier={2}
+                style={[a.flex_shrink]}>
+                {audienceText}
+              </ButtonText>
+            </>
+          ) : null}
           <ButtonIcon icon={TinyChevronIcon} size="2xs" />
         </Button>
       )}

@@ -44,6 +44,10 @@ fundraisers are paused and have no phase yet.
 
 ### Changed
 
+- **A private post's settings button shows who can see it too:** "👥
+  Interaction limited · 🔒 Horizon members", or Followers, People you follow,
+  Only me, or the audience's own name, each with its icon, so both settings
+  read at a glance without opening the menu.
 - **Reply, quote and mention notifications show the avatar without a
   badge,** on the Public and Private tabs, as new-post notifications already
   did. Likes, reposts and follows keep theirs.

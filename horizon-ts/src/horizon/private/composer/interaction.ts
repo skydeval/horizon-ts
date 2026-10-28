@@ -160,20 +160,25 @@ export function interactionSummary(
 }
 
 /**
- * What the audience drop-down's trigger reads (v2 round 2, fix 5): the
- * interaction summary in both visibilities, as the stock pill does, with the
- * audience named inside under Who can see. Only a private compose with no
- * reply section (a reply composed Private, starting a branch, where who can
- * see is all the menu sets) has no summary to show, so it names the audience.
+ * What the audience drop-down's trigger reads: a public post, the
+ * interaction summary, as the stock pill does (v2 round 2, fix 5); a private
+ * post, the summary and its audience side by side, "Interaction limited ·
+ * Followers", so both show at a glance (skydeval, 2026-10-27). A private
+ * compose with no reply section (a reply composed Private, starting a
+ * branch) has no summary, and one with no audience chosen yet asks for one
+ * (P5R7-L1), so those read the audience alone.
  */
 export function audienceTriggerReads({
   isPrivate,
   hasReplySection,
+  audiencePicked = true,
 }: {
   isPrivate: boolean
   hasReplySection: boolean
-}): 'summary' | 'audience' {
-  return isPrivate && !hasReplySection ? 'audience' : 'summary'
+  audiencePicked?: boolean
+}): 'summary' | 'audience' | 'both' {
+  if (!isPrivate) return 'summary'
+  return hasReplySection && audiencePicked ? 'both' : 'audience'
 }
 
 /**
