@@ -17,6 +17,7 @@ import {type SessionAccount, usePdsClient, useSession} from '#/state/session'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_NATIVE} from '#/env'
+import {PUSH_OFF} from '#/horizon/switches'
 import {app} from '#/lexicons'
 
 /**
@@ -158,6 +159,8 @@ export function useGetAndRegisterPushToken() {
       isAgeRestricted?: boolean
     } = {}) => {
       if (!IS_NATIVE || IS_DEV) return
+      // HORIZON: no push service for Horizon's app yet (PUSH_OFF)
+      if (PUSH_OFF) return
 
       /**
        * This will also fire the listener added via `addPushTokenListener`. That
@@ -206,6 +209,8 @@ export function useNotificationsRegistration() {
      * _after_ we've loaded their age assurance state.
      */
     if (!currentAccount) return
+    // HORIZON: no push service for Horizon's app yet (PUSH_OFF)
+    if (PUSH_OFF) return
 
     notyLogger.debug(`useNotificationsRegistration`)
 
@@ -259,6 +264,8 @@ export function useRequestNotificationsPermission() {
   return async (
     context: 'StartOnboarding' | 'AfterOnboarding' | 'Login' | 'Home',
   ) => {
+    // HORIZON: no prompt while there is no push service (PUSH_OFF)
+    if (PUSH_OFF) return
     const permissions = await Notifications.getPermissionsAsync()
 
     if (
@@ -346,6 +353,8 @@ export async function resetBadgeCount() {
 
 export async function unregisterPushToken(clients: TemporaryPushClient[]) {
   if (!IS_NATIVE) return
+  // HORIZON: nothing was registered (PUSH_OFF)
+  if (PUSH_OFF) return
 
   try {
     const token = await getPushToken()

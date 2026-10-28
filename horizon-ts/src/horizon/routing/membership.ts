@@ -13,6 +13,7 @@
  */
 
 import {useSyncExternalStore} from 'react'
+import {AppState} from 'react-native'
 import {
   type Client,
   XrpcInvalidResponseError,
@@ -366,9 +367,22 @@ function defaultEnvironment(): ProbeEnvironment {
     setTimeout: (callback, ms) => setTimeout(callback, ms),
     clearTimeout: handle =>
       clearTimeout(handle as ReturnType<typeof setTimeout>),
-    isHidden: () => hasDocument && document.visibilityState === 'hidden',
+    /*
+     * In the app, the page's visibility is the app's state: hidden in the
+     * background, visible again when it comes to the front (2K design, native
+     * `AppState` active)
+     */
+    isHidden: () =>
+      hasDocument
+        ? document.visibilityState === 'hidden'
+        : AppState.currentState === 'background',
     onVisible: callback => {
-      if (!hasDocument) return () => {}
+      if (!hasDocument) {
+        const subscription = AppState.addEventListener('change', state => {
+          if (state === 'active') callback()
+        })
+        return () => subscription.remove()
+      }
       const listener = () => {
         if (document.visibilityState === 'visible') callback()
       }

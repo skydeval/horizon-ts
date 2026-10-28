@@ -1022,9 +1022,8 @@ const NATIVE_LINK_ACTION_CONFIG = {
 }
 
 const LINKING = {
-  // TODO figure out what we are going to use
-  // note: `bluesky://` is what is used in app.config.js
-  prefixes: ['bsky://', 'bluesky://', 'https://bsky.app'],
+  // HORIZON: Horizon's scheme (app.config.js) and site, not Bluesky's
+  prefixes: ['app.nearhorizon://', 'https://nearhorizon.app'],
 
   getPathFromState(state: State) {
     // find the current node in the navigation tree

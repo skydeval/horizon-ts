@@ -6,7 +6,10 @@
  * `completeWebOAuth`); the AppView-switch record is not carried over.
  */
 
-import {type OAuthSession} from '@atproto/oauth-client-browser'
+import {
+  type BrowserOAuthClient,
+  type OAuthSession,
+} from '@atproto/oauth-client-browser'
 
 import {getOAuthClient} from '#/horizon/session/oauth-client'
 import {OAUTH_CALLBACK_PATH} from '#/horizon/session/oauth-metadata'
@@ -49,7 +52,9 @@ async function completeCallback(
   login: (session: OAuthSession, state: string | null) => Promise<void>,
 ) {
   clearPendingSignIn()
-  const result = await getOAuthClient().initCallback(params)
+  // This file runs on web only, where the client is the browser one
+  const client = getOAuthClient() as unknown as BrowserOAuthClient
+  const result = await client.initCallback(params)
   await login(result.session, result.state)
   return true
 }

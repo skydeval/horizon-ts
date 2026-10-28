@@ -2,11 +2,13 @@ import {describe, expect, it} from '@jest/globals'
 
 import committedProduction from '../../../../public/oauth-client-metadata.json'
 import committedDev from '../../../../public/oauth-client-metadata-dev.json'
+import committedNative from '../../../../public/oauth-client-metadata-native.json'
 import {
   createPreviewClientMetadata,
   HOSTED_DEV_CLIENT_METADATA,
   isOAuthPopupComplete,
   loopbackClientId,
+  NATIVE_CLIENT_METADATA,
   OAUTH_SCOPE,
   PRODUCTION_CLIENT_METADATA,
   selectOAuthClientMode,
@@ -21,6 +23,29 @@ describe('OAuth client metadata', () => {
 
   it('the committed development document equals the one built in code', () => {
     expect(committedDev).toEqual(HOSTED_DEV_CLIENT_METADATA)
+  })
+
+  it('the committed app document equals the one built in code', () => {
+    expect(committedNative).toEqual(NATIVE_CLIENT_METADATA)
+  })
+
+  it("the app document is a native client whose redirect is nearhorizon.app's reversed scheme", () => {
+    expect(NATIVE_CLIENT_METADATA).toEqual({
+      client_id: 'https://nearhorizon.app/oauth-client-metadata-native.json',
+      client_name: 'Horizon',
+      client_uri: 'https://nearhorizon.app',
+      redirect_uris: ['app.nearhorizon:/oauth/callback'],
+      scope: 'atproto transition:generic transition:email transition:chat.bsky',
+      token_endpoint_auth_method: 'none',
+      response_types: ['code'],
+      grant_types: ['authorization_code', 'refresh_token'],
+      application_type: 'native',
+      dpop_bound_access_tokens: true,
+    })
+    // The library accepts only a `scheme:/path` redirect with a dotted scheme
+    expect(NATIVE_CLIENT_METADATA.redirect_uris[0]).toMatch(
+      /^(?:[^.]+(?:\.[^.]+)+):\/(?:[^/].*)?$/,
+    )
   })
 
   it('the production document is the design document', () => {

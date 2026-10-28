@@ -23,6 +23,13 @@ export const LOCAL_FLAGS: boolean = true
 export const AGE_ASSURANCE_OFF: boolean = true
 
 /**
+ * Native push is off: no permission prompt, and no device token is sent to
+ * Bluesky's push service, which delivers only to Bluesky's own app. On until
+ * Horizon has its own push service.
+ */
+export const PUSH_OFF: boolean = true
+
+/**
  * Settings > About shows "Send error report". Off while error reporting is
  * off, since the report would go nowhere.
  */

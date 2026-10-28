@@ -23,6 +23,9 @@ overrides:
   'psl': '1.9.0'
   '@types/psl': '1.1.1'
   'react-native-screens': '4.30.0'
+  # HORIZON: the Expo OAuth client (0.1.x, the last on MMKV 3) asks for an old
+  # expo-web-browser; use the app's own, so one native module is linked
+  '@atproto/oauth-client-expo>expo-web-browser': '58.0.6'
 allowBuilds:
   '@sentry/cli': true
   '@swc/core': false

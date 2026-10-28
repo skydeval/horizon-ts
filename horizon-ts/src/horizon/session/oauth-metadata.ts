@@ -5,8 +5,9 @@
  *
  * The production document is also committed as
  * `public/oauth-client-metadata.json`, and the hosted development document as
- * `public/oauth-client-metadata-dev.json`; a unit test keeps each equal to the
- * document built here. A preview build's document is written into the build
+ * `public/oauth-client-metadata-dev.json`, and the app's document as
+ * `public/oauth-client-metadata-native.json`; a unit test keeps each equal to
+ * the document built here. A preview build's document is written into the build
  * output by `scripts/horizon-preview-pages.js`; a unit test keeps that script
  * equal to `createPreviewClientMetadata`.
  */
@@ -74,24 +75,27 @@ export type OAuthClientMetadataDocument = {
   token_endpoint_auth_method: 'none'
   response_types: ['code']
   grant_types: ['authorization_code', 'refresh_token']
-  application_type: 'web'
+  application_type: 'web' | 'native'
   dpop_bound_access_tokens: true
 }
 
 /**
- * Build a public, DPoP-bound web client document. The key order matches the
- * committed JSON files.
+ * Build a public, DPoP-bound client document, for the web unless
+ * `applicationType` says `native`. The key order matches the committed JSON
+ * files.
  */
 export function createOAuthClientMetadata({
   clientId,
   clientUri,
   redirectUri,
   clientName,
+  applicationType = 'web',
 }: {
   clientId: string
   clientUri: string
   redirectUri: string
   clientName: string
+  applicationType?: 'web' | 'native'
 }): OAuthClientMetadataDocument {
   return {
     client_id: clientId,
@@ -102,7 +106,7 @@ export function createOAuthClientMetadata({
     token_endpoint_auth_method: 'none',
     response_types: ['code'],
     grant_types: ['authorization_code', 'refresh_token'],
-    application_type: 'web',
+    application_type: applicationType,
     dpop_bound_access_tokens: true,
   }
 }
@@ -127,6 +131,30 @@ export const HOSTED_DEV_CLIENT_METADATA = createOAuthClientMetadata({
   clientUri: HORIZON_ORIGIN,
   redirectUri: HOSTED_DEV_REDIRECT_URI,
   clientName: `${PRODUCT_NAME} (development)`,
+})
+
+/**
+ * The app's client ID: its own document beside the web one on nearhorizon.app.
+ */
+export const NATIVE_CLIENT_ID = `${HORIZON_ORIGIN}/oauth-client-metadata-native.json`
+
+/**
+ * The app's redirect: a private-use scheme that is nearhorizon.app reversed
+ * (the app's `scheme` in app.config.js), with a single slash, as atproto
+ * OAuth requires of native clients.
+ */
+export const NATIVE_REDIRECT_URI = 'app.nearhorizon:/oauth/callback'
+
+/**
+ * The Android (and later iOS) app's document, served at
+ * `https://nearhorizon.app/oauth-client-metadata-native.json`.
+ */
+export const NATIVE_CLIENT_METADATA = createOAuthClientMetadata({
+  clientId: NATIVE_CLIENT_ID,
+  clientUri: HORIZON_ORIGIN,
+  redirectUri: NATIVE_REDIRECT_URI,
+  clientName: PRODUCT_NAME,
+  applicationType: 'native',
 })
 
 /**

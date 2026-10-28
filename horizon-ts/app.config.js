@@ -39,8 +39,13 @@ module.exports = function (_config) {
    * profile's env, so profiles opt out of OTA updates with their own flag. A
    * dev client with updates on rejects unsigned manifests from a local Metro.
    */
-  const UPDATES_ENABLED =
-    (IS_TESTFLIGHT || IS_PRODUCTION) && !process.env.DISABLE_UPDATES
+  /*
+   * HORIZON: over-the-air updates are off. Upstream's channel is Bluesky's
+   * server and signing certificate, so a Horizon build that checked it could
+   * replace itself with stock Bluesky. A Horizon update server can switch this
+   * back on with its own URL and certificate
+   */
+  const UPDATES_ENABLED = false
 
   const USE_SENTRY = Boolean(process.env.SENTRY_AUTH_TOKEN)
 
@@ -56,9 +61,12 @@ module.exports = function (_config) {
       version: VERSION,
       // HORIZON: the product name has one source in src/horizon/branding
       name: product.name,
-      slug: 'bluesky',
-      scheme: 'bluesky',
-      owner: 'blueskysocial',
+      /*
+       * HORIZON: Horizon's own identity. The scheme is the reverse of
+       * nearhorizon.app, which native OAuth needs for its redirect
+       */
+      slug: 'horizon',
+      scheme: 'app.nearhorizon',
       runtimeVersion: {
         policy: 'appVersion',
       },
@@ -206,7 +214,8 @@ module.exports = function (_config) {
           backgroundColor: '#006AFF',
         },
         googleServicesFile: './google-services.json',
-        package: 'xyz.blueskyweb.app',
+        // HORIZON: Horizon's own package, so it installs beside Bluesky
+        package: 'app.nearhorizon',
         intentFilters: [
           {
             action: 'VIEW',
@@ -214,7 +223,8 @@ module.exports = function (_config) {
             data: [
               {
                 scheme: 'https',
-                host: 'bsky.app',
+                // HORIZON: Horizon's links, not bsky.app's
+                host: 'nearhorizon.app',
               },
               ...(IS_DEV
                 ? [
@@ -234,7 +244,7 @@ module.exports = function (_config) {
         favicon: './assets/favicon.png',
       },
       updates: {
-        url: 'https://updates.bsky.app/manifest',
+        // HORIZON: no update server (see UPDATES_ENABLED)
         enabled: UPDATES_ENABLED,
         fallbackToCacheTimeout: 30000,
         codeSigningCertificate: UPDATES_ENABLED
@@ -301,17 +311,7 @@ module.exports = function (_config) {
           'react-native-edge-to-edge',
           {android: {enforceNavigationBarContrast: false}},
         ],
-        /*
-         * Expo runs Gradle mods in reverse registration order. Keep Bitdrift
-         * before Sentry so its plugins block is prepended after Sentry's apply
-         * statement and remains at the top, as required by Gradle.
-         */
-        [
-          '@bitdrift/react-native',
-          {
-            networkInstrumentation: true,
-          },
-        ],
+        // HORIZON: no Bitdrift (a proprietary network logging SDK)
         ...(USE_SENTRY
           ? [
               /** @type {[string, any]} */ ([
@@ -430,80 +430,15 @@ module.exports = function (_config) {
             },
           },
         ],
-        [
-          '@bsky.app/expo-dynamic-app-icon',
-          {
-            /**
-             * Default set
-             */
-            default_light: {
-              ios: './assets/app-icons/ios_icon_legacy_light.png',
-              android: './assets/app-icons/android_icon_legacy_light.png',
-              prerendered: true,
-            },
-            default_dark: {
-              ios: './assets/app-icons/ios_icon_legacy_dark.png',
-              android: './assets/app-icons/android_icon_legacy_dark.png',
-              prerendered: true,
-            },
-
-            /**
-             * Bluesky+ core set
-             */
-            core_aurora: {
-              ios: './assets/app-icons/ios_icon_core_aurora.png',
-              android: './assets/app-icons/android_icon_core_aurora.png',
-              prerendered: true,
-            },
-            core_bonfire: {
-              ios: './assets/app-icons/ios_icon_core_bonfire.png',
-              android: './assets/app-icons/android_icon_core_bonfire.png',
-              prerendered: true,
-            },
-            core_sunrise: {
-              ios: './assets/app-icons/ios_icon_core_sunrise.png',
-              android: './assets/app-icons/android_icon_core_sunrise.png',
-              prerendered: true,
-            },
-            core_sunset: {
-              ios: './assets/app-icons/ios_icon_core_sunset.png',
-              android: './assets/app-icons/android_icon_core_sunset.png',
-              prerendered: true,
-            },
-            core_midnight: {
-              ios: './assets/app-icons/ios_icon_core_midnight.png',
-              android: './assets/app-icons/android_icon_core_midnight.png',
-              prerendered: true,
-            },
-            core_flat_blue: {
-              ios: './assets/app-icons/ios_icon_core_flat_blue.png',
-              android: './assets/app-icons/android_icon_core_flat_blue.png',
-              prerendered: true,
-            },
-            core_flat_white: {
-              ios: './assets/app-icons/ios_icon_core_flat_white.png',
-              android: './assets/app-icons/android_icon_core_flat_white.png',
-              prerendered: true,
-            },
-            core_flat_black: {
-              ios: './assets/app-icons/ios_icon_core_flat_black.png',
-              android: './assets/app-icons/android_icon_core_flat_black.png',
-              prerendered: true,
-            },
-            core_classic: {
-              ios: './assets/app-icons/ios_icon_core_classic.png',
-              android: './assets/app-icons/android_icon_core_classic.png',
-              prerendered: true,
-            },
-          },
-        ],
+        // HORIZON: no Bluesky+ alternate icons (all Bluesky marks)
         ['expo-screen-orientation'],
         ['expo-location'],
         [
           'expo-contacts',
           {
             contactsPermission:
-              'I agree to allow Bluesky to use my contacts for friend discovery until I opt out.',
+              // HORIZON: the app's own name
+              'I agree to allow Horizon to use my contacts for friend discovery until I opt out.',
           },
         ],
       ],
@@ -550,12 +485,8 @@ module.exports = function (_config) {
               },
             },
           },
-          projectId: '55bd077a-d905-4184-9c7f-94789ba0f302',
+          // HORIZON: no EAS project; Bluesky's projectId and build cache are gone
         },
-      },
-      experiments: {
-        // HORIZON: no /static base URL, so dist/ serves as a plain static folder
-        buildCacheProvider: 'eas',
       },
     },
   }

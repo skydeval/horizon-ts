@@ -28,6 +28,7 @@ import {
   LexAuthFactorError,
   PasswordSession,
 } from '@atproto/lex-password-session'
+import {type BrowserOAuthClient} from '@atproto/oauth-client-browser'
 import {type DidString} from '@atproto/syntax'
 import {t} from '@lingui/core/macro'
 import {jwtDecode} from 'jwt-decode'
@@ -130,13 +131,22 @@ const defaultEnv: RegistrationEnv = {
       'width=600,height=600,menubar=no,toolbar=no',
     ),
   // `signIn` with `display: 'popup'` is this call; it takes the window name.
-  signIn: (did, name) =>
-    getOAuthClient().signInPopup(did, {
+  signIn: (did, name) => {
+    /*
+     * Popup sign-in is web only: the app's client has none, and the dialog
+     * offers the app-password path there instead
+     */
+    const client = getOAuthClient() as Partial<BrowserOAuthClient>
+    if (!client.signInPopup) {
+      return Promise.reject(new Error('Popup sign-in is only on the web'))
+    }
+    return client.signInPopup(did, {
       display: 'popup',
       popupName: name,
       prompt: 'login',
       scope: OAUTH_SCOPE,
-    }),
+    })
+  },
   currentDid: () => getCurrentClients()?.did,
   currentPdsClient: () => getCurrentClients()?.pdsClient,
   revoke: did => revokeOAuthGrant(did),

@@ -1,12 +1,21 @@
 /*
  * Horizon's own device keys, outside Bluesky's storage schema. This is the
- * native and test implementation: an in-memory map. The web implementation
- * (`local-store.web.ts`) uses `localStorage` and follows other tabs.
+ * native implementation: its own synchronous MMKV instance, so drafts, the
+ * private outbox, membership and the like survive the app closing. In tests
+ * MMKV runs in memory. The web implementation (`local-store.web.ts`) uses
+ * `localStorage` and follows other tabs.
  */
 
-const values = new Map<string, string>()
+import {MMKV} from 'react-native-mmkv'
+
+let store: MMKV | undefined
 const listeners = new Map<string, Set<() => void>>()
 const prefixListeners = new Map<string, Set<(key: string) => void>>()
+
+function mmkv() {
+  if (!store) store = new MMKV({id: 'horizon_local'})
+  return store
+}
 
 function notify(key: string) {
   listeners.get(key)?.forEach(listener => listener())
@@ -16,47 +25,72 @@ function notify(key: string) {
 }
 
 /**
- * Read a key, or `undefined` when it is not set.
+ * Read a key, or `undefined` when it is not set or storage failed.
  */
 export function readLocal(key: string): string | undefined {
-  return values.get(key)
+  try {
+    return mmkv().getString(key)
+  } catch {
+    return undefined
+  }
+}
+
+function write(key: string, value: string | undefined) {
+  if (value === undefined) {
+    mmkv().delete(key)
+  } else {
+    mmkv().set(key, value)
+  }
 }
 
 /**
  * Write a key; `undefined` removes it. Listeners for the key are called.
  */
 export function writeLocal(key: string, value: string | undefined) {
-  if (value === undefined) {
-    values.delete(key)
-  } else {
-    values.set(key, value)
+  try {
+    write(key, value)
+  } catch {
+    // Storage failed (e.g. the disk is full); the value is lost.
   }
   notify(key)
 }
 
 /**
- * Write a key and read it back (2K design PA-28, K8-N8). `false` when the
- * write threw or the value read back differs; the map never fails here, so
- * this is `writeLocal` that answers `true`.
+ * Write a key and read it back (2K design PA-28, K8-N8): `false` when the
+ * write threw or the value read back differs. Unlike {@link writeLocal}, a
+ * failure is never swallowed.
  */
 export function writeLocalChecked(
   key: string,
   value: string | undefined,
 ): boolean {
-  writeLocal(key, value)
-  return values.get(key) === value
+  let saved = false
+  try {
+    write(key, value)
+    saved = mmkv().getString(key) === value
+  } catch {
+    saved = false
+  }
+  notify(key)
+  return saved
 }
 
 /**
- * Every key that starts with `prefix`.
+ * Every key that starts with `prefix`; `[]` when storage failed.
  */
 export function listLocalKeys(prefix: string): string[] {
-  return Array.from(values.keys()).filter(key => key.startsWith(prefix))
+  try {
+    return mmkv()
+      .getAllKeys()
+      .filter(key => key.startsWith(prefix))
+  } catch {
+    return []
+  }
 }
 
 /**
- * Call `listener` whenever the key changes, in this tab or another one.
- * Returns the unsubscribe function.
+ * Call `listener` whenever the key changes. Returns the unsubscribe function.
+ * The app is one process, so every change comes through this module.
  */
 export function subscribeLocal(key: string, listener: () => void) {
   let set = listeners.get(key)
@@ -71,8 +105,8 @@ export function subscribeLocal(key: string, listener: () => void) {
 }
 
 /**
- * Call `listener` with the key whenever a key starting with `prefix` changes,
- * in this tab or another one. Returns the unsubscribe function.
+ * Call `listener` with the key whenever a key starting with `prefix` changes.
+ * Returns the unsubscribe function.
  */
 export function subscribeLocalPrefix(
   prefix: string,

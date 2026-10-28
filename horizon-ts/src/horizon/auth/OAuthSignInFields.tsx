@@ -18,6 +18,7 @@ import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import * as TextField from '#/components/forms/TextField'
 import {At_Stroke2_Corner0_Rounded as AtIcon} from '#/components/icons/At'
 import {Loader} from '#/components/Loader'
+import {IS_WEB} from '#/env'
 import {
   clearCallbackError,
   clearStalledSignIn,
@@ -145,17 +146,22 @@ export function OAuthSignInFields({
     setIsProcessing(true)
     continuedInTab.current = false
     try {
-      if (mode === 'page' || getOAuthDisplay() === 'page') {
+      /*
+       * On web the main sign-in redirects. In the app every sign-in opens
+       * the server in an in-app browser tab and returns here, like the popup
+       */
+      if (IS_WEB && (mode === 'page' || getOAuthDisplay() === 'page')) {
         await signInInThisTab(value)
         return
       }
       const expectedDid = await resolveExpectedDid(value)
       const abort = new AbortController()
       popupAbort.current = abort
-      setPopupOpen(true)
+      if (IS_WEB) setPopupOpen(true)
       const session = await getOAuthClient().signIn(value, {
         scope: OAUTH_SCOPE,
-        display: 'popup',
+        // The app's client asks for its own touch display
+        ...(IS_WEB ? {display: 'popup' as const} : {}),
         signal: abort.signal,
       })
       setPopupOpen(false)
@@ -268,7 +274,8 @@ export function OAuthSignInFields({
             </ButtonText>
           </Button>
         )}
-        {mode === 'page' && <AppViewButton />}
+        {/* The AppView switch reloads the page, so it is web only for now */}
+        {mode === 'page' && IS_WEB && <AppViewButton />}
         <View style={a.flex_1} />
         <Button
           testID="oauthNextButton"

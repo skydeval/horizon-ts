@@ -52,6 +52,24 @@ let config = getSentryExpoConfig(import.meta.dirname, {
           platform,
         )
       }
+      /*
+       * HORIZON: the Expo OAuth client (native app sign-in) imports its
+       * platform-split files with an explicit `.js` (ESM style), which Metro
+       * resolves literally; without it Metro picks `.native.js` or `.web.js`
+       */
+      if (
+        /[\\/]@atproto[\\/]oauth-client-expo[\\/]dist[\\/]/.test(
+          context.originModulePath,
+        ) &&
+        (moduleName === './expo-oauth-client.js' ||
+          moduleName === './polyfill.js')
+      ) {
+        return context.resolveRequest(
+          context,
+          moduleName.slice(0, -'.js'.length),
+          platform,
+        )
+      }
       if (
         process.env.BSKY_PROFILE &&
         moduleName.endsWith('ReactNativeRenderer-prod')

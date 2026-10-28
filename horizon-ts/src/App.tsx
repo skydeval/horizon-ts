@@ -86,10 +86,8 @@ import {
   Provider as LiveEventsProvider,
 } from '#/features/liveEvents/context'
 import * as Geo from '#/geolocation'
-// HORIZON: the appearance record's sync on native (Phase 3, BD-22)
-import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
-// HORIZON: the "spoilers from other apps" choice (change list 2)
-import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
+// HORIZON: Horizon's app-wide host, as on web (native app, step 7)
+import {HorizonHost} from '#/horizon/auth/HorizonHost'
 // HORIZON: the sdk's preference ids on each account's own clock (Phase 5, A)
 import {installSdkPreferenceIds} from '#/horizon/tid-clock/sdk-ids'
 import {Splash} from '#/Splash'
@@ -188,10 +186,8 @@ function InnerApp() {
                                                                 <TestCtrls />
                                                                 <Shell />
                                                                 <ToastOutlet />
-                                                                {/* HORIZON: the appearance record's sync (Phase 3, BD-22) */}
-                                                                <AppearanceSync />
-                                                                {/* HORIZON: the "spoilers from other apps" choice (change list 2) */}
-                                                                <OtherAppSpoilersSync />
+                                                                {/* HORIZON: Horizon's app-wide host (membership, outbox, sign-in window, appearance and spoilers sync) */}
+                                                                <HorizonHost />
                                                               </TranslateOnDeviceProvider>
                                                             </IntentDialogProvider>
                                                           </GlobalGestureEventsProvider>
