@@ -466,3 +466,18 @@ export const manageAudience = l.procedure(
   createInput,
   createOutput,
 )
+
+/**
+ * `tools.kryphocron.policy.deleteAudience`: deletes one of the caller's
+ * audience records (aurora A-4). Used only to remove the repo copies left
+ * once prism holds audiences (`private.audiences`).
+ */
+export const deleteAudience = l.procedure(
+  'tools.kryphocron.policy.deleteAudience',
+  l.params(),
+  l.jsonPayload({
+    repo: l.string({format: 'did'}),
+    rkey: l.string(),
+  }),
+  l.jsonPayload({}),
+)

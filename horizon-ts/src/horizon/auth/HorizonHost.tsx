@@ -8,7 +8,9 @@
  * reader's mutes on the device (for a lens member), the identity
  * reads' `getRecords` and `listMembers` tokens' prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
- * the "spoilers from other apps" choice, the system accounts' list read
+ * the "spoilers from other apps" choice, the one-time removal of audience
+ * records left in the repo once prism holds audiences, the system accounts'
+ * list read
  * and announcer, the launch-time
  * check for a sign-in that never came back, the notice for a resume that
  * found its OAuth session busy in another tab, and the cross-tab reload after an
@@ -25,6 +27,7 @@ import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
 import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
 import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
+import {LeftoverAudienceCleanup} from '#/horizon/private/audiences/LeftoverAudienceCleanup'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {RefractHost} from '#/horizon/refract/RefractHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
@@ -92,6 +95,7 @@ export function HorizonHost() {
       <MuteCacheHost />
       <IdentityTokenPrefetch />
       <OutboxHost />
+      <LeftoverAudienceCleanup />
       <AppearanceSync />
       <OtherAppSpoilersSync />
       <SystemAccountsHost />

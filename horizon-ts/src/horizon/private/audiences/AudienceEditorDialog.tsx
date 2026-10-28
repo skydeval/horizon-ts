@@ -2,7 +2,9 @@
  * Creating a list: a name and the people on it. `kind: 'audience'` makes a
  * list audience (the Audiences screen's New list, and New audience... under
  * Who can see); `kind: 'replyList'` makes a Bluesky curate list for reply
- * rules (New reply list... under Who can reply, 5.5). Both are public lists.
+ * rules (New reply list... under Who can reply, 5.5). A reply list is a
+ * public Bluesky list; an audience is private once prism holds audiences
+ * (`private.audiences`), and public in the repo until then.
  * With `editing`, the same dialog edits a list audience (2K design 4.7):
  * "Edit list", its name and people filled in, and Save, swapping on the CID
  * it was listed with.
@@ -52,6 +54,7 @@ import {
   ReplyListPartlyCreatedError,
 } from '#/horizon/private/api/reply-lists'
 import {PrivateKryphocronHostError} from '#/horizon/private/api/writer'
+import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {getPrismClient} from '#/horizon/routing/prism'
 import {app} from '#/lexicons'
 import type * as bsky from '#/types/bsky'
@@ -288,6 +291,11 @@ function DetailsStep({
   const currentClient = usePdsClient()
   const [error, setError] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  /*
+   * Read for the current account: prism switches every member at once, so
+   * it holds for a posting account too.
+   */
+  const onPrism = usePrismFeature('private.audiences')
   // The posting account's repo when one is given (Phase 5 PA-14).
   const did = account ? account.did : currentAccount?.did
   const pdsClient = account ? account.pdsClient : currentClient
@@ -443,7 +451,11 @@ function DetailsStep({
           </Button>
           <Text
             style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
-            <Trans>Anyone can see who is on this list.</Trans>
+            {kind === 'audience' && onPrism ? (
+              <Trans>Only you can see who is on this list.</Trans>
+            ) : (
+              <Trans>Anyone can see who is on this list.</Trans>
+            )}
           </Text>
         </View>
 

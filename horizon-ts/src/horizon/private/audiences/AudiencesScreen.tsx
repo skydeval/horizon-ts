@@ -56,6 +56,7 @@ import {PrivateKryphocronHostError} from '#/horizon/private/api/writer'
 import {AudienceEditorDialog} from '#/horizon/private/audiences/AudienceEditorDialog'
 import {useAudiencesQuery} from '#/horizon/private/audiences/useAudiencesQuery'
 import {privateRouteNote} from '#/horizon/private/composer/blockers'
+import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {useCanPostPrivately} from '#/horizon/private/membership'
 import {getPrismClient} from '#/horizon/routing/prism'
 import {app} from '#/lexicons'
@@ -85,7 +86,8 @@ export function AudiencesSettingsScreen({}: Props) {
   const {data: audiences, isLoading, isError, refetch} = useAudiencesQuery()
   const {standing, lists} = orderAudiences(audiences ?? [])
   const can = useCanPostPrivately()
-  const editable = audienceEditAvailable(can.routes.repoRoute)
+  const onPrism = usePrismFeature('private.audiences')
+  const editable = audienceEditAvailable(can.routes.repoRoute, onPrism)
   const routeNote = can.offered ? undefined : privateRouteNote(can.routes)
 
   const openEditor = (entry: AudienceEntry | undefined) => {
@@ -328,6 +330,7 @@ function MembersInner({entry}: {entry: AudienceEntry}) {
   const appviewClient = useAppviewClient()
   const moderationOpts = useModerationOpts()
   const label = audienceLabel(entry, {isSelf: true})
+  const onPrism = usePrismFeature('private.audiences')
   const {data: profiles, isLoading} = useQuery({
     queryKey: ['horizon-audience-members', entry.uri, entry.members],
     queryFn: async () => {
@@ -350,7 +353,11 @@ function MembersInner({entry}: {entry: AudienceEntry}) {
       <View style={[a.gap_md]}>
         <Text style={[a.text_xl, a.font_bold]}>{label}</Text>
         <Text style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
-          <Trans>Anyone can see who is on this list.</Trans>
+          {onPrism ? (
+            <Trans>Only you can see who is on this list.</Trans>
+          ) : (
+            <Trans>Anyone can see who is on this list.</Trans>
+          )}
         </Text>
         {entry.members.length === 0 ? (
           <Text style={[a.text_sm]}>

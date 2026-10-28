@@ -17,6 +17,14 @@ import {type QueryClient} from '@tanstack/react-query'
 import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {STALE} from '#/state/queries'
+import {kryphocron} from '#/horizon/lexicons'
+import {
+  audiencesOnPrism,
+  createPrismAudience,
+  deletePrismAudience,
+  listPrismAudiences,
+  updatePrismAudience,
+} from '#/horizon/private/api/prism-audiences'
 import {
   requestRecordCaughtUp,
   requestRecordQuietly,
@@ -152,12 +160,32 @@ export async function listAudiences(
 }
 
 /**
+ * The account's audiences from wherever they are held: prism once it lists
+ * `private.audiences` (audience lists are private, skydeval 2026-10-27),
+ * else the repo.
+ */
+export async function loadAudiences(
+  clients: AudienceClients,
+): Promise<AudienceEntry[]> {
+  if (!audiencesOnPrism(clients.did)) {
+    return listAudiences(clients.pdsClient, clients.did)
+  }
+  const rows = await listPrismAudiences(clients.prismClient, clients.did)
+  const entries: AudienceEntry[] = []
+  for (const row of rows) {
+    const entry = readAudienceRecord(row.uri, row.record, row.cid)
+    if (entry) entries.push(entry)
+  }
+  return entries
+}
+
+/**
  * The audience list's query options, shared by the hook and the write path.
  */
-export function audiencesQueryOptions(pdsClient: Client, did: string) {
+export function audiencesQueryOptions(clients: AudienceClients) {
   return {
-    queryKey: audiencesQueryKey(did),
-    queryFn: () => listAudiences(pdsClient, did),
+    queryKey: audiencesQueryKey(clients.did),
+    queryFn: () => loadAudiences(clients),
     staleTime: STALE.MINUTES.FIVE,
   }
 }
@@ -167,10 +195,9 @@ export function audiencesQueryOptions(pdsClient: Client, did: string) {
  */
 export function fetchAudiences(
   queryClient: QueryClient,
-  pdsClient: Client,
-  did: string,
+  clients: AudienceClients,
 ): Promise<AudienceEntry[]> {
-  return queryClient.fetchQuery(audiencesQueryOptions(pdsClient, did))
+  return queryClient.fetchQuery(audiencesQueryOptions(clients))
 }
 
 /**
@@ -256,7 +283,7 @@ async function refetchAudiences(
   queryClient: QueryClient,
   clients: AudienceClients,
 ): Promise<AudienceEntry[]> {
-  const fresh = await listAudiences(clients.pdsClient, clients.did)
+  const fresh = await loadAudiences(clients)
   queryClient.setQueryData(audiencesQueryKey(clients.did), fresh)
   return fresh
 }
@@ -277,22 +304,24 @@ async function findForWrite(
   {refetchOnMiss}: {refetchOnMiss: boolean},
 ): Promise<AudienceEntry | undefined> {
   const repoRoute = repoRouteForDid(clientDid(clients.pdsClient) ?? clients.did)
-  const cached = await fetchAudiences(
-    queryClient,
-    clients.pdsClient,
-    clients.did,
-  )
+  const onPrism = audiencesOnPrism(clients.did)
+  const cached = await fetchAudiences(queryClient, clients)
   const hit = pick(cached)
   if (hit) {
     const listedAt =
       queryClient.getQueryState(audiencesQueryKey(clients.did))
         ?.dataUpdatedAt ?? 0
     if (
-      repoRoute !== 'stock' ||
+      (repoRoute !== 'stock' && !onPrism) ||
       Date.now() - listedAt <= CACHED_AUDIENCE_CONFIRM_MS
     ) {
       return hit
     }
+    /*
+     * prism holds no single-audience read: an older cached hit is checked
+     * against a fresh list instead (it may have been deleted elsewhere).
+     */
+    if (onPrism) return pick(await refetchAudiences(queryClient, clients))
     const state = await readAudienceState(clients.pdsClient, hit.uri)
     if (state === 'present') return hit
     const fresh = await refetchAudiences(queryClient, clients)
@@ -328,12 +357,24 @@ export async function findOrCreateStandingAudience(
   )
   if (existing) return existing.uri
   const now = toDatetimeString(new Date())
-  const res = await writer.createAudience({
+  const record: LexMap = {
     $type: AUDIENCE_COLLECTION,
     mode,
     createdAt: now,
     updatedAt: now,
-  })
+  }
+  if (audiencesOnPrism(clients.did)) {
+    /*
+     * prism commits the row before it answers, so the post naming it next is
+     * served at once: no `requestRecord` wait (prism's reply 1).
+     */
+    const created = await createOnPrism(clients, record)
+    void queryClient.invalidateQueries({
+      queryKey: audiencesQueryKey(clients.did),
+    })
+    return created
+  }
+  const res = await writer.createAudience(record)
   void queryClient.invalidateQueries({queryKey: audiencesQueryKey(clients.did)})
   if (writer.route === 'encode') {
     /*
@@ -381,6 +422,32 @@ export class AudienceNameInvalidError extends Error {
 }
 
 /**
+ * The account already holds as many audiences as prism keeps (200).
+ */
+export class AudienceLimitError extends Error {
+  constructor() {
+    super(
+      t`You’ve reached the limit of ${MAX_AUDIENCES} audiences. Delete one to make another.`,
+    )
+    this.name = 'AudienceLimitError'
+  }
+}
+
+/**
+ * A list has more people than an audience can hold (1000).
+ */
+export class AudienceMembersLimitError extends Error {
+  constructor() {
+    super(t`A list can have at most ${MAX_MEMBERS} people.`)
+    this.name = 'AudienceMembersLimitError'
+  }
+}
+
+/** prism's caps (prism's private audiences reply, Q-2). */
+export const MAX_AUDIENCES = 200
+export const MAX_MEMBERS = 1000
+
+/**
  * The members a list audience is written with: DIDs only, de-duplicated,
  * without the author (who always reads their own posts).
  */
@@ -393,6 +460,33 @@ export function normalizeMembers(
       members.filter(member => member.startsWith('did:') && member !== ownDid),
     ),
   )
+}
+
+/** {@link normalizeMembers}, refused past {@link MAX_MEMBERS}. */
+function membersFor(members: readonly string[], ownDid: string): string[] {
+  const normalized = normalizeMembers(members, ownDid)
+  if (normalized.length > MAX_MEMBERS) throw new AudienceMembersLimitError()
+  return normalized
+}
+
+/** A create on prism, its cap refusal worded. Answers the URI. */
+async function createOnPrism(
+  clients: AudienceClients,
+  record: LexMap,
+): Promise<string> {
+  try {
+    const res = await createPrismAudience(
+      clients.prismClient,
+      clients.did,
+      record,
+    )
+    return res.uri
+  } catch (error) {
+    if (error instanceof XrpcResponseError && error.error === 'LimitReached') {
+      throw new AudienceLimitError()
+    }
+    throw error
+  }
 }
 
 /** A list name, trimmed and checked as `manageAudience` checks it. */
@@ -416,17 +510,25 @@ export async function createListAudience(
   clients: AudienceClients,
   {name, members}: {name: string; members: readonly string[]},
 ): Promise<string> {
-  const writer = postingWriterForClient(clients.pdsClient, clients.did)
   const trimmed = listNameFor(name)
   const now = toDatetimeString(new Date())
-  const res = await writer.createAudience({
+  const record: LexMap = {
     $type: AUDIENCE_COLLECTION,
     mode: 'list',
     name: trimmed,
-    members: normalizeMembers(members, clients.did),
+    members: membersFor(members, clients.did),
     createdAt: now,
     updatedAt: now,
-  })
+  }
+  if (audiencesOnPrism(clients.did)) {
+    const uri = await createOnPrism(clients, record)
+    await queryClient.invalidateQueries({
+      queryKey: audiencesQueryKey(clients.did),
+    })
+    return uri
+  }
+  const writer = postingWriterForClient(clients.pdsClient, clients.did)
+  const res = await writer.createAudience(record)
   requestRecordQuietly(clients.prismClient, res.uri)
   await queryClient.invalidateQueries({
     queryKey: audiencesQueryKey(clients.did),
@@ -446,11 +548,17 @@ export class AudienceChangedError extends Error {
 }
 
 /**
- * Whether the Audiences screen offers edit and delete (PA-14): on repo route
- * `stock` always, whatever the posting route; on locus once A-4 is live.
+ * Whether the Audiences screen offers edit and delete (PA-14): always once
+ * prism holds the account's audiences; else on repo route `stock` always,
+ * whatever the posting route, and on locus once A-4 is live.
  */
-export function audienceEditAvailable(repoRoute: RepoRoute): boolean {
-  return repoRoute === 'stock' || (repoRoute === 'locus' && AUDIENCE_EDIT)
+export function audienceEditAvailable(
+  repoRoute: RepoRoute,
+  onPrism = false,
+): boolean {
+  return (
+    onPrism || repoRoute === 'stock' || (repoRoute === 'locus' && AUDIENCE_EDIT)
+  )
 }
 
 /**
@@ -476,7 +584,6 @@ export async function updateListAudience(
     members,
   }: {entry: AudienceEntry; name: string; members: readonly string[]},
 ): Promise<void> {
-  const writer = repoWriterForClient(clients.pdsClient)
   if (!isEditableAudience(entry) || !entry.cid) throw new AudienceChangedError()
   const trimmed = listNameFor(name)
   const now = toDatetimeString(new Date())
@@ -484,19 +591,32 @@ export async function updateListAudience(
     $type: AUDIENCE_COLLECTION,
     mode: 'list',
     name: trimmed,
-    members: normalizeMembers(members, clients.did),
+    members: membersFor(members, clients.did),
     createdAt: entry.createdAt ?? now,
     updatedAt: now,
   }
+  const onPrism = audiencesOnPrism(clients.did)
   try {
-    await writer.updateAudienceRecord(entry.uri, record, entry.cid)
+    if (onPrism) {
+      await updatePrismAudience(clients.prismClient, clients.did, {
+        uri: entry.uri,
+        record,
+        swapCid: entry.cid,
+      })
+    } else {
+      await repoWriterForClient(clients.pdsClient).updateAudienceRecord(
+        entry.uri,
+        record,
+        entry.cid,
+      )
+    }
   } catch (error) {
     if (error instanceof XrpcResponseError && error.error === 'InvalidSwap') {
       throw new AudienceChangedError()
     }
     throw error
   }
-  requestRecordQuietly(clients.prismClient, entry.uri)
+  if (!onPrism) requestRecordQuietly(clients.prismClient, entry.uri)
   await queryClient.invalidateQueries({
     queryKey: audiencesQueryKey(clients.did),
   })
@@ -513,13 +633,17 @@ export async function deleteAudience(
   clients: AudienceClients,
   uri: string,
 ): Promise<void> {
-  const writer = repoWriterForClient(clients.pdsClient)
-  await writer.deleteAudience(uri)
+  const onPrism = audiencesOnPrism(clients.did)
+  if (onPrism) {
+    await deletePrismAudience(clients.prismClient, clients.did, uri)
+  } else {
+    await repoWriterForClient(clients.pdsClient).deleteAudience(uri)
+  }
   queryClient.setQueryData<AudienceEntry[]>(
     audiencesQueryKey(clients.did),
     entries => entries?.filter(entry => entry.uri !== uri),
   )
-  requestRecordQuietly(clients.prismClient, uri)
+  if (!onPrism) requestRecordQuietly(clients.prismClient, uri)
   void queryClient.invalidateQueries({queryKey: audiencesQueryKey(clients.did)})
 }
 
@@ -592,6 +716,12 @@ export type PostAudienceSource = {
   served?: {uri: string; mode?: string; name?: string}
   /** That account's handle, once known. */
   ownerHandle: string | undefined
+  /**
+   * Where audiences are held. With `prism` another account's record can't
+   * be read, so an audience the served one doesn't label reads "a custom
+   * audience" (its member count is never served). Default `repo`.
+   */
+  recordsHeld?: 'repo' | 'prism'
 }
 
 const RELATIONAL_MODES: readonly string[] = ['followers', 'following', 'nobody']
@@ -651,7 +781,9 @@ export function postAudienceLabel(
     served
       ? {mode: served.mode ?? 'list', name: served.name, members: []}
       : source.record
-  if (!record) return undefined
+  if (!record) {
+    return source.recordsHeld === 'prism' ? t`a custom audience` : undefined
+  }
   const needsHandle =
     record.name === undefined && RELATIONAL_MODES.includes(record.mode)
   if (needsHandle && !source.ownerHandle) return undefined
@@ -659,4 +791,37 @@ export function postAudienceLabel(
     isSelf: false,
     handle: source.ownerHandle ?? '',
   })
+}
+
+/**
+ * Once prism holds the account's audiences, delete the audience records
+ * still in its repo: prism ignores them, but anyone can list them, names and
+ * members included. Run once per sign-in; after the first success the list
+ * is empty and this costs one `listRecords`. Each delete stands alone, so a
+ * failure leaves the rest to the next sign-in. Answers how many went.
+ */
+export async function deleteLeftoverRepoAudiences(
+  clients: Pick<AudienceClients, 'did' | 'pdsClient'>,
+): Promise<number> {
+  if (!audiencesOnPrism(clients.did)) return 0
+  const leftovers = await listAudiences(clients.pdsClient, clients.did)
+  if (leftovers.length === 0) return 0
+  const repoRoute = repoRouteForDid(clientDid(clients.pdsClient) ?? clients.did)
+  let deleted = 0
+  for (const entry of leftovers) {
+    try {
+      if (repoRoute === 'locus') {
+        await clients.pdsClient.call(kryphocron.deleteAudience, {
+          repo: clients.did as DidString,
+          rkey: entry.rkey,
+        })
+      } else {
+        await repoWriterForClient(clients.pdsClient).deleteAudience(entry.uri)
+      }
+      deleted++
+    } catch {
+      // Left for the next sign-in.
+    }
+  }
+  return deleted
 }

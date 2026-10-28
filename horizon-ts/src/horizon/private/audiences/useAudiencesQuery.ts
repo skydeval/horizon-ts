@@ -3,12 +3,14 @@ import {useQuery} from '@tanstack/react-query'
 
 import {STALE} from '#/state/queries'
 import {useMaybePdsClient, useSession} from '#/state/session'
-import {audiencesQueryKey, listAudiences} from '#/horizon/private/api/audiences'
+import {audiencesQueryKey, loadAudiences} from '#/horizon/private/api/audiences'
+import {getPrismClient} from '#/horizon/routing/prism'
 
 /**
- * The current account's audience records, or with `account` (the composer's
+ * The current account's audiences, or with `account` (the composer's
  * posting account when it is not the current one, Phase 5 PA-14) that
- * account's, read with its own client.
+ * account's, read with its own client: from prism once it holds them, else
+ * the repo (`loadAudiences`).
  */
 export function useAudiencesQuery({
   enabled = true,
@@ -23,7 +25,14 @@ export function useAudiencesQuery({
   const did = account ? account.did : (currentAccount?.did ?? '')
   return useQuery({
     queryKey: audiencesQueryKey(did),
-    queryFn: () => (pdsClient ? listAudiences(pdsClient, did) : []),
+    queryFn: () =>
+      pdsClient
+        ? loadAudiences({
+            did,
+            pdsClient,
+            prismClient: getPrismClient(pdsClient),
+          })
+        : [],
     staleTime: STALE.MINUTES.FIVE,
     enabled: enabled && !!pdsClient && !!did,
   })

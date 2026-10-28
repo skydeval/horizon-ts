@@ -29,6 +29,7 @@ import {
   readAudienceRecordAt,
 } from '#/horizon/private/api/audiences'
 import {useAudiencesQuery} from '#/horizon/private/audiences/useAudiencesQuery'
+import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {isPrivateDisplay} from '#/horizon/private/render/controls'
 import {PrivateMark} from '#/horizon/private/render/PrivateBadge'
 import {SyncingLabel} from '#/horizon/private/render/SyncingLabel'
@@ -84,10 +85,15 @@ export function usePostAudienceLabel(
   const isOwn = !!owner && owner === currentAccount?.did
   const isOther = !!owner && !isOwn
   const {data: ownAudiences} = useAudiencesQuery({enabled: known && isOwn})
-  // The PDS record only where the served audience does not name it.
+  /*
+   * The PDS record only where the served audience does not name it, and
+   * only while audiences are repo records: once prism holds them there is
+   * no record to read.
+   */
+  const onPrism = usePrismFeature('private.audiences')
   const {data: record} = useAudienceRecord(
     audienceUri,
-    known && isOther && !labelsFromServedAudience(served),
+    known && isOther && !onPrism && !labelsFromServedAudience(served),
   )
   const {data: ownerProfile} = useProfileQuery({
     did: known && isOther ? owner : undefined,
@@ -101,6 +107,7 @@ export function usePostAudienceLabel(
     record: record ?? undefined,
     ownerHandle: ownerProfile?.handle,
     served,
+    recordsHeld: onPrism ? 'prism' : 'repo',
   })
 }
 

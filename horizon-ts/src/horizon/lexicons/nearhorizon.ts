@@ -488,6 +488,82 @@ export const privatePutAppearance = l.procedure(
 )
 
 /*
+ * Audiences held by prism (prism's private audiences reply, section 1;
+ * `private.audiences`): the member's own audiences, never repo records.
+ * `cid` is an opaque version token, handed back as `swapCid` and never
+ * parsed. Create and update take prism's readiness gate; list and delete
+ * the member-only one.
+ */
+
+const audienceRow = l.object({
+  uri: l.string({format: 'at-uri'}),
+  cid: l.string(),
+  record: l.lexMap(),
+})
+
+const audienceWritten = l.jsonPayload({
+  uri: l.string({format: 'at-uri'}),
+  cid: l.string(),
+})
+
+/**
+ * `app.nearhorizon.private.createAudience`: prism mints the rkey (a TID).
+ * `LimitReached`: 200 audiences. `InvalidRequest`: the record check
+ * (name, mode, more than 1000 members, a member DID over 256 bytes).
+ */
+export const privateCreateAudience = l.procedure(
+  'app.nearhorizon.private.createAudience',
+  l.params(),
+  l.jsonPayload({record: l.lexMap()}),
+  audienceWritten,
+  ['InvalidRequest', 'LimitReached', ...NOT_MEMBER_ERRORS],
+)
+
+/**
+ * `app.nearhorizon.private.updateAudience`: always swapped. `InvalidSwap`
+ * also for an audience deleted meanwhile.
+ */
+export const privateUpdateAudience = l.procedure(
+  'app.nearhorizon.private.updateAudience',
+  l.params(),
+  l.jsonPayload({
+    uri: l.string({format: 'at-uri'}),
+    record: l.lexMap(),
+    swapCid: l.string(),
+  }),
+  audienceWritten,
+  ['InvalidRequest', 'InvalidSwap', ...NOT_MEMBER_ERRORS],
+)
+
+/**
+ * `app.nearhorizon.private.deleteAudience`: idempotent.
+ */
+export const privateDeleteAudience = l.procedure(
+  'app.nearhorizon.private.deleteAudience',
+  l.params(),
+  l.jsonPayload({uri: l.string({format: 'at-uri'})}),
+  l.jsonPayload({}),
+  ['InvalidRequest', 'NotEnrolled'],
+)
+
+/**
+ * `app.nearhorizon.private.listAudiences`: the caller's own, newest first.
+ * A page may end early with a cursor; read until there is none.
+ */
+export const privateListAudiences = l.query(
+  'app.nearhorizon.private.listAudiences',
+  l.params({
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+  }),
+  l.jsonPayload({
+    cursor: l.optional(l.string()),
+    audiences: l.array(audienceRow),
+  }),
+  ['NotEnrolled'],
+)
+
+/*
  * Activity subscriptions for private posts (activity subscriptions design
  * section 3, PR-AS-1; the prism handoff, section 2): Bluesky's shapes for
  * prism's own store. The flags are stock

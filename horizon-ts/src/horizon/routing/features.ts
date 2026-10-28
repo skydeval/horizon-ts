@@ -55,6 +55,12 @@ export const PRISM_FEATURES = [
    */
   'private.appearanceRetention',
   /*
+   * Audiences held by prism (prism's private audiences reply): the four
+   * audience methods. Once listed, audiences are read and written only
+   * there, never as repo records (`private/api/audiences.ts`).
+   */
+  'private.audiences',
+  /*
    * Off-locus private posts are fully served and plaintext is refused (2K
    * design 2.3): the `encode` posting route needs it.
    */
