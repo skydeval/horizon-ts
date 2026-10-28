@@ -33,6 +33,7 @@ import {
   resolveExpectedDid,
 } from '#/horizon/session/expected-account'
 import {useHorizonSessionApi} from '#/horizon/session/HorizonSessionProvider'
+import {cleanSignInIdentifier} from '#/horizon/session/identifier'
 import {getOAuthClient} from '#/horizon/session/oauth-client'
 import {getOAuthDisplay} from '#/horizon/session/oauth-display'
 import {OAUTH_SCOPE} from '#/horizon/session/oauth-metadata'
@@ -122,7 +123,7 @@ export function OAuthSignInFields({
     setPopupOpen(false)
     setIsProcessing(true)
     try {
-      await signInInThisTab(identifier.trim())
+      await signInInThisTab(cleanSignInIdentifier(identifier))
     } catch (e) {
       setIsProcessing(false)
       showError(e)
@@ -136,7 +137,7 @@ export function OAuthSignInFields({
     clearCallbackError()
     setShowStalled(false)
     clearStalledSignIn()
-    const value = identifier.trim()
+    const value = cleanSignInIdentifier(identifier)
     if (!value) {
       setError(l`Please enter your handle, DID or server address`)
       return

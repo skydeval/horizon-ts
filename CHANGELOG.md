@@ -107,6 +107,11 @@ fundraisers are paused and have no phase yet.
 
 ### Fixed
 
+- **Signing in with a handle works when it's typed or pasted loosely.** An
+  `@` in front, invisible characters copied along with a handle, capitals
+  from a phone keyboard, or a pasted profile link made a valid handle fail
+  while the DID worked. The Add system account dialog reads entries the same
+  way.
 - **Notifications' Private view keeps its All / Replies / Activity pills in
   the header,** as the Public view does. On web they slid under the header
   when the page scrolled, leaving the bottom of the labels peeking out. Its

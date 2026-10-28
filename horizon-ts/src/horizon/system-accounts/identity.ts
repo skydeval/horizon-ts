@@ -11,6 +11,7 @@ import {type DidDocument, getPdsEndpoint} from '@atproto/common-web'
 import {type HandleString} from '@atproto/syntax'
 
 import {getPublicAppviewClient} from '#/state/session/clients'
+import {cleanSignInIdentifier} from '#/horizon/session/identifier'
 import {com} from '#/lexicons'
 
 /** An account the identifier names. */
@@ -50,9 +51,13 @@ async function withTimeout<T>(run: (signal: AbortSignal) => Promise<T>) {
   }
 }
 
-/** Normalize as the sign-in form does: trimmed, lowercased, no leading `@`. */
+/**
+ * Normalize as the sign-in form does (`cleanSignInIdentifier`): invisible
+ * characters and spaces gone, no leading `@`, a profile link read as its
+ * handle, then lowercased.
+ */
 export function normalizeIdentifier(identifier: string): string {
-  return identifier.trim().toLowerCase().replace(/^@/, '')
+  return cleanSignInIdentifier(identifier).toLowerCase()
 }
 
 async function fetchDidDocument(
