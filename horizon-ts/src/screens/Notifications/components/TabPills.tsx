@@ -62,11 +62,20 @@ export function TabPills({
   const didMeasure = useRef(false)
   const tabLayoutKey = tabs.map(tab => `${tab.key}:${tab.label}`).join('|')
   const tabCount = tabs.length
+  /*
+   * HORIZON: bumped by the pills' own layout, so they are measured again once
+   * they have a size. Pills mounted out of sight (a hidden screen, or the
+   * Private view's pills switched in) measure as zero, which stacked every
+   * label at the row's corner and left the row empty
+   */
+  const [layoutCount, setLayoutCount] = useState(0)
 
   useLayoutEffect(() => {
     const viewportRect = listRef.current?.getBoundingClientRect()
     const contentRect = contentRef.current?.getBoundingClientRect()
     if (!viewportRect || !contentRect) return
+    // HORIZON: not laid out yet (hidden), so wait for the layout below
+    if (contentRect.width === 0 || contentRect.height === 0) return
 
     const layouts = Array.from({length: tabCount}, (_, index) => {
       const rect = tabRefs.current[index]?.getBoundingClientRect()
@@ -78,7 +87,7 @@ export function TabPills({
         height: rect.height,
       }
     })
-    if (layouts.some(layout => layout === null)) return
+    if (layouts.some(layout => layout === null || layout.width === 0)) return
 
     const nextLayouts = layouts as PillLayout[]
     setTabOffsets(current =>
@@ -101,7 +110,7 @@ export function TabPills({
       })
     }
     didMeasure.current = true
-  }, [selectedTab, tabLayoutKey, tabCount, tabs, windowWidth])
+  }, [selectedTab, tabLayoutKey, tabCount, tabs, windowWidth, layoutCount])
 
   function handleSelectTab(index: number) {
     const tab = tabs[index]
@@ -235,6 +244,7 @@ export function TabPills({
           scrollEventThrottle={IS_WEB ? 16 : undefined}>
           <View
             ref={contentRef}
+            onLayout={() => setLayoutCount(count => count + 1)}
             style={[
               a.flex_row,
               a.gap_sm,
