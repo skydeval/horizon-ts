@@ -15,6 +15,7 @@ import {
 } from '@atproto/oauth-client-expo'
 
 import {PUBLIC_BSKY_SERVICE} from '#/lib/constants'
+import {bufferedFetch} from '#/horizon/session/oauth-fetch'
 import {
   NATIVE_CLIENT_METADATA,
   type OAuthClientMode,
@@ -79,6 +80,8 @@ export function getOAuthClient(): ExpoOAuthClient {
     client = new ExpoOAuthClient({
       clientMetadata: NATIVE_CLIENT_METADATA,
       handleResolver: OAUTH_HANDLE_RESOLVER,
+      // Plain responses, so the DPoP nonce retry runs (see oauth-fetch.ts)
+      fetch: bufferedFetch,
       onSessionDeleted(sub, cause) {
         deletedListeners.forEach(listener => listener(sub, cause))
       },
