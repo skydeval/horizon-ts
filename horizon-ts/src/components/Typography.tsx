@@ -8,8 +8,6 @@ import {
   renderChildrenWithEmoji,
   type TextProps,
 } from '#/alf/typography'
-// HORIZON: the halo on a bare window, in the app (Android app)
-import {haloTextStyle, useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 
 export type {TextProps}
 export {Text as Span} from 'react-native'
@@ -30,15 +28,12 @@ export function Text({
 }: TextProps) {
   const {fonts, flags} = useAlf()
   const t = useTheme()
-  // HORIZON: text on a bare window takes its halo, in the app (Android app)
-  const halo = useBarHalo()
   const s = normalizeTextStyles(
     [
       a.text_sm,
       t.atoms.text,
       a.leading_snug,
       web(numberOfLines === 1 && numberOfLinesClippingFix),
-      halo && haloTextStyle(halo, false),
       style,
     ],
     {
