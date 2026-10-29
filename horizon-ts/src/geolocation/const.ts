@@ -1,7 +1,14 @@
-import {GEOLOCATION_URL} from '#/env'
+import {GEOLOCATION_URL, IS_WEB} from '#/env'
 import {type Geolocation} from '#/geolocation/types'
 
-export const GEOLOCATION_SERVICE_URL = `${GEOLOCATION_URL}/geolocation`
+/*
+ * HORIZON: on web, Horizon's own endpoint on the same site
+ * (`functions/horizon-geolocation.ts`): Bluesky's service answers only pages
+ * from bsky.app. The app has no such limit and keeps Bluesky's.
+ */
+export const GEOLOCATION_SERVICE_URL = IS_WEB
+  ? '/horizon-geolocation'
+  : `${GEOLOCATION_URL}/geolocation`
 
 /**
  * Default geolocation config.

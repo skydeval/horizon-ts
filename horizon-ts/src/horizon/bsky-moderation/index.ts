@@ -9,7 +9,11 @@ import {useQueryClient} from '@tanstack/react-query'
 import {usePreferencesQuery} from '#/state/queries/preferences'
 import {useSession} from '#/state/session'
 import {useAgeAssurance} from '#/ageAssurance'
-import {applyBskyModeration} from '#/horizon/bsky-moderation/apply'
+import {useGeolocation} from '#/geolocation'
+import {
+  applyBskyModeration,
+  refreshCountryLabelers,
+} from '#/horizon/bsky-moderation/apply'
 import {
   type BskyModerationLock,
   bskyModerationLock,
@@ -69,10 +73,17 @@ export function BskyModerationSync() {
    * off again.
    */
   const prefsReadAt = usePreferencesQuery().dataUpdatedAt
+  /*
+   * And when the location becomes known or changes: the country labelers
+   * set before it was known are every country's.
+   */
+  const {countryCode} = useGeolocation()
   useEffect(() => {
-    if (applyBskyModeration(on)) {
+    const countries = refreshCountryLabelers(countryCode)
+    const bsky = applyBskyModeration(on)
+    if (countries || bsky) {
       void queryClient.invalidateQueries()
     }
-  }, [on, prefsReadAt, queryClient])
+  }, [on, prefsReadAt, countryCode, queryClient])
   return null
 }

@@ -10,7 +10,10 @@ import {Client} from '@atproto/lex'
 import {type DidString} from '@atproto/syntax'
 import {api} from '@bsky/sdk'
 
-import {configureGlobalAppLabelers} from '#/state/session/additional-moderation-authorities'
+import {
+  additionalModerationAuthoritiesFor,
+  configureGlobalAppLabelers,
+} from '#/state/session/additional-moderation-authorities'
 
 /** Bluesky's moderation labeler. */
 export const BSKY_MODERATION_DID = api.moderation.did as DidString
@@ -18,6 +21,24 @@ export const BSKY_MODERATION_DID = api.moderation.did as DidString
 /** Whether requests carry Bluesky's moderation labeler right now. */
 export function bskyModerationApplied(): boolean {
   return Client.appLabelers.includes(BSKY_MODERATION_DID)
+}
+
+/**
+ * Rebuilds the country labelers from the device's current location,
+ * keeping Bluesky's labeler as it is. The session sets them before the
+ * location is known (unknown means every country's), and Bluesky's own code
+ * only ever adds to the list. Returns true when the list changed.
+ */
+export function refreshCountryLabelers(
+  countryCode: string | undefined,
+): boolean {
+  const before = Client.appLabelers.join(',')
+  const next = [
+    ...(bskyModerationApplied() ? [BSKY_MODERATION_DID] : []),
+    ...additionalModerationAuthoritiesFor(countryCode),
+  ]
+  configureGlobalAppLabelers(Array.from(new Set(next)))
+  return Client.appLabelers.join(',') !== before
 }
 
 /**

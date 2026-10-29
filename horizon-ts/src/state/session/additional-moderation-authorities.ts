@@ -68,19 +68,26 @@ export function isNonConfigurableModerationAuthority(did: string) {
   return MODERATION_AUTHORITIES_DIDS.includes(did)
 }
 
+/**
+ * HORIZON: the country labelers for `countryCode` (every country's when it
+ * is unknown), for `#/horizon/bsky-moderation` to rebuild the list when the
+ * location becomes known.
+ */
+export function additionalModerationAuthoritiesFor(
+  countryCode: string | undefined,
+): string[] {
+  if (__DEV__) return []
+  // default to all
+  if (!countryCode) return MODERATION_AUTHORITIES_DIDS
+  // only those necessary
+  return MODERATION_AUTHORITIES[countryCode] ?? []
+}
+
 export function configureAdditionalModerationAuthorities() {
   const geolocation = device.get(['mergedGeolocation'])
-  // default to all
-  let additionalLabelers: string[] = MODERATION_AUTHORITIES_DIDS
-
-  if (geolocation?.countryCode) {
-    // overwrite with only those necessary
-    additionalLabelers = MODERATION_AUTHORITIES[geolocation.countryCode] ?? []
-  }
-
-  if (__DEV__) {
-    additionalLabelers = []
-  }
+  const additionalLabelers = additionalModerationAuthoritiesFor(
+    geolocation?.countryCode,
+  )
 
   /*
    * Merge with whatever is already on the static rather than replacing it, so
