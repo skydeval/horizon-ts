@@ -45,15 +45,15 @@ fundraisers are paused and have no phase yet.
 ### Changed
 
 - **Sharper backdrop swatches:** pride flag swatches in Appearance show
-  clear stripes that blend into each other, instead of a blur.
+  clear stripes that blend into each other, instead of a blur. The darkest
+  Calm swatches are lighter in dark themes, so they don't disappear into the
+  page. The first tile is labelled “None” and shows as a white tile with a
+  slash. The name of the selected backdrop no longer appears above it.
 - **The Gutter phone frame is now called Sides,** after the thin strips of
   backdrop down each side.
 - **The menu drawer shows your backdrop in full colour.** Its dark glass is
-  gone; its text and icons get the same soft halo as the bars, so they stay
-  readable. The darkest Calm swatches are lighter
-  in dark themes, so they don't disappear into the page. The first tile is
-  labelled “None” and shows as a white tile with a slash. The name of the
-  selected backdrop no longer appears above it.
+  gone; its text and icons have a thin outline, so they stay readable over
+  bright and white stripes.
 - **Audience lists are private:** who is on a list that picks a private
   post's audience is now seen only by you, not kept as a public record in your
   repo. Existing lists keep working, and their old public copies are removed

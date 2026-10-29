@@ -158,6 +158,10 @@ jest.mock('expo-localization', () => ({
  */
 jest.mock('../src/horizon/appearance/sync-platform', () => ({
   SYNCS_HERE: true,
+  /*
+   * Read live, for tests that mock the switch; a sync timer that fires after
+   * its test was torn down gets no module, and reads as off.
+   */
   appearanceSyncs: () =>
-    require('../src/horizon/switches').APPEARANCE_SYNC === true,
+    require('../src/horizon/switches')?.APPEARANCE_SYNC === true,
 }))

@@ -19,6 +19,7 @@ import {useActiveBackdrop} from '#/horizon/backdrops/active'
 import {BarHaloContext} from '#/horizon/backdrops/bar-halo-context'
 import {
   barHaloColors,
+  barOutline,
   type WindowBox,
   type WindowKind,
   windowMode,
@@ -48,19 +49,19 @@ function barBox(piece: WindowKind, width: number, height: number): WindowBox {
 
 /**
  * Wraps a bar piece's items: when the piece is a bare window, they draw
- * the halo. `enabled` as for the piece's `FrameWindow`. `recolour` false
- * keeps every item's own colour (the drawer, whose links and badges are
- * blue): its `text` is then empty.
+ * the halo. `enabled` as for the piece's `FrameWindow`. `outline` draws a
+ * thin solid outline in the theme's tint instead, every item keeping its
+ * own colour (the drawer, whose links and badges are blue).
  */
 export function BarHaloScope({
   piece,
   enabled = true,
-  recolour = true,
+  outline = false,
   children,
 }: {
   piece: WindowKind
   enabled?: boolean
-  recolour?: boolean
+  outline?: boolean
   children: React.ReactNode
 }) {
   const t = useTheme()
@@ -78,15 +79,21 @@ export function BarHaloScope({
     enabled,
   })
   if (!def || mode !== 'bare') return <>{children}</>
+  if (outline) {
+    return (
+      <BarHaloContext.Provider value={barOutline(t.name)}>
+        {children}
+      </BarHaloContext.Provider>
+    )
+  }
   const range = windowRange(
     def,
     t.name,
     {width, height},
     barBox(piece, width, height),
   )
-  const colors = barHaloColors(def, t.name, range)
   return (
-    <BarHaloContext.Provider value={recolour ? colors : {...colors, text: ''}}>
+    <BarHaloContext.Provider value={barHaloColors(def, t.name, range)}>
       {children}
     </BarHaloContext.Provider>
   )

@@ -18,10 +18,7 @@ import {
 } from '#/components/icons/glyphMaps'
 import {type IconWithSvgMeta} from '#/components/icons/TEMPLATE'
 // HORIZON: the halo on a bare window, in the app (Android app)
-import {
-  ICON_HALO_OFFSETS,
-  useBarHalo,
-} from '#/horizon/backdrops/bar-halo-context'
+import {iconHaloOffsets, useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 /*
  * Each set is typed by its own glyph names, so widen the components to accept
  * any name. The native renderers put `style` in an array, so a style array is
@@ -173,7 +170,7 @@ export function withNanoGlyph(
           accessible={false}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants">
-          {ICON_HALO_OFFSETS.map(([left, top]) => (
+          {iconHaloOffsets(halo).map(([left, top]) => (
             // oxlint-disable-next-line react-native-a11y/has-accessibility-hint -- hidden glyph, as below
             <NanoIconSet
               key={`${left},${top}`}

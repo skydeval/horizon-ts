@@ -18,7 +18,7 @@ import {
 } from 'react'
 import {type StyleProp, StyleSheet, type TextStyle} from 'react-native'
 
-import {useBreakpoints} from '#/alf'
+import {useBreakpoints, useTheme} from '#/alf'
 import {useDialogContext} from '#/components/Dialog/context'
 import {useAppearanceState} from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
@@ -27,6 +27,7 @@ import {
   BARE_TEXT_VAR,
   barShadesOn,
   haloVar,
+  outlineColor,
   RECOLOURED_KINDS,
   SHADE_KINDS,
   SHADE_SHAPES,
@@ -214,16 +215,77 @@ export function BarShade({
   return <div aria-hidden style={{...shadePaint(kind), ...shadeBox(kind)}} />
 }
 
+/*
+ * The drawer's outline: a thin solid edge in the theme's tint round every
+ * glyph and icon, which a soft halo could not do over a flag's white band
+ * (skydeval, 2026-10-29). Small stacked shadows, handed down by CSS from
+ * the drawer, with the colour as a custom property on it.
+ */
+const OUTLINE_ATTRIBUTE = 'data-horizon-outline'
+const OUTLINE_VAR = '--horizon-outline'
+
+let outlineSheetAdded = false
+
+function addOutlineSheet() {
+  if (outlineSheetAdded || typeof document === 'undefined') return
+  outlineSheetAdded = true
+  const c = `var(${OUTLINE_VAR})`
+  // A pixel out every way, as the app's copies (`Outlined.tsx`).
+  const text = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ]
+    .map(([x, y]) => `${x}px ${y}px 0 ${c}`)
+    .join(',')
+  const icon = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ]
+    .map(([x, y]) => `drop-shadow(${x}px ${y}px 0 ${c})`)
+    .join(' ')
+  const sheet = document.createElement('style')
+  sheet.setAttribute('data-horizon', 'drawer-outline')
+  sheet.textContent = [
+    `[${OUTLINE_ATTRIBUTE}]{text-shadow:${text}}`,
+    `[${OUTLINE_ATTRIBUTE}] svg{filter:${icon}}`,
+  ].join('\n')
+  document.head.appendChild(sheet)
+}
+
 /**
- * The drawer's halo (its window is bare with every style): placed first in
- * the drawer, it marks the whole drawer, so every line of text and every
- * icon in it takes the halo, which CSS hands down. Nothing without a
- * backdrop; outside its bare window it inherits no colour.
+ * The drawer's outline (its window is bare with every style): placed first
+ * in the drawer, it marks the whole drawer, so every line of text and every
+ * icon in it is outlined. Nothing without a backdrop.
  */
 export function DrawerHalo() {
   const def = useActiveBackdrop()
-  if (!def || !usesHalo()) return null
-  return <Halo kind="tab" />
+  const t = useTheme()
+  const ref = useRef<HTMLSpanElement>(null)
+  const color = outlineColor(t.name)
+  const on = !!def
+
+  useLayoutEffect(() => {
+    const drawer = ref.current?.parentElement
+    if (!on || !drawer) return
+    addOutlineSheet()
+    drawer.setAttribute(OUTLINE_ATTRIBUTE, '')
+    drawer.style.setProperty(OUTLINE_VAR, color)
+    return () => {
+      drawer.removeAttribute(OUTLINE_ATTRIBUTE)
+      drawer.style.removeProperty(OUTLINE_VAR)
+    }
+  }, [on, color])
+
+  if (!on) return null
+  return <span ref={ref} aria-hidden style={{display: 'none'}} />
 }
 
 const InSlot = createContext(false)

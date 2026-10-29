@@ -72,12 +72,13 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
-// HORIZON: the drawer's halo in the app
+// HORIZON: the drawer's outline in the app
 import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
 // HORIZON: the drawer's halo on web
 import {DrawerHalo} from '#/horizon/backdrops/BarShade'
 // HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
+import {Outlined} from '#/horizon/backdrops/Outlined'
 
 const iconWidth = 26
 type SecondarySidebarTab =
@@ -124,18 +125,21 @@ let DrawerProfileCard = ({
       />
       <View style={[a.gap_2xs]}>
         <View style={[a.flex_row, a.align_center, a.gap_xs, a.flex_1]}>
-          <Text
-            emoji
-            style={[
-              a.font_bold,
-              a.text_xl,
-              a.mt_2xs,
-              a.leading_tight,
-              a.flex_shrink,
-            ]}
-            numberOfLines={1}>
-            {profile?.displayName || account.handle}
-          </Text>
+          {/* HORIZON: outlined over the bare drawer, in the app */}
+          <Outlined style={[a.flex_shrink]}>
+            <Text
+              emoji
+              style={[
+                a.font_bold,
+                a.text_xl,
+                a.mt_2xs,
+                a.leading_tight,
+                a.flex_shrink,
+              ]}
+              numberOfLines={1}>
+              {profile?.displayName || account.handle}
+            </Text>
+          </Outlined>
           {profile && <ProfileBadges profile={profile} size="lg" />}
           {onPressShare && (
             <Pressable
@@ -164,36 +168,40 @@ let DrawerProfileCard = ({
             </Pressable>
           )}
         </View>
-        <Text
-          emoji
-          style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
-          numberOfLines={1}>
-          {sanitizeHandle(account.handle, '@')}
-        </Text>
+        <Outlined>
+          <Text
+            emoji
+            style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
+            numberOfLines={1}>
+            {sanitizeHandle(account.handle, '@')}
+          </Text>
+        </Outlined>
       </View>
-      <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
-        <Trans>
-          <Text style={[a.text_md, a.font_semi_bold]}>
-            {formatCount(i18n, profile?.followersCount ?? 0)}
-          </Text>{' '}
-          <Plural
-            value={profile?.followersCount || 0}
-            one="follower"
-            other="followers"
-          />
-        </Trans>{' '}
-        &middot;{' '}
-        <Trans>
-          <Text style={[a.text_md, a.font_semi_bold]}>
-            {formatCount(i18n, profile?.followsCount ?? 0)}
-          </Text>{' '}
-          <Plural
-            value={profile?.followsCount || 0}
-            one="following"
-            other="following"
-          />
-        </Trans>
-      </Text>
+      <Outlined>
+        <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
+          <Trans>
+            <Text style={[a.text_md, a.font_semi_bold]}>
+              {formatCount(i18n, profile?.followersCount ?? 0)}
+            </Text>{' '}
+            <Plural
+              value={profile?.followersCount || 0}
+              one="follower"
+              other="followers"
+            />
+          </Trans>{' '}
+          &middot;{' '}
+          <Trans>
+            <Text style={[a.text_md, a.font_semi_bold]}>
+              {formatCount(i18n, profile?.followsCount ?? 0)}
+            </Text>{' '}
+            <Plural
+              value={profile?.followsCount || 0}
+              one="following"
+              other="following"
+            />
+          </Trans>
+        </Text>
+      </Outlined>
     </TouchableOpacity>
   )
 }
@@ -375,10 +383,10 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
       style={[a.flex_1, a.border_r, t.atoms.bg, t.atoms.border_contrast_low]}>
       {/* HORIZON: the drawer, a bare window onto the backdrop (Phase 3, BD-17) */}
       <FrameWindow kind="drawer" />
-      {/* HORIZON: its text and icons haloed, on web */}
+      {/* HORIZON: its text and icons outlined, on web */}
       <DrawerHalo />
-      {/* HORIZON: its text and icons haloed, in the app */}
-      <BarHaloScope piece="drawer" recolour={false}>
+      {/* HORIZON: its text and icons outlined, in the app */}
+      <BarHaloScope piece="drawer" outline>
         <ScrollView
           style={[a.flex_1]}
           contentContainerStyle={[
@@ -512,9 +520,12 @@ let DrawerFooter = ({
         style={{
           backgroundColor: 'transparent',
         }}>
-        <ButtonText>
-          <Trans>Help</Trans>
-        </ButtonText>
+        {/* HORIZON: outlined over the bare drawer, in the app */}
+        <Outlined>
+          <ButtonText>
+            <Trans>Help</Trans>
+          </ButtonText>
+        </Outlined>
       </Button>
     </View>
   )
@@ -826,16 +837,19 @@ function MenuItem({icon, label, count, bold, beta, onPress}: MenuItemProps) {
             ) : undefined}
           </View>
           <View style={[a.flex_1, a.flex_row, a.align_center, a.gap_sm]}>
-            <Text
-              style={[
-                a.flex_shrink,
-                a.text_2xl,
-                bold && a.font_bold,
-                web(a.leading_snug),
-              ]}
-              numberOfLines={1}>
-              {label}
-            </Text>
+            {/* HORIZON: outlined over the bare drawer, in the app */}
+            <Outlined style={[a.flex_shrink]}>
+              <Text
+                style={[
+                  a.flex_shrink,
+                  a.text_2xl,
+                  bold && a.font_bold,
+                  web(a.leading_snug),
+                ]}
+                numberOfLines={1}>
+                {label}
+              </Text>
+            </Outlined>
             {beta && <BetaTag />}
           </View>
         </View>
@@ -851,18 +865,23 @@ function ExtraLinks() {
 
   return (
     <View style={[a.flex_col, a.gap_md, a.flex_wrap]}>
-      <InlineLinkText
-        style={[a.text_md]}
-        label={l`Terms of Service`}
-        to="https://bsky.social/about/support/tos">
-        <Trans>Terms of Service</Trans>
-      </InlineLinkText>
-      <InlineLinkText
-        style={[a.text_md]}
-        to="https://bsky.social/about/support/privacy-policy"
-        label={l`Privacy Policy`}>
-        <Trans>Privacy Policy</Trans>
-      </InlineLinkText>
+      {/* HORIZON: outlined over the bare drawer, in the app */}
+      <Outlined style={[a.self_start]}>
+        <InlineLinkText
+          style={[a.text_md]}
+          label={l`Terms of Service`}
+          to="https://bsky.social/about/support/tos">
+          <Trans>Terms of Service</Trans>
+        </InlineLinkText>
+      </Outlined>
+      <Outlined style={[a.self_start]}>
+        <InlineLinkText
+          style={[a.text_md]}
+          to="https://bsky.social/about/support/privacy-policy"
+          label={l`Privacy Policy`}>
+          <Trans>Privacy Policy</Trans>
+        </InlineLinkText>
+      </Outlined>
       {logoVariant === 'kawaii' && (
         <Text style={t.atoms.text_contrast_medium}>
           <Trans>

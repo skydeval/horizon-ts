@@ -1,7 +1,18 @@
 import {describe, expect, it} from '@jest/globals'
 
-import {haloTextStyle} from '#/horizon/backdrops/bar-halo-context'
-import {barHaloColors, barShadeVars, haloVar} from '#/horizon/backdrops/frame'
+import {
+  haloTextStyle,
+  ICON_HALO_OFFSETS,
+  ICON_OUTLINE_OFFSETS,
+  iconHaloOffsets,
+  OUTLINE_RADIUS,
+} from '#/horizon/backdrops/bar-halo-context'
+import {
+  barHaloColors,
+  barOutline,
+  barShadeVars,
+  haloVar,
+} from '#/horizon/backdrops/frame'
 import {registryDef} from '#/horizon/backdrops/registry'
 
 /*
@@ -36,11 +47,20 @@ describe("the app's bar halo", () => {
     expect(1 - Math.pow(1 - copy, 4)).toBeCloseTo(whole, 2)
   })
 
-  it('a scope that keeps colours (the drawer) shadows text without recolouring it', () => {
-    const kept = {...barHaloColors(trans, 'dark'), text: ''}
-    const style = haloTextStyle(kept, true)
-    expect(style.textShadowColor).toBe(kept.halo)
+  it('the drawer’s outline: a small solid shadow in the theme’s tint, colours kept', () => {
+    const outline = barOutline('dark')
+    expect(outline.halo).toBe('rgba(0, 0, 0, 1)')
+    expect(barOutline('light').halo).toBe('rgba(255, 255, 255, 1)')
+    const style = haloTextStyle(outline, true)
+    expect(style.textShadowColor).toBe(outline.halo)
+    expect(style.textShadowRadius).toBe(OUTLINE_RADIUS)
     expect('color' in style).toBe(false)
+    // Icon copies are solid too, a point out every way
+    expect(outline.iconCopy).toBe(outline.halo)
+    expect(iconHaloOffsets(outline)).toEqual(ICON_OUTLINE_OFFSETS)
+    expect(iconHaloOffsets(barHaloColors(trans, 'dark'))).toEqual(
+      ICON_HALO_OFFSETS,
+    )
   })
 
   it("recolours to the theme's text colour", () => {

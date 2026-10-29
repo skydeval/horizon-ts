@@ -625,6 +625,27 @@ export function barHaloColors(
   return colors
 }
 
+/** The solid colour of an outline: the theme's glass tint, opaque. */
+export function outlineColor(theme: ThemeName): string {
+  return rgba(GLASS[theme].tint, 1)
+}
+
+const barOutlines = new Map<ThemeName, BarHaloColors & {outline: true}>()
+
+/**
+ * The app's outline for a bare window (the drawer): the theme's tint, solid,
+ * for text and every icon copy; no recolouring (`text` empty).
+ */
+export function barOutline(theme: ThemeName): BarHaloColors & {outline: true} {
+  let outline = barOutlines.get(theme)
+  if (!outline) {
+    const color = outlineColor(theme)
+    outline = {halo: color, iconCopy: color, text: '', outline: true}
+    barOutlines.set(theme, outline)
+  }
+  return outline
+}
+
 const shadeVarsCache = new Map<string, Record<string, string>>()
 
 /**
