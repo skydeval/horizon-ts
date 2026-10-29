@@ -66,6 +66,25 @@ describe('bufferedFetch', () => {
     })
   })
 
+  it('keeps UTF-8 text whole: emoji, accents and other scripts', async () => {
+    const profile = {displayName: 'Boobs✨ 🌸 é ñ 日本 👩🏽‍💻'}
+    serverAnswers(200, profile)
+    const response = await bufferedFetch('https://pds.example/xrpc/x')
+    expect(await response.json()).toEqual(profile)
+  })
+
+  it('passes a response that is not JSON or text through untouched', async () => {
+    const image = new realResponse(new Uint8Array([0xff, 0xd8, 0xff]), {
+      status: 200,
+      headers: {'content-type': 'image/jpeg'},
+    })
+    globalThis.fetch = jest.fn(
+      (_input: RequestInfo | URL, _init?: RequestInit) =>
+        Promise.resolve(image),
+    )
+    expect(await bufferedFetch('https://pds.example/blob')).toBe(image)
+  })
+
   it('passes the request through unchanged', async () => {
     serverAnswers(200, {ok: true})
     const init = {method: 'POST', body: 'a=b'}
