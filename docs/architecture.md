@@ -68,9 +68,7 @@ naming the AppView. The PDS mints a short-lived service token for that one
 method and forwards the call. Horizon holds no long-lived prism token.
 
 For a few kryphocron and Refract reads Horizon calls prism directly, with a
-per-method service token from your PDS that it keeps in memory for up to an
-hour. This keeps reads fast, and keeps the text of your own kryphocron posts
-from passing back through your PDS.
+short-lived service token for that method from your PDS.
 
 **Signed out**, Horizon calls the public AppView directly, and prism only
 for its few public reads. Thread Lens and kryphocron reads are never made
@@ -93,9 +91,6 @@ Features are switched on per account from prism's answer, not from a
 version number. When prism adds a feature, Horizon turns on the matching
 part of the interface. When prism doesn't list it, that part stays hidden or
 uses a simpler interim behaviour.
-
-When prism is busy or catching up, Horizon keeps your membership as it was
-and handles the gap quietly.
 
 ## Inside the app
 
@@ -134,7 +129,7 @@ that work:
 | `app.nearhorizon.richtext.facet` | inside post records | spoilers and content warnings |
 | `app.nearhorizon.private.*`, `app.nearhorizon.threadLens.*` | prism | kryphocron reads, Thread Lens |
 
-### Privacy in the client
+### Analytics and age checks
 
 - Bluesky's analytics and error reporting are switched off.
 - Bluesky's age assurance is switched off too, with one narrow exception:

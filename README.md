@@ -42,6 +42,23 @@ for a handful of testers. Features change often, and stored settings may be
 reset without migration. Native iOS and Android builds are not a near-term
 goal: web comes first.
 
+## Building
+
+You need Node 24 and pnpm (through corepack). From `horizon-ts/`:
+
+```sh
+corepack enable
+pnpm install --frozen-lockfile
+pnpm intl:extract:all
+pnpm intl:compile
+pnpm web          # development server
+pnpm build-web    # production web build, into dist/
+```
+
+`pnpm typecheck`, `pnpm lint` and `pnpm test` run the checks. The
+kryphocron encoder ships prebuilt in `horizon-ts/vendor/kryphocron-web/`, so
+no Rust toolchain is needed.
+
 ## Repository layout
 
 | Path | What it holds |
