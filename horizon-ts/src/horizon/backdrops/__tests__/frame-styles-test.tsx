@@ -130,16 +130,16 @@ describe('phone frame styles (live fix 1)', () => {
       ]),
     )
     expect(table).toEqual({
-      bars: ['bare', 'bare', 'bare', 'bare'],
-      edges: ['edge', 'edge', 'edge', 'bare'],
-      gutter: [null, null, null, 'bare'],
-      headerBand: ['bare', 'bare', null, 'bare'],
+      bars: ['bare', 'bare', 'bare', 'full'],
+      edges: ['edge', 'edge', 'edge', 'full'],
+      gutter: [null, null, null, 'full'],
+      headerBand: ['bare', 'bare', null, 'full'],
     })
-    // Web's drawer keeps its glass with every style
+    // The app's drawer is bare with every style, its text outlined
     for (const frameStyle of FRAME_STYLES) {
-      expect(windowMode({...base, frameStyle, kind: 'drawer', web: true})).toBe(
-        'full',
-      )
+      expect(
+        windowMode({...base, frameStyle, kind: 'drawer', web: false}),
+      ).toBe('bare')
     }
     // Bare in the app too, which draws its own halo (BarHalo)
     expect(
