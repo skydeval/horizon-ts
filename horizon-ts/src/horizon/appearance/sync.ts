@@ -71,6 +71,7 @@ import {
   registerAppearanceSync,
   updateAccountCopy,
 } from '#/horizon/appearance/store'
+import {appearanceSyncs} from '#/horizon/appearance/sync-platform'
 import {
   kickTake,
   resetTakeForTests,
@@ -78,7 +79,7 @@ import {
 } from '#/horizon/appearance/take'
 import {subscribePrismFeatures} from '#/horizon/routing/features'
 import {subscribeMembership} from '#/horizon/routing/membership'
-import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
+import {BACKDROPS} from '#/horizon/switches'
 
 export {rebase} from '#/horizon/appearance/resolve'
 
@@ -115,7 +116,7 @@ const modeSeen = new Map<string, string>()
 let unsubscribeAnswers: (() => void) | null = null
 
 function enabled() {
-  return APPEARANCE_SYNC && BACKDROPS
+  return appearanceSyncs() && BACKDROPS
 }
 
 function clientFor(did: string): Client | null {

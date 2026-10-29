@@ -150,3 +150,14 @@ jest.mock('expo-localization', () => ({
   getCalendars: jest.fn(() => [{uses24hourClock: null}]),
   getLocales: () => [],
 }))
+
+/*
+ * HORIZON: Jest runs as iOS, where the app keeps its appearance on the
+ * device; the shared sync tests run with sync on, as on web
+ * (sync-platform-test checks the app's side).
+ */
+jest.mock('../src/horizon/appearance/sync-platform', () => ({
+  SYNCS_HERE: true,
+  appearanceSyncs: () =>
+    require('../src/horizon/switches').APPEARANCE_SYNC === true,
+}))

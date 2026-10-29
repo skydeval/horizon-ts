@@ -63,10 +63,17 @@ function lift(channel: number) {
   return Math.round(channel + (255 - channel) * DARK_LIFT)
 }
 
-/** A sharp edge between two bands: wide enough to stay smooth on screen. */
-const SWATCH_EDGE = 0.004
+/**
+ * How much of each band blends into the next: half of it, so a flag's
+ * colours flow into each other with no hard line yet each still shows
+ * solid (skydeval: "add gradient to the colors", 2026-10-29).
+ */
+const SWATCH_BLEND = 0.5
 
-/** A flag's stripes as sharp diagonal bands, corner to corner. */
+/**
+ * A flag's stripes as crisp diagonal bands, corner to corner, blending
+ * into each other.
+ */
 function sharpFlag(def: BackdropDef): BackdropDef {
   return {
     ...def,
@@ -75,7 +82,7 @@ function sharpFlag(def: BackdropDef): BackdropDef {
         kind: 'linear',
         direction: {kind: 'corner'},
         stops: makeStripedStops(def.stripes, {
-          edgeEpsilon: SWATCH_EDGE,
+          edgeEpsilon: SWATCH_BLEND / 2 / def.stripes.length,
           softenEdges: false,
         }),
         opacity: 1,

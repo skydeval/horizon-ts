@@ -33,10 +33,11 @@ import {
   type ThemePrefs,
   withoutThemePrefs,
 } from '#/horizon/appearance/model'
+import {appearanceSyncs} from '#/horizon/appearance/sync-platform'
 import {type FrameStyle} from '#/horizon/backdrops/frame-style'
 import {BACKDROP_CUSTOM} from '#/horizon/backdrops/registry'
 import {type SoftTheme} from '#/horizon/backdrops/softness'
-import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
+import {BACKDROPS} from '#/horizon/switches'
 
 export type AppearanceState = {
   device: DeviceAppearanceV1
@@ -85,9 +86,7 @@ function load(): AppearanceState {
    * (storage choice design, section 4).
    */
   if (
-    Object.values(device.accounts).some(
-      copy => copy.blocked || copy.storeKnown,
-    )
+    Object.values(device.accounts).some(copy => copy.blocked || copy.storeKnown)
   ) {
     const accounts: Record<string, AccountCopy> = {}
     for (const [did, copy] of Object.entries(device.accounts)) {
@@ -187,7 +186,7 @@ export function effectiveAppearance(
 ): Appearance {
   const {device} = current
   let result: Appearance
-  if (!did || !APPEARANCE_SYNC) {
+  if (!did || !appearanceSyncs()) {
     result = device.device
   } else {
     const copy = device.accounts[did]
@@ -232,7 +231,7 @@ export function editAppearance(
   const base = effectiveAppearance({...current, preview: null}, did)
   const next = change(base)
   const device = current.device
-  if (did && APPEARANCE_SYNC) {
+  if (did && appearanceSyncs()) {
     const copy = device.accounts[did] ?? emptyCopy()
     const old = copy.pending
     // A choice change not yet landed rides along with the edit (5).
@@ -273,7 +272,7 @@ export function accountThemePrefs(
   did: string | undefined,
 ): ThemePrefs {
   const {device} = current
-  if (!did || !APPEARANCE_SYNC || !BACKDROPS) return {}
+  if (!did || !appearanceSyncs() || !BACKDROPS) return {}
   const copy = device.accounts[did]
   const source = copy?.pending?.appearance ?? copy?.record
   if (!source) return {}
@@ -294,7 +293,7 @@ export function saveThemePref<K extends ThemePrefField>(
   field: K,
   value: ThemePrefs[K],
 ) {
-  if (!did || !APPEARANCE_SYNC || !BACKDROPS) return
+  if (!did || !appearanceSyncs() || !BACKDROPS) return
   editAppearance(did, [field], base => ({...base, [field]: value}))
 }
 

@@ -22,9 +22,10 @@ import {
   registerAppearanceClient,
   unregisterAppearanceClient,
 } from '#/horizon/appearance/sync'
+import {appearanceSyncs} from '#/horizon/appearance/sync-platform'
 import {ThemePrefsSync} from '#/horizon/appearance/ThemePrefsSync'
 import {getPrismClient} from '#/horizon/routing/prism'
-import {APPEARANCE_SYNC, BACKDROPS} from '#/horizon/switches'
+import {BACKDROPS} from '#/horizon/switches'
 
 /** The sync host. Renders only the theme settings' host. */
 export function AppearanceSync() {
@@ -33,7 +34,7 @@ export function AppearanceSync() {
   const did = currentAccount?.did
 
   useEffect(() => {
-    if (!APPEARANCE_SYNC || !BACKDROPS || !did || !client) return
+    if (!appearanceSyncs() || !BACKDROPS || !did || !client) return
     // prism's client for the member table (storage choice design, section 4).
     registerAppearanceClient(did, client, getPrismClient(client))
     void refresh(did)

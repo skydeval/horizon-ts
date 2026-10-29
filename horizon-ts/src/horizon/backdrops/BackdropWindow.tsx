@@ -36,15 +36,18 @@ function shapeStyle(shape: WindowShape): ViewStyle {
 
 /**
  * Paints `def` under `overlays` (top first) inside the parent, aligned with
- * the window. `homeHeader` adds the Home header's mode trigger. The web
- * painter's tracking hints (`isStatic`, `followsAnimations`) and shade
- * colours (`shades`; bare windows are web only) do not apply here.
+ * the window. `homeHeader` adds the Home header's mode trigger.
+ * `followsAnimations` (the drawer) is not measured: it lays out while slid
+ * off-screen, so a measurement would paint the empty space past the
+ * screen's edge, and it always opens at the screen's top left. The web
+ * painter's other hints (`isStatic`, `shades`) do not apply here.
  */
 export function BackdropWindow({
   def,
   overlays,
   shape,
   homeHeader = false,
+  followsAnimations = false,
 }: {
   def: BackdropDef
   overlays: string[]
@@ -57,10 +60,13 @@ export function BackdropWindow({
   const t = useTheme()
   const frame = useViewportFrame()
   const ref = useRef<React.ComponentRef<typeof View>>(null)
-  const [offset, setOffset] = useState<{x: number; y: number} | null>(null)
+  const [offset, setOffset] = useState<{x: number; y: number} | null>(() =>
+    followsAnimations ? windowOffset({left: 0, top: 0}) : null,
+  )
   const compiled = compileBackdrop(def, t.name, frame)
 
   const measure = () => {
+    if (followsAnimations) return
     ref.current?.measureInWindow((left, top) => {
       const next = windowOffset({left, top})
       setOffset(prev =>

@@ -89,17 +89,24 @@ describe('swatches (T8)', () => {
     expect(swatchDef(trans, 'dark').stripes).toEqual(trans.stripes)
   })
 
-  it("draws a flag's swatch as sharp bands, in every theme", () => {
+  it("draws a flag's swatch as bands that blend, each still solid", () => {
     const trans = registryDef('pride.trans')!
+    const band = 1 / trans.stripes.length
     for (const theme of ['light', 'dim', 'dark'] as const) {
       const [layer] = swatchDef(trans, theme).layers ?? []
       expect(layer?.kind).toBe('linear')
-      // Each band holds its colour to within a hair of the next one
       const stops = layer.stops
-      for (let i = 1; i < stops.length; i++) {
-        if (stops[i].color !== stops[i - 1].color) {
-          expect(stops[i].pos - stops[i - 1].pos).toBeLessThanOrEqual(0.01)
-        }
+      let runStart = stops[0].pos
+      for (let i = 1; i <= stops.length; i++) {
+        if (i < stops.length && stops[i].color === stops[i - 1].color) continue
+        // Each colour holds solid for at least half a band
+        expect(stops[i - 1].pos - runStart).toBeGreaterThanOrEqual(
+          band / 2 - 1e-9,
+        )
+        if (i === stops.length) break
+        // Then blends into the next, not a hard line, across half a band
+        expect(stops[i].pos - stops[i - 1].pos).toBeCloseTo(band / 2, 5)
+        runStart = stops[i].pos
       }
     }
     // The backdrop itself is unchanged

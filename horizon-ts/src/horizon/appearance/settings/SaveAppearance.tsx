@@ -5,7 +5,8 @@
  * removed members, and members until prism lists the feature) sees two. The
  * radio shows a choice not yet landed at once, and its row says "Moving..."
  * until the choice lands and its record step is done. The migration,
- * removal and too-large notes leave a line here until dismissed.
+ * removal and too-large notes leave a line here until dismissed. Web
+ * only: the app keeps its appearance on the device (`sync-platform.ts`).
  */
 
 import {useSyncExternalStore} from 'react'
@@ -35,6 +36,7 @@ import {
   dismissAppearanceNote,
   useAppearanceState,
 } from '#/horizon/appearance/store'
+import {appearanceSyncs} from '#/horizon/appearance/sync-platform'
 import {PRODUCT_NAME} from '#/horizon/branding'
 import {subscribePrismFeatures} from '#/horizon/routing/features'
 import {subscribeMembership} from '#/horizon/routing/membership'
@@ -62,36 +64,34 @@ export function SaveAppearanceGroup() {
   const did = currentAccount?.did
   const {device} = useAppearanceState()
   const offersPrivate = useOffersPrivate(did)
-  if (!did) return null
+  if (!did || !appearanceSyncs()) return null
   const copy = device.accounts[did]
   const shown = copy?.pending?.store ?? copy?.store ?? null
   // A remembered `private` with the feature unlisted shows as resolving.
   const value = shown === 'private' && !offersPrivate ? null : shown
-  const moving =
-    !!copy && (copy.pending?.store !== undefined || copy.recordDue)
+  const moving = !!copy && (copy.pending?.store !== undefined || copy.recordDue)
 
-  const rows: {store: AppearanceStore; label: string; description: string}[] =
-    [
-      ...(offersPrivate
-        ? [
-            {
-              store: 'private' as const,
-              label: l`Private, synced`,
-              description: l`${PRODUCT_NAME} keeps it for you and syncs it across your devices. It isn’t in your public account.`,
-            },
-          ]
-        : []),
-      {
-        store: 'public',
-        label: l`Public, in my account`,
-        description: l`Saved in your account’s public data. Other apps can read it.`,
-      },
-      {
-        store: 'device',
-        label: l`This device only`,
-        description: l`Not saved anywhere else. Your other devices keep their own.`,
-      },
-    ]
+  const rows: {store: AppearanceStore; label: string; description: string}[] = [
+    ...(offersPrivate
+      ? [
+          {
+            store: 'private' as const,
+            label: l`Private, synced`,
+            description: l`${PRODUCT_NAME} keeps it for you and syncs it across your devices. It isn’t in your public account.`,
+          },
+        ]
+      : []),
+    {
+      store: 'public',
+      label: l`Public, in my account`,
+      description: l`Saved in your account’s public data. Other apps can read it.`,
+    },
+    {
+      store: 'device',
+      label: l`This device only`,
+      description: l`Not saved anywhere else. Your other devices keep their own.`,
+    },
+  ]
 
   const line = copy?.noted
     ? migrationNoteText()

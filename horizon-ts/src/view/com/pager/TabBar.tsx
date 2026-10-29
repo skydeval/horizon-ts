@@ -405,7 +405,15 @@ function TabBarItem({
   const t = useTheme()
   // HORIZON: the halo on a bare window, in the app (Android app)
   const halo = useBarHalo()
+  /*
+   * HORIZON: on a bare window every label is full strength, as on web; the
+   * indicator alone marks the selected one (skydeval, 2026-10-29)
+   */
+  const fade = !halo
   const style = useAnimatedStyle(() => {
+    if (!fade) {
+      return {opacity: 1}
+    }
     if (!_WORKLET) {
       return {opacity: 0.7}
     }
@@ -456,7 +464,7 @@ function TabBarItem({
               a.text_md,
               a.font_semi_bold,
               // HORIZON: the halo on a bare window, in the app (Android app)
-              halo && haloTextStyle(halo, false),
+              halo && haloTextStyle(halo, true),
             ]}
             onLayout={handleTextLayout}>
             {item}
