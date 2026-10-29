@@ -77,6 +77,8 @@ no Rust toolchain is needed.
 
 ## Credits and licenses
 
+- Horizon's own code is under the Mozilla Public License 2.0, and Bluesky's
+  code stays under MIT. [LICENSE.md](LICENSE.md) says which is which.
 - Horizon is built on Bluesky's
   [social-app](https://github.com/bluesky-social/social-app), which is MIT
   licensed (`horizon-ts/LICENSE`). Some of Bluesky's assets are not covered
