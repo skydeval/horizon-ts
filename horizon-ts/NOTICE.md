@@ -61,7 +61,7 @@ Copyright (c) 2020 @catamphetamine <purecatamphetamine@gmail.com>
 
 **Path:** `vendor/kryphocron-web/`, the copies the web build emits (`kryphocron_web_bg.*.wasm` and the `kryphocron_web-*.js` chunk), and its JavaScript build in the Android app
 **License:** Mozilla Public License, Version 2.0 — full text at [`licenses/MPL-2.0.txt`](./licenses/MPL-2.0.txt)
-**Source:** https://github.com/skydeval/kryphocron, tag `v0.4.4`, its wasm directory
+**Source:** https://github.com/skydeval/kryphocron, tag `v0.4.5`, its wasm directory
 
 ```
 Copyright (c) skydeval
