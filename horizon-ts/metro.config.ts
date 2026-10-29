@@ -70,6 +70,17 @@ let config = getSentryExpoConfig(import.meta.dirname, {
           platform,
         )
       }
+      /*
+       * HORIZON: the same client's core-js polyfill broke
+       * `Function.prototype.toString` (a recursion on the first call), so it
+       * gets Horizon's own small polyfill instead
+       */
+      if (moduleName === 'core-js/proposals/explicit-resource-management') {
+        return {
+          type: 'sourceFile',
+          filePath: `${import.meta.dirname}/src/horizon/polyfills/explicit-resource-management.ts`,
+        }
+      }
       if (
         process.env.BSKY_PROFILE &&
         moduleName.endsWith('ReactNativeRenderer-prod')
