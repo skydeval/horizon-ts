@@ -10,8 +10,8 @@ import {
 } from '#/alf/typography'
 // HORIZON: the drawer's outline, in the app (Android app)
 import {
-  outlineCopyTextStyle,
-  useOutlineCopyColor,
+  outlineShadowTextStyle,
+  useOutlineShadow,
 } from '#/horizon/backdrops/bar-halo-context'
 
 export type {TextProps}
@@ -33,8 +33,8 @@ export function Text({
 }: TextProps) {
   const {fonts, flags} = useAlf()
   const t = useTheme()
-  // HORIZON: text in an outline's copy takes its colour (Android app)
-  const outlineCopy = useOutlineCopyColor()
+  // HORIZON: a soft shadow over the app's bare drawer (Android app)
+  const outlineShadow = useOutlineShadow()
   const s = normalizeTextStyles(
     [
       a.text_sm,
@@ -42,7 +42,7 @@ export function Text({
       a.leading_snug,
       web(numberOfLines === 1 && numberOfLinesClippingFix),
       style,
-      outlineCopy && outlineCopyTextStyle(outlineCopy),
+      outlineShadow && outlineShadowTextStyle(outlineShadow),
     ],
     {
       fontScale: allowFontScaling ? fonts.scaleMultiplier : 1,

@@ -633,8 +633,11 @@ export function barHaloColors(
  * a shadow that fades outward. App only: web's drawer keeps its glass.
  */
 
-/** The alpha of each of the app's outline copies. */
+/** The alpha of each of the app's outline copies (icons). */
 export const OUTLINE_COPY_ALPHA = 0.25
+
+/** The alpha of the soft shadow under the drawer's text in the app. */
+export const OUTLINE_SHADOW_ALPHA = 0.9
 
 /** An outline's colour: the theme's glass tint at `alpha`. */
 export function outlineColor(theme: ThemeName, alpha = 1): string {

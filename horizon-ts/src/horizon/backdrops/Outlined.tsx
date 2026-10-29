@@ -1,55 +1,28 @@
 /*
- * A soft outline round text in the app (the drawer over its bare window,
- * skydeval 2026-10-29). Android draws one text shadow, blurred and sized in
- * raw pixels, which cannot part white text from a flag's white band. So the
- * outline is eight copies of the children, a point out every way, faint and
- * slightly blurred in the outline's colour (`OutlineCopyContext`, which
- * Typography's `Text` takes, nested text included), behind the children
- * themselves; where they overlap they build a shadow that fades out. The
- * copies are hidden from touch and screen readers. Outside an outline
- * scope (`BarHaloScope` with `outline`), the children only.
+ * Text over the app's bare drawer: one soft shadow in the theme's tint under
+ * the text (`OutlineShadowContext`, which Typography's `Text` takes, nested
+ * text included), as a phone's home screen does for its labels over a
+ * wallpaper. The text keeps its colour and the layout is unchanged. Copies
+ * of the text a point out every way read as pills behind each word
+ * (skydeval, 2026-10-29). Outside an outline scope (`BarHaloScope` with
+ * `outline`), the children only.
  */
 
-import {type StyleProp, View, type ViewStyle} from 'react-native'
-
+import {useTheme} from '#/alf'
 import {
-  ICON_OUTLINE_OFFSETS,
-  OutlineCopyContext,
+  OutlineShadowContext,
   useBarHalo,
 } from '#/horizon/backdrops/bar-halo-context'
+import {OUTLINE_SHADOW_ALPHA, outlineColor} from '#/horizon/backdrops/frame'
 
-export function Outlined({
-  children,
-  style,
-}: {
-  children: React.ReactNode
-  /** The wrapper's layout, while outlined (a row's `flex_shrink`). */
-  style?: StyleProp<ViewStyle>
-}) {
+export function Outlined({children}: {children: React.ReactNode}) {
   const halo = useBarHalo()
+  const t = useTheme()
   if (!halo?.outline) return <>{children}</>
   return (
-    <View style={style}>
-      {ICON_OUTLINE_OFFSETS.map(([left, top]) => (
-        <View
-          key={`${left},${top}`}
-          pointerEvents="none"
-          accessible={false}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={{
-            position: 'absolute',
-            top,
-            left,
-            right: -left,
-            bottom: -top,
-          }}>
-          <OutlineCopyContext.Provider value={halo.halo}>
-            {children}
-          </OutlineCopyContext.Provider>
-        </View>
-      ))}
+    <OutlineShadowContext.Provider
+      value={outlineColor(t.name, OUTLINE_SHADOW_ALPHA)}>
       {children}
-    </View>
+    </OutlineShadowContext.Provider>
   )
 }

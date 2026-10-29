@@ -29,30 +29,30 @@ export function useBarHalo(): BarHalo | null {
 }
 
 /*
- * An outline in the app is drawn as copies (`Outlined.tsx`): text inside a
- * copy takes this colour, with a slight blur of the same colour, nested text
- * included.
+ * Text in the app's bare drawer (`Outlined.tsx`) takes one soft shadow of
+ * this colour, nested text included, as a phone's home screen does for its
+ * labels over a wallpaper. Copies of the text (an outline) read as pills
+ * behind each word (skydeval, 2026-10-29).
  */
-export const OutlineCopyContext = createContext<string | null>(null)
+export const OutlineShadowContext = createContext<string | null>(null)
 
-/** The colour text takes inside an outline copy, or null. */
-export function useOutlineCopyColor(): string | null {
-  return useContext(OutlineCopyContext)
+/** The colour of the soft shadow text takes here, or null. */
+export function useOutlineShadow(): string | null {
+  return useContext(OutlineShadowContext)
 }
 
 /**
- * The blur of an outline copy's text, in the pixels Android's text shadow
- * takes (not points): a point and a half.
+ * The shadow's blur, in the pixels Android's text shadow takes (not
+ * points): three points.
  */
-export const OUTLINE_COPY_BLUR = 1.5 * PixelRatio.get()
+export const OUTLINE_SHADOW_BLUR = 3 * PixelRatio.get()
 
-/** The style text takes inside an outline copy of `color`. */
-export function outlineCopyTextStyle(color: string) {
+/** The style text takes for a soft shadow of `color`; its colour is kept. */
+export function outlineShadowTextStyle(color: string) {
   return {
-    color,
     textShadowColor: color,
     textShadowOffset: {width: 0, height: 0},
-    textShadowRadius: OUTLINE_COPY_BLUR,
+    textShadowRadius: OUTLINE_SHADOW_BLUR,
   }
 }
 

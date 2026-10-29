@@ -124,7 +124,7 @@ let DrawerProfileCard = ({
       <View style={[a.gap_2xs]}>
         <View style={[a.flex_row, a.align_center, a.gap_xs, a.flex_1]}>
           {/* HORIZON: outlined over the bare drawer, in the app */}
-          <Outlined style={[a.flex_shrink]}>
+          <Outlined>
             <Text
               emoji
               style={[
@@ -166,36 +166,41 @@ let DrawerProfileCard = ({
             </Pressable>
           )}
         </View>
-        <Text
-          emoji
-          style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
-          numberOfLines={1}>
-          {sanitizeHandle(account.handle, '@')}
-        </Text>
+        {/* HORIZON: a soft shadow over the bare drawer, in the app */}
+        <Outlined>
+          <Text
+            emoji
+            style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
+            numberOfLines={1}>
+            {sanitizeHandle(account.handle, '@')}
+          </Text>
+        </Outlined>
       </View>
-      <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
-        <Trans>
-          <Text style={[a.text_md, a.font_semi_bold]}>
-            {formatCount(i18n, profile?.followersCount ?? 0)}
-          </Text>{' '}
-          <Plural
-            value={profile?.followersCount || 0}
-            one="follower"
-            other="followers"
-          />
-        </Trans>{' '}
-        &middot;{' '}
-        <Trans>
-          <Text style={[a.text_md, a.font_semi_bold]}>
-            {formatCount(i18n, profile?.followsCount ?? 0)}
-          </Text>{' '}
-          <Plural
-            value={profile?.followsCount || 0}
-            one="following"
-            other="following"
-          />
-        </Trans>
-      </Text>
+      <Outlined>
+        <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
+          <Trans>
+            <Text style={[a.text_md, a.font_semi_bold]}>
+              {formatCount(i18n, profile?.followersCount ?? 0)}
+            </Text>{' '}
+            <Plural
+              value={profile?.followersCount || 0}
+              one="follower"
+              other="followers"
+            />
+          </Trans>{' '}
+          &middot;{' '}
+          <Trans>
+            <Text style={[a.text_md, a.font_semi_bold]}>
+              {formatCount(i18n, profile?.followsCount ?? 0)}
+            </Text>{' '}
+            <Plural
+              value={profile?.followsCount || 0}
+              one="following"
+              other="following"
+            />
+          </Trans>
+        </Text>
+      </Outlined>
     </TouchableOpacity>
   )
 }
@@ -830,7 +835,7 @@ function MenuItem({icon, label, count, bold, beta, onPress}: MenuItemProps) {
           </View>
           <View style={[a.flex_1, a.flex_row, a.align_center, a.gap_sm]}>
             {/* HORIZON: outlined over the bare drawer, in the app */}
-            <Outlined style={[a.flex_shrink]}>
+            <Outlined>
               <Text
                 style={[
                   a.flex_shrink,
