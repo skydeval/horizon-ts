@@ -214,6 +214,18 @@ export function BarShade({
   return <div aria-hidden style={{...shadePaint(kind), ...shadeBox(kind)}} />
 }
 
+/**
+ * The drawer's halo (its window is bare with every style): placed first in
+ * the drawer, it marks the whole drawer, so every line of text and every
+ * icon in it takes the halo, which CSS hands down. Nothing without a
+ * backdrop; outside its bare window it inherits no colour.
+ */
+export function DrawerHalo() {
+  const def = useActiveBackdrop()
+  if (!def || !usesHalo()) return null
+  return <Halo kind="tab" />
+}
+
 const InSlot = createContext(false)
 
 /**

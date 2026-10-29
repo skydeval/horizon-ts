@@ -11,6 +11,7 @@ export function BarHaloScope({
 }: {
   piece: WindowKind
   enabled?: boolean
+  recolour?: boolean
   children: React.ReactNode
 }) {
   return <>{children}</>

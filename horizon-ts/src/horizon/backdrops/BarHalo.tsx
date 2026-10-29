@@ -34,6 +34,8 @@ const BAR_HEIGHT = {top: 110, bottom: 80}
  * bottom. Close enough for the range, which is widened to 2% steps anyway.
  */
 function barBox(piece: WindowKind, width: number, height: number): WindowBox {
+  // The drawer runs the screen's height, from its left edge.
+  if (piece === 'drawer') return {left: 0, top: 0, width, height}
   return piece === 'bottomBar'
     ? {
         left: 0,
@@ -46,15 +48,19 @@ function barBox(piece: WindowKind, width: number, height: number): WindowBox {
 
 /**
  * Wraps a bar piece's items: when the piece is a bare window, they draw
- * the halo. `enabled` as for the piece's `FrameWindow`.
+ * the halo. `enabled` as for the piece's `FrameWindow`. `recolour` false
+ * keeps every item's own colour (the drawer, whose links and badges are
+ * blue): its `text` is then empty.
  */
 export function BarHaloScope({
   piece,
   enabled = true,
+  recolour = true,
   children,
 }: {
   piece: WindowKind
   enabled?: boolean
+  recolour?: boolean
   children: React.ReactNode
 }) {
   const t = useTheme()
@@ -78,8 +84,9 @@ export function BarHaloScope({
     {width, height},
     barBox(piece, width, height),
   )
+  const colors = barHaloColors(def, t.name, range)
   return (
-    <BarHaloContext.Provider value={barHaloColors(def, t.name, range)}>
+    <BarHaloContext.Provider value={recolour ? colors : {...colors, text: ''}}>
       {children}
     </BarHaloContext.Provider>
   )
