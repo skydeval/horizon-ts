@@ -9,7 +9,7 @@ build needs no Rust, clang, wasm-bindgen or binaryen.
 | | |
 |---|---|
 | kryphocron tag | `v0.4.5` |
-| kryphocron commit | `2721f264596a3be4eb72164458e09b6eb9397baf` |
+| kryphocron commit | `bba2119e5bdbb32e42cb9c2d283cdbea86d14490` |
 | Source | `git archive v0.4.5` (a clean export of the tag, not a working tree) |
 | Built | 2026-10-29 |
 | rustc | 1.88.0 (6b00bc388 2025-06-23), with `rust-src` for `build.sh`'s rebuilt std |
