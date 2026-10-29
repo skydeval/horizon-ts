@@ -30,6 +30,12 @@ export const AGE_ASSURANCE_OFF: boolean = true
 export const PUSH_OFF: boolean = true
 
 /**
+ * The "Oh no!" screen shows the crash's stack under its message, selectable,
+ * so testers can send it (pre-alpha and the first native builds).
+ */
+export const SHOW_ERROR_STACK: boolean = true
+
+/**
  * Settings > About shows "Send error report". Off while error reporting is
  * off, since the report would go nowhere.
  */

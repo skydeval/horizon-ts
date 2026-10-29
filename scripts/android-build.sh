@@ -72,5 +72,8 @@ EXPO_PUBLIC_ENV=production NODE_ENV=production ./gradlew --no-daemon \
 mkdir -p "$OUT"
 SHA="$(cat "$APP/.build-sha" 2>/dev/null || echo local)"
 cp app/build/outputs/apk/release/app-release.apk "$OUT/horizon-$SHA.apk"
+# The Hermes-composed source map, to turn a crash's bundle offsets into lines
+MAP=app/build/generated/sourcemaps/react/release/index.android.bundle.map
+if [ -f "$MAP" ]; then cp "$MAP" "$OUT/horizon-$SHA.map"; fi
 echo "== APK: $OUT/horizon-$SHA.apk"
-ls -la "$OUT/horizon-$SHA.apk"
+ls -la "$OUT/horizon-$SHA".*

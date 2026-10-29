@@ -1,10 +1,12 @@
 import {Component, type ErrorInfo, type ReactNode} from 'react'
-import {type StyleProp, type ViewStyle} from 'react-native'
+import {ScrollView, type StyleProp, type ViewStyle} from 'react-native'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 
 import {logger} from '#/logger'
 import {type Metadata} from '#/logger/types'
+import {ErrorStack} from '#/horizon/errors/ErrorStack'
+import {SHOW_ERROR_STACK} from '#/horizon/switches'
 import {ErrorScreen} from './error/ErrorScreen'
 import {CenteredView} from './Views'
 
@@ -18,6 +20,8 @@ interface Props {
 interface State {
   hasError: boolean
   error: any
+  // HORIZON: shown under the message in test builds (SHOW_ERROR_STACK)
+  componentStack?: string
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -35,6 +39,10 @@ export class ErrorBoundary extends Component<Props, State> {
       errorInfo,
       ...this.props.getErrorMetadata?.(error),
     })
+    // HORIZON: kept for the stack shown in test builds
+    if (SHOW_ERROR_STACK) {
+      this.setState({componentStack: errorInfo.componentStack ?? undefined})
+    }
   }
 
   public render() {
@@ -45,7 +53,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <CenteredView style={[{height: '100%', flex: 1}, this.props.style]}>
-          <TranslatedErrorScreen details={this.state.error.toString()} />
+          {/* HORIZON: scrolls, with the crash's stack below in test builds */}
+          <ScrollView>
+            <TranslatedErrorScreen details={this.state.error.toString()} />
+            {SHOW_ERROR_STACK && (
+              <ErrorStack
+                error={this.state.error}
+                componentStack={this.state.componentStack}
+              />
+            )}
+          </ScrollView>
         </CenteredView>
       )
     }
