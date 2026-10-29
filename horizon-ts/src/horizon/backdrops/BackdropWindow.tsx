@@ -36,10 +36,11 @@ function shapeStyle(shape: WindowShape): ViewStyle {
 
 /**
  * Paints `def` under `overlays` (top first) inside the parent, aligned with
- * the window. `homeHeader` adds the Home header's mode trigger.
- * `followsAnimations` (the drawer) is not measured: it lays out while slid
- * off-screen, so a measurement would paint the empty space past the
- * screen's edge, and it always opens at the screen's top left. The web
+ * the window. `homeHeader` adds the Home header's mode trigger. `at`, the
+ * window's known place on the screen, replaces the measurement (the Sides
+ * strips). `followsAnimations` (the drawer) is at the screen's top left: it
+ * lays out while slid off-screen, so a measurement would paint the empty
+ * space past the screen's edge, and it always opens there. The web
  * painter's other hints (`isStatic`, `shades`) do not apply here.
  */
 export function BackdropWindow({
@@ -48,6 +49,7 @@ export function BackdropWindow({
   shape,
   homeHeader = false,
   followsAnimations = false,
+  at,
 }: {
   def: BackdropDef
   overlays: string[]
@@ -56,20 +58,23 @@ export function BackdropWindow({
   isStatic?: boolean
   followsAnimations?: boolean
   shades?: boolean
+  at?: {left: number; top: number}
 }) {
   const t = useTheme()
   const frame = useViewportFrame()
   const ref = useRef<React.ComponentRef<typeof View>>(null)
-  const [offset, setOffset] = useState<{x: number; y: number} | null>(() =>
-    followsAnimations ? windowOffset({left: 0, top: 0}) : null,
+  const [measured, setMeasured] = useState<{x: number; y: number} | null>(
+    null,
   )
+  const known = at ?? (followsAnimations ? {left: 0, top: 0} : null)
+  const offset = known ? windowOffset(known) : measured
   const compiled = compileBackdrop(def, t.name, frame)
 
   const measure = () => {
-    if (followsAnimations) return
+    if (known) return
     ref.current?.measureInWindow((left, top) => {
       const next = windowOffset({left, top})
-      setOffset(prev =>
+      setMeasured(prev =>
         prev && prev.x === next.x && prev.y === next.y ? prev : next,
       )
     })

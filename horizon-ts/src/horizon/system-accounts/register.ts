@@ -39,6 +39,7 @@ import {logger} from '#/logger'
 import {networkAwareFetch} from '#/state/session/network'
 import {sessionDataToSessionAccount} from '#/state/session/session-data'
 import {type SessionAccount} from '#/state/session/types'
+import {IS_WEB} from '#/env'
 import {createTemporaryClient} from '#/horizon/posting-as/temp-client'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {
@@ -105,9 +106,15 @@ export type PopupSession = {
 export type RegistrationEnv = {
   now(): number
   windowName(): string
+  /**
+   * Whether sign-in runs in a popup window (web). The app's sign-in opens
+   * the server in the system's browser sheet instead, with no window to
+   * pre-open or bring forward.
+   */
+  popupWindows: boolean
   /** The pre-open in the press: `null` when the browser blocked it. */
   openWindow(name: string): Window | null
-  /** The library's popup sign-in, started in the same press. */
+  /** The sign-in (web: the library's popup), started in the same press. */
   signIn(did: string, name: string): Promise<PopupSession>
   currentDid(): string | undefined
   currentPdsClient(): Client | undefined
@@ -123,6 +130,7 @@ function randomName(): string {
 const defaultEnv: RegistrationEnv = {
   now: () => Date.now(),
   windowName: randomName,
+  popupWindows: IS_WEB,
   openWindow: name =>
     window.open(
       'about:blank',
@@ -132,13 +140,17 @@ const defaultEnv: RegistrationEnv = {
     ),
   // `signIn` with `display: 'popup'` is this call; it takes the window name.
   signIn: (did, name) => {
-    /*
-     * Popup sign-in is web only: the app's client has none, and the dialog
-     * offers the app-password path there instead
-     */
     const client = getOAuthClient() as Partial<BrowserOAuthClient>
     if (!client.signInPopup) {
-      return Promise.reject(new Error('Popup sign-in is only on the web'))
+      /*
+       * The app: its client's own sign-in, as for a first sign-in, which
+       * returns the session the same way (skydeval, 2026-10-29: adding a
+       * system account in the app took an app password only)
+       */
+      return getOAuthClient().signIn(did, {
+        prompt: 'login',
+        scope: OAUTH_SCOPE,
+      })
     }
     return client.signInPopup(did, {
       display: 'popup',
@@ -154,9 +166,12 @@ const defaultEnv: RegistrationEnv = {
 
 let env = defaultEnv
 
-/** Test-only: replace parts of the environment (undefined resets). */
+/**
+ * Test-only: replace parts of the environment (undefined resets). Popup
+ * windows unless `next` says otherwise, as Jest runs as the app.
+ */
 export function setRegistrationEnvForTests(next?: Partial<RegistrationEnv>) {
-  env = next ? {...defaultEnv, ...next} : defaultEnv
+  env = next ? {...defaultEnv, popupWindows: true, ...next} : defaultEnv
 }
 
 /* The registry. */
@@ -499,8 +514,8 @@ function startAttempt(reg: Registration): 'started' | 'blocked' {
       pendingUntil: now + PENDING_MS,
     })
   }
-  const popup = env.openWindow(windowName)
-  if (!popup) {
+  const popup = env.popupWindows ? env.openWindow(windowName) : null
+  if (env.popupWindows && !popup) {
     if (wroteProvisional) deleteEntry(reg.did)
     else patchEntry(reg.did, {pendingUntil: undefined})
     setOutcome(reg, {kind: 'blocked'})

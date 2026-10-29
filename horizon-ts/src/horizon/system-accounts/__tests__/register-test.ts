@@ -302,6 +302,52 @@ describe('the popup (4.3 step 4)', () => {
   })
 })
 
+describe('the Android app’s sign-in (no popup windows)', () => {
+  it('opens no window, signs in the account, and the add goes through as on web', async () => {
+    const openWindow = jest.fn(() => null)
+    setRegistrationEnvForTests({
+      now: () => now,
+      windowName: () => 'n1',
+      popupWindows: false,
+      openWindow,
+      signIn: () =>
+        new Promise<PopupSession>((resolve, reject) =>
+          results.push({resolve, reject}),
+        ),
+      currentDid: () => mockCurrent?.did,
+      currentPdsClient: () => mockCurrent?.pdsClient as never,
+      revoke: did => mockRevoke(did),
+    })
+    begin()
+    expect(pressSignIn()).toBe('started')
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(getRegistration()?.outcome.kind).toBe('waiting')
+    results[0].resolve(popupSession(B))
+    await settle()
+    expect(mockApi.addSystemAccount).toHaveBeenCalledTimes(1)
+    expect(getRegistration()?.outcome.kind).toBe('added')
+  })
+
+  it('a cancelled sign-in says it failed and can be tried again', async () => {
+    setRegistrationEnvForTests({
+      now: () => now,
+      windowName: () => 'n1',
+      popupWindows: false,
+      signIn: () =>
+        new Promise<PopupSession>((resolve, reject) =>
+          results.push({resolve, reject}),
+        ),
+      currentDid: () => A,
+    })
+    begin()
+    pressSignIn()
+    results[0].reject(new Error('Authentication cancelled'))
+    await settle()
+    expect(getRegistration()?.outcome.kind).toBe('signInFailed')
+    expect(pressSignIn()).toBe('started')
+  })
+})
+
 describe('when the popup returns (4.3 step 5)', () => {
   it('the expected account: the entry is completed and one add is sent with the added account’s proof', async () => {
     const close = registrationDialogOpened()

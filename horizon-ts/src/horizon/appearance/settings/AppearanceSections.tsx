@@ -514,13 +514,13 @@ function FrameStylePicker() {
   const labels: Record<FrameStyle, string> = {
     bars: l({message: 'Bars', context: 'phone frame style'}),
     edges: l({message: 'Edges', context: 'phone frame style'}),
-    gutter: l({message: 'Gutter', context: 'phone frame style'}),
+    gutter: l({message: 'Sides', context: 'phone frame style'}),
     headerBand: l({message: 'Header', context: 'phone frame style'}),
   }
   const descriptions: Record<FrameStyle, string> = {
     bars: l`The top bar and the tab bar show the backdrop.`,
     edges: l`Plain bars with a thin strip of backdrop along their edges.`,
-    gutter: l`Plain bars; the backdrop shows in a margin beside the posts.`,
+    gutter: l`Plain bars; the backdrop shows in a thin strip down each side.`,
     headerBand: l`The top bar shows the backdrop; the tab bar stays plain.`,
   }
   return (

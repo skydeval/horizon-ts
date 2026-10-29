@@ -51,6 +51,18 @@ describe("the app's drawer window", () => {
     expect(getByTestId('painted').props.children).toBe('0,0')
   })
 
+  it('a window at a known place paints from there (the Sides strips)', () => {
+    const {getByTestId} = render(
+      <BackdropWindow
+        def={trans}
+        overlays={[]}
+        shape={FILL_SHAPE}
+        at={{left: 392, top: 0}}
+      />,
+    )
+    expect(getByTestId('painted').props.children).toBe('-392,0')
+  })
+
   it('other windows wait for their measurement', () => {
     const {queryByTestId} = render(
       <BackdropWindow def={trans} overlays={[]} shape={FILL_SHAPE} />,

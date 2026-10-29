@@ -25,7 +25,7 @@ import {
   parseFrameStyle,
 } from '#/horizon/backdrops/frame-style'
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
-import {insetReadingCardOn} from '#/horizon/backdrops/inset'
+import {insetReadingCardOn, sidesStripsOn} from '#/horizon/backdrops/inset'
 import {registryDef} from '#/horizon/backdrops/registry'
 import {
   DEFAULT_SOFTNESS,
@@ -223,6 +223,19 @@ describe('phone frame styles (live fix 1)', () => {
     act(() => store.setFrameStyle('gutter'))
     expect(render(<FrameWindow kind="bottomBar" />).toJSON()).toBeNull()
     expect(render(<FrameWindow kind="drawer" />).toJSON()).not.toBeNull()
+  })
+
+  it('Sides in the app: strips instead of the card, below 800 only', () => {
+    const on = {def: trans, frameStyle: 'gutter' as const, gtMobile: false}
+    expect(sidesStripsOn({...on, web: false})).toBe(true)
+    // Web draws the card instead
+    expect(sidesStripsOn({...on, web: true})).toBe(false)
+    expect(sidesStripsOn({...on, web: false, gtMobile: true})).toBe(false)
+    expect(sidesStripsOn({...on, web: false, def: null})).toBe(false)
+    for (const style of FRAME_STYLES) {
+      if (style === 'gutter') continue
+      expect(sidesStripsOn({...on, web: false, frameStyle: style})).toBe(false)
+    }
   })
 })
 

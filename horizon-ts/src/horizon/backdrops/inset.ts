@@ -44,6 +44,31 @@ export function insetReadingCardOn({
   )
 }
 
+/**
+ * Whether the app draws the Sides strips (`SidesFrame.tsx`): web's inset
+ * card look, the backdrop in 8px strips down each side, which the app paints
+ * over its screens as it has no layer behind them (skydeval, 2026-10-29).
+ */
+export function sidesStripsOn({
+  def,
+  frameStyle,
+  gtMobile,
+  web = IS_WEB,
+}: {
+  def: BackdropDef | null
+  frameStyle: FrameStyle
+  gtMobile: boolean
+  web?: boolean
+}): boolean {
+  return (
+    compactFrameOn() &&
+    !web &&
+    def !== null &&
+    frameStyle === 'gutter' &&
+    !gtMobile
+  )
+}
+
 /** Whether the inset card is drawn now. */
 export function useInsetReadingCard(): boolean {
   const def = useActiveBackdrop()

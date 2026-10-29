@@ -4,8 +4,9 @@
  *
  * Its own sign-in step (SA-5): it never imports the switcher's sign-in form
  * or paths. Web, in a browser tab: the server's sign-in in a popup, or an
- * app password. An installed web app on a phone or tablet, and native: the
- * app password only (SA-17). The registration lives in `register.ts`'s
+ * app password. The Android app: the server's sign-in in the system's
+ * browser sheet, or an app password. An installed web app on a phone or
+ * tablet, and the iOS app (no OAuth client): the app password only (SA-17). The registration lives in `register.ts`'s
  * registry, so closing this dialog does not end a popup's wait; an outcome
  * after it closed is spoken by the shell announcer.
  */
@@ -24,7 +25,6 @@ import {At_Stroke2_Corner0_Rounded as AtIcon} from '#/components/icons/At'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
 import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
-import {IS_WEB} from '#/env'
 import {OAUTH_AVAILABLE} from '#/horizon/session/oauth-client'
 import {announce} from './announce'
 import {
@@ -60,9 +60,12 @@ type Step = 'identify' | 'confirm' | 'signIn' | 'password'
 
 type Target = {did: string; handle?: string; pdsUrl?: string}
 
-/** Whether this window can use the server's sign-in in a popup (SA-17). */
+/**
+ * Whether this window can use the server's sign-in (SA-17): in a popup on
+ * web, in the system's browser sheet in the Android app.
+ */
 function popupAvailable(): boolean {
-  return IS_WEB && OAUTH_AVAILABLE && !isInstalledMobileWebApp()
+  return OAUTH_AVAILABLE && !isInstalledMobileWebApp()
 }
 
 /*

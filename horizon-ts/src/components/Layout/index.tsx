@@ -35,6 +35,8 @@ import {IS_IPAD, IS_WEB} from '#/env'
 import {useInsetReadingGutter} from '#/horizon/backdrops/inset'
 // HORIZON: the opaque reading surface over the backdrop (Phase 3)
 import {ReadingSurface} from '#/horizon/backdrops/ReadingSurface'
+// HORIZON: the Sides frame in the app
+import {SidesFrame} from '#/horizon/backdrops/SidesFrame'
 
 export * from '#/components/Layout/const'
 export * as Header from '#/components/Layout/Header'
@@ -81,6 +83,8 @@ export const Screen = memo(function Screen({
         ]}
         {...props}
       />
+      {/* HORIZON: the Sides frame's strips, over the screen in the app */}
+      <SidesFrame />
     </>
   )
 })
