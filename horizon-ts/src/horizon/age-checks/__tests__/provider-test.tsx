@@ -26,7 +26,19 @@ jest.mock('#/horizon/age-checks', () => {
     useAgeCheckOnLaunch: (active: boolean) => mockOnLaunch(active),
   }
 })
-jest.mock('#/ageAssurance/data')
+// Bluesky's own provider (off in Horizon) and what it pulls in
+jest.mock('#/ageAssurance/data', () => ({
+  AgeAssuranceServerDataProvider: () => null,
+  useAgeAssuranceServerDataContext: () => ({}),
+}))
+jest.mock('#/ageAssurance/state', () => ({
+  useAgeAssuranceState: () => ({}),
+  useOnAgeAssuranceAccessUpdate: () => {},
+}))
+jest.mock('#/ageAssurance/util', () => ({
+  computeAgeAssuranceFlags: () => ({}),
+  useAgeAssuranceRegionConfigWithFallback: () => undefined,
+}))
 jest.mock('#/lib/notifications/notifications', () => ({
   useGetAndRegisterPushToken: () => () => Promise.resolve(),
 }))
