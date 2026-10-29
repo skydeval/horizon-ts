@@ -5,10 +5,10 @@
 
 import * as AgeRange from 'expo-age-range'
 
+import {logger} from '#/logger'
 import {DEVICE_SIGNALS_SUPPORTED} from '#/ageAssurance/const'
 import {IS_ANDROID} from '#/env'
 import {type StoredAgeCheck} from '#/horizon/age-checks/types'
-import {logger} from '#/logger'
 
 const THRESHOLDS = {threshold1: 13, threshold2: 16, threshold3: 18}
 

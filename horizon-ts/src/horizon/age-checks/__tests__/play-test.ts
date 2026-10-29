@@ -1,5 +1,5 @@
-import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 import * as AgeRange from 'expo-age-range'
+import {beforeEach, describe, expect, it, jest} from '@jest/globals'
 
 import {askStore} from '#/horizon/age-checks/play'
 import {

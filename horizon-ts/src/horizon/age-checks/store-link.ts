@@ -1,7 +1,7 @@
 import {Linking} from 'react-native'
 
-import {IS_ANDROID} from '#/env'
 import {logger} from '#/logger'
+import {IS_ANDROID} from '#/env'
 
 const PACKAGE = 'app.nearhorizon'
 

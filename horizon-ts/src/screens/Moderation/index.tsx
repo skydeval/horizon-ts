@@ -47,10 +47,10 @@ import {GlobalLabelPreference} from '#/components/moderation/LabelPreference'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAgeAssurance} from '#/ageAssurance'
-// HORIZON: the app's age check notice (state app store laws)
-import {AgeCheckNotice} from '#/horizon/age-checks/AgeCheckNotice'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: the app's age check notice (state app store laws)
+import {AgeCheckNotice} from '#/horizon/age-checks/AgeCheckNotice'
 
 function ErrorState({error}: {error: string}) {
   const t = useTheme()

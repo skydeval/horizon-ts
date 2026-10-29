@@ -5,9 +5,9 @@
 
 import {type StoredAgeCheck} from '#/horizon/age-checks/types'
 
-export async function askStore(_args: {
+export function askStore(_args: {
   prompt: boolean
   previous: StoredAgeCheck | undefined
 }): Promise<StoredAgeCheck | undefined> {
-  return undefined
+  return Promise.resolve(undefined)
 }

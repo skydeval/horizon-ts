@@ -4,6 +4,7 @@ import {render} from '@testing-library/react-native'
 
 import {Provider, useAgeAssurance} from '#/ageAssurance'
 import {type AgeCheck} from '#/horizon/age-checks'
+import type * as DecideModule from '#/horizon/age-checks/decide'
 
 /*
  * The app's age check drives the context Bluesky's screens read: a block is
@@ -15,9 +16,9 @@ let mockCheck: AgeCheck | null = null
 const mockOnLaunch = jest.fn()
 
 jest.mock('#/horizon/age-checks', () => {
-  const decide = jest.requireActual<
-    typeof import('#/horizon/age-checks/decide')
-  >('#/horizon/age-checks/decide')
+  const decide = jest.requireActual<typeof DecideModule>(
+    '#/horizon/age-checks/decide',
+  )
   return {
     blocksApp: decide.blocksApp,
     locksAdultContent: decide.locksAdultContent,
