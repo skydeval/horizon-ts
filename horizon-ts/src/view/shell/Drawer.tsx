@@ -72,7 +72,11 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
-// HORIZON: the frosted drawer's window (Phase 3)
+// HORIZON: the drawer's halo in the app
+import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
+// HORIZON: the drawer's halo on web
+import {DrawerHalo} from '#/horizon/backdrops/BarShade'
+// HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
 const iconWidth = 26
@@ -369,89 +373,94 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     <View
       testID="drawer"
       style={[a.flex_1, a.border_r, t.atoms.bg, t.atoms.border_contrast_low]}>
-      {/* HORIZON: the frosted drawer, a window onto the backdrop (Phase 3, BD-17) */}
+      {/* HORIZON: the drawer, a bare window onto the backdrop (Phase 3, BD-17) */}
       <FrameWindow kind="drawer" />
-      <ScrollView
-        style={[a.flex_1]}
-        contentContainerStyle={[
-          {
-            paddingTop: Math.max(
-              insets.top + a.pt_xl.paddingTop,
-              a.pt_xl.paddingTop,
-            ),
-          },
-        ]}>
-        <View style={[a.px_xl]}>
-          {hasSession && currentAccount ? (
-            <DrawerProfileCard
-              account={currentAccount}
-              onPressProfile={onPressDrawerHeaderProfile}
-              onPressShare={
-                IS_NATIVE
-                  ? () => {
-                      ax.metric('invite:dialog:open', {logContext: 'Drawer'})
-                      setDrawerOpen(false)
-                      inviteFriendsControl.open()
-                    }
-                  : undefined
-              }
-            />
+      {/* HORIZON: its text and icons haloed, on web */}
+      <DrawerHalo />
+      {/* HORIZON: its text and icons haloed, in the app */}
+      <BarHaloScope piece="drawer" recolour={false}>
+        <ScrollView
+          style={[a.flex_1]}
+          contentContainerStyle={[
+            {
+              paddingTop: Math.max(
+                insets.top + a.pt_xl.paddingTop,
+                a.pt_xl.paddingTop,
+              ),
+            },
+          ]}>
+          <View style={[a.px_xl]}>
+            {hasSession && currentAccount ? (
+              <DrawerProfileCard
+                account={currentAccount}
+                onPressProfile={onPressDrawerHeaderProfile}
+                onPressShare={
+                  IS_NATIVE
+                    ? () => {
+                        ax.metric('invite:dialog:open', {logContext: 'Drawer'})
+                        setDrawerOpen(false)
+                        inviteFriendsControl.open()
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              <View style={[a.pr_xl]}>
+                <NavSignupCard />
+              </View>
+            )}
+
+            <OTAChannelNotice style={[a.mt_lg]} />
+
+            <Divider style={[a.mt_xl, a.mb_sm]} />
+          </View>
+
+          {hasSession ? (
+            <>
+              <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
+              <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
+              <ChatMenuItem isActive={isAtMessages} onPress={onPressMessages} />
+              <NotificationsMenuItem
+                isActive={isAtNotifications}
+                onPress={onPressNotifications}
+              />
+              {isAtmosphereExploreEnabled && (
+                <AtmosphereMenuItem
+                  isActive={isAtAtmosphere}
+                  onPress={onPressAtmosphere}
+                />
+              )}
+              <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
+              <ListsMenuItem onPress={onPressLists} />
+              <BookmarksMenuItem
+                isActive={isAtBookmarks}
+                onPress={onPressBookmarks}
+              />
+              <ProfileMenuItem
+                isActive={isAtMyProfile}
+                onPress={onPressProfile}
+              />
+              <SettingsMenuItem onPress={onPressSettings} />
+            </>
           ) : (
-            <View style={[a.pr_xl]}>
-              <NavSignupCard />
-            </View>
+            <>
+              <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
+              <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
+              <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
+            </>
           )}
 
-          <OTAChannelNotice style={[a.mt_lg]} />
+          <View style={[a.px_xl]}>
+            <Divider style={[a.mb_xl, a.mt_sm]} />
+            <ExtraLinks />
+          </View>
+        </ScrollView>
 
-          <Divider style={[a.mt_xl, a.mb_sm]} />
-        </View>
-
-        {hasSession ? (
-          <>
-            <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
-            <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
-            <ChatMenuItem isActive={isAtMessages} onPress={onPressMessages} />
-            <NotificationsMenuItem
-              isActive={isAtNotifications}
-              onPress={onPressNotifications}
-            />
-            {isAtmosphereExploreEnabled && (
-              <AtmosphereMenuItem
-                isActive={isAtAtmosphere}
-                onPress={onPressAtmosphere}
-              />
-            )}
-            <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
-            <ListsMenuItem onPress={onPressLists} />
-            <BookmarksMenuItem
-              isActive={isAtBookmarks}
-              onPress={onPressBookmarks}
-            />
-            <ProfileMenuItem
-              isActive={isAtMyProfile}
-              onPress={onPressProfile}
-            />
-            <SettingsMenuItem onPress={onPressSettings} />
-          </>
-        ) : (
-          <>
-            <HomeMenuItem isActive={isAtHome} onPress={onPressHome} />
-            <FeedsMenuItem isActive={isAtFeeds} onPress={onPressMyFeeds} />
-            <SearchMenuItem isActive={isAtSearch} onPress={onPressSearch} />
-          </>
-        )}
-
-        <View style={[a.px_xl]}>
-          <Divider style={[a.mb_xl, a.mt_sm]} />
-          <ExtraLinks />
-        </View>
-      </ScrollView>
-
-      <DrawerFooter
-        onPressFeedback={onPressFeedback}
-        onPressHelp={onPressHelp}
-      />
+        <DrawerFooter
+          onPressFeedback={onPressFeedback}
+          onPressHelp={onPressHelp}
+        />
+      </BarHaloScope>
       <InviteFriendsDialog control={inviteFriendsControl} />
     </View>
   )

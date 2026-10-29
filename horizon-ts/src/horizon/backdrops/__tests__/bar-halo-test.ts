@@ -1,5 +1,6 @@
 import {describe, expect, it} from '@jest/globals'
 
+import {haloTextStyle} from '#/horizon/backdrops/bar-halo-context'
 import {barHaloColors, barShadeVars, haloVar} from '#/horizon/backdrops/frame'
 import {registryDef} from '#/horizon/backdrops/registry'
 
@@ -33,6 +34,13 @@ describe("the app's bar halo", () => {
     expect(copy).toBeLessThan(whole)
     // Four copies overlapping give back about the halo's own alpha
     expect(1 - Math.pow(1 - copy, 4)).toBeCloseTo(whole, 2)
+  })
+
+  it('a scope that keeps colours (the drawer) shadows text without recolouring it', () => {
+    const kept = {...barHaloColors(trans, 'dark'), text: ''}
+    const style = haloTextStyle(kept, true)
+    expect(style.textShadowColor).toBe(kept.halo)
+    expect('color' in style).toBe(false)
   })
 
   it("recolours to the theme's text colour", () => {

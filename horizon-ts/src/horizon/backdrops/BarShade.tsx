@@ -16,6 +16,11 @@ export function BarShade(_props: {kind: ShadeKind; show?: boolean}) {
   return null
 }
 
+/** Nothing in the app: the drawer's `BarHaloScope` does the work. */
+export function DrawerHalo() {
+  return null
+}
+
 /** The slot's children only, in the app. */
 export function BarSlot({children}: {children?: React.ReactNode}) {
   return <>{children}</>

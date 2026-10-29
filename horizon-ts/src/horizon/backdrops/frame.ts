@@ -121,17 +121,23 @@ const WINDOW_MODES: Record<
   FrameStyle,
   Partial<Record<WindowKind, WindowMode>>
 > = {
-  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'full'},
+  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'bare'},
   edges: {
     homeHeader: 'edge',
     header: 'edge',
     bottomBar: 'edge',
-    drawer: 'full',
+    drawer: 'bare',
   },
-  gutter: {drawer: 'full'},
+  gutter: {drawer: 'bare'},
   // Bare like Bars since the round 2 list; the bottom bar stays stock.
-  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'full'},
+  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'bare'},
 }
+/*
+ * The drawer is bare with every style, its text and icons haloed
+ * (`DrawerHalo`): its glass, at the alpha that kept grey text at 4.5:1 over
+ * the whole backdrop, all but hid the colours in dim and dark (skydeval,
+ * 2026-10-29).
+ */
 
 /**
  * How a window is drawn, or null when it is not (9.3): a backdrop is
