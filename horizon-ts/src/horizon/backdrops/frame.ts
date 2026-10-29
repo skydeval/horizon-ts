@@ -644,17 +644,27 @@ export function outlineColor(theme: ThemeName, alpha = 1): string {
   return rgba(GLASS[theme].tint, alpha)
 }
 
-const barOutlines = new Map<ThemeName, BarHaloColors & {outline: true}>()
+/** The app's drawer treatment (`barOutline`). */
+export type BarOutline = BarHaloColors & {outline: true; textShadow: string}
+
+const barOutlines = new Map<ThemeName, BarOutline>()
 
 /**
- * The app's outline for a bare window (the drawer): the theme's tint, faint,
- * for each text and icon copy; no recolouring (`text` empty).
+ * The app's treatment for its bare drawer: icons outlined by faint copies
+ * in the theme's tint, text under one soft shadow of it (`textShadow`); no
+ * recolouring (`text` empty).
  */
-export function barOutline(theme: ThemeName): BarHaloColors & {outline: true} {
+export function barOutline(theme: ThemeName): BarOutline {
   let outline = barOutlines.get(theme)
   if (!outline) {
     const color = outlineColor(theme, OUTLINE_COPY_ALPHA)
-    outline = {halo: color, iconCopy: color, text: '', outline: true}
+    outline = {
+      halo: color,
+      iconCopy: color,
+      text: '',
+      outline: true,
+      textShadow: outlineColor(theme, OUTLINE_SHADOW_ALPHA),
+    }
     barOutlines.set(theme, outline)
   }
   return outline

@@ -1,11 +1,11 @@
-import {Text as RNText} from 'react-native'
+import {Text} from 'react-native'
 import {describe, expect, it} from '@jest/globals'
 import {render} from '@testing-library/react-native'
 
-import {Text} from '#/components/Typography'
 import {
   BarHaloContext,
   OUTLINE_SHADOW_BLUR,
+  outlineShadowTextStyle,
   useOutlineShadow,
 } from '#/horizon/backdrops/bar-halo-context'
 import {
@@ -23,30 +23,35 @@ import {Outlined} from '#/horizon/backdrops/Outlined'
 
 function Probe() {
   const shadow = useOutlineShadow()
-  return <RNText>{shadow ?? 'none'}</RNText>
+  return <Text>{shadow ?? 'none'}</Text>
 }
 
 describe('Outlined', () => {
-  it('hands its text a soft shadow and draws no copies', () => {
-    const shadow = outlineColor('light', OUTLINE_SHADOW_ALPHA)
+  it('hands its text one soft shadow and draws no copies', () => {
+    const outline = barOutline('light')
+    expect(outline.textShadow).toBe(
+      outlineColor('light', OUTLINE_SHADOW_ALPHA),
+    )
     const view = render(
-      <BarHaloContext.Provider value={barOutline('light')}>
+      <BarHaloContext.Provider value={outline}>
         <Outlined>
           <Probe />
-          <Text style={{color: 'blue'}}>Home</Text>
         </Outlined>
       </BarHaloContext.Provider>,
     )
-    expect(view.getAllByText(shadow, {includeHiddenElements: true})).toHaveLength(
-      1,
-    )
-    const home = view.getAllByText('Home', {includeHiddenElements: true})
-    expect(home).toHaveLength(1)
-    expect(home[0]).toHaveStyle({
-      color: 'blue',
-      textShadowColor: shadow,
+    expect(
+      view.getAllByText(outline.textShadow, {includeHiddenElements: true}),
+    ).toHaveLength(1)
+  })
+
+  it('the shadow keeps the text colour', () => {
+    const style = outlineShadowTextStyle('rgba(0, 0, 0, 0.9)')
+    expect(style).toEqual({
+      textShadowColor: 'rgba(0, 0, 0, 0.9)',
+      textShadowOffset: {width: 0, height: 0},
       textShadowRadius: OUTLINE_SHADOW_BLUR,
     })
+    expect('color' in style).toBe(false)
   })
 
   it('is the children only outside an outline scope', () => {

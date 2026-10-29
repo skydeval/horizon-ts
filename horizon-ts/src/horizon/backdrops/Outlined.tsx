@@ -8,20 +8,16 @@
  * `outline`), the children only.
  */
 
-import {useTheme} from '#/alf'
 import {
   OutlineShadowContext,
   useBarHalo,
 } from '#/horizon/backdrops/bar-halo-context'
-import {OUTLINE_SHADOW_ALPHA, outlineColor} from '#/horizon/backdrops/frame'
 
 export function Outlined({children}: {children: React.ReactNode}) {
   const halo = useBarHalo()
-  const t = useTheme()
-  if (!halo?.outline) return <>{children}</>
+  if (!halo?.outline || !halo.textShadow) return <>{children}</>
   return (
-    <OutlineShadowContext.Provider
-      value={outlineColor(t.name, OUTLINE_SHADOW_ALPHA)}>
+    <OutlineShadowContext.Provider value={halo.textShadow}>
       {children}
     </OutlineShadowContext.Provider>
   )

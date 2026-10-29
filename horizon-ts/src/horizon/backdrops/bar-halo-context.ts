@@ -19,6 +19,8 @@ export type BarHalo = BarHaloColors & {
    * colours.
    */
   outline?: boolean
+  /** With `outline`, the colour of the soft shadow under text. */
+  textShadow?: string
 }
 
 export const BarHaloContext = createContext<BarHalo | null>(null)
