@@ -59,7 +59,7 @@ Copyright (c) 2020 @catamphetamine <purecatamphetamine@gmail.com>
 
 ## kryphocron-web
 
-**Path:** `vendor/kryphocron-web/`, and the copies the web build emits (`kryphocron_web_bg.*.wasm` and the `kryphocron_web-*.js` chunk)
+**Path:** `vendor/kryphocron-web/`, the copies the web build emits (`kryphocron_web_bg.*.wasm` and the `kryphocron_web-*.js` chunk), and its JavaScript build in the Android app
 **License:** Mozilla Public License, Version 2.0 — full text at [`licenses/MPL-2.0.txt`](./licenses/MPL-2.0.txt)
 **Source:** https://github.com/skydeval/kryphocron, tag `v0.4.4`, its wasm directory
 
@@ -69,7 +69,7 @@ Copyright (c) skydeval
 
 This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-*An unmodified WebAssembly build of kryphocron's private-post encoder. [`vendor/kryphocron-web/VERSION.md`](./vendor/kryphocron-web/VERSION.md) records how it was built and its checksums.*
+*An unmodified WebAssembly build of kryphocron's private-post encoder, and, for the Android app, the same build converted to JavaScript with binaryen's wasm2js (`kryphocron_web_bg.wasm2js.js`) with a glue adjusted for it (`kryphocron_web_native.js`). [`vendor/kryphocron-web/VERSION.md`](./vendor/kryphocron-web/VERSION.md) records how both were built and their checksums.*
 
 <!-- HORIZON: Horizon is a fork of Bluesky's social-app; record the base it is built on -->
 

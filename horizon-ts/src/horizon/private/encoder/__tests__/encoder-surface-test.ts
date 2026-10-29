@@ -76,6 +76,38 @@ describe('the encoder surface', () => {
     expect(exportNames(types)).toEqual(expected)
   })
 
+  it("the native build's glue exports the same, and its module only instantiate", () => {
+    const glue = fs.readFileSync(
+      path.join(VENDOR, 'kryphocron_web_native.js'),
+      'utf8',
+    )
+    expect(exportNames(glue)).toEqual([
+      'default',
+      'initSync',
+      'preparePrivatePost',
+    ])
+    const module = fs.readFileSync(
+      path.join(VENDOR, 'kryphocron_web_bg.wasm2js.js'),
+      'utf8',
+    )
+    expect(exportNames(module)).toEqual(['instantiate'])
+    // The same module the .wasm exports, nothing more (decoders included)
+    const wasmTypes = fs.readFileSync(
+      path.join(VENDOR, 'kryphocron_web_bg.wasm.d.ts'),
+      'utf8',
+    )
+    const wasmExports = [...wasmTypes.matchAll(/^export const (\w+)/gm)]
+      .map(([, name]) => name)
+      .sort()
+    const moduleExports = [...module.matchAll(/^ {2}"(\w+)": /gm)]
+      .map(([, name]) => name)
+      .filter(
+        name => !name.startsWith('__abort') && name !== '__instance_terminated',
+      )
+      .sort()
+    expect(moduleExports).toEqual(wasmExports)
+  })
+
   it('preparePrivatePost takes (did, nsid, rkey, content_json, now_secs)', () => {
     const types = fs.readFileSync(
       path.join(VENDOR, 'kryphocron_web.d.ts'),
