@@ -72,9 +72,9 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
+import {useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 // HORIZON: the drawer's outline in the app
 import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
-import {useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 // HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {Outlined} from '#/horizon/backdrops/Outlined'
