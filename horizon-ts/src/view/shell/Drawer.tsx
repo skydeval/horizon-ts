@@ -74,6 +74,7 @@ import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
 // HORIZON: the drawer's outline in the app
 import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
+import {useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 // HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {Outlined} from '#/horizon/backdrops/Outlined'
@@ -103,6 +104,14 @@ let DrawerProfileCard = ({
 }): React.ReactNode => {
   const {t: l, i18n} = useLingui()
   const t = useTheme()
+  /*
+   * HORIZON: over the app's bare drawer the handle and counts take the main
+   * text colour, as the rest of the drawer: grey under the dark theme's
+   * shadow was hard to read over a light band (skydeval, 2026-10-29).
+   */
+  const secondaryText = useBarHalo()?.outline
+    ? t.atoms.text
+    : t.atoms.text_contrast_medium
   const {data: profile} = useProfileQuery({did: account.did})
   const {isActive: live} = useActorStatus(profile)
 
@@ -170,14 +179,14 @@ let DrawerProfileCard = ({
         <Outlined>
           <Text
             emoji
-            style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
+            style={[secondaryText, a.text_md, a.leading_tight]}
             numberOfLines={1}>
             {sanitizeHandle(account.handle, '@')}
           </Text>
         </Outlined>
       </View>
       <Outlined>
-        <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
+        <Text style={[a.text_md, secondaryText]}>
           <Trans>
             <Text style={[a.text_md, a.font_semi_bold]}>
               {formatCount(i18n, profile?.followersCount ?? 0)}
