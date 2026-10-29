@@ -47,15 +47,15 @@ describe("the app's bar halo", () => {
     expect(1 - Math.pow(1 - copy, 4)).toBeCloseTo(whole, 2)
   })
 
-  it('the drawer’s outline: a small solid shadow in the theme’s tint, colours kept', () => {
+  it('the drawer’s outline: faint copies in the theme’s tint, colours kept', () => {
     const outline = barOutline('dark')
-    expect(outline.halo).toBe('rgba(0, 0, 0, 1)')
-    expect(barOutline('light').halo).toBe('rgba(255, 255, 255, 1)')
+    expect(outline.halo).toBe('rgba(0, 0, 0, 0.25)')
+    expect(barOutline('light').halo).toBe('rgba(255, 255, 255, 0.25)')
     const style = haloTextStyle(outline, true)
     expect(style.textShadowColor).toBe(outline.halo)
     expect(style.textShadowRadius).toBe(OUTLINE_RADIUS)
     expect('color' in style).toBe(false)
-    // Icon copies are solid too, a point out every way
+    // Icon copies match, a point out every way
     expect(outline.iconCopy).toBe(outline.halo)
     expect(iconHaloOffsets(outline)).toEqual(ICON_OUTLINE_OFFSETS)
     expect(iconHaloOffsets(barHaloColors(trans, 'dark'))).toEqual(

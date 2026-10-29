@@ -6,6 +6,7 @@
  */
 
 import {createContext, useContext} from 'react'
+import {PixelRatio} from 'react-native'
 
 import {type BarHaloColors} from '#/horizon/backdrops/frame'
 
@@ -29,13 +30,30 @@ export function useBarHalo(): BarHalo | null {
 
 /*
  * An outline in the app is drawn as copies (`Outlined.tsx`): text inside a
- * copy takes this colour, with no shadow, nested text included.
+ * copy takes this colour, with a slight blur of the same colour, nested text
+ * included.
  */
 export const OutlineCopyContext = createContext<string | null>(null)
 
 /** The colour text takes inside an outline copy, or null. */
 export function useOutlineCopyColor(): string | null {
   return useContext(OutlineCopyContext)
+}
+
+/**
+ * The blur of an outline copy's text, in the pixels Android's text shadow
+ * takes (not points): a point and a half.
+ */
+export const OUTLINE_COPY_BLUR = 1.5 * PixelRatio.get()
+
+/** The style text takes inside an outline copy of `color`. */
+export function outlineCopyTextStyle(color: string) {
+  return {
+    color,
+    textShadowColor: color,
+    textShadowOffset: {width: 0, height: 0},
+    textShadowRadius: OUTLINE_COPY_BLUR,
+  }
 }
 
 /** Where an icon's halo copies sit round it, in points. */

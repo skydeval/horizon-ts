@@ -625,21 +625,34 @@ export function barHaloColors(
   return colors
 }
 
-/** The solid colour of an outline: the theme's glass tint, opaque. */
-export function outlineColor(theme: ThemeName): string {
-  return rgba(GLASS[theme].tint, 1)
+/*
+ * The outline is a soft border, not a highlight (skydeval, 2026-10-29: "more
+ * like a faded shadow than a bold line"): each of the app's eight copies is
+ * faint and blurred, so where several overlap at a letter's edge they build
+ * a shadow that fades outward. Web's blurred shadows use the stronger alpha.
+ */
+
+/** The alpha of each of the app's outline copies. */
+export const OUTLINE_COPY_ALPHA = 0.25
+
+/** The alpha of web's outline shadows. */
+export const OUTLINE_WEB_ALPHA = 0.6
+
+/** An outline's colour: the theme's glass tint at `alpha`. */
+export function outlineColor(theme: ThemeName, alpha = 1): string {
+  return rgba(GLASS[theme].tint, alpha)
 }
 
 const barOutlines = new Map<ThemeName, BarHaloColors & {outline: true}>()
 
 /**
- * The app's outline for a bare window (the drawer): the theme's tint, solid,
- * for text and every icon copy; no recolouring (`text` empty).
+ * The app's outline for a bare window (the drawer): the theme's tint, faint,
+ * for each text and icon copy; no recolouring (`text` empty).
  */
 export function barOutline(theme: ThemeName): BarHaloColors & {outline: true} {
   let outline = barOutlines.get(theme)
   if (!outline) {
-    const color = outlineColor(theme)
+    const color = outlineColor(theme, OUTLINE_COPY_ALPHA)
     outline = {halo: color, iconCopy: color, text: '', outline: true}
     barOutlines.set(theme, outline)
   }

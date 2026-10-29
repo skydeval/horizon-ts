@@ -1,10 +1,11 @@
 /*
- * A thin solid outline round text in the app (the drawer over its bare
- * window, skydeval 2026-10-29). Android draws one text shadow, blurred and
- * sized in raw pixels, which cannot part white text from a flag's white
- * band. So the outline is eight copies of the children, a point out every
- * way, in the outline's colour (`OutlineCopyContext`, which Typography's
- * `Text` takes, nested text included), behind the children themselves. The
+ * A soft outline round text in the app (the drawer over its bare window,
+ * skydeval 2026-10-29). Android draws one text shadow, blurred and sized in
+ * raw pixels, which cannot part white text from a flag's white band. So the
+ * outline is eight copies of the children, a point out every way, faint and
+ * slightly blurred in the outline's colour (`OutlineCopyContext`, which
+ * Typography's `Text` takes, nested text included), behind the children
+ * themselves; where they overlap they build a shadow that fades out. The
  * copies are hidden from touch and screen readers. Outside an outline
  * scope (`BarHaloScope` with `outline`), the children only.
  */

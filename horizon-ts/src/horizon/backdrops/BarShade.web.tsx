@@ -27,6 +27,7 @@ import {
   BARE_TEXT_VAR,
   barShadesOn,
   haloVar,
+  OUTLINE_WEB_ALPHA,
   outlineColor,
   RECOLOURED_KINDS,
   SHADE_KINDS,
@@ -216,10 +217,11 @@ export function BarShade({
 }
 
 /*
- * The drawer's outline: a thin solid edge in the theme's tint round every
- * glyph and icon, which a soft halo could not do over a flag's white band
- * (skydeval, 2026-10-29). Small stacked shadows, handed down by CSS from
- * the drawer, with the colour as a custom property on it.
+ * The drawer's outline: a soft border in the theme's tint round every
+ * glyph and icon, denser than the bars' halo so it holds over a flag's
+ * white band, and faded rather than a bold line (skydeval, 2026-10-29).
+ * Small blurred shadows, handed down by CSS from the drawer, with the
+ * colour as a custom property on it.
  */
 const OUTLINE_ATTRIBUTE = 'data-horizon-outline'
 const OUTLINE_VAR = '--horizon-outline'
@@ -230,32 +232,12 @@ function addOutlineSheet() {
   if (outlineSheetAdded || typeof document === 'undefined') return
   outlineSheetAdded = true
   const c = `var(${OUTLINE_VAR})`
-  // A pixel out every way, as the app's copies (`Outlined.tsx`).
-  const text = [
-    [-1, 0],
-    [1, 0],
-    [0, -1],
-    [0, 1],
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
-  ]
-    .map(([x, y]) => `${x}px ${y}px 0 ${c}`)
-    .join(',')
-  const icon = [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ]
-    .map(([x, y]) => `drop-shadow(${x}px ${y}px 0 ${c})`)
-    .join(' ')
+  // A soft border fading outward, as the app's faint blurred copies.
   const sheet = document.createElement('style')
   sheet.setAttribute('data-horizon', 'drawer-outline')
   sheet.textContent = [
-    `[${OUTLINE_ATTRIBUTE}]{text-shadow:${text}}`,
-    `[${OUTLINE_ATTRIBUTE}] svg{filter:${icon}}`,
+    `[${OUTLINE_ATTRIBUTE}]{text-shadow:0 0 1px ${c},0 0 2px ${c},0 0 3px ${c}}`,
+    `[${OUTLINE_ATTRIBUTE}] svg{filter:drop-shadow(0 0 1px ${c}) drop-shadow(0 0 2px ${c})}`,
   ].join('\n')
   document.head.appendChild(sheet)
 }
@@ -269,7 +251,7 @@ export function DrawerHalo() {
   const def = useActiveBackdrop()
   const t = useTheme()
   const ref = useRef<HTMLSpanElement>(null)
-  const color = outlineColor(t.name)
+  const color = outlineColor(t.name, OUTLINE_WEB_ALPHA)
   const on = !!def
 
   useLayoutEffect(() => {

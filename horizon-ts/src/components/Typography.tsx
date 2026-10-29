@@ -9,7 +9,10 @@ import {
   type TextProps,
 } from '#/alf/typography'
 // HORIZON: the drawer's outline, in the app (Android app)
-import {useOutlineCopyColor} from '#/horizon/backdrops/bar-halo-context'
+import {
+  outlineCopyTextStyle,
+  useOutlineCopyColor,
+} from '#/horizon/backdrops/bar-halo-context'
 
 export type {TextProps}
 export {Text as Span} from 'react-native'
@@ -39,7 +42,7 @@ export function Text({
       a.leading_snug,
       web(numberOfLines === 1 && numberOfLinesClippingFix),
       style,
-      outlineCopy && {color: outlineCopy, textShadowColor: 'transparent'},
+      outlineCopy && outlineCopyTextStyle(outlineCopy),
     ],
     {
       fontScale: allowFontScaling ? fonts.scaleMultiplier : 1,
