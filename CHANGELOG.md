@@ -47,10 +47,7 @@ fundraisers are paused and have no phase yet.
 - **Sharper backdrop swatches:** pride flag swatches in Appearance show
   clear stripes that blend into each other, instead of a blur.
 - **The Gutter phone frame is now called Sides,** after the thin strips of
-  backdrop down each side.
-- **The menu drawer shows your backdrop in full colour.** Its glass now sits
-  only behind each row, as a rounded pill, so the text reads as before and
-  the colours show around it. The darkest Calm swatches are lighter
+  backdrop down each side. The darkest Calm swatches are lighter
   in dark themes, so they don't disappear into the page. The first tile is
   labelled “None” and shows as a white tile with a slash. The name of the
   selected backdrop no longer appears above it.

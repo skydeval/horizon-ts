@@ -682,11 +682,14 @@ describe('FrameWindow on web (T15, T16, 7b)', () => {
     expect(inner.style.transform).toBe('translate3d(0px, 20px, 0)')
   })
 
-  it('the drawer is bare: no glass over it (its rows carry pills)', async () => {
+  it('the drawer keeps its glass: a tint layer above the backdrop', async () => {
     act(() => store.selectBackdrop(undefined, 'pride.trans'))
     const view = await mount(<FrameWindow kind="drawer" />)
-    const [, , ...rest] = divs(view.toJSON())
-    expect(rest).toEqual([])
+    const [, , glass] = divs(view.toJSON())
+    expect(glass.props.style?.backgroundImage).toBe(
+      'linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55))',
+    )
+    expect([...vars.keys()]).toHaveLength(0)
   })
 
   it('the Home header follows headerMode too', async () => {

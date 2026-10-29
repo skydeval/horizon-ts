@@ -72,9 +72,7 @@ import {useAnalytics} from '#/analytics'
 import {IS_NATIVE, IS_WEB} from '#/env'
 import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
-// HORIZON: the drawer's rows on pills over its bare window
-import {useDrawerPill} from '#/horizon/backdrops/drawer-pill'
-// HORIZON: the drawer's window (Phase 3)
+// HORIZON: the frosted drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 
 const iconWidth = 26
@@ -104,8 +102,6 @@ let DrawerProfileCard = ({
   const t = useTheme()
   const {data: profile} = useProfileQuery({did: account.did})
   const {isActive: live} = useActorStatus(profile)
-  // HORIZON: the card on a pill over the bare drawer
-  const pill = useDrawerPill()
 
   return (
     <TouchableOpacity
@@ -113,11 +109,7 @@ let DrawerProfileCard = ({
       accessibilityLabel={l`Profile`}
       accessibilityHint={l`Navigates to your profile`}
       onPress={onPressProfile}
-      style={[
-        a.gap_sm,
-        a.pr_lg,
-        pill && [pill, a.p_md, {marginHorizontal: -tokens.space.md}],
-      ]}>
+      style={[a.gap_sm, a.pr_lg]}>
       <UserAvatar
         size={52}
         avatar={profile?.avatar}
@@ -207,8 +199,6 @@ export {DrawerProfileCard}
 let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
   const t = useTheme()
   const insets = useSafeAreaInsets()
-  // HORIZON: the signed-out card on a pill over the bare drawer
-  const pill = useDrawerPill()
   const setDrawerOpen = useSetDrawerOpen()
   const navigation = useNavigation<NavigationProp>()
   const ax = useAnalytics()
@@ -407,11 +397,7 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
               }
             />
           ) : (
-            <View
-              style={[
-                a.pr_xl,
-                pill && [pill, a.p_md, {marginHorizontal: -tokens.space.md}],
-              ]}>
+            <View style={[a.pr_xl]}>
               <NavSignupCard />
             </View>
           )}
@@ -482,8 +468,6 @@ let DrawerFooter = ({
 }): React.ReactNode => {
   const {t: l} = useLingui()
   const insets = useSafeAreaInsets()
-  // HORIZON: Help, transparent stock, on a pill over the bare drawer
-  const pill = useDrawerPill()
   return (
     <View
       style={[
@@ -517,7 +501,7 @@ let DrawerFooter = ({
         color="secondary"
         onPress={onPressHelp}
         style={{
-          backgroundColor: pill?.backgroundColor ?? 'transparent',
+          backgroundColor: 'transparent',
         }}>
         <ButtonText>
           <Trans>Help</Trans>
@@ -778,8 +762,6 @@ SettingsMenuItem = memo(SettingsMenuItem)
 function MenuItem({icon, label, count, bold, beta, onPress}: MenuItemProps) {
   const t = useTheme()
   const {t: l} = useLingui()
-  // HORIZON: the row on a pill over the bare drawer
-  const pill = useDrawerPill()
   return (
     <Button
       testID={`menuItemButton-${label}`}
@@ -795,14 +777,6 @@ function MenuItem({icon, label, count, bold, beta, onPress}: MenuItemProps) {
             a.gap_md,
             a.py_md,
             a.px_xl,
-            pill && [
-              pill,
-              {
-                marginHorizontal: tokens.space.sm,
-                marginVertical: 2,
-                paddingHorizontal: tokens.space.xl - tokens.space.sm,
-              },
-            ],
             (hovered || pressed) && t.atoms.bg_contrast_25,
           ]}>
           <View style={[a.relative]}>
@@ -865,21 +839,9 @@ function ExtraLinks() {
   const {t: l} = useLingui()
   const t = useTheme()
   const logoVariant = useLogoVariant()
-  // HORIZON: the links on a pill over the bare drawer
-  const pill = useDrawerPill()
 
   return (
-    <View
-      style={[
-        a.flex_col,
-        a.gap_md,
-        a.flex_wrap,
-        pill && [
-          pill,
-          a.p_md,
-          {alignSelf: 'flex-start', marginHorizontal: -tokens.space.md},
-        ],
-      ]}>
+    <View style={[a.flex_col, a.gap_md, a.flex_wrap]}>
       <InlineLinkText
         style={[a.text_md]}
         label={l`Terms of Service`}

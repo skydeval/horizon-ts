@@ -175,13 +175,13 @@ describe('Header goes bare like Bars (round 2 list, item 4)', () => {
     web: true,
   }
 
-  it('the top bars are bare windows, the bottom bar stock, the drawer bare', () => {
+  it('the top bars are bare windows, the bottom bar stock, the drawer glass', () => {
     const mode = (kind: WindowKind, web = true) =>
       windowMode({...base, kind, web})
     expect(mode('homeHeader')).toBe('bare')
     expect(mode('header')).toBe('bare')
     expect(mode('bottomBar')).toBeNull()
-    expect(mode('drawer')).toBe('bare')
+    expect(mode('drawer')).toBe('full')
     // The app is bare too, with its own halo (BarHalo.tsx), as with Bars.
     expect(mode('homeHeader', false)).toBe('bare')
     // No glass over the backdrop, as with Bars.

@@ -130,10 +130,10 @@ describe('phone frame styles (live fix 1)', () => {
       ]),
     )
     expect(table).toEqual({
-      bars: ['bare', 'bare', 'bare', 'bare'],
-      edges: ['edge', 'edge', 'edge', 'bare'],
-      gutter: [null, null, null, 'bare'],
-      headerBand: ['bare', 'bare', null, 'bare'],
+      bars: ['bare', 'bare', 'bare', 'full'],
+      edges: ['edge', 'edge', 'edge', 'full'],
+      gutter: [null, null, null, 'full'],
+      headerBand: ['bare', 'bare', null, 'full'],
     })
     // Bare in the app too, which draws its own halo (BarHalo)
     expect(

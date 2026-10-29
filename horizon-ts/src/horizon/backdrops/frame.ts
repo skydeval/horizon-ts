@@ -121,23 +121,17 @@ const WINDOW_MODES: Record<
   FrameStyle,
   Partial<Record<WindowKind, WindowMode>>
 > = {
-  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'bare'},
+  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'full'},
   edges: {
     homeHeader: 'edge',
     header: 'edge',
     bottomBar: 'edge',
-    drawer: 'bare',
+    drawer: 'full',
   },
-  gutter: {drawer: 'bare'},
+  gutter: {drawer: 'full'},
   // Bare like Bars since the round 2 list; the bottom bar stays stock.
-  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'bare'},
+  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'full'},
 }
-/*
- * The drawer is bare with every style, its rows on pills of the glass
- * (`DrawerPill.tsx`): glass over the whole drawer all but hid the colours in
- * dim and dark, and a halo could not part white text from a flag's white
- * band (skydeval, 2026-10-29).
- */
 
 /**
  * How a window is drawn, or null when it is not (9.3): a backdrop is
