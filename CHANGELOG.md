@@ -140,6 +140,14 @@ fundraisers are paused and have no phase yet.
 
 ### Fixed
 
+- **Other countries' legal labelers no longer show up on web.** Bluesky's
+  location service only answers bsky.app, so on Horizon's web address the
+  location stayed unknown, and every country's legal labeler was added to
+  be safe. Web now asks Horizon's own site for a rough location, from the
+  host serving the page, and only your country's legal labelers apply.
+  The list also updates once the location is known, instead of waiting for
+  the next sign-in.
+
 - **Signing in with a handle works when it's typed or pasted loosely.** An
   `@` in front, invisible characters copied along with a handle, capitals
   from a phone keyboard, or a pasted profile link made a valid handle fail
