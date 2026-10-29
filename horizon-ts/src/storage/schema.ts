@@ -3,6 +3,8 @@ import {type SessionRecord} from '#/analytics/identifiers/session'
 import {type Gif} from '#/features/gifPicker/types'
 import {type InviteThemeKey} from '#/features/inviteFriends/themes'
 import {type Geolocation} from '#/geolocation/types'
+// HORIZON: the app's age check result (Android app, state app store laws)
+import {type StoredAgeCheck} from '#/horizon/age-checks/types'
 
 /**
  * Data that's specific to the device and does not vary based account
@@ -76,6 +78,12 @@ export type Device = {
    */
   policyUpdateDebugOverride?: boolean
   [PolicyUpdate202508]?: boolean
+
+  /**
+   * HORIZON: what Google Play last said about this device's user's age, in a
+   * state whose app store law applies (`#/horizon/age-checks`).
+   */
+  horizonAgeCheck?: StoredAgeCheck
 }
 
 export type Account = {

@@ -46,6 +46,9 @@ import {NoAccessScreen} from '#/ageAssurance/components/NoAccessScreen'
 import {RedirectOverlay} from '#/ageAssurance/components/RedirectOverlay'
 import {PassiveAnalytics} from '#/analytics/PassiveAnalytics'
 import {IS_ANDROID, IS_IOS, IS_LIQUID_GLASS} from '#/env'
+// HORIZON: the app's age check blocked screen (state app store laws)
+import {AgeCheckBlockedScreen} from '#/horizon/age-checks/AgeCheckBlockedScreen'
+import {AGE_ASSURANCE_OFF} from '#/horizon/switches'
 import {RoutesContainer, TabsNavigator} from '#/Navigation'
 import {Composer} from './Composer'
 import {DrawerContent} from './Drawer'
@@ -264,7 +267,12 @@ export function Shell() {
           {aa.state.error === 'account-data' ? (
             <DataUnavailableScreen />
           ) : aa.state.access === aa.Access.None ? (
-            <NoAccessScreen />
+            // HORIZON: the app's own age check blocks with its own screen
+            AGE_ASSURANCE_OFF ? (
+              <AgeCheckBlockedScreen />
+            ) : (
+              <NoAccessScreen />
+            )
           ) : (
             <RoutesContainer>
               <ShellInner />

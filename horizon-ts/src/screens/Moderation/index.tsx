@@ -47,6 +47,8 @@ import {GlobalLabelPreference} from '#/components/moderation/LabelPreference'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAgeAssurance} from '#/ageAssurance'
+// HORIZON: the app's age check notice (state app store laws)
+import {AgeCheckNotice} from '#/horizon/age-checks/AgeCheckNotice'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
 
@@ -426,6 +428,8 @@ export function ModerationScreenInner({
       <AgeAssuranceAdmonition style={[a.pb_md]}>
         {aaCopy.notice}
       </AgeAssuranceAdmonition>
+      {/* HORIZON: why the app's age check keeps adult content off */}
+      <AgeCheckNotice style={[a.pb_md]} />
       <View style={[a.gap_md]}>
         <View
           style={[

@@ -21,7 +21,14 @@ import {
   computeAgeAssuranceFlags,
   useAgeAssuranceRegionConfigWithFallback,
 } from '#/ageAssurance/util'
-// HORIZON: age assurance is off for every session
+// HORIZON: the app's own age checks, where a state law applies
+import {
+  blocksApp,
+  locksAdultContent,
+  useAgeCheck,
+  useAgeCheckOnLaunch,
+} from '#/horizon/age-checks'
+// HORIZON: Bluesky's age assurance is off for every session
 import {AGE_ASSURANCE_OFF} from '#/horizon/switches'
 
 export {
@@ -33,12 +40,14 @@ export {
 } from '#/ageAssurance/data'
 export {logger} from '#/ageAssurance/logger'
 
-const AgeAssuranceStateContext = createContext<{
+type AgeAssuranceContextValue = {
   Access: typeof AgeAssuranceAccess
   Status: typeof AgeAssuranceStatus
   state: AgeAssuranceState
   flags: AgeAssuranceFlags
-}>({
+}
+
+const DEFAULT_CONTEXT: AgeAssuranceContextValue = {
   Access: AgeAssuranceAccess,
   Status: AgeAssuranceStatus,
   state: {
@@ -58,7 +67,10 @@ const AgeAssuranceStateContext = createContext<{
     allowsDeviceVerification: false,
     hasSharedDeviceSignals: false,
   },
-})
+}
+
+const AgeAssuranceStateContext =
+  createContext<AgeAssuranceContextValue>(DEFAULT_CONTEXT)
 
 /**
  * THE MAIN AGE ASSURANCE CONTEXT HOOK
@@ -70,14 +82,55 @@ export function useAgeAssurance() {
 }
 
 export function Provider({children}: {children: React.ReactNode}) {
-  // HORIZON: age assurance is off; the context defaults grant full access
-  if (AGE_ASSURANCE_OFF) return <>{children}</>
+  /*
+   * HORIZON: Bluesky's age assurance is off; the context grants full access
+   * except where the app's own age check applies (`#/horizon/age-checks`).
+   */
+  if (AGE_ASSURANCE_OFF) {
+    return <HorizonAgeCheckProvider>{children}</HorizonAgeCheckProvider>
+  }
   return (
     <AgeAssuranceServerDataProvider>
       <InnerProvider>
         <RedirectOverlayProvider>{children}</RedirectOverlayProvider>
       </InnerProvider>
     </AgeAssuranceServerDataProvider>
+  )
+}
+
+/*
+ * HORIZON: in the app in a covered state, the store's answer drives the
+ * same context Bluesky's screens read: a block shows the blocked screen
+ * (access `None`), anything short of an adult locks adult content off. Chat
+ * and everything else are untouched (skydeval, 2026-10-29). Elsewhere the
+ * defaults.
+ */
+function HorizonAgeCheckProvider({children}: {children: React.ReactNode}) {
+  const check = useAgeCheck()
+  useAgeCheckOnLaunch(check !== null)
+  const outcome = check?.outcome
+  const value = useMemo((): AgeAssuranceContextValue => {
+    if (!outcome) return DEFAULT_CONTEXT
+    const blocked = blocksApp(outcome)
+    return {
+      ...DEFAULT_CONTEXT,
+      state: {
+        ...DEFAULT_CONTEXT.state,
+        status: blocked
+          ? AgeAssuranceStatus.Blocked
+          : AgeAssuranceStatus.Unknown,
+        access: blocked ? AgeAssuranceAccess.None : AgeAssuranceAccess.Full,
+      },
+      flags: {
+        ...DEFAULT_CONTEXT.flags,
+        adultContentDisabled: locksAdultContent(outcome),
+      },
+    }
+  }, [outcome])
+  return (
+    <AgeAssuranceStateContext.Provider value={value}>
+      {children}
+    </AgeAssuranceStateContext.Provider>
   )
 }
 
