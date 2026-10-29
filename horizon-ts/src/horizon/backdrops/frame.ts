@@ -121,22 +121,22 @@ const WINDOW_MODES: Record<
   FrameStyle,
   Partial<Record<WindowKind, WindowMode>>
 > = {
-  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'bare'},
+  bars: {homeHeader: 'bare', header: 'bare', bottomBar: 'bare', drawer: 'full'},
   edges: {
     homeHeader: 'edge',
     header: 'edge',
     bottomBar: 'edge',
-    drawer: 'bare',
+    drawer: 'full',
   },
-  gutter: {drawer: 'bare'},
+  gutter: {drawer: 'full'},
   // Bare like Bars since the round 2 list; the bottom bar stays stock.
-  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'bare'},
+  headerBand: {homeHeader: 'bare', header: 'bare', drawer: 'full'},
 }
 /*
- * The drawer is bare with every style, its text and icons haloed
- * (`DrawerHalo`): its glass, at the alpha that kept grey text at 4.5:1 over
- * the whole backdrop, all but hid the colours in dim and dark (skydeval,
- * 2026-10-29).
+ * In the app the drawer is bare with every style, its text and icons
+ * outlined (`Outlined`): its glass, at the alpha that kept grey text at
+ * 4.5:1 over the whole backdrop, all but hid the colours in dim and dark.
+ * Web keeps its glass (skydeval, 2026-10-29: web was already right).
  */
 
 /**
@@ -170,6 +170,7 @@ export function windowMode({
   if (isWithinDialog || !enabled) return null
   const mode = WINDOW_MODES[frameStyle][kind] ?? null
   if (mode && kind === 'header' && web && gtMobile) return null
+  if (mode && kind === 'drawer' && !web) return 'bare'
   return mode
 }
 
@@ -629,14 +630,11 @@ export function barHaloColors(
  * The outline is a soft border, not a highlight (skydeval, 2026-10-29: "more
  * like a faded shadow than a bold line"): each of the app's eight copies is
  * faint and blurred, so where several overlap at a letter's edge they build
- * a shadow that fades outward. Web's blurred shadows use the stronger alpha.
+ * a shadow that fades outward. App only: web's drawer keeps its glass.
  */
 
 /** The alpha of each of the app's outline copies. */
 export const OUTLINE_COPY_ALPHA = 0.25
-
-/** The alpha of web's outline shadows. */
-export const OUTLINE_WEB_ALPHA = 0.6
 
 /** An outline's colour: the theme's glass tint at `alpha`. */
 export function outlineColor(theme: ThemeName, alpha = 1): string {

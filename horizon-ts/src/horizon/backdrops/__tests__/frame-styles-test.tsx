@@ -135,6 +135,12 @@ describe('phone frame styles (live fix 1)', () => {
       gutter: [null, null, null, 'bare'],
       headerBand: ['bare', 'bare', null, 'bare'],
     })
+    // Web's drawer keeps its glass with every style
+    for (const frameStyle of FRAME_STYLES) {
+      expect(windowMode({...base, frameStyle, kind: 'drawer', web: true})).toBe(
+        'full',
+      )
+    }
     // Bare in the app too, which draws its own halo (BarHalo)
     expect(
       windowMode({...base, frameStyle: 'bars', kind: 'bottomBar', web: false}),

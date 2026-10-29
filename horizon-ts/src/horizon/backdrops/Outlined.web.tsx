@@ -1,6 +1,6 @@
 /*
- * On web the drawer's outline is CSS (`DrawerHalo` in `BarShade.web.tsx`),
- * so the app's copies (`Outlined.tsx`) are not needed.
+ * On web the drawer keeps its glass, so the app's outline copies
+ * (`Outlined.tsx`) are not drawn.
  */
 
 import {type StyleProp, type ViewStyle} from 'react-native'

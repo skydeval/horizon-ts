@@ -18,7 +18,7 @@ import {
 } from 'react'
 import {type StyleProp, StyleSheet, type TextStyle} from 'react-native'
 
-import {useBreakpoints, useTheme} from '#/alf'
+import {useBreakpoints} from '#/alf'
 import {useDialogContext} from '#/components/Dialog/context'
 import {useAppearanceState} from '#/horizon/appearance/store'
 import {useActiveBackdrop} from '#/horizon/backdrops/active'
@@ -27,8 +27,6 @@ import {
   BARE_TEXT_VAR,
   barShadesOn,
   haloVar,
-  OUTLINE_WEB_ALPHA,
-  outlineColor,
   RECOLOURED_KINDS,
   SHADE_KINDS,
   SHADE_SHAPES,
@@ -214,60 +212,6 @@ export function BarShade({
   if (usesHalo()) return <Halo kind={kind} />
   if (kind === 'label') return <LabelShade />
   return <div aria-hidden style={{...shadePaint(kind), ...shadeBox(kind)}} />
-}
-
-/*
- * The drawer's outline: a soft border in the theme's tint round every
- * glyph and icon, denser than the bars' halo so it holds over a flag's
- * white band, and faded rather than a bold line (skydeval, 2026-10-29).
- * Small blurred shadows, handed down by CSS from the drawer, with the
- * colour as a custom property on it.
- */
-const OUTLINE_ATTRIBUTE = 'data-horizon-outline'
-const OUTLINE_VAR = '--horizon-outline'
-
-let outlineSheetAdded = false
-
-function addOutlineSheet() {
-  if (outlineSheetAdded || typeof document === 'undefined') return
-  outlineSheetAdded = true
-  const c = `var(${OUTLINE_VAR})`
-  // A soft border fading outward, as the app's faint blurred copies.
-  const sheet = document.createElement('style')
-  sheet.setAttribute('data-horizon', 'drawer-outline')
-  sheet.textContent = [
-    `[${OUTLINE_ATTRIBUTE}]{text-shadow:0 0 1px ${c},0 0 2px ${c},0 0 3px ${c}}`,
-    `[${OUTLINE_ATTRIBUTE}] svg{filter:drop-shadow(0 0 1px ${c}) drop-shadow(0 0 2px ${c})}`,
-  ].join('\n')
-  document.head.appendChild(sheet)
-}
-
-/**
- * The drawer's outline (its window is bare with every style): placed first
- * in the drawer, it marks the whole drawer, so every line of text and every
- * icon in it is outlined. Nothing without a backdrop.
- */
-export function DrawerHalo() {
-  const def = useActiveBackdrop()
-  const t = useTheme()
-  const ref = useRef<HTMLSpanElement>(null)
-  const color = outlineColor(t.name, OUTLINE_WEB_ALPHA)
-  const on = !!def
-
-  useLayoutEffect(() => {
-    const drawer = ref.current?.parentElement
-    if (!on || !drawer) return
-    addOutlineSheet()
-    drawer.setAttribute(OUTLINE_ATTRIBUTE, '')
-    drawer.style.setProperty(OUTLINE_VAR, color)
-    return () => {
-      drawer.removeAttribute(OUTLINE_ATTRIBUTE)
-      drawer.style.removeProperty(OUTLINE_VAR)
-    }
-  }, [on, color])
-
-  if (!on) return null
-  return <span ref={ref} aria-hidden style={{display: 'none'}} />
 }
 
 const InSlot = createContext(false)

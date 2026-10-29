@@ -74,8 +74,6 @@ import {InviteFriendsDialog} from '#/features/inviteFriends'
 import {useActorStatus} from '#/features/liveNow'
 // HORIZON: the drawer's outline in the app
 import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
-// HORIZON: the drawer's halo on web
-import {DrawerHalo} from '#/horizon/backdrops/BarShade'
 // HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {Outlined} from '#/horizon/backdrops/Outlined'
@@ -168,40 +166,36 @@ let DrawerProfileCard = ({
             </Pressable>
           )}
         </View>
-        <Outlined>
-          <Text
-            emoji
-            style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
-            numberOfLines={1}>
-            {sanitizeHandle(account.handle, '@')}
-          </Text>
-        </Outlined>
-      </View>
-      <Outlined>
-        <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
-          <Trans>
-            <Text style={[a.text_md, a.font_semi_bold]}>
-              {formatCount(i18n, profile?.followersCount ?? 0)}
-            </Text>{' '}
-            <Plural
-              value={profile?.followersCount || 0}
-              one="follower"
-              other="followers"
-            />
-          </Trans>{' '}
-          &middot;{' '}
-          <Trans>
-            <Text style={[a.text_md, a.font_semi_bold]}>
-              {formatCount(i18n, profile?.followsCount ?? 0)}
-            </Text>{' '}
-            <Plural
-              value={profile?.followsCount || 0}
-              one="following"
-              other="following"
-            />
-          </Trans>
+        <Text
+          emoji
+          style={[t.atoms.text_contrast_medium, a.text_md, a.leading_tight]}
+          numberOfLines={1}>
+          {sanitizeHandle(account.handle, '@')}
         </Text>
-      </Outlined>
+      </View>
+      <Text style={[a.text_md, t.atoms.text_contrast_medium]}>
+        <Trans>
+          <Text style={[a.text_md, a.font_semi_bold]}>
+            {formatCount(i18n, profile?.followersCount ?? 0)}
+          </Text>{' '}
+          <Plural
+            value={profile?.followersCount || 0}
+            one="follower"
+            other="followers"
+          />
+        </Trans>{' '}
+        &middot;{' '}
+        <Trans>
+          <Text style={[a.text_md, a.font_semi_bold]}>
+            {formatCount(i18n, profile?.followsCount ?? 0)}
+          </Text>{' '}
+          <Plural
+            value={profile?.followsCount || 0}
+            one="following"
+            other="following"
+          />
+        </Trans>
+      </Text>
     </TouchableOpacity>
   )
 }
@@ -381,11 +375,9 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     <View
       testID="drawer"
       style={[a.flex_1, a.border_r, t.atoms.bg, t.atoms.border_contrast_low]}>
-      {/* HORIZON: the drawer, a bare window onto the backdrop (Phase 3, BD-17) */}
+      {/* HORIZON: the drawer, a window onto the backdrop (Phase 3, BD-17) */}
       <FrameWindow kind="drawer" />
-      {/* HORIZON: its text and icons outlined, on web */}
-      <DrawerHalo />
-      {/* HORIZON: its text and icons outlined, in the app */}
+      {/* HORIZON: in the app it is bare, its text and icons outlined */}
       <BarHaloScope piece="drawer" outline>
         <ScrollView
           style={[a.flex_1]}
@@ -865,23 +857,18 @@ function ExtraLinks() {
 
   return (
     <View style={[a.flex_col, a.gap_md, a.flex_wrap]}>
-      {/* HORIZON: outlined over the bare drawer, in the app */}
-      <Outlined style={[a.self_start]}>
-        <InlineLinkText
-          style={[a.text_md]}
-          label={l`Terms of Service`}
-          to="https://bsky.social/about/support/tos">
-          <Trans>Terms of Service</Trans>
-        </InlineLinkText>
-      </Outlined>
-      <Outlined style={[a.self_start]}>
-        <InlineLinkText
-          style={[a.text_md]}
-          to="https://bsky.social/about/support/privacy-policy"
-          label={l`Privacy Policy`}>
-          <Trans>Privacy Policy</Trans>
-        </InlineLinkText>
-      </Outlined>
+      <InlineLinkText
+        style={[a.text_md]}
+        label={l`Terms of Service`}
+        to="https://bsky.social/about/support/tos">
+        <Trans>Terms of Service</Trans>
+      </InlineLinkText>
+      <InlineLinkText
+        style={[a.text_md]}
+        to="https://bsky.social/about/support/privacy-policy"
+        label={l`Privacy Policy`}>
+        <Trans>Privacy Policy</Trans>
+      </InlineLinkText>
       {logoVariant === 'kawaii' && (
         <Text style={t.atoms.text_contrast_medium}>
           <Trans>
