@@ -140,7 +140,8 @@ const WINDOW_MODES: Record<
  * 800 and up it is part of the opaque column). On native every screen's
  * header is a window too: it sits above its scroller, so the native painter
  * fills it as it does the Home header (Android app, 2026-10-29). A `bare`
- * window is web only: its shades need CSS, so native keeps the glass.
+ * window is bare on both: web halos its items with CSS, the app with
+ * `BarHalo` (skydeval: as close to web as possible).
  */
 export function windowMode({
   def,
@@ -163,7 +164,6 @@ export function windowMode({
   if (isWithinDialog || !enabled) return null
   const mode = WINDOW_MODES[frameStyle][kind] ?? null
   if (mode && kind === 'header' && web && gtMobile) return null
-  if (mode === 'bare' && !web) return 'full'
   return mode
 }
 
@@ -576,6 +576,47 @@ function haloKind(kind: ShadeKind): ShadeKind {
 export function haloAlpha(boxAlpha: number): number {
   if (boxAlpha === 0) return 0
   return Math.min(0.95, 0.35 + boxAlpha)
+}
+
+/** A bare window's halo, for the app (`BarHalo.tsx`). */
+export type BarHaloColors = {
+  /** The halo's colour, as web's `haloVar` for every kind but the logo. */
+  halo: string
+  /** The same halo's colour for one of the copies an icon's halo is drawn
+   * with: a few overlap at each edge, so each is fainter. */
+  iconCopy: string
+  /** The theme's text colour, which the grey items take on a bare window. */
+  text: string
+}
+
+/** How many of an icon's halo copies overlap at its edge, roughly. */
+const ICON_HALO_OVERLAP = 4
+
+const barHaloCache = new Map<string, BarHaloColors>()
+
+/**
+ * The app's halo colours for a bare window over `range` of the backdrop:
+ * web's (`barShadeVars`), as one colour and its per-copy share.
+ */
+export function barHaloColors(
+  def: BackdropDef,
+  theme: ThemeName,
+  range: GradientRange = FULL_RANGE,
+): BarHaloColors {
+  const key = `${backdropKey(def)}|${theme}|${range[0]}-${range[1]}|${BACKDROP_LOOK}`
+  let colors = barHaloCache.get(key)
+  if (!colors) {
+    const tint = GLASS[theme].tint
+    const alpha = haloAlpha(shadeAlpha(def, theme, haloKind('tab'), range))
+    colors = {
+      halo: rgba(tint, alpha),
+      iconCopy: rgba(tint, 1 - Math.pow(1 - alpha, 1 / ICON_HALO_OVERLAP)),
+      text: themes[theme].atoms.text.color,
+    }
+    if (barHaloCache.size >= 512) barHaloCache.clear()
+    barHaloCache.set(key, colors)
+  }
+  return colors
 }
 
 const shadeVarsCache = new Map<string, Record<string, string>>()

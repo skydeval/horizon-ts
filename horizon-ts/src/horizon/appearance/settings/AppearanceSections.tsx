@@ -105,6 +105,31 @@ function Ring({selected, focused}: {selected: boolean; focused: boolean}) {
   )
 }
 
+/** The None tile's paint and its slash. */
+const NONE_TILE = '#FFFFFF'
+const NONE_SLASH = '#9AA5B4'
+
+/** A diagonal slash across the None tile, corner to corner. */
+function NoneSlash() {
+  const length = SWATCH_SIZE * Math.SQRT2
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        a.absolute,
+        {
+          width: length,
+          height: 2,
+          left: (SWATCH_SIZE - length) / 2,
+          top: SWATCH_SIZE / 2 - 1,
+          backgroundColor: NONE_SLASH,
+          transform: [{rotate: '-45deg'}],
+        },
+      ]}
+    />
+  )
+}
+
 function Swatch({
   def,
   name,
@@ -121,6 +146,7 @@ function Swatch({
   const t = useTheme()
   const {t: l} = useLingui()
   const [focused, setFocused] = useState(false)
+  const isNone = def.stripes.length === 0 && !def.layers
   return (
     <Pressable
       accessibilityRole="radio"
@@ -150,13 +176,15 @@ function Swatch({
             borderRadius: 14,
             borderWidth: 1,
           },
-          def.stripes.length === 0 && t.atoms.bg,
+          // None: a white tile with a slash, in every theme (skydeval)
+          isNone && {backgroundColor: NONE_TILE},
         ]}>
         <BackdropFill
           def={swatchDef(def, t.name)}
           theme={t.name}
           size={SWATCH_SIZE}
         />
+        {isNone && <NoneSlash />}
       </View>
       <Ring selected={selected} focused={focused} />
     </Pressable>
@@ -253,7 +281,7 @@ function BackdropGroup() {
   const showName = (collection: PickerCollection) => (name: string | null) =>
     setHover(name === null ? null : {collection, name})
   const sectionTitles: Record<PickerCollection, string> = {
-    system: '',
+    system: l({message: 'None', context: 'backdrop group'}),
     pride: l({message: 'Flags', context: 'backdrop group'}),
     materials: l({message: 'Materials', context: 'backdrop group'}),
     calm: l({message: 'Calm', context: 'backdrop group'}),
@@ -281,11 +309,6 @@ function BackdropGroup() {
     <SettingsList.Group iconInset={false}>
       <SettingsList.ItemIcon icon={PaintRollerIcon} />
       <SettingsList.ItemText>{l`Backdrops`}</SettingsList.ItemText>
-      <Text
-        accessibilityLiveRegion="polite"
-        style={[a.text_sm, t.atoms.text_contrast_medium]}>
-        {selectedName}
-      </Text>
       <View
         accessibilityRole="radiogroup"
         accessibilityLabel={l`Backdrop`}
@@ -297,28 +320,28 @@ function BackdropGroup() {
            * there the selected backdrop's name sits beside its own section
            */
           const hovered =
-            hover?.collection === section.collection
-              ? hover.name
-              : !IS_WEB && section.defs.some(def => def.id === selectedId)
-                ? selectedName
-                : null
+            section.collection === 'system'
+              ? null
+              : hover?.collection === section.collection
+                ? hover.name
+                : !IS_WEB && section.defs.some(def => def.id === selectedId)
+                  ? selectedName
+                  : null
           return (
             <View key={section.collection} style={[a.w_full, {gap: 6}]}>
-              {section.collection !== 'system' && (
-                <Text
-                  style={[
-                    a.text_xs,
-                    a.font_semi_bold,
-                    t.atoms.text_contrast_medium,
-                  ]}>
-                  {sectionTitles[section.collection]}
-                  {hovered !== null && (
-                    <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-                      {` · ${hovered}`}
-                    </Text>
-                  )}
-                </Text>
-              )}
+              <Text
+                style={[
+                  a.text_xs,
+                  a.font_semi_bold,
+                  t.atoms.text_contrast_medium,
+                ]}>
+                {sectionTitles[section.collection]}
+                {hovered !== null && (
+                  <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
+                    {` · ${hovered}`}
+                  </Text>
+                )}
+              </Text>
               <View
                 style={[
                   a.w_full,
@@ -346,12 +369,6 @@ function BackdropGroup() {
                     onShowName={showName(section.collection)}
                   />
                 ))}
-                {/* The untitled first section (None) shows its name beside it. */}
-                {section.collection === 'system' && hovered !== null && (
-                  <Text style={[a.text_xs, t.atoms.text_contrast_medium]}>
-                    {hovered}
-                  </Text>
-                )}
               </View>
             </View>
           )

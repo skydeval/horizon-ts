@@ -3,6 +3,7 @@ import {
   type ColorValue,
   type StyleProp,
   StyleSheet,
+  View,
   type ViewStyle,
 } from 'react-native'
 import {createNanoIconSet} from 'react-native-nano-icons'
@@ -16,6 +17,11 @@ import {
   type NanoGlyphName,
 } from '#/components/icons/glyphMaps'
 import {type IconWithSvgMeta} from '#/components/icons/TEMPLATE'
+// HORIZON: the halo on a bare window, in the app (Android app)
+import {
+  ICON_HALO_OFFSETS,
+  useBarHalo,
+} from '#/horizon/backdrops/bar-halo-context'
 /*
  * Each set is typed by its own glyph names, so widen the components to accept
  * any name. The native renderers put `style` in an array, so a style array is
@@ -98,6 +104,8 @@ export function withNanoGlyph(
 
   const Icon = forwardRef<Svg, Props>(function NanoIcon(props, ref) {
     const t = useTheme()
+    // HORIZON: the halo on a bare window, in the app (Android app)
+    const halo = useBarHalo()
     const {
       fill,
       size,
@@ -136,7 +144,12 @@ export function withNanoGlyph(
       return <SvgIcon {...props} ref={ref} />
     }
 
-    const resolvedFill = (fill ||
+    /*
+     * HORIZON: on a bare window an icon takes the theme's text colour, as
+     * web's grey bar items do (frame.ts RECOLOURED_KINDS)
+     */
+    const resolvedFill = (halo?.text ||
+      fill ||
       StyleSheet.flatten(style)?.color ||
       t.palette.primary_500) as ColorValue
 
@@ -145,6 +158,51 @@ export function withNanoGlyph(
      * glyph container is a View. Only layout props are meaningful here.
      */
     const viewStyle = style as StyleProp<ViewStyle>
+    const color = layered
+      ? layers.map(layer => (layer === 'currentColor' ? resolvedFill : layer))
+      : resolvedFill
+
+    /*
+     * HORIZON: web's halo is a CSS drop-shadow; here, copies of the glyph in
+     * the halo's colour sit a point or so round it, behind it (BarHalo.tsx)
+     */
+    if (halo) {
+      return (
+        <View
+          style={viewStyle}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants">
+          {ICON_HALO_OFFSETS.map(([left, top]) => (
+            // oxlint-disable-next-line react-native-a11y/has-accessibility-hint -- hidden glyph, as below
+            <NanoIconSet
+              key={`${left},${top}`}
+              name={name}
+              size={resolvedSize}
+              color={halo.iconCopy}
+              style={{position: 'absolute', left, top}}
+              allowFontScaling={false}
+              accessibilityLabel=""
+              accessible={false}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+          ))}
+          {/* oxlint-disable-next-line react-native-a11y/has-accessibility-hint -- hidden glyph, as below */}
+          <NanoIconSet
+            name={name}
+            size={resolvedSize}
+            color={color}
+            testID={testID}
+            allowFontScaling={false}
+            accessibilityLabel=""
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+        </View>
+      )
+    }
 
     return (
       /*
@@ -163,13 +221,7 @@ export function withNanoGlyph(
          * white tick in `VerifiedCheck`. Other icons are filled entirely, as
          * `createSinglePathSVG` ignores the source colour.
          */
-        color={
-          layered
-            ? layers.map(color =>
-                color === 'currentColor' ? resolvedFill : color,
-              )
-            : resolvedFill
-        }
+        color={color}
         /*
          * Passed through unflattened, so that a stable style keeps nano's
          * memo comparator effective.

@@ -273,10 +273,11 @@ describe('toShortUrl', () => {
 
 describe('toShareUrl', () => {
   const inputs = ['https://bsky.app', '/3jk7x4irgv52r', 'item/test/123']
+  // HORIZON: relative paths go on SHARE_ORIGIN (nearhorizon.app in tests)
   const outputs = [
     'https://bsky.app',
-    'https://bsky.app/3jk7x4irgv52r',
-    'https://bsky.app/item/test/123',
+    'https://nearhorizon.app/3jk7x4irgv52r',
+    'https://nearhorizon.app/item/test/123',
   ]
 
   it('appends https, when not present', () => {

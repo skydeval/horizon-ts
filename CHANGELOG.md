@@ -44,6 +44,11 @@ fundraisers are paused and have no phase yet.
 
 ### Changed
 
+- **Sharper backdrop swatches:** pride flag swatches in Appearance show
+  crisp stripes instead of blurred ones. The darkest Calm swatches are lighter
+  in dark themes, so they don't disappear into the page. The first tile is
+  labelled “None” and shows as a white tile with a slash. The name of the
+  selected backdrop no longer appears above it.
 - **Audience lists are private:** who is on a list that picks a private
   post's audience is now seen only by you, not kept as a public record in your
   repo. Existing lists keep working, and their old public copies are removed

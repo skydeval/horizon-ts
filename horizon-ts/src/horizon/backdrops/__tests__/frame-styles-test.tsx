@@ -135,15 +135,15 @@ describe('phone frame styles (live fix 1)', () => {
       gutter: [null, null, null, 'full'],
       headerBand: ['bare', 'bare', null, 'full'],
     })
-    // Bare windows need the web shades: native keeps the glass.
+    // Bare in the app too, which draws its own halo (BarHalo)
     expect(
       windowMode({...base, frameStyle: 'bars', kind: 'bottomBar', web: false}),
-    ).toBe('full')
-    // In the app every screen's header is a window: glass for Bars and
+    ).toBe('bare')
+    // In the app every screen's header is a window: bare for Bars and
     // Header, the band for Edges
     expect(
       windowMode({...base, frameStyle: 'bars', kind: 'header', web: false}),
-    ).toBe('full')
+    ).toBe('bare')
     expect(
       windowMode({
         ...base,
@@ -151,7 +151,7 @@ describe('phone frame styles (live fix 1)', () => {
         kind: 'header',
         web: false,
       }),
-    ).toBe('full')
+    ).toBe('bare')
     expect(
       windowMode({...base, frameStyle: 'edges', kind: 'header', web: false}),
     ).toBe('edge')

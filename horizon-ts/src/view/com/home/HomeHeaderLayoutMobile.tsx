@@ -21,6 +21,8 @@ import * as Layout from '#/components/Layout'
 import {Link} from '#/components/Link'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_LIQUID_GLASS} from '#/env'
+// HORIZON: the halo on a bare window, in the app (Android app)
+import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
 // HORIZON: the logo's shade on a bare window (Phase 3)
 import {BarShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the inner row's sticky value under the window (Phase 3)
@@ -61,54 +63,57 @@ export function HomeHeaderLayoutMobile({
       onLayout={onLayout}>
       {/* HORIZON: the logo row and feed tabs on one window (Phase 3, BD-12) */}
       <FrameWindow kind="homeHeader" />
-      {/* HORIZON: not sticky, so the row shows the wrapper's window (Phase 3, BD-13) */}
-      <Layout.Header.Outer noBottomBorder sticky={horizonInnerHeaderSticky()}>
-        <Layout.Header.Slot>
-          <Layout.Header.MenuButton />
-        </Layout.Header.Slot>
+      {/* HORIZON: the halo on a bare window, in the app (Android app) */}
+      <BarHaloScope piece="homeHeader">
+        {/* HORIZON: not sticky, so the row shows the wrapper's window (Phase 3, BD-13) */}
+        <Layout.Header.Outer noBottomBorder sticky={horizonInnerHeaderSticky()}>
+          <Layout.Header.Slot>
+            <Layout.Header.MenuButton />
+          </Layout.Header.Slot>
 
-        <View style={[a.flex_1, a.align_center]}>
-          <PressableScale
-            targetScale={0.9}
-            onPress={() => {
-              if (IS_DEV) {
-                navigate('Debug')
-              } else {
-                haptics.tap()
-                emitSoftReset()
-              }
-            }}>
-            {/* HORIZON: the logo's shade on a bare window (Phase 3) */}
-            <BarShade kind="logo" />
-            <Logo width={30} />
-          </PressableScale>
-        </View>
-
-        <Layout.Header.Slot>
-          {hasSession && (
-            <Link
-              testID="viewHeaderHomeFeedPrefsBtn"
-              to={{screen: 'Feeds'}}
-              hitSlop={HITSLOP_10}
-              label={_(msg`View your feeds and explore more`)}
-              size="small"
-              variant="ghost"
-              color="secondary"
-              shape="square"
+          <View style={[a.flex_1, a.align_center]}>
+            <PressableScale
+              targetScale={0.9}
               onPress={() => {
-                ax.metric('nav:click', {item: 'feeds', surface: 'topBar'})
-              }}
-              style={[
-                a.justify_center,
-                {marginRight: -Layout.BUTTON_VISUAL_ALIGNMENT_OFFSET},
-                a.bg_transparent,
-              ]}>
-              <ButtonIcon icon={FeedsIcon} size="lg" />
-            </Link>
-          )}
-        </Layout.Header.Slot>
-      </Layout.Header.Outer>
-      {children}
+                if (IS_DEV) {
+                  navigate('Debug')
+                } else {
+                  haptics.tap()
+                  emitSoftReset()
+                }
+              }}>
+              {/* HORIZON: the logo's shade on a bare window (Phase 3) */}
+              <BarShade kind="logo" />
+              <Logo width={30} />
+            </PressableScale>
+          </View>
+
+          <Layout.Header.Slot>
+            {hasSession && (
+              <Link
+                testID="viewHeaderHomeFeedPrefsBtn"
+                to={{screen: 'Feeds'}}
+                hitSlop={HITSLOP_10}
+                label={_(msg`View your feeds and explore more`)}
+                size="small"
+                variant="ghost"
+                color="secondary"
+                shape="square"
+                onPress={() => {
+                  ax.metric('nav:click', {item: 'feeds', surface: 'topBar'})
+                }}
+                style={[
+                  a.justify_center,
+                  {marginRight: -Layout.BUTTON_VISUAL_ALIGNMENT_OFFSET},
+                  a.bg_transparent,
+                ]}>
+                <ButtonIcon icon={FeedsIcon} size="lg" />
+              </Link>
+            )}
+          </Layout.Header.Slot>
+        </Layout.Header.Outer>
+        {children}
+      </BarHaloScope>
     </Animated.View>
   )
 }

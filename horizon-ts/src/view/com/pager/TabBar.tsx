@@ -21,6 +21,8 @@ import {BlockDrawerGesture} from '#/view/shell/BlockDrawerGesture'
 import {atoms as a, useTheme} from '#/alf'
 import {Center} from '#/components/Layout'
 import {Text} from '#/components/Typography'
+// HORIZON: the halo on a bare window, in the app (Android app)
+import {haloTextStyle, useBarHalo} from '#/horizon/backdrops/bar-halo-context'
 
 export interface TabBarProps {
   testID?: string
@@ -401,6 +403,8 @@ function TabBarItem({
   align: 'center' | 'left'
 }) {
   const t = useTheme()
+  // HORIZON: the halo on a bare window, in the app (Android app)
+  const halo = useBarHalo()
   const style = useAnimatedStyle(() => {
     if (!_WORKLET) {
       return {opacity: 0.7}
@@ -446,7 +450,14 @@ function TabBarItem({
           <Text
             emoji
             testID={testID ? `${testID}-${item}` : undefined}
-            style={[styles.itemText, t.atoms.text, a.text_md, a.font_semi_bold]}
+            style={[
+              styles.itemText,
+              t.atoms.text,
+              a.text_md,
+              a.font_semi_bold,
+              // HORIZON: the halo on a bare window, in the app (Android app)
+              halo && haloTextStyle(halo, false),
+            ]}
             onLayout={handleTextLayout}>
             {item}
           </Text>

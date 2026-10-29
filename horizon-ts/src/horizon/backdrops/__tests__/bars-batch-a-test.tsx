@@ -182,8 +182,8 @@ describe('Header goes bare like Bars (round 2 list, item 4)', () => {
     expect(mode('header')).toBe('bare')
     expect(mode('bottomBar')).toBeNull()
     expect(mode('drawer')).toBe('full')
-    // Native keeps the glass, as with Bars.
-    expect(mode('homeHeader', false)).toBe('full')
+    // The app is bare too, with its own halo (BarHalo.tsx), as with Bars.
+    expect(mode('homeHeader', false)).toBe('bare')
     // No glass over the backdrop, as with Bars.
     expect(windowOverlays(trans, 'dark', 'bare', false)).toEqual([])
   })

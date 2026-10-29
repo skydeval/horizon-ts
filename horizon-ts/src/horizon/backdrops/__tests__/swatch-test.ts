@@ -2,7 +2,7 @@ import {describe, expect, it} from '@jest/globals'
 
 import {compileBackdrop, type RGB} from '#/horizon/backdrops/compile'
 import {BACKDROP_DEFS, registryDef} from '#/horizon/backdrops/registry'
-import {isPaleSwatch, swatchDef} from '#/horizon/backdrops/swatch'
+import {isDarkSwatch, isPaleSwatch, swatchDef} from '#/horizon/backdrops/swatch'
 import {type BackdropDef, type ThemeName} from '#/horizon/backdrops/types'
 
 const PALE = [
@@ -86,7 +86,45 @@ describe('swatches (T8)', () => {
     expect(swatchDef(paper, 'light')).toBe(paper)
     expect(swatchDef(paper, 'dark').stripes[0]).toBe('#EDE3D1')
     const trans = registryDef('pride.trans')!
-    expect(swatchDef(trans, 'dark')).toBe(trans)
+    expect(swatchDef(trans, 'dark').stripes).toEqual(trans.stripes)
+  })
+
+  it("draws a flag's swatch as sharp bands, in every theme", () => {
+    const trans = registryDef('pride.trans')!
+    for (const theme of ['light', 'dim', 'dark'] as const) {
+      const [layer] = swatchDef(trans, theme).layers ?? []
+      expect(layer?.kind).toBe('linear')
+      // Each band holds its colour to within a hair of the next one
+      const stops = layer.stops
+      for (let i = 1; i < stops.length; i++) {
+        if (stops[i].color !== stops[i - 1].color) {
+          expect(stops[i].pos - stops[i - 1].pos).toBeLessThanOrEqual(0.01)
+        }
+      }
+    }
+    // The backdrop itself is unchanged
+    expect(trans.layers).toBeUndefined()
+  })
+
+  it('lifts only the near-black Calm swatches, in dim and dark only', () => {
+    for (const theme of ['dim', 'dark'] as const) {
+      const dark = BACKDROP_DEFS.filter(def => isDarkSwatch(def, theme)).map(
+        def => def.id,
+      )
+      expect(dark).toEqual(['calm.slate', 'calm.charcoal'])
+    }
+    expect(BACKDROP_DEFS.some(def => isDarkSwatch(def, 'light'))).toBe(false)
+    const slate = registryDef('calm.slate')!
+    expect(swatchDef(slate, 'light')).toBe(slate)
+    const lifted = swatchDef(slate, 'dark')
+    expect(lifted.layers![0].stops[0].color).not.toBe(
+      slate.layers![0].stops[0].color,
+    )
+    // Still two different shades once lifted
+    const charcoal = swatchDef(registryDef('calm.charcoal')!, 'dark')
+    expect(charcoal.layers![0].stops[0].color).not.toBe(
+      lifted.layers![0].stops[0].color,
+    )
   })
 
   it('keeps the pale swatches at least 5.0 apart in dim and dark', () => {

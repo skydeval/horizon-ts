@@ -31,6 +31,8 @@ import {ScrollbarOffsetContext} from '#/components/Layout/context'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: the halo on a bare window, in the app (Android app)
+import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
 // HORIZON: shades under the header's buttons and title on a bare window (Phase 3)
 import {BarShade, BarSlot, useBarTextShade} from '#/horizon/backdrops/BarShade'
 // HORIZON: the sticky header's compact frame window (Phase 3)
@@ -83,7 +85,10 @@ export function Outer({
       ]}>
       {/* HORIZON: a sticky header below 800px is a window (Phase 3, BD-15) */}
       <FrameWindow kind="header" enabled={sticky} />
-      {children}
+      {/* HORIZON: the halo on a bare window, in the app (Android app) */}
+      <BarHaloScope piece="header" enabled={sticky}>
+        {children}
+      </BarHaloScope>
     </View>
   )
 }
