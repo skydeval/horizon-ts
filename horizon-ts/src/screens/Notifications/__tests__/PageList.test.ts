@@ -19,6 +19,8 @@ jest.mock('#/screens/Notifications/components/PagerView', () => ({}))
 jest.mock('#/screens/Notifications/components/RefreshPill', () => ({}))
 jest.mock('#/components/Link', () => ({}))
 jest.mock('#/analytics', () => ({}))
+// HORIZON: Layout reaches the session through the backdrop inset (sonner-native)
+jest.mock('#/components/Layout', () => ({}))
 
 describe('getPlaceholderRow', () => {
   it('shows the skeleton before the first load', () => {
