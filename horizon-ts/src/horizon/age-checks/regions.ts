@@ -2,9 +2,8 @@ import {type Geolocation} from '#/geolocation/types'
 import {type CoveredRegion} from '#/horizon/age-checks/types'
 
 /*
- * The states whose app store laws apply, each from its start date
- * (`docs/internal/branding/native-app.md`, "Age checks"). Adding a state is
- * a line here. Recheck Texas before each release: its challenge is pending.
+ * The states whose app store laws apply, each from its start date. Adding a
+ * state is a line here. Recheck Texas before each release: its challenge is pending.
  */
 export const COVERED_REGIONS: readonly CoveredRegion[] = [
   {

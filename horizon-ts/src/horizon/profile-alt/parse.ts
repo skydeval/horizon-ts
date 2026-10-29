@@ -1,6 +1,5 @@
 /*
- * Profile image descriptions (design `docs/internal/design/profile-alt-text.md`,
- * spec atproto-profile-alt): parsing `app.nearhorizon.actor.profileAlt` and
+ * Profile image descriptions (spec atproto-profile-alt): parsing `app.nearhorizon.actor.profileAlt` and
  * matching a slot to the image on screen.
  *
  * A slot describes one image by its blob CID. It is shown only while that

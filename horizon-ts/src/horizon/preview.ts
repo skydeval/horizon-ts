@@ -1,8 +1,7 @@
 /*
  * A preview build: the production web build served from its own https origin
  * (a public preview, not the release at nearhorizon.app). The build sets
- * `EXPO_PUBLIC_OAUTH_CLIENT=preview` and `EXPO_PUBLIC_PREVIEW_ORIGIN`; see
- * `docs/internal/notes/preview-deploy.md` in the outer repo.
+ * `EXPO_PUBLIC_OAUTH_CLIENT=preview` and `EXPO_PUBLIC_PREVIEW_ORIGIN`.
  */
 
 /**

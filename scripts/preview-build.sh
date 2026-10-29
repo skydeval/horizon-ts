@@ -4,8 +4,7 @@
 # The code is synced to ~/horizon/horizon-ts by rsync from the workstation
 # (dependencies installed with silonew-dev.sh install). build makes the
 # production web build in preview mode for one https origin and leaves a
-# ready-to-upload directory; deploy uploads it with wrangler. How-to:
-# docs/internal/notes/preview-deploy.md.
+# ready-to-upload directory; deploy uploads it with wrangler.
 #
 # Usage:
 #   preview-build.sh build [origin]       production web build for the https

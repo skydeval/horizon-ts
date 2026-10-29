@@ -7,8 +7,7 @@
  *
  * Unlike upstream's `getSupportProvider`, this matches the whole host, every
  * path and the bare homepage, so `paypal.com/donate/...`, `paypal.com/pools/...`
- * and a half-typed `paypal.com` all count. See
- * docs/internal/notes/upstream-profile-links-audit.md.
+ * and a half-typed `paypal.com` all count.
  */
 
 import {

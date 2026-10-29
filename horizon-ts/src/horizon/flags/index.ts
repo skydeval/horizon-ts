@@ -48,8 +48,7 @@ const DEFAULTS: Record<Features, unknown> = {
    * Horizon since the link editor's payment guard landed (2026-10-24): a link
    * on a payment or support host is never sent to cardyb (no title, favicon
    * or reachability check), and typing is debounced. See
-   * src/horizon/profile-links/payment-domains.ts and
-   * docs/internal/notes/upstream-profile-links-audit.md.
+   * src/horizon/profile-links/payment-domains.ts.
    */
   [Features.ProfileLinksEnable]: true,
   [Features.StarterPacksConfig]: {limit: 150},

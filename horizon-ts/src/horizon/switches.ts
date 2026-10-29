@@ -311,14 +311,7 @@ export const THREAD_LENS: boolean = true
  * Restored accounts (refract client design RF-1, RF-12; code under
  * `refract/`): accounts Bluesky's AppView withholds that a community prism
  * trusts still hosts, read through prism's `app.nearhorizon.refract.*` and
- * rendered as ordinary content, while prism lists `refract`. RF-12's gate
- * needed prism's deploy reply to name `14c5b57` (fixes A, the not-hosted
- * cache), `5bbd301` (RF-S14, `withheld` `unavailable`) and `c037058`
- * (RF-S16, a DID restored after the snapshot answers `pending`) as deployed.
- * It was met on 2026-10-23: prism.nearhorizon.app runs `839e8ed`, which
- * carries all three with `b87c39d` (`withheld`, `servedAs`, `viewerChecked`),
- * then `53128b9` (RF-S15 and the parallel profile walk)
- * (`docs/internal/handoff/prism-refract-client-fixes-deployed.md`). `false`:
+ * rendered as ordinary content, while prism lists `refract`. `false`:
  * no refract call, and every hook keeps Bluesky's behaviour.
  */
 export const REFRACT: boolean = true
@@ -462,8 +455,7 @@ export const SYSTEM_ACCOUNTS_DEV_STUB: boolean = false
 export const REFRACT_DEV_FIXTURES: boolean = false
 
 /**
- * Profile image descriptions (`profile-alt/`, design
- * `docs/internal/design/profile-alt-text.md`): the
+ * Profile image descriptions (`profile-alt/`): the
  * `app.nearhorizon.actor.profileAlt` record read from the account's own
  * repo and shown on the profile header, the hover card and the full-size
  * view, and the "Describe" buttons in Edit Profile. `false`: nothing is

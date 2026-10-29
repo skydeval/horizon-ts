@@ -10,8 +10,7 @@
  *   the proof-only `lxm` `confirmSystemAccount`.
  * - In the one-shot mode a 401 is not resent with the same body; the add
  *   re-mints both its bearer and its proof and sends once more (SAR3-N5).
- * - prism's reply (`docs/internal/handoff/prism-system-accounts-reply.md`):
- *   `rev` is an integer; `501 MethodNotImplemented` means the feature is
+ * - prism's contract: `rev` is an integer; `501 MethodNotImplemented` means the feature is
  *   off (`unavailable`); a 429 from the `system_accounts` rate class (1/s,
  *   burst 20, writes cost 4) holds every call for that caller until its
  *   `Retry-After`, so no retry spends the class.
