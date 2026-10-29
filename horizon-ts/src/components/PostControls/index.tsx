@@ -31,7 +31,7 @@ import {guardPrivateInteraction} from '#/horizon/private/api/gate-guard'
 // HORIZON: a sending or failed private post shows its status in place of the controls
 import {usePendingPostControls} from '#/horizon/private/composer/PendingPostStatus'
 // HORIZON: a private post shows counts only when prism served them
-import {privateControlsFor} from '#/horizon/private/render/controls'
+import {usePrivateControls} from '#/horizon/private/render/controls'
 // HORIZON: a visitor-form restored view hides like, repost and quote
 import {useRestoredActionsHidden} from '#/horizon/refract/visitor'
 import {type app} from '#/lexicons'
@@ -104,7 +104,7 @@ let PostControls = ({
     post.author.viewer?.blockingByList,
   )
   // HORIZON: a private post shows counts only when prism served them
-  const privateControls = privateControlsFor(post.uri)
+  const privateControls = usePrivateControls(post.uri)
   // HORIZON: a visitor-form restored view hides like, repost and quote
   const restoredActionsHidden = useRestoredActionsHidden(post)
   // HORIZON: posting as PA-6: a long press on like lists the other signed-in accounts to like as

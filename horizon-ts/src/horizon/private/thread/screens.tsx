@@ -22,7 +22,7 @@ import {atoms as a} from '#/alf'
 import * as Layout from '#/components/Layout'
 import {usePrismFeature} from '#/horizon/private/features-hooks'
 import {useIsMember} from '#/horizon/private/membership'
-import {countsServed} from '#/horizon/private/render/controls'
+import {useCountsServed} from '#/horizon/private/render/controls'
 import {StandIn} from '#/horizon/private/render/StandIn'
 import {PP_COLLECTION} from '#/horizon/private/uri'
 
@@ -93,7 +93,8 @@ function PrivateInteractionList({
       : kind === 'reposts'
         ? post.repostCount
         : post.quoteCount
-  const showCount = !!post && countsServed(post.uri)
+  const served = useCountsServed(post?.uri)
+  const showCount = !!post && served
 
   return (
     <Layout.Screen>

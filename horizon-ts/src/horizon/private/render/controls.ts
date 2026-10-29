@@ -18,6 +18,7 @@ import {
   getPendingPost,
   getPrivatePostFacts,
   pendingPhase,
+  usePrivatePostFacts,
 } from '#/horizon/private/store'
 import {isPrivatePostPath, isPrivatePostUri} from '#/horizon/private/uri'
 import {PRIVATE_POST_DISPLAY} from '#/horizon/switches'
@@ -148,20 +149,40 @@ export function privateControlsFor(uri: string | undefined): PrivateControls {
 }
 
 /**
+ * Whether prism served counts on the private post at `uri`'s view, kept
+ * current: components read this, not {@link countsServed}. A plain store
+ * read in render is cached by the React Compiler, so counts that arrive
+ * after the first render stayed hidden until the post was opened.
+ */
+export function useCountsServed(uri: string | undefined): boolean {
+  const facts = usePrivatePostFacts(isPrivateDisplay(uri) ? uri : undefined)
+  return !!facts?.countsServed
+}
+
+/** {@link privateControlsFor}, kept current, for components. */
+export function usePrivateControls(uri: string | undefined): PrivateControls {
+  const served = useCountsServed(uri)
+  return {hideCounts: isPrivateDisplay(uri) && !served}
+}
+
+/**
  * Whether the thread anchor's stats row is left out (Anchor 1): on a private
  * post without served counts, or with no reposts, likes or quotes. The stock
  * row also tests `bookmarkCount !== 0`, which holds for a private view
  * (prism serves no bookmark count), so an all-zero private post would draw
- * an empty bordered row.
+ * an empty bordered row. `served` is the post's {@link useCountsServed}.
  */
-export function hidesPrivateStatsRow(post: {
-  uri: string
-  repostCount?: number
-  likeCount?: number
-  quoteCount?: number
-}): boolean {
+export function hidesPrivateStatsRow(
+  post: {
+    uri: string
+    repostCount?: number
+    likeCount?: number
+    quoteCount?: number
+  },
+  served: boolean = countsServed(post.uri),
+): boolean {
   if (!isPrivateDisplay(post.uri)) return false
-  if (!countsServed(post.uri)) return true
+  if (!served) return true
   return post.repostCount === 0 && post.likeCount === 0 && post.quoteCount === 0
 }
 

@@ -73,6 +73,7 @@ import {
   hidesGateControls,
   hidesPrivateStatsRow,
   proxiesPostLinks,
+  useCountsServed,
 } from '#/horizon/private/render/controls'
 // HORIZON: private post links use the ppost segment
 import {postSegment} from '#/horizon/private/uri'
@@ -210,6 +211,8 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
   const formatPostStatCount = useFormatPostStatCount()
 
   const post = postShadow
+  // HORIZON: prism's counts on a private anchor, kept current
+  const privateCountsServed = useCountsServed(post.uri)
   const record = item.value.post.record
   const postNumbering = item.value
   const showPostNumber = useHasThreadItemPostNumber(postNumbering)
@@ -499,7 +502,7 @@ const ThreadItemAnchorInner = memo(function ThreadItemAnchorInner({
               isThreadAuthor={isThreadAuthor}
             />
             {/* HORIZON: no stats row on a private post without served counts or with none to show */}
-            {!hidesPrivateStatsRow(post) &&
+            {!hidesPrivateStatsRow(post, privateCountsServed) &&
             (post.repostCount !== 0 ||
               post.likeCount !== 0 ||
               post.quoteCount !== 0 ||
