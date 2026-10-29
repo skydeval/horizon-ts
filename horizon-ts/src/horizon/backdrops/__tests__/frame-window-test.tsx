@@ -490,7 +490,11 @@ describe('when windows are drawn (T15)', () => {
     )
     expect(windowActive({...base, kind: 'header', enabled: false})).toBe(false)
     expect(windowActive({...base, kind: 'header', gtMobile: true})).toBe(false)
-    expect(windowActive({...base, kind: 'header', web: false})).toBe(false)
+    // In the app every screen's header is a window, phone or tablet
+    expect(windowActive({...base, kind: 'header', web: false})).toBe(true)
+    expect(
+      windowActive({...base, kind: 'header', web: false, gtMobile: true}),
+    ).toBe(true)
     expect(windowActive({...base, kind: 'drawer', gtMobile: true})).toBe(true)
     expect(windowActive({...base, kind: 'homeHeader'})).toBe(true)
   })

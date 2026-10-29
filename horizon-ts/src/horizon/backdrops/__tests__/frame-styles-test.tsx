@@ -139,7 +139,23 @@ describe('phone frame styles (live fix 1)', () => {
     expect(
       windowMode({...base, frameStyle: 'bars', kind: 'bottomBar', web: false}),
     ).toBe('full')
-    // Headers stay part of the opaque column at 800 and up.
+    // In the app every screen's header is a window: glass for Bars and
+    // Header, the band for Edges
+    expect(
+      windowMode({...base, frameStyle: 'bars', kind: 'header', web: false}),
+    ).toBe('full')
+    expect(
+      windowMode({
+        ...base,
+        frameStyle: 'headerBand',
+        kind: 'header',
+        web: false,
+      }),
+    ).toBe('full')
+    expect(
+      windowMode({...base, frameStyle: 'edges', kind: 'header', web: false}),
+    ).toBe('edge')
+    // On web, headers stay part of the opaque column at 800 and up.
     expect(
       windowMode({
         ...base,

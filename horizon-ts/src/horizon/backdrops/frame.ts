@@ -136,10 +136,11 @@ const WINDOW_MODES: Record<
 /**
  * How a window is drawn, or null when it is not (9.3): a backdrop is
  * active, the frame style draws this piece, the piece is not inside a
- * dialog and is enabled, and a sticky header only below 800px (at 800 and
- * up it is part of the opaque column). The header window is web only:
- * `Layout.Header.Outer` is sticky only on web (9.8). A `bare` window is
- * web only too: its shades need CSS, so native keeps the glass.
+ * dialog and is enabled, and on web a sticky header only below 800px (at
+ * 800 and up it is part of the opaque column). On native every screen's
+ * header is a window too: it sits above its scroller, so the native painter
+ * fills it as it does the Home header (Android app, 2026-10-29). A `bare`
+ * window is web only: its shades need CSS, so native keeps the glass.
  */
 export function windowMode({
   def,
@@ -161,7 +162,7 @@ export function windowMode({
   if (!compactFrameOn() || def === null) return null
   if (isWithinDialog || !enabled) return null
   const mode = WINDOW_MODES[frameStyle][kind] ?? null
-  if (mode && kind === 'header' && !(web && !gtMobile)) return null
+  if (mode && kind === 'header' && web && gtMobile) return null
   if (mode === 'bare' && !web) return 'full'
   return mode
 }

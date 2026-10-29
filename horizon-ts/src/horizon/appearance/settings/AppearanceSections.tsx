@@ -292,8 +292,16 @@ function BackdropGroup() {
         accessibilityHint=""
         style={[a.w_full, {gap: GAP, marginTop: GAP}]}>
         {PICKER_SECTIONS.map(section => {
+          /*
+           * The hovered or focused swatch's name. A phone has neither, so
+           * there the selected backdrop's name sits beside its own section
+           */
           const hovered =
-            hover?.collection === section.collection ? hover.name : null
+            hover?.collection === section.collection
+              ? hover.name
+              : !IS_WEB && section.defs.some(def => def.id === selectedId)
+                ? selectedName
+                : null
           return (
             <View key={section.collection} style={[a.w_full, {gap: 6}]}>
               {section.collection !== 'system' && (
