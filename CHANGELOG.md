@@ -11,6 +11,14 @@ fundraisers are paused and have no phase yet.
 
 ### Added
 
+- **Adults can turn Bluesky's moderation off.** Moderation settings has a
+  "Use Bluesky's moderation" switch. Off, Horizon stops asking for Bluesky
+  Moderation's labels for that account on that device. Takedowns, the legal
+  labelers for your country, self-labels and the labelers you subscribe to
+  all stay. Only an account that's 18 or over, by its saved birthdate or
+  its declared age, can turn it off. Minors and accounts with no known age
+  keep it on, and so does anyone whose adult content the app's age check
+  has locked. The choice stays on the device and isn't published.
 - **Age checks in the Android app, only where a state law requires them.**
   In US states whose app store laws make apps act on the age a phone's app
   store reports (Texas now, Utah from 31 December 2026, Louisiana from

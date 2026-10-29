@@ -31,7 +31,7 @@ server, and how Horizon's code sits inside Bluesky's app.
 | **Your PDS** | Sign-in, every write to your repository, and the proxy that forwards your reads to AppViews. Any atproto PDS works. |
 | **prism** (`prism.nearhorizon.app`) | Horizon's AppView. Serves kryphocron posts to their audiences, membership, Thread Lens, restored accounts, private bookmarks, notifications and search, and every `app.nearhorizon.*` call. It does not index public posts. |
 | **The public AppView** | Ordinary `app.bsky.*` reads: timelines, profiles, public threads. Bluesky's AppView by default; you can switch it. |
-| **Bluesky's other services** | Chat, video upload, push notifications, custom feeds and labelers work as in Bluesky's app. |
+| **Bluesky's other services** | Chat, video upload, push notifications, custom feeds and labelers work as in Bluesky's app. One difference: an adult can turn Bluesky's own moderation labeler off in Moderation settings. Minors, and accounts whose age Horizon can't tell, keep it. Takedowns and the legal labelers for the user's country stay either way. |
 | **locus** (`locus.nearhorizon.app`) | A PDS with kryphocron support. Accounts hosted there write kryphocron posts through locus's own procedures. Accounts elsewhere don't need it. |
 
 ### Two AppViews at once
