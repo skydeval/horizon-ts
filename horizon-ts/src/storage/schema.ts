@@ -125,4 +125,10 @@ export type Account = {
    * labeler headers.
    */
   labelers?: string[]
+
+  /**
+   * HORIZON: this account turned Bluesky's moderation labeler off on this
+   * device (`#/horizon/bsky-moderation`). Only honoured for an adult.
+   */
+  horizonBskyModerationOff?: boolean
 }

@@ -51,6 +51,8 @@ import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
 // HORIZON: the app's age check notice (state app store laws)
 import {AgeCheckNotice} from '#/horizon/age-checks/AgeCheckNotice'
+// HORIZON: Bluesky's moderation labeler, off for an adult who chooses
+import {BskyModerationSwitch} from '#/horizon/bsky-moderation/BskyModerationSwitch'
 
 function ErrorState({error}: {error: string}) {
   const t = useTheme()
@@ -521,6 +523,8 @@ export function ModerationScreenInner({
         ]}>
         <Trans>Advanced</Trans>
       </Text>
+      {/* HORIZON: an adult can turn Bluesky's moderation labeler off */}
+      <BskyModerationSwitch style={[a.mb_md]} />
       {unavailableDids.length > 0 && (
         <Admonition.Outer type="tip" style={[a.mb_md]}>
           <Admonition.Row>

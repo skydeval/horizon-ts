@@ -8,7 +8,8 @@
  * reader's mutes on the device (for a lens member), the identity
  * reads' `getRecords` and `listMembers` tokens' prefetch, the appearance
  * record's sync, the pre-warm of prism's private activity subscriptions,
- * the "spoilers from other apps" choice, the one-time removal of audience
+ * the "spoilers from other apps" choice, an adult's choice to turn
+ * Bluesky's moderation labeler off, the one-time removal of audience
  * records left in the repo once prism holds audiences, the system accounts'
  * list read
  * and announcer, the launch-time
@@ -22,6 +23,7 @@ import {useEffect} from 'react'
 
 import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
+import {BskyModerationSync} from '#/horizon/bsky-moderation'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
 import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
@@ -98,6 +100,7 @@ export function HorizonHost() {
       <LeftoverAudienceCleanup />
       <AppearanceSync />
       <OtherAppSpoilersSync />
+      <BskyModerationSync />
       <SystemAccountsHost />
       <InPlaceSignInWindow />
       <PasswordGateDialog />

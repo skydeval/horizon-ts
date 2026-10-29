@@ -1,6 +1,7 @@
 import {useMemo} from 'react'
 import {Client} from '@atproto/lex'
 import {type DidString} from '@atproto/syntax'
+import {api} from '@bsky/sdk'
 import {
   type InterpretedLabelValueDefinition,
   LABELS,
@@ -105,10 +106,15 @@ export function isAppLabeler(
     | app.bsky.labeler.defs.LabelerView
     | app.bsky.labeler.defs.LabelerViewDetailed,
 ): boolean {
-  if (typeof labeler === 'string') {
-    return Client.appLabelers.includes(labeler as DidString)
-  }
-  return Client.appLabelers.includes(labeler.creator.did)
+  const did = typeof labeler === 'string' ? labeler : labeler.creator.did
+  /*
+   * HORIZON: Bluesky's labeler stays the app's own while an adult has it
+   * off (`#/horizon/bsky-moderation`), so it's never offered as an ordinary
+   * subscription.
+   */
+  return (
+    Client.appLabelers.includes(did as DidString) || did === api.moderation.did
+  )
 }
 
 export function isLabelerSubscribed(
@@ -119,7 +125,8 @@ export function isLabelerSubscribed(
   modOpts: ModerationOpts,
 ) {
   labeler = typeof labeler === 'string' ? labeler : labeler.creator.did
-  if (isAppLabeler(labeler)) {
+  // HORIZON: subscribed while it's on the requests (off for an adult who chose)
+  if (Client.appLabelers.includes(labeler as DidString)) {
     return true
   }
   return modOpts.prefs.labelers.find(l => l.did === labeler)
