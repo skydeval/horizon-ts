@@ -11,6 +11,7 @@ its logic here and touches Bluesky's files only through small, marked hooks.
 | `preview.ts` | A preview build's origin (`EXPO_PUBLIC_OAUTH_CLIENT=preview` with `EXPO_PUBLIC_PREVIEW_ORIGIN`), read by the OAuth client mode and the private share links; `undefined` in every other build. |
 | `flags/` | The local feature-flag table that replaces Bluesky's GrowthBook fetch. |
 | `telemetry/` | The no-op metrics client. |
+| `age-checks/` | The app's age checks, only in US states whose app store laws require them (`regions.ts`, with start dates), from the phone store's age range (`play.ts`; never on web, `play.web.ts`): the outcome (`decide.ts`), the device's last answer (`store.ts`), the launch check and hooks (`index.ts`), the blocked screen and the adult content notice. Drives Bluesky's age assurance context while `AGE_ASSURANCE_OFF` keeps Bluesky's own flow off. See its `README.md`. |
 | `branding/` | The product name. `product.json` is its one source. |
 | `session/` | Session logic: the OAuth client, its metadata and transport, OAuth bundles and accounts, kind dispatch, refresh, sign-out, session death, cross-tab adoption, Horizon's device keys, and the Horizon session provider. No UI. |
 | `auth/` | Sign-in, callback, in-place sign-in, password gate and signup UI, and `HorizonHost`. |

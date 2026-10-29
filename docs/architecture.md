@@ -136,7 +136,17 @@ that work:
 
 ### Privacy in the client
 
-- Bluesky's analytics and error reporting are switched off, and so is age
-  assurance.
+- Bluesky's analytics and error reporting are switched off.
+- Bluesky's age assurance is switched off too, with one narrow exception:
+  the Android app, in US states whose app store laws require apps to act on
+  the age a phone's app store reports. That's Texas now, Utah from
+  31 December 2026 and Louisiana from 1 July 2027. There, Horizon asks
+  Google Play for the user's age range. Under 13 can't use the app, under
+  18 has adult content locked off, and nothing else changes. The state
+  comes from the same rough location lookup the app already makes.
+- It's built that way because of what the laws cover. They apply to apps
+  from app stores, not websites, so web never checks, and nowhere else asks
+  for a check. Horizon reads the store's answer instead of running Bluesky's
+  own verification, so it never asks for ID, a selfie or a birthdate itself.
 - Bluesky's feature flags are read from a local table, not fetched.
 - Horizon's logs never include the text of a kryphocron post.

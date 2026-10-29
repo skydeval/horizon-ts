@@ -11,6 +11,15 @@ fundraisers are paused and have no phase yet.
 
 ### Added
 
+- **Age checks in the Android app, only where a state law requires them.**
+  In US states whose app store laws make apps act on the age a phone's app
+  store reports (Texas now, Utah from 31 December 2026, Louisiana from
+  1 July 2027), the app asks Google Play for the user's age range. Under 13
+  can't use the app, under 18 has adult content locked off, and a parent's
+  pending or declined approval is honoured. If no age range is shared,
+  adult content stays off until it is. Web never checks, since the laws
+  cover apps from app stores, and nowhere else checks either. Bluesky's own
+  age assurance stays off.
 - **Link cards in Discord and other chat apps.** A Horizon post link now
   shows a card: the author's name and pronouns, the text, a "replying to"
   line, a quoted post, up to four images or a playable video or GIF, and the
@@ -1163,7 +1172,9 @@ umbrella design that sets the build order.
 
 - **Usage metrics and error reporting to Bluesky.** No events are queued or
   sent, and Sentry stays off even if a DSN is set.
-- **Age assurance**, for every session, signed in or out.
+- **Bluesky's age assurance**, for every session, signed in or out. The
+  Android app later gained a narrow age check of its own, only where a state
+  law requires one (see Unreleased).
 - **Artwork not covered by Bluesky's MIT license:** the kawaii logo artwork
   and the landing-screen illustration, with `ASSETS.md` updated to match.
 
