@@ -44,7 +44,7 @@ beforeEach(() => {
   h = setupRefract()
   resetCommunities()
   mockPds.clear()
-  mockPds.set(ON_COMMUNITY, 'https://Members.Blacksky.app:443')
+  mockPds.set(ON_COMMUNITY, 'https://Members.Community.example:443')
   mockPds.set(ELSEWHERE, 'https://oyster.us-east.host.bsky.network')
 })
 
@@ -54,25 +54,25 @@ afterEach(() => {
 
 function communities() {
   return {
-    communities: [{name: 'c', pdsPatterns: ['*.blacksky.app', 'blacksky.app']}],
+    communities: [{name: 'c', pdsPatterns: ['*.community.example', 'community.example']}],
   }
 }
 
 describe('the host match', () => {
   it('follows prism: *.x needs a label in front, other patterns are exact', () => {
-    const patterns = ['*.blacksky.app', 'pds.example.com']
-    expect(matchesCommunityHost('members.blacksky.app', patterns)).toBe(true)
-    expect(matchesCommunityHost('A.B.Blacksky.App', patterns)).toBe(true)
-    expect(matchesCommunityHost('blacksky.app', patterns)).toBe(false)
-    expect(matchesCommunityHost('evilblacksky.app', patterns)).toBe(false)
+    const patterns = ['*.community.example', 'pds.example.com']
+    expect(matchesCommunityHost('members.community.example', patterns)).toBe(true)
+    expect(matchesCommunityHost('A.B.Community.Example', patterns)).toBe(true)
+    expect(matchesCommunityHost('community.example', patterns)).toBe(false)
+    expect(matchesCommunityHost('evilcommunity.example', patterns)).toBe(false)
     expect(matchesCommunityHost('pds.example.com', patterns)).toBe(true)
     expect(matchesCommunityHost('x.pds.example.com', patterns)).toBe(false)
     expect(matchesCommunityHost('anything', [])).toBe(false)
   })
 
   it('takes the PDS host lowercased, without its port', () => {
-    expect(pdsHostOf('https://Members.Blacksky.app:443/')).toBe(
-      'members.blacksky.app',
+    expect(pdsHostOf('https://Members.Community.example:443/')).toBe(
+      'members.community.example',
     )
     expect(pdsHostOf('not a url')).toBeUndefined()
   })

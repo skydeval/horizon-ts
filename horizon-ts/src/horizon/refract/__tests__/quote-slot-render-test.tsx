@@ -57,7 +57,7 @@ describe('the quote card', () => {
     h.respond(call =>
       call.method.endsWith('.fill')
         ? answer.promise
-        : {communities: [{name: 'c', pdsPatterns: ['blacksky.app']}]},
+        : {communities: [{name: 'c', pdsPatterns: ['community.example']}]},
     )
     render(
       <RestoredQuoteSlot
