@@ -8,8 +8,6 @@
  *   EXPO_PUBLIC_PREVIEW_ORIGIN=https://preview.example \
  *   node scripts/horizon-preview-pages.js [dist-dir]
  *
- * The outer repo's scripts/preview-build.sh runs both steps.
- *
  * It turns dist/ into a ready-to-upload Pages directory:
  * - dist/oauth-client-metadata.json becomes the preview's own client document
  *   (the production document moved to the preview origin), and the hosted
