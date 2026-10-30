@@ -77,6 +77,7 @@ You may refer to Bluesky by name to describe interoperability or origin — for 
 - `assets/favicon.png`
 - `assets/logo.png`
 - `assets/default-avatar.png`
+<!-- HORIZON: the Android app uses Horizon's own icon, notification icon and splash from `assets/horizon/` (Horizon's mark, not Bluesky's); the files below stay for iOS and upstream merges -->
 - `assets/icon-android-foreground.png`
 - `assets/icon-android-monochrome.png`
 - `assets/icon-android-notification.png`

@@ -215,11 +215,13 @@ module.exports = function (_config) {
         },
       },
       android: {
-        icon: './assets/app-icons/android_icon_default_next.png',
+        // HORIZON: Horizon's own mark (assets/horizon), not Bluesky's butterfly
+        icon: './assets/horizon/android-icon.png',
         adaptiveIcon: {
-          foregroundImage: './assets/icon-android-foreground.png',
-          monochromeImage: './assets/icon-android-monochrome.png',
-          backgroundColor: '#006AFF',
+          foregroundImage: './assets/horizon/android-foreground.png',
+          monochromeImage: './assets/horizon/android-monochrome.png',
+          // The mark's sky
+          backgroundColor: '#CFE5EE',
         },
         googleServicesFile: './google-services.json',
         // HORIZON: Horizon's own package, so it installs beside Bluesky
@@ -364,8 +366,9 @@ module.exports = function (_config) {
         [
           'expo-notifications',
           {
-            icon: './assets/icon-android-notification.png',
-            color: '#1185fe',
+            // HORIZON: Horizon's mark and its front-hill green
+            icon: './assets/horizon/android-notification.png',
+            color: '#2F6B3A',
             sounds: PLATFORM === 'ios' ? ['assets/dm.aiff'] : ['assets/dm.mp3'],
           },
         ],
@@ -429,14 +432,19 @@ module.exports = function (_config) {
                 resizeMode: 'cover',
               },
             },
+            /*
+             * HORIZON: Horizon's mark. The icon's foreground layer keeps the
+             * sun inside the circle Android masks a splash icon to; the
+             * mark's sky shows behind it, and its ink at night
+             */
             android: {
-              backgroundColor: '#006AFF', // primary_500
-              image: './assets/splash/android-splash-logo-white.png',
-              imageWidth: 102, // even division of 306px
+              backgroundColor: '#CFE5EE',
+              image: './assets/horizon/android-foreground.png',
+              imageWidth: 160,
               dark: {
-                backgroundColor: '#002861', // primary_900
-                image: './assets/splash/android-splash-logo-white.png',
-                imageWidth: 102,
+                backgroundColor: '#1A1D33',
+                image: './assets/horizon/android-foreground.png',
+                imageWidth: 160,
               },
             },
           },
