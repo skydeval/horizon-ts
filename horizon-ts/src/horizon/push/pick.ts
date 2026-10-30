@@ -24,12 +24,8 @@ export type Shown = {
   body?: string
   /** The Android channel, one per reason, as Bluesky's pushes use. */
   channel: string
-  data: {
-    reason: string
-    uri: string
-    subject: string
-    recipientDid: string
-  }
+  /** The tap payload, in the shape of Bluesky's pushes for the reason. */
+  data: {reason: string; recipientDid: string} & Record<string, string>
 }
 
 /** With nothing shown before on this phone, only this recent is new. */

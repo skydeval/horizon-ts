@@ -23,3 +23,6 @@ export const HORIZON_PUSH_APP_ID = 'app.nearhorizon'
 
 /** The background task that turns a "check" message into notifications. */
 export const HORIZON_PUSH_TASK = 'horizon-push-check'
+
+/** The timed background task that looks for new DMs. */
+export const HORIZON_DM_TASK = 'horizon-dm-check'

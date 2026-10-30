@@ -13,7 +13,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **Push notifications in the Android app,** from Horizon's own push
   service. It only tells your phone to check; the app fetches your
   notifications with your own sign-in, so your push settings, mutes and
-  blocks apply. Accounts signed in with a password don't get push yet.
+  blocks apply. DMs and private notifications are checked about every 15
+  minutes, and whenever something else wakes the phone.
 - **Android downloads at [nearhorizon.app/download](https://nearhorizon.app/download),**
   with update checks through Obtainium.
 - **A switch to turn Bluesky's moderation off.** Adults can turn off "Use

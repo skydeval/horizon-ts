@@ -24,7 +24,6 @@ import {
   HORIZON_PUSH_SERVICE_ACTIVE,
 } from '#/horizon/push/config'
 import {registerPushTask} from '#/horizon/push/task'
-import {isOauthAccount} from '#/horizon/session/accounts'
 import {PUSH_OFF} from '#/horizon/switches'
 import {app} from '#/lexicons'
 
@@ -58,11 +57,6 @@ async function _registerPushToken({
     ageRestricted?: boolean
   }
 }) {
-  /*
-   * HORIZON: the background task reads notifications through the account's
-   * OAuth session, so only OAuth accounts register
-   */
-  if (!isOauthAccount(currentAccount)) return
   try {
     const payload: app.bsky.notification.registerPush.$InputBody = {
       // HORIZON: Horizon's push service, not Bluesky's (see #/horizon/push)

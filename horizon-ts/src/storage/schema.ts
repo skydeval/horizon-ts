@@ -91,6 +91,18 @@ export type Device = {
    * (`#/horizon/push`).
    */
   horizonPushShown?: Record<string, string>
+
+  /**
+   * HORIZON: per account DID, the `sentAt` of the newest DM a push check has
+   * shown on this phone (`#/horizon/push`).
+   */
+  horizonPushShownDm?: Record<string, string>
+
+  /**
+   * HORIZON: per account DID, the `indexedAt` of the newest kryphocron
+   * notification a push check has shown on this phone (`#/horizon/push`).
+   */
+  horizonPushShownPrivate?: Record<string, string>
 }
 
 export type Account = {

@@ -23,6 +23,8 @@ import {isOauthAccount, isSignedInAccount} from '#/horizon/session/accounts'
 import {adoptOAuthAccount} from '#/horizon/session/adopt'
 // HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
 import {HorizonSessionProvider} from '#/horizon/session/HorizonSessionProvider'
+// HORIZON: the push task borrows the live session
+import {setLiveSession} from '#/horizon/session/live'
 // HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
 import {isSignedInBundle} from '#/horizon/session/oauth-bundles'
 // HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
@@ -105,6 +107,8 @@ class SessionStore {
     const initialState = getInitialState(persisted.get('session').accounts)
     addSessionDebugLog({type: 'reducer:init', state: redactState(initialState)})
     this.state = initialState
+    // HORIZON: the push task borrows the live session (#/horizon/push)
+    setLiveSession(this.getState)
   }
 
   getState = (): State => {

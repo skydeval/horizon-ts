@@ -474,6 +474,9 @@ importers:
       expo-atlas:
         specifier: ^0.4.3
         version: 0.4.3(expo@58.0.14)(supports-color@8.1.1)
+      expo-background-task:
+        specifier: ~58.0.11
+        version: 58.0.11(expo@58.0.14)(react-native@0.88.0(patch_hash=1866e10bcf6a0cbfc000cec25a538dc5109020c0de9f213ad25954024cd17af4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))
       expo-blur:
         specifier: ~58.0.4
         version: 58.0.5(expo@58.0.14)(react-native@0.88.0(patch_hash=1866e10bcf6a0cbfc000cec25a538dc5109020c0de9f213ad25954024cd17af4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
@@ -6081,6 +6084,11 @@ packages:
   expo-atlas@0.4.3:
     resolution: {integrity: sha512-nN2bouxFvMsqZqLl0ka+eI9Ofida0PcuoE4v+7fHlgyp95X2cCL8Acf0nRKXmmIBEYazdw0d7BAOZfC0b41oxA==}
     hasBin: true
+    peerDependencies:
+      expo: '*'
+
+  expo-background-task@58.0.11:
+    resolution: {integrity: sha512-dseg1bJg2gkzJxQ1qYgK3UNenBgibFP3oOVIXOpwMexwbKgEVc6sIwCrlWazpyZpYjE5Lj8siEjQwCIBTT778g==}
     peerDependencies:
       expo: '*'
 
@@ -15912,6 +15920,13 @@ snapshots:
       stream-json: 1.9.1
     transitivePeerDependencies:
       - supports-color
+
+  expo-background-task@58.0.11(expo@58.0.14)(react-native@0.88.0(patch_hash=1866e10bcf6a0cbfc000cec25a538dc5109020c0de9f213ad25954024cd17af4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1)):
+    dependencies:
+      expo: 58.0.14(patch_hash=0208b099bee03d1d30dddfe51b3a1598db2180fa85ae9a9c032a296cb0cb006f)(6d3b18194454bc346efe25c75d8e39aa)
+      expo-task-manager: 58.0.12(expo@58.0.14)(react-native@0.88.0(patch_hash=1866e10bcf6a0cbfc000cec25a538dc5109020c0de9f213ad25954024cd17af4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))
+    transitivePeerDependencies:
+      - react-native
 
   expo-blur@58.0.5(expo@58.0.14)(react-native@0.88.0(patch_hash=1866e10bcf6a0cbfc000cec25a538dc5109020c0de9f213ad25954024cd17af4)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
     dependencies:
