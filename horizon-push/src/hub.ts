@@ -54,7 +54,7 @@ export class Hub extends DurableObject<Env> {
   /** Account -> when it was last nudged. */
   private lastSent = new Map<string, number>()
   private fcm?: Fcm
-  private stats = {events: 0, nudges: 0, sends: 0, gone: 0, failed: 0}
+  private stats = {events: 0, notified: 0, nudges: 0, sends: 0, gone: 0, failed: 0}
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -117,6 +117,18 @@ export class Hub extends DurableObject<Env> {
       this.accounts.delete(did)
       this.pending.delete(did)
     }
+  }
+
+  /** A trusted service reports activity for these accounts. */
+  async notify(dids: string[]): Promise<void> {
+    const now = Date.now()
+    for (const did of dids) {
+      if (this.accounts.has(did) && !this.pending.has(did)) {
+        this.pending.set(did, now)
+        this.stats.notified++
+      }
+    }
+    await this.ensureRunning()
   }
 
   // Health

@@ -2,7 +2,23 @@ import {describe, expect, it} from 'vitest'
 
 import {SERVICE_DID} from '../src/config'
 import {buildMessage, classifyFailure} from '../src/fcm'
-import {DID_DOC, readPushInput} from '../src/input'
+import {DID_DOC, readNotifyInput, readPushInput} from '../src/input'
+
+describe('readNotifyInput', () => {
+  const A = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'
+  it('takes a list of DIDs, once each', () => {
+    expect(readNotifyInput({dids: [A, A, 'did:web:example.com']})).toEqual([
+      A,
+      'did:web:example.com',
+    ])
+  })
+  it('refuses empty, oversized and malformed lists', () => {
+    expect(readNotifyInput({dids: []})).toMatch(/non-empty/)
+    expect(readNotifyInput({dids: Array(101).fill(A)})).toMatch(/at most/)
+    expect(readNotifyInput({dids: ['alice.example.com']})).toMatch(/DIDs/)
+    expect(readNotifyInput(null)).toMatch(/non-empty/)
+  })
+})
 
 const good = {
   serviceDid: SERVICE_DID,

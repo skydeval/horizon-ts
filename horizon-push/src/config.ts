@@ -13,6 +13,15 @@ export const SERVICE_ID = '#horizon_push'
 /** Where the service answers. */
 export const SERVICE_ENDPOINT = 'https://push.nearhorizon.app'
 
+/**
+ * Services allowed to ask for a check (`app.nearhorizon.push.notify`), for
+ * activity the public stream never carries: prism, for kryphocron posts.
+ */
+export const NOTIFY_SOURCES = new Set(['did:web:prism.nearhorizon.app'])
+
+/** Accounts per notify request. */
+export const MAX_NOTIFY_DIDS = 100
+
 /** Only Horizon's own app can register. */
 export const APP_ID = 'app.nearhorizon'
 

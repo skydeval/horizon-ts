@@ -4,7 +4,25 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import {APP_ID, PLATFORMS, SERVICE_DID, SERVICE_ENDPOINT, SERVICE_ID} from './config'
+import {
+  APP_ID,
+  MAX_NOTIFY_DIDS,
+  PLATFORMS,
+  SERVICE_DID,
+  SERVICE_ENDPOINT,
+  SERVICE_ID,
+} from './config'
+
+const DID_RE = /^did:(plc:[a-z2-7]{24}|web:[a-zA-Z0-9.-]+)$/
+
+/** Checks a notify body (`{dids}`); returns an error message or the DIDs. */
+export function readNotifyInput(body: unknown): string[] | string {
+  const dids = (body as {dids?: unknown} | null)?.dids
+  if (!Array.isArray(dids) || dids.length === 0) return 'dids must be a non-empty array'
+  if (dids.length > MAX_NOTIFY_DIDS) return `at most ${MAX_NOTIFY_DIDS} dids`
+  if (!dids.every(d => typeof d === 'string' && DID_RE.test(d))) return 'dids must be DIDs'
+  return [...new Set(dids as string[])]
+}
 
 /** The service's DID document. */
 export const DID_DOC = {
