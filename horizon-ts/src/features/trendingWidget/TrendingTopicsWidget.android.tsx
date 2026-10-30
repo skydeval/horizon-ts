@@ -128,7 +128,7 @@ function TrendingTopicsWidget(
               color={secondaryTextColor}
               maxLines={3}
               style={{fontSize: 13}}>
-              {props.emptyMessage ?? 'Open Bluesky to load trending topics.'}
+              {props.emptyMessage ?? 'Open Horizon to load trending topics.'}
             </Text>
             {/* the whole card opens the app, this just makes that obvious */}
             {props.topics ? null : (
@@ -144,7 +144,8 @@ function TrendingTopicsWidget(
                     color="#FFFFFF"
                     maxLines={1}
                     style={{fontSize: 13, fontWeight: 'bold'}}>
-                    Open Bluesky
+                    {/* HORIZON: Horizon's name */}
+                    Open Horizon
                   </Text>
                 </Row>
               </Column>

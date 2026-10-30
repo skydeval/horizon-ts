@@ -193,7 +193,7 @@ function TrendingTopicsWidget(
               foregroundStyle(secondaryTextColor),
               lineLimit(3),
             ]}>
-            {props.emptyMessage ?? 'Open Bluesky to load trending topics.'}
+            {props.emptyMessage ?? 'Open Horizon to load trending topics.'}
           </Text>
           {/* the whole widget opens the app, this just makes that obvious */}
           {props.topics ? null : (
@@ -206,7 +206,8 @@ function TrendingTopicsWidget(
                 clipShape('capsule'),
                 padding({top: 6}),
               ]}>
-              Open Bluesky
+              {/* HORIZON: Horizon's name */}
+              Open Horizon
             </Text>
           )}
         </VStack>
