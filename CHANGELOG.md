@@ -10,6 +10,12 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Push notifications in the Android app,** from Horizon's own push
+  service. It only tells your phone to check; the app fetches your
+  notifications with your own sign-in, so your push settings, mutes and
+  blocks apply. Accounts signed in with a password don't get push yet.
+- **Android downloads at [nearhorizon.app/download](https://nearhorizon.app/download),**
+  with update checks through Obtainium.
 - **A switch to turn Bluesky's moderation off.** Adults can turn off "Use
   Bluesky's moderation"; takedowns, your country's legal labelers,
   self-labels and the labelers you subscribe to all stay.

@@ -84,6 +84,13 @@ export type Device = {
    * state whose app store law applies (`#/horizon/age-checks`).
    */
   horizonAgeCheck?: StoredAgeCheck
+
+  /**
+   * HORIZON: per account DID, the `indexedAt` of the newest notification a
+   * push has shown on this phone, so the next push shows only newer ones
+   * (`#/horizon/push`).
+   */
+  horizonPushShown?: Record<string, string>
 }
 
 export type Account = {

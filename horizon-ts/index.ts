@@ -5,6 +5,8 @@ import {LogBox} from 'react-native'
 import {registerRootComponent} from 'expo'
 
 import App from '#/App'
+// HORIZON: the push task must be defined when the bundle loads
+import '#/horizon/push/task'
 
 if (process.env.NODE_ENV === 'test') {
   LogBox.ignoreAllLogs() // suppress all logs in tests

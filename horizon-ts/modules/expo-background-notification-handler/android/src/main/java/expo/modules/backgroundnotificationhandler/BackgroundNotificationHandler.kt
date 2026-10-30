@@ -13,6 +13,12 @@ class BackgroundNotificationHandler(
       return
     }
 
+    // HORIZON: a "check" message has nothing to show; the app's background
+    // task fetches the account's notifications and shows those instead
+    if (remoteMessage.data["kind"] == "check") {
+      return
+    }
+
     if (remoteMessage.data["reason"] == "chat-message" || remoteMessage.data["reason"] == "chat-reaction") {
       mutateWithChatMessage(remoteMessage)
     } else {

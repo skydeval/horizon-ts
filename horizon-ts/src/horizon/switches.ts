@@ -5,6 +5,8 @@
  * Flipping one restores Bluesky's behaviour at that hook.
  */
 
+import {Platform} from 'react-native'
+
 /**
  * Nothing is sent to Bluesky's metrics service, and Sentry stays off even if
  * a DSN is set.
@@ -23,11 +25,12 @@ export const LOCAL_FLAGS: boolean = true
 export const AGE_ASSURANCE_OFF: boolean = true
 
 /**
- * Native push is off: no permission prompt, and no device token is sent to
- * Bluesky's push service, which delivers only to Bluesky's own app. On until
- * Horizon has its own push service.
+ * Native push is off where Horizon's push service cannot deliver: no
+ * permission prompt and no device token sent. Bluesky's push service
+ * delivers only to Bluesky's own app, so Android registers with Horizon's
+ * (`#/horizon/push`); iOS has no Horizon push yet.
  */
-export const PUSH_OFF: boolean = true
+export const PUSH_OFF: boolean = Platform.OS !== 'android'
 
 /**
  * The "Oh no!" screen shows the crash's stack under its message, selectable,

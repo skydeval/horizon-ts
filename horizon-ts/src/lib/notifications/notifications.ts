@@ -17,6 +17,14 @@ import {type SessionAccount, usePdsClient, useSession} from '#/state/session'
 import {useAgeAssurance} from '#/ageAssurance'
 import {useAnalytics} from '#/analytics'
 import {IS_DEV, IS_NATIVE} from '#/env'
+import {
+  HORIZON_PUSH_APP_ID,
+  HORIZON_PUSH_DID,
+  HORIZON_PUSH_SERVICE,
+  HORIZON_PUSH_SERVICE_ACTIVE,
+} from '#/horizon/push/config'
+import {registerPushTask} from '#/horizon/push/task'
+import {isOauthAccount} from '#/horizon/session/accounts'
 import {PUSH_OFF} from '#/horizon/switches'
 import {app} from '#/lexicons'
 
@@ -50,21 +58,33 @@ async function _registerPushToken({
     ageRestricted?: boolean
   }
 }) {
+  /*
+   * HORIZON: the background task reads notifications through the account's
+   * OAuth session, so only OAuth accounts register
+   */
+  if (!isOauthAccount(currentAccount)) return
   try {
     const payload: app.bsky.notification.registerPush.$InputBody = {
-      serviceDid: currentAccount.service?.includes('staging')
-        ? PUBLIC_STAGING_APPVIEW_DID
-        : PUBLIC_APPVIEW_DID,
+      // HORIZON: Horizon's push service, not Bluesky's (see #/horizon/push)
+      serviceDid: HORIZON_PUSH_SERVICE_ACTIVE
+        ? HORIZON_PUSH_DID
+        : currentAccount.service?.includes('staging')
+          ? PUBLIC_STAGING_APPVIEW_DID
+          : PUBLIC_APPVIEW_DID,
       platform: Platform.OS,
       token: token.data,
-      appId: 'xyz.blueskyweb.app',
+      appId: HORIZON_PUSH_SERVICE_ACTIVE
+        ? HORIZON_PUSH_APP_ID
+        : 'xyz.blueskyweb.app',
       ageRestricted: extra.ageRestricted ?? false,
     }
 
     notyLogger.debug(`registerPushToken: registering`, {...payload})
 
     await client.call(app.bsky.notification.registerPush, payload, {
-      service: NOTIF_SERVICE,
+      service: HORIZON_PUSH_SERVICE_ACTIVE
+        ? HORIZON_PUSH_SERVICE
+        : NOTIF_SERVICE,
     })
 
     notyLogger.debug(`registerPushToken: success`)
@@ -214,6 +234,9 @@ export function useNotificationsRegistration() {
 
     notyLogger.debug(`useNotificationsRegistration`)
 
+    // HORIZON: the task that turns Horizon's "check" pushes into notifications
+    void registerPushTask()
+
     /**
      * Init push token, if permissions are granted already. If they weren't,
      * they'll be requested by the `useRequestNotificationsPermission` hook
@@ -360,18 +383,25 @@ export async function unregisterPushToken(clients: TemporaryPushClient[]) {
     const token = await getPushToken()
     if (token) {
       for (const {client, service, handle} of clients) {
+        // HORIZON: unregister from Horizon's push service (see #/horizon/push)
         await client.call(
           app.bsky.notification.unregisterPush,
           {
-            serviceDid: service.includes('staging')
-              ? PUBLIC_STAGING_APPVIEW_DID
-              : PUBLIC_APPVIEW_DID,
+            serviceDid: HORIZON_PUSH_SERVICE_ACTIVE
+              ? HORIZON_PUSH_DID
+              : service.includes('staging')
+                ? PUBLIC_STAGING_APPVIEW_DID
+                : PUBLIC_APPVIEW_DID,
             platform: Platform.OS,
             token: token.data,
-            appId: 'xyz.blueskyweb.app',
+            appId: HORIZON_PUSH_SERVICE_ACTIVE
+              ? HORIZON_PUSH_APP_ID
+              : 'xyz.blueskyweb.app',
           },
           {
-            service: NOTIF_SERVICE,
+            service: HORIZON_PUSH_SERVICE_ACTIVE
+              ? HORIZON_PUSH_SERVICE
+              : NOTIF_SERVICE,
           },
         )
         notyLogger.debug(`Push token unregistered for ${handle}`)

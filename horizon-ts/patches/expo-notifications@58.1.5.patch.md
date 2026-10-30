@@ -5,6 +5,10 @@
 This patch supports the Android background notification handling module. Incoming messages
 in `onMessageReceived` are sent to the module for handling.
 
+HORIZON: in the background, the registered JS tasks run as well (stock expo-notifications runs them
+in every state). Horizon's push service sends data-only "check" messages, which the module leaves
+alone and the app's background task turns into notifications.
+
 It also allows us to set the Android notification channel ID from the notification `data`, rather
 than the `notification` object in the payload.
 

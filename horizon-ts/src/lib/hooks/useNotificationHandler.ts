@@ -39,6 +39,8 @@ export type NotificationReason =
   | 'verified'
   | 'unverified'
   | 'subscribed-post'
+  // HORIZON: a push standing for several notifications (#/horizon/push)
+  | 'horizon-activity'
 
 type ChatNotificationReason = Extract<NotificationReason, `chat-${string}`>
 
@@ -439,6 +441,17 @@ export function storePayloadForAccountSwitch(payload: NotificationPayload) {
 export function getNotificationPayload(
   e: Notifications.Notification,
 ): NotificationPayload | null {
+  /*
+   * HORIZON: notifications shown by Horizon's push task are local ones, with
+   * the same payload shape as Bluesky's pushes (#/horizon/push)
+   */
+  const local = e.request.content.data as
+    | (NotificationPayload & {horizonPush?: unknown})
+    | undefined
+  if (local?.horizonPush === true && local.reason) {
+    return local
+  }
+
   if (
     e.request.trigger == null ||
     typeof e.request.trigger !== 'object' ||
@@ -503,6 +516,8 @@ export function notificationToURL(payload: NotificationPayload): string | null {
       return null
     case 'verified':
     case 'unverified':
+    // HORIZON: a summary push opens the notifications tab
+    case 'horizon-activity':
       return '/notifications'
     default:
       // do nothing if we don't know what to do with it
