@@ -11,6 +11,7 @@ import {type OAuthSession} from '@atproto/oauth-client-browser'
 import {Trans, useLingui} from '@lingui/react/macro'
 import {StackActions, useNavigation} from '@react-navigation/native'
 
+import {getHomeNavigationAction} from '#/lib/routes/navigation'
 import {type NavigationProp} from '#/lib/routes/types'
 import {cleanError} from '#/lib/strings/errors'
 import {logger} from '#/logger'
@@ -85,7 +86,9 @@ export function AuthCallbackScreen() {
         const completed = await completeWebOAuth(login)
         if (!completed) {
           // No callback here and no exchange in flight: never log in twice.
-          navigation.replace('Home')
+          navigation.dispatch(
+            getHomeNavigationAction(navigation.getState(), 'replace'),
+          )
         }
       } catch (e) {
         if (isOAuthPopupComplete(e)) return

@@ -38,19 +38,17 @@ const DEFAULTS: Record<Features, unknown> = {
   // Bluesky beta, on in Horizon: "Keep your place in the Following feed" (native only)
   [Features.FollowingV2Enable]: true,
   [Features.OnboardingInterestsRequiredEnable]: false,
-  [Features.ModerationInboxEnable]: false,
+  // Bluesky's moderation inbox, released 2026-10-30: on in Horizon (skydeval)
+  [Features.ModerationInboxEnable]: true,
   // Renamed from atmosphere_explore:enable upstream; public default false (read 2026-10-24)
   [Features.AtmosphereScreenEnable]: false,
   // Bluesky beta, on in Horizon: "Redesigned notifications"
   [Features.NotificationsV2Enable]: true,
   /*
-   * Profile links: Bluesky's public default is true (read 2026-10-24). On in
-   * Horizon since the link editor's payment guard landed (2026-10-24): a link
-   * on a payment or support host is never sent to cardyb (no title, favicon
-   * or reachability check), and typing is debounced. See
+   * Profile links lost their flag upstream (2026-10-30 merge) and are always
+   * on; the link editor's payment guard still applies, see
    * src/horizon/profile-links/payment-domains.ts.
    */
-  [Features.ProfileLinksEnable]: true,
   [Features.StarterPacksConfig]: {limit: 150},
   [Features.TrendingDiscoverValues]: {topics: 5, accounts: 15, videos: 30},
   [Features.TrendingExploreTopicsCountValue]: 5,
