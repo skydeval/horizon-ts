@@ -72,3 +72,27 @@ const IMGPROXY_PRESET_RE =
 export function convertCdnPreset(uri: string, preset: ImgproxyPreset): string {
   return uri.replace(IMGPROXY_PRESET_RE, `$1${preset}$3`)
 }
+
+/**
+ * HORIZON: the file name for a saved image, `<cid>.jpg`, the same name the
+ * CDN's download preset gives. The CID is the `cid` query parameter of a
+ * `getBlob` URI, or else the last path segment of a CDN URI without its
+ * `@jpeg` format suffix. Saving the same image always gives the same name.
+ */
+export function savedImageFilename(uri: string): string {
+  let id = ''
+  try {
+    id = new URL(uri).searchParams.get('cid') ?? ''
+  } catch {}
+  if (!id) {
+    const last = uri.split(/[?#]/)[0].split('/').at(-1) ?? ''
+    id = last.split('@')[0]
+  }
+  id = id.replace(/[^A-Za-z0-9_-]/g, '')
+  return `${id || 'image'}.jpg`
+}
+
+/** HORIZON: whether `uri` is on Bluesky's image CDN. */
+export function isCdnImage(uri: string): boolean {
+  return uri.startsWith('https://cdn.bsky.app/img/')
+}

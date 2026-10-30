@@ -21,7 +21,11 @@ import {IS_ANDROID, IS_IOS} from '#/env'
 import {renderImage} from './image-manipulator'
 import {type PickerImage} from './picker.shared'
 import {type Dimensions} from './types'
-import {convertCdnPreset, getResizedDimensions} from './util'
+import {
+  convertCdnPreset,
+  getResizedDimensions,
+  savedImageFilename,
+} from './util'
 
 export async function compressIfNeeded(
   img: PickerImage,
@@ -100,7 +104,8 @@ export async function shareImageModal({uri}: {uri: string}) {
   }
 }
 
-const ALBUM_NAME = 'Bluesky'
+// HORIZON: Horizon's own album
+const ALBUM_NAME = 'Horizon'
 
 /**
  * Saves an image to the user's device. Uses the CDN's `download` preset
@@ -115,7 +120,15 @@ export async function saveImageToMediaLibrary({uri}: {uri: string}) {
     String(uuid.v4()),
     20e3,
   )
-  const imagePath = await moveToPermanentPath(downloadedPath, '.jpg')
+  /*
+   * HORIZON: the gallery takes its file name from the file, so copy it to
+   * `<cid>.jpg` in a folder of its own (two saves at once can't collide).
+   */
+  const saveDir = joinPath(cacheDirectory as string, String(uuid.v4()))
+  await makeDirectoryAsync(saveDir, {intermediates: true})
+  const imagePath = normalizePath(joinPath(saveDir, savedImageFilename(uri)))
+  await copyAsync({from: normalizePath(downloadedPath), to: imagePath})
+  void safeDeleteAsync(downloadedPath)
 
   // save
   try {
@@ -176,7 +189,7 @@ export async function saveImageToMediaLibrary({uri}: {uri: string}) {
     })
     throw err
   } finally {
-    safeDeleteAsync(imagePath)
+    void safeDeleteAsync(saveDir)
   }
 }
 

@@ -5,6 +5,8 @@ import {
   convertCdnPreset,
   getDataUriSize,
   getResizedDimensions,
+  isCdnImage,
+  savedImageFilename,
 } from './util'
 
 export async function compressIfNeeded(
@@ -54,8 +56,23 @@ export async function shareImageModal(_opts: {uri: string}) {
  */
 export async function saveImageToMediaLibrary({uri}: {uri: string}) {
   const downloadUri = convertCdnPreset(uri, 'download')
-  const segments = downloadUri.split('/')
-  const filename = `bluesky-${segments.at(-1)}.jpg`
+  const filename = savedImageFilename(uri)
+  /*
+   * Browsers ignore `download` on cross-origin links. The CDN names the file
+   * itself and refuses cross-origin fetches, so its link is used as is. Other
+   * images (a PDS's getBlob) are fetched first so the name sticks.
+   */
+  if (!isCdnImage(downloadUri)) {
+    try {
+      const res = await fetch(downloadUri)
+      if (res.ok) {
+        const href = URL.createObjectURL(await res.blob())
+        downloadUrl(href, filename)
+        setTimeout(() => URL.revokeObjectURL(href), 60e3)
+        return
+      }
+    } catch {}
+  }
   downloadUrl(downloadUri, filename)
 }
 
