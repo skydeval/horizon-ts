@@ -5,7 +5,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 
 import {createSanitizedDisplayName} from '#/lib/moderation/create-sanitized-display-name'
 import {
-  type AllNavigatorParams,
+  type CommonNavigatorParams,
   type NativeStackScreenProps,
 } from '#/lib/routes/types'
 import {cleanError} from '#/lib/strings/errors'
@@ -37,7 +37,7 @@ import {ItemTextWithSubtitle} from './components/ItemTextWithSubtitle'
 import {PreferenceControls} from './components/PreferenceControls'
 
 type Props = NativeStackScreenProps<
-  AllNavigatorParams,
+  CommonNavigatorParams,
   'ActivityNotificationSettings'
 >
 

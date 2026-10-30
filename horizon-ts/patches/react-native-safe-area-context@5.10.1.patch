@@ -1,44 +1,62 @@
 diff --git a/lib/commonjs/NativeSafeAreaProvider.web.js b/lib/commonjs/NativeSafeAreaProvider.web.js
-index d272a37b5cf0861b48d246b03a70d95616119ed7..02ac5c61ca3f0607dfd98f6f2e9b9c3f6ffd8f8e 100644
+index d272a37..05d2876 100644
 --- a/lib/commonjs/NativeSafeAreaProvider.web.js
 +++ b/lib/commonjs/NativeSafeAreaProvider.web.js
-@@ -41,7 +41,8 @@ function NativeSafeAreaProvider({
-     const providerElement = viewRef.current;
-     // When the provider element cannot be measured or observed, insets and
-     // frame stay based on the window instead of the provider view.
--    const canMeasureProviderElement = typeof ResizeObserver !== 'undefined' && providerElement != null && typeof providerElement.getBoundingClientRect === 'function';
-+    // HORIZON: always window-based (as in 5.7); the provider spans the window-scrolled document, so its rect top is -scrollY
-+    const canMeasureProviderElement = false && typeof ResizeObserver !== 'undefined' && providerElement != null && typeof providerElement.getBoundingClientRect === 'function';
-     const element = createContextElement();
-     document.body.appendChild(element);
-     const onEnd = () => {
+@@ -70,10 +70,10 @@ function NativeSafeAreaProvider({
+         // overlapping the provider view.
+         const rect = providerElement.getBoundingClientRect();
+         insets = {
+-          top: Math.max(0, windowInsets.top - rect.top),
+-          bottom: Math.max(0, windowInsets.bottom - (window.innerHeight - rect.bottom)),
+-          left: Math.max(0, windowInsets.left - rect.left),
+-          right: Math.max(0, windowInsets.right - (window.innerWidth - rect.right))
++          top: Math.max(0, windowInsets.top - Math.max(0, rect.top)),
++          bottom: Math.max(0, windowInsets.bottom - Math.max(0, window.innerHeight - rect.bottom)),
++          left: Math.max(0, windowInsets.left - Math.max(0, rect.left)),
++          right: Math.max(0, windowInsets.right - Math.max(0, window.innerWidth - rect.right))
+         };
+         frame = {
+           x: rect.left,
 diff --git a/lib/module/NativeSafeAreaProvider.web.js b/lib/module/NativeSafeAreaProvider.web.js
-index 359ed9f254889056cf31fc70129804eb16c48747..2745ea24bc51960d49e2acd4648316d6868bc8ec 100644
+index 359ed9f..5b389d9 100644
 --- a/lib/module/NativeSafeAreaProvider.web.js
 +++ b/lib/module/NativeSafeAreaProvider.web.js
-@@ -34,7 +34,8 @@ export function NativeSafeAreaProvider({
-     const providerElement = viewRef.current;
-     // When the provider element cannot be measured or observed, insets and
-     // frame stay based on the window instead of the provider view.
--    const canMeasureProviderElement = typeof ResizeObserver !== 'undefined' && providerElement != null && typeof providerElement.getBoundingClientRect === 'function';
-+    // HORIZON: always window-based (as in 5.7); the provider spans the window-scrolled document, so its rect top is -scrollY
-+    const canMeasureProviderElement = false && typeof ResizeObserver !== 'undefined' && providerElement != null && typeof providerElement.getBoundingClientRect === 'function';
-     const element = createContextElement();
-     document.body.appendChild(element);
-     const onEnd = () => {
+@@ -63,10 +63,10 @@ export function NativeSafeAreaProvider({
+         // overlapping the provider view.
+         const rect = providerElement.getBoundingClientRect();
+         insets = {
+-          top: Math.max(0, windowInsets.top - rect.top),
+-          bottom: Math.max(0, windowInsets.bottom - (window.innerHeight - rect.bottom)),
+-          left: Math.max(0, windowInsets.left - rect.left),
+-          right: Math.max(0, windowInsets.right - (window.innerWidth - rect.right))
++          top: Math.max(0, windowInsets.top - Math.max(0, rect.top)),
++          bottom: Math.max(0, windowInsets.bottom - Math.max(0, window.innerHeight - rect.bottom)),
++          left: Math.max(0, windowInsets.left - Math.max(0, rect.left)),
++          right: Math.max(0, windowInsets.right - Math.max(0, window.innerWidth - rect.right))
+         };
+         frame = {
+           x: rect.left,
 diff --git a/src/NativeSafeAreaProvider.web.tsx b/src/NativeSafeAreaProvider.web.tsx
-index 5bcdf5cd07567d54530d241097e04a6e29240d84..93183d21cf8f78f8bf691a3cda993e681c6c428e 100644
+index 5bcdf5c..16a688c 100644
 --- a/src/NativeSafeAreaProvider.web.tsx
 +++ b/src/NativeSafeAreaProvider.web.tsx
-@@ -43,7 +43,11 @@ export function NativeSafeAreaProvider({
-     const providerElement = viewRef.current as unknown as HTMLElement | null;
-     // When the provider element cannot be measured or observed, insets and
-     // frame stay based on the window instead of the provider view.
-+    // HORIZON: always window-based (as in 5.7). The app's provider spans the
-+    // whole window-scrolled document, so its rect top is -scrollY and the
-+    // measured top inset became the scroll offset.
-     const canMeasureProviderElement =
-+      false &&
-       typeof ResizeObserver !== 'undefined' &&
-       providerElement != null &&
-       typeof providerElement.getBoundingClientRect === 'function';
+@@ -75,15 +75,15 @@ export function NativeSafeAreaProvider({
+         // overlapping the provider view.
+         const rect = providerElement.getBoundingClientRect();
+         insets = {
+-          top: Math.max(0, windowInsets.top - rect.top),
++          top: Math.max(0, windowInsets.top - Math.max(0, rect.top)),
+           bottom: Math.max(
+             0,
+-            windowInsets.bottom - (window.innerHeight - rect.bottom),
++            windowInsets.bottom - Math.max(0, window.innerHeight - rect.bottom),
+           ),
+-          left: Math.max(0, windowInsets.left - rect.left),
++          left: Math.max(0, windowInsets.left - Math.max(0, rect.left)),
+           right: Math.max(
+             0,
+-            windowInsets.right - (window.innerWidth - rect.right),
++            windowInsets.right - Math.max(0, window.innerWidth - rect.right),
+           ),
+         };
+         frame = {

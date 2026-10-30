@@ -175,7 +175,6 @@ function InnerApp() {
                                                               <TranslateOnDeviceProvider>
                                                                 <HotkeysProvider>
                                                                   <Shell />
-                                                                  <ToastOutlet />
                                                                   {/* HORIZON: Horizon's app-wide host (in-place sign-in, password dialog, membership) */}
                                                                   <HorizonHost />
                                                                 </HotkeysProvider>
@@ -203,6 +202,7 @@ function InnerApp() {
                     </QueryProvider>
                   </AnalyticsFeaturesContext>
                 </Fragment>
+                <ToastOutlet />
               </ActiveVideoProvider>
             </VideoVolumeProvider>
           </Splash>
