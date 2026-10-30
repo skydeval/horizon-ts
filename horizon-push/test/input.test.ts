@@ -1,8 +1,19 @@
 import {describe, expect, it} from 'vitest'
 
-import {SERVICE_DID} from '../src/config'
+import {notifySources, SERVICE_DID} from '../src/config'
 import {buildMessage, classifyFailure} from '../src/fcm'
 import {DID_DOC, readNotifyInput, readPushInput} from '../src/input'
+
+describe('notifySources', () => {
+  it("is Horizon's prism unless configured", () => {
+    expect([...notifySources(undefined)]).toEqual(['did:web:prism.nearhorizon.app'])
+    expect([...notifySources(' ')]).toEqual(['did:web:prism.nearhorizon.app'])
+    expect([...notifySources('did:web:a.example, did:web:b.example,junk')]).toEqual([
+      'did:web:a.example',
+      'did:web:b.example',
+    ])
+  })
+})
 
 describe('readNotifyInput', () => {
   const A = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'

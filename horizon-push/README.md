@@ -16,6 +16,18 @@ Push notifications for Horizon's Android app, as a Cloudflare Worker at
   sign-in and shows them, so mutes, blocks and notification settings apply as
   usual.
 
+- A trusted service (Horizon's prism, or the DIDs in the `NOTIFY_SOURCES`
+  variable) can ask for a check with `app.nearhorizon.push.notify`, for
+  activity the public stream never carries. It sends account DIDs only,
+  signed as itself.
+
+## What the operator sees
+
+The service stores each registered account's DID and push tokens. It also
+learns which registered accounts had activity and when, including activity
+reported by a notify source. It never receives post or message content.
+Firebase sees a content-free message to each phone.
+
 ## Development
 
 ```sh

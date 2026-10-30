@@ -21,6 +21,8 @@ import {Fcm} from './fcm'
 export type Env = {
   HUB: DurableObjectNamespace<Hub>
   FCM_SERVICE_ACCOUNT: string
+  /** Comma-separated DIDs allowed to call notify; see `notifySources`. */
+  NOTIFY_SOURCES?: string
 }
 
 /** How often the watchdog alarm checks the stream. */
@@ -54,7 +56,6 @@ export class Hub extends DurableObject<Env> {
   /** Account -> when it was last nudged. */
   private lastSent = new Map<string, number>()
   private fcm?: Fcm
-  private stats = {events: 0, notified: 0, nudges: 0, sends: 0, gone: 0, failed: 0}
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env)
@@ -125,7 +126,6 @@ export class Hub extends DurableObject<Env> {
     for (const did of dids) {
       if (this.accounts.has(did) && !this.pending.has(did)) {
         this.pending.set(did, now)
-        this.stats.notified++
       }
     }
     await this.ensureRunning()
@@ -133,16 +133,18 @@ export class Hub extends DurableObject<Env> {
 
   // Health
 
+  /**
+   * Public health only: no counts of accounts, notifications or sends, which
+   * would say something about users' activity (kryphocron included).
+   */
   async status() {
     const now = Date.now()
     return {
       connected: Boolean(this.ws),
-      accounts: this.accounts.size,
       lagSeconds: this.cursor ? Math.round((now * 1000 - this.cursor) / 1e6) : null,
       secondsSinceEvent: this.lastEventAt ? Math.round((now - this.lastEventAt) / 1000) : null,
       upSeconds: this.connectedAt ? Math.round((now - this.connectedAt) / 1000) : 0,
       host: JETSTREAM_HOSTS[this.hostIndex],
-      ...this.stats,
     }
   }
 
@@ -230,7 +232,6 @@ export class Hub extends DurableObject<Env> {
       return
     }
     this.lastEventAt = Date.now()
-    this.stats.events++
     const cursor = cursorOf(event)
     if (cursor && (!this.cursor || cursor > this.cursor)) this.cursor = cursor
     for (const did of targetsOf(event)) {
@@ -273,14 +274,10 @@ export class Hub extends DurableObject<Env> {
     const phones = this.sql
       .exec<{token: string}>(`SELECT token FROM phones WHERE did = ?`, did)
       .toArray()
-    this.stats.nudges++
     for (const {token} of phones) {
-      const result = await this.fcm.send(token, did)
-      if (result === 'sent') this.stats.sends++
-      else if (result === 'gone') {
-        this.stats.gone++
+      if ((await this.fcm.send(token, did)) === 'gone') {
         this.sql.exec(`DELETE FROM phones WHERE did = ? AND token = ?`, did, token)
-      } else this.stats.failed++
+      }
     }
     this.forgetIfEmpty(did)
   }

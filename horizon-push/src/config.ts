@@ -16,8 +16,18 @@ export const SERVICE_ENDPOINT = 'https://push.nearhorizon.app'
 /**
  * Services allowed to ask for a check (`app.nearhorizon.push.notify`), for
  * activity the public stream never carries: prism, for kryphocron posts.
+ * The `NOTIFY_SOURCES` variable (comma-separated DIDs) replaces the default,
+ * for operators running their own prism.
  */
-export const NOTIFY_SOURCES = new Set(['did:web:prism.nearhorizon.app'])
+export const DEFAULT_NOTIFY_SOURCES = ['did:web:prism.nearhorizon.app']
+
+export function notifySources(configured: string | undefined): Set<string> {
+  const list = (configured ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.startsWith('did:'))
+  return new Set(list.length ? list : DEFAULT_NOTIFY_SOURCES)
+}
 
 /** Accounts per notify request. */
 export const MAX_NOTIFY_DIDS = 100

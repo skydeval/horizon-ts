@@ -5,7 +5,7 @@
  */
 
 import {AuthError, verifyServiceAuth} from './auth'
-import {NOTIFY_SOURCES} from './config'
+import {notifySources} from './config'
 import {type Env} from './hub'
 import {DID_DOC, readNotifyInput, readPushInput} from './input'
 
@@ -62,7 +62,7 @@ async function notify(request: Request, env: Env): Promise<Response> {
     const message = e instanceof AuthError ? e.message : 'could not check the token'
     return xrpcError(401, 'AuthenticationRequired', message)
   }
-  if (!NOTIFY_SOURCES.has(source)) {
+  if (!notifySources(env.NOTIFY_SOURCES).has(source)) {
     return xrpcError(403, 'Forbidden', 'this service may not send notifications')
   }
   let body: unknown
