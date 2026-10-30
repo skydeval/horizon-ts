@@ -91,6 +91,17 @@ export function AboutSettingsScreen({}: Props) {
       </Layout.Header.Outer>
       <Layout.Content>
         <SettingsList.Container>
+          {/* HORIZON: patch notes (start) */}
+          <SettingsList.LinkItem
+            to="/patch-notes"
+            label={_(msg`Patch notes`)}>
+            <SettingsList.ItemIcon icon={NewspaperIcon} />
+            <SettingsList.ItemText>
+              <Trans>Patch notes</Trans>
+            </SettingsList.ItemText>
+          </SettingsList.LinkItem>
+          <SettingsList.Divider />
+          {/* HORIZON: patch notes (end) */}
           <SettingsList.LinkItem
             to="https://bsky.social/about/support/tos"
             label={_(msg`Terms of Service`)}>

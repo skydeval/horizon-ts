@@ -1,0 +1,60 @@
+/*
+ * Generated from patch-notes/*.md by scripts/horizon-patch-notes.js.
+ * Do not edit; run `node scripts/horizon-patch-notes.js generate`.
+ */
+
+import {type PatchNote} from './types'
+
+export const PATCH_NOTES: readonly PatchNote[] = [
+  {
+    "version": "0.1.0",
+    "build": 5,
+    "date": "2026-10-30",
+    "summary": "The moderation inbox, and the latest from Bluesky's app.",
+    "sections": [
+      {
+        "kind": "horizon",
+        "items": [
+          "Replies and mentions on private posts now notify you within seconds.",
+          "Saving an image gives it the same file name every time, so saving it twice won't make two copies under different names.",
+          "On Android, saved images go to a Horizon album.",
+          "Patch notes, at nearhorizon.app/patch-notes and in Settings, About."
+        ]
+      },
+      {
+        "kind": "upstream",
+        "items": [
+          "The moderation inbox: see the reports you've made and any moderation decisions about your account, in Settings, Moderation.",
+          "A trending topics widget for your Android home screen.",
+          "Notifications line up with the feed, and the Activity tab is now called Post alerts.",
+          "Links can open a profile straight to one of its tabs, such as its lists.",
+          "Tabs with something unread show a dot."
+        ]
+      },
+      {
+        "kind": "fixes",
+        "items": [
+          "Two-factor codes from an authenticator app are handled properly when signing in.",
+          "Ordinary GitHub links on profiles are no longer treated as payment links. GitHub Sponsors links still are."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
+    "build": 4,
+    "date": "2026-10-30",
+    "summary": "Notifications on Android, and Horizon's own look.",
+    "sections": [
+      {
+        "kind": "horizon",
+        "items": [
+          "Push notifications on Android, for likes, reposts, replies, quotes, mentions and follows.",
+          "Direct messages and private notifications are checked about every 15 minutes.",
+          "Horizon has its own app icon, notification icon and launch screen.",
+          "Android builds can be downloaded from nearhorizon.app/download, and Obtainium can keep them up to date."
+        ]
+      }
+    ]
+  }
+]

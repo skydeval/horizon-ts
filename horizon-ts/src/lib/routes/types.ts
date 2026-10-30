@@ -62,6 +62,8 @@ export type CommonNavigatorParams = {
   PrivatePostRepostedBy: {name: string; rkey: string}
   PrivatePostQuotes: {name: string; rkey: string}
   AudiencesSettings: undefined
+  // HORIZON: patch notes
+  PatchNotes: undefined
   CustomFeed: {
     name: string
     rkey: string

@@ -10,6 +10,14 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Patch notes** at nearhorizon.app/patch-notes and in Settings → About:
+  what each release brings, sorted into new Horizon features, features from
+  Bluesky's app, and fixes. The Android download page shows the latest
+  release's notes.
+- **The moderation inbox,** from Bluesky's app: your reports and moderation
+  decisions about your account, in Settings → Moderation.
+- **Saved images keep the same file name** every time, and Android saves
+  them to a Horizon album.
 - **Push notifications in the Android app,** from Horizon's own push
   service. It only tells your phone to check; the app fetches your
   notifications with your own sign-in, so your push settings, mutes and
