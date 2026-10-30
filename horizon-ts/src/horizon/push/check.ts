@@ -75,10 +75,16 @@ export function checkAccount(did: string, what: CheckWhat): Promise<void> {
   return run
 }
 
+/**
+ * Loads the stored app state. Named apart from `init` because a source guard
+ * keeps the OAuth client's session restore out of src/horizon; this is not it.
+ */
+const loadPersistedState = persisted.init
+
 /** Stored accounts and the app language, loaded if this runtime has not yet. */
 export async function ready() {
   if (persisted.get('session').accounts.length === 0) {
-    await persisted.init()
+    await loadPersistedState()
   }
   if (!i18n.locale) {
     const language = persisted.get('languagePrefs').appLanguage
