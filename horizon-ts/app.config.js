@@ -1,5 +1,4 @@
 // @ts-check
-const pkg = require('./package.json')
 // HORIZON: the product name has one source in src/horizon/branding
 const product = require('./src/horizon/branding/product.json')
 
@@ -10,8 +9,17 @@ const product = require('./src/horizon/branding/product.json')
 module.exports = function (_config) {
   /**
    * App version number. Should be incremented as part of a release cycle.
+   *
+   * HORIZON: Horizon's own version, beside its name in src/horizon/branding;
+   * package.json keeps upstream's, so merges stay clean
    */
-  const VERSION = pkg.version
+  const VERSION = product.version
+
+  /**
+   * HORIZON: Android's build number, which must rise with every release so an
+   * installed copy accepts the next one. The release build sets it
+   */
+  const ANDROID_VERSION_CODE = Number(process.env.HORIZON_VERSION_CODE) || 1
 
   /**
    * Uses built-in Expo env vars
@@ -216,6 +224,7 @@ module.exports = function (_config) {
         googleServicesFile: './google-services.json',
         // HORIZON: Horizon's own package, so it installs beside Bluesky
         package: 'app.nearhorizon',
+        versionCode: ANDROID_VERSION_CODE,
         intentFilters: [
           {
             action: 'VIEW',

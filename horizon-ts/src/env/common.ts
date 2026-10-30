@@ -1,14 +1,15 @@
 import {type DidString} from '@atproto/syntax'
 
-import packageJson from '#/../package.json'
+import product from '#/horizon/branding/product.json'
 
 /**
- * The semver version of the app, as defined in `package.json.`
+ * The semver version of the app. HORIZON: Horizon's own, from its branding
+ * file rather than `package.json` (which keeps upstream's version).
  *
  * N.B. The fallback is needed for Render.com deployments
  */
 export const RELEASE_VERSION: string =
-  process.env.EXPO_PUBLIC_RELEASE_VERSION || packageJson.version
+  process.env.EXPO_PUBLIC_RELEASE_VERSION || product.version
 
 /**
  * The env the app is running in e.g. development, testflight, production, e2e

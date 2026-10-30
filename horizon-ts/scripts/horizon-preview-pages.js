@@ -87,8 +87,11 @@ function previewClientMetadata(production, origin) {
  * Cloudflare Pages' `_redirects`: every path that is not a file is the app.
  * A file that exists (the client document, the bundle) is expected to be
  * served as itself ahead of this rule; the deploy how-to checks it.
+ * `/download` goes to the Android download page, which lives beside the APKs.
  */
-const PAGES_REDIRECTS = '/* /index.html 200\n'
+const PAGES_REDIRECTS =
+  '/download https://dl.nearhorizon.app/index.html 302\n' +
+  '/* /index.html 200\n'
 
 /**
  * Cloudflare Pages' `_headers`.

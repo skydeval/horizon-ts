@@ -56,7 +56,13 @@ describe('preview build packaging', () => {
   })
 
   it('every path that is not a file is the app', () => {
-    expect(PAGES_REDIRECTS).toBe('/* /index.html 200\n')
+    expect(PAGES_REDIRECTS.split('\n').at(-2)).toBe('/* /index.html 200')
+  })
+
+  it('/download goes to the Android download page, ahead of the app', () => {
+    expect(PAGES_REDIRECTS.split('\n')[0]).toBe(
+      '/download https://dl.nearhorizon.app/index.html 302',
+    )
   })
 
   it('the client document is readable cross-origin and not cached', () => {
