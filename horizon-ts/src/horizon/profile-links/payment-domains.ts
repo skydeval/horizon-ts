@@ -70,6 +70,10 @@ export const PAYMENT_DOMAINS: readonly PaymentDomain[] = [
   ...HORIZON_PAYMENT_DOMAINS,
   ...SUPPORT_PROVIDERS.map(provider => ({
     domain: provider.domain,
+    // Upstream's path-scoped hosts (GitHub Sponsors), without the trailing slash
+    ...(provider.pathPrefix
+      ? {pathPrefix: provider.pathPrefix.replace(/\/+$/, '')}
+      : {}),
     logo: provider.logo,
   })),
 ]

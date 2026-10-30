@@ -59,10 +59,13 @@ describe('isPaymentUrl', () => {
     expect(isPaymentUrl(url)).toBe(true)
   })
 
-  it('covers every support site upstream recognises, by host', () => {
+  it('covers every support site upstream recognises, by host and path', () => {
     for (const provider of SUPPORT_PROVIDERS) {
-      expect(isPaymentUrl(`https://${provider.domain}`)).toBe(true)
-      expect(isPaymentUrl(`https://sub.${provider.domain}/any/path`)).toBe(true)
+      const prefix = (provider.pathPrefix ?? '').replace(/\/+$/, '')
+      expect(isPaymentUrl(`https://${provider.domain}${prefix}`)).toBe(true)
+      expect(
+        isPaymentUrl(`https://sub.${provider.domain}${prefix}/any/path`),
+      ).toBe(true)
     }
   })
 
