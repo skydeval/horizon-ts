@@ -1,0 +1,58 @@
+import {describe, expect, it} from 'vitest'
+
+import {SERVICE_DID} from '../src/config'
+import {buildMessage, classifyFailure} from '../src/fcm'
+import {DID_DOC, readPushInput} from '../src/input'
+
+const good = {
+  serviceDid: SERVICE_DID,
+  token: 'fcm-token-example-1234',
+  platform: 'android',
+  appId: 'app.nearhorizon',
+}
+
+describe('readPushInput', () => {
+  it('accepts a Horizon Android registration', () => {
+    expect(readPushInput({...good, ageRestricted: false})).toEqual(good)
+  })
+
+  it("refuses Bluesky's service, other apps, other platforms and bad tokens", () => {
+    expect(readPushInput({...good, serviceDid: 'did:web:api.bsky.app'})).toMatch(/serviceDid/)
+    expect(readPushInput({...good, appId: 'xyz.blueskyweb.app'})).toMatch(/appId/)
+    expect(readPushInput({...good, platform: 'ios'})).toMatch(/platform/)
+    expect(readPushInput({...good, token: 'x'})).toMatch(/token/)
+    expect(readPushInput([])).toMatch(/object/)
+  })
+})
+
+describe('DID document', () => {
+  it('names the push service entry apps proxy to', () => {
+    expect(DID_DOC.id).toBe(SERVICE_DID)
+    expect(DID_DOC.service[0]).toMatchObject({
+      id: '#horizon_push',
+      serviceEndpoint: 'https://push.nearhorizon.app',
+    })
+  })
+})
+
+describe('Firebase messages', () => {
+  it('carry no text, only which account should check', () => {
+    const {message} = buildMessage('tok', 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa')
+    expect(message.data).toEqual({kind: 'check', did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'})
+    expect(message).not.toHaveProperty('notification')
+    expect(message.android.priority).toBe('HIGH')
+  })
+
+  it('drop tokens Firebase no longer knows, retry on overload', () => {
+    expect(classifyFailure(404, '')).toBe('gone')
+    expect(classifyFailure(400, '{"error":{"details":[{"errorCode":"UNREGISTERED"}]}}')).toBe(
+      'gone',
+    )
+    expect(classifyFailure(400, 'The registration token is not a valid FCM registration token')).toBe(
+      'gone',
+    )
+    expect(classifyFailure(429, '')).toBe('retry')
+    expect(classifyFailure(503, '')).toBe('retry')
+    expect(classifyFailure(403, '')).toBe('failed')
+  })
+})
