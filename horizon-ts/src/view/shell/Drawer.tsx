@@ -518,22 +518,26 @@ let DrawerFooter = ({
           <Trans>Feedback</Trans>
         </ButtonText>
       </Button>
-      <Button
-        label={l`Get help`}
-        size="small"
-        variant="outline"
-        color="secondary"
-        onPress={onPressHelp}
-        style={{
-          backgroundColor: 'transparent',
-        }}>
-        {/* HORIZON: outlined over the bare drawer, in the app */}
-        <Outlined>
-          <ButtonText>
-            <Trans>Help</Trans>
-          </ButtonText>
-        </Outlined>
-      </Button>
+      {/* HORIZON: no Help in the app until Horizon has its own (start) */}
+      {!IS_NATIVE && (
+        <Button
+          label={l`Get help`}
+          size="small"
+          variant="outline"
+          color="secondary"
+          onPress={onPressHelp}
+          style={{
+            backgroundColor: 'transparent',
+          }}>
+          {/* HORIZON: outlined over the bare drawer, in the app */}
+          <Outlined>
+            <ButtonText>
+              <Trans>Help</Trans>
+            </ButtonText>
+          </Outlined>
+        </Button>
+      )}
+      {/* HORIZON: no Help in the app until Horizon has its own (end) */}
     </View>
   )
 }

@@ -296,16 +296,20 @@ export function SettingsScreen({}: Props) {
               </SettingsList.ItemText>
             </SettingsList.LinkItem>
           )}
-          <SettingsList.PressableItem
-            onPress={() => void Linking.openURL(HELP_DESK_URL)}
-            label={l`Help`}
-            accessibilityHint={l`Opens helpdesk in browser`}>
-            <SettingsList.ItemIcon icon={CircleQuestionIcon} />
-            <SettingsList.ItemText>
-              <Trans>Help</Trans>
-            </SettingsList.ItemText>
-            <SettingsList.Chevron />
-          </SettingsList.PressableItem>
+          {/* HORIZON: no Help in the app until Horizon has its own (start) */}
+          {!IS_NATIVE && (
+            <SettingsList.PressableItem
+              onPress={() => void Linking.openURL(HELP_DESK_URL)}
+              label={l`Help`}
+              accessibilityHint={l`Opens helpdesk in browser`}>
+              <SettingsList.ItemIcon icon={CircleQuestionIcon} />
+              <SettingsList.ItemText>
+                <Trans>Help</Trans>
+              </SettingsList.ItemText>
+              <SettingsList.Chevron />
+            </SettingsList.PressableItem>
+          )}
+          {/* HORIZON: no Help in the app until Horizon has its own (end) */}
           <SettingsList.LinkItem to="/settings/about" label={l`About`}>
             <SettingsList.ItemIcon icon={BubbleInfoIcon} />
             <SettingsList.ItemText>
