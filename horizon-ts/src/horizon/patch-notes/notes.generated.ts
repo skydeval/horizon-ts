@@ -8,9 +8,9 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
-    "build": 10,
+    "build": 11,
     "date": "2026-10-31",
-    "summary": "Steadier videos and Following feed, a look for each account, bigger notification counts and the jump to top button.",
+    "summary": "Steadier videos and Following feed, a look for each account, quotes from pasted Horizon links, bigger notification counts and the jump to top button.",
     "sections": [
       {
         "kind": "horizon",
@@ -21,6 +21,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       {
         "kind": "fixes",
         "items": [
+          "Pasting a Horizon link to a post quotes the post, as a bsky.app link does, instead of making a link card. That works in replies too.",
           "Videos recover by themselves after a dropped connection, and start again when you come back to them, instead of freezing or going black. A slow video shows its spinner while it loads.",
           "Coming back to Following from a post no longer shows a black feed or jumps away from where you were. New posts wait until you're back, and the Home dot tells you they're there.",
           "Each account keeps its own backdrop, colour mode, dark theme, font and font size. Switching accounts shows the ones you chose for it.",

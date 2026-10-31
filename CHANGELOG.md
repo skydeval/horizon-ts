@@ -70,6 +70,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **Coming back to Following from a post no longer shows a black feed** or
   jumps away from your place. New posts wait until you're back.
 - **The Android launch screen shows the whole icon,** sky included.
+- **Pasting a Horizon post link quotes the post,** as a bsky.app link does,
+  instead of making a link card, in replies too. Horizon links open in the
+  app.
 - **Android videos recover by themselves** after a dropped connection, and
   start again when you come back to them, instead of freezing or going black.
 - **Each account in the Android app keeps its own backdrop** and theme
