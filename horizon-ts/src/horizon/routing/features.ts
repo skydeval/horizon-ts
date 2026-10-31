@@ -16,11 +16,11 @@
 
 import {type QueryClient} from '@tanstack/react-query'
 
+import {isAnchoredFollowingKey} from '#/horizon/private/feed/keys'
 import {
   getCurrentClients,
   getCurrentDid,
 } from '#/horizon/routing/current-clients'
-import {isAnchoredFollowingKey} from '#/horizon/private/feed/keys'
 import {readMembershipRecord} from '#/horizon/routing/membership-record'
 import {THREAD_LENS} from '#/horizon/switches'
 

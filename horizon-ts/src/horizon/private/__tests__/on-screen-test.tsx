@@ -1,6 +1,6 @@
 import {describe, expect, it, jest} from '@jest/globals'
-import {act, renderHook} from '@testing-library/react-native'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
+import {act, renderHook} from '@testing-library/react-native'
 
 import {isAnchoredFollowingKey} from '#/horizon/private/feed/keys'
 import {

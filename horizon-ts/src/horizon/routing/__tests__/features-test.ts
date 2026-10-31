@@ -95,25 +95,36 @@ describe('answers and loads', () => {
     answerPrismFeatures(DID, ['private'])
     expect(listener).toHaveBeenCalledTimes(1)
     /*
-     * With Thread Lens on, one pass is split in two (Phase 4 design 11.6):
-     * every non-lens query is invalidated, and lens entries are only marked
-     * stale.
+     * One pass, split: every other query is invalidated, while anchored
+     * Following and, with Thread Lens on, lens entries (Phase 4 design 11.6)
+     * are only marked stale.
      */
-    const calls = THREAD_LENS ? 2 : 1
+    const calls = THREAD_LENS ? 3 : 2
     expect(invalidateQueries).toHaveBeenCalledTimes(calls)
+    type Filters = {
+      predicate?: (query: {queryKey: unknown[]}) => boolean
+      refetchType?: string
+    }
+    const [[rest], [following], lens] = invalidateQueries.mock
+      .calls as unknown as [[Filters], [Filters], [unknown] | undefined]
+    const FOLLOWING = ['post-feed', 'v2|following', {}, {horizonPrivate: DID}]
+    expect(rest.refetchType).toBeUndefined()
+    expect(rest.predicate?.({queryKey: ['post-thread']})).toBe(true)
+    expect(rest.predicate?.({queryKey: ['post-feed', 'following', {}]})).toBe(
+      true,
+    )
+    expect(rest.predicate?.({queryKey: FOLLOWING})).toBe(false)
+    expect(rest.predicate?.({queryKey: ['horizon-thread-lens']})).toBe(
+      !THREAD_LENS,
+    )
+    expect(following.refetchType).toBe('none')
+    expect(following.predicate?.({queryKey: FOLLOWING})).toBe(true)
+    expect(following.predicate?.({queryKey: ['post-thread']})).toBe(false)
     if (THREAD_LENS) {
-      const [rest, lens] = invalidateQueries.mock.calls as unknown as [
-        [{predicate: (query: {queryKey: unknown[]}) => boolean}],
-        [unknown],
-      ]
-      expect(rest[0].predicate({queryKey: ['horizon-thread-lens']})).toBe(false)
-      expect(rest[0].predicate({queryKey: ['post-thread']})).toBe(true)
-      expect(lens[0]).toEqual({
+      expect(lens?.[0]).toEqual({
         queryKey: ['horizon-thread-lens'],
         refetchType: 'none',
       })
-    } else {
-      expect(invalidateQueries).toHaveBeenCalledWith()
     }
     answerPrismFeatures(DID, ['private'])
     expect(listener).toHaveBeenCalledTimes(1)
