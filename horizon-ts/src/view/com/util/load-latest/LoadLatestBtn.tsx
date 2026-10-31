@@ -1,4 +1,4 @@
-import {StyleSheet, useWindowDimensions} from 'react-native'
+import {StyleSheet, useWindowDimensions, View} from 'react-native'
 import Animated from 'react-native-reanimated'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {useMediaQuery} from 'react-responsive'
@@ -19,10 +19,13 @@ import {IS_NATIVE} from '#/env'
 export function LoadLatestBtn({
   onPress,
   label,
+  hint = '',
   showIndicator,
 }: {
   onPress: () => void
   label: string
+  /** HORIZON: what pressing does, for screen readers. */
+  hint?: string
   showIndicator: boolean
 }) {
   const {hasSession} = useSession()
@@ -88,7 +91,7 @@ export function LoadLatestBtn({
         onPress={onPress}
         hitSlop={HITSLOP_20}
         accessibilityLabel={label}
-        accessibilityHint=""
+        accessibilityHint={hint}
         targetScale={0.9}
         onPointerEnter={onHoverIn}
         onPointerLeave={onHoverOut}>
@@ -102,6 +105,26 @@ export function LoadLatestBtn({
               : t.atoms.text_contrast_medium,
           ]}
         />
+        {/* HORIZON: a dot for new posts, so the tint is not the only sign. */}
+        {showIndicator && (
+          <View
+            testID="loadLatestBtnDot"
+            style={[
+              a.absolute,
+              a.rounded_full,
+              a.z_20,
+              {
+                top: 4,
+                right: 4,
+                width: 9,
+                height: 9,
+                backgroundColor: t.palette.primary_500,
+                borderWidth: 1.5,
+                borderColor: t.atoms.bg.backgroundColor,
+              },
+            ]}
+          />
+        )}
       </PressableScale>
     </Animated.View>
   )

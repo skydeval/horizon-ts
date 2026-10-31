@@ -167,6 +167,12 @@ export type AccountCopy = {
   /** Edits made since a removal, for the rejoin (removed members design). */
   fallback: AppearanceFallback | null
   /**
+   * HORIZON: this account's appearance on a device that does not sync it
+   * (the app), so each account keeps its own backdrop. Device only; sync
+   * never reads it. Null until the account edits here.
+   */
+  local: Appearance | null
+  /**
    * The removal line shows the "moved it here" text: this device copied
    * prism's retained appearance. Cleared with `removalLine`.
    */
@@ -225,6 +231,7 @@ export function emptyAccountCopy(): AccountCopy {
     tooLargeLine: false,
     take: null,
     fallback: null,
+    local: null,
     removalTaken: false,
   }
 }
@@ -364,6 +371,7 @@ function parseCopy(value: unknown): AccountCopy | null {
     tooLargeLine: value.tooLargeLine === true,
     take: parseTake(value.take),
     fallback: parseFallback(value.fallback),
+    local: parseStoredAppearance(value.local),
     removalTaken: value.removalTaken === true,
   }
 }

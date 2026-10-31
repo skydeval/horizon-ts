@@ -66,7 +66,7 @@ import {isStandardSiteEmbed} from '#/components/Post/Embed/StandardSiteEmbed/uti
 import {PostFeedSkeleton} from '#/components/PostFeedSkeleton'
 import {RichText} from '#/components/RichText'
 import {useAnalytics} from '#/analytics'
-import {IS_IOS, IS_NATIVE, IS_WEB} from '#/env'
+import {IS_ANDROID, IS_IOS, IS_NATIVE, IS_WEB} from '#/env'
 import {isFollowingV2Eligible} from '#/features/followingV2/eligibility'
 import {DiscoverFeedLiveEventFeedsAndTrendingBanner} from '#/features/liveEvents/components/DiscoverFeedLiveEventFeedsAndTrendingBanner'
 import {
@@ -1538,6 +1538,12 @@ let PostFeed = ({
             isAnchored ? {minIndexForVisible: leadingRowCount} : undefined
           }
           onLayout={isAnchored ? listRest.onLayout : undefined}
+          /*
+           * HORIZON: keeping your place moves the scroll offset under
+           * Android's scroll bar, so it jumps about the further down you
+           * go. It can't be dragged there, so hiding it loses nothing.
+           */
+          showsVerticalScrollIndicator={!(IS_ANDROID && isAnchored)}
         />
       </ScrollProvider>
       {isAnchored && (

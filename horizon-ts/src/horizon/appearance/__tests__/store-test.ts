@@ -82,6 +82,36 @@ describe('effectiveAppearance (T11)', () => {
     expect(scheduled).toEqual([])
   })
 
+  it('with sync off (the app), each account keeps its own backdrop', () => {
+    const BOB = 'did:plc:bob'
+    const CAROL = 'did:plc:carol'
+    mockSync = false
+    seed({
+      device: {...DEFAULT_APPEARANCE, backdrop: 'materials.paper'},
+      accounts: {[CAROL]: store.emptyCopy()},
+    })
+    const shown = (did: string | undefined) =>
+      store.effectiveAppearance(store.getAppearanceState(), did).backdrop
+
+    store.selectBackdrop(DID, 'pride.lesbian')
+    // Carol never chose, and keeps what she showed before Alice's edit.
+    expect(shown(CAROL)).toBe('materials.paper')
+    store.selectBackdrop(BOB, 'pride.trans')
+    expect(shown(DID)).toBe('pride.lesbian')
+    expect(shown(BOB)).toBe('pride.trans')
+    expect(shown(CAROL)).toBe('materials.paper')
+    // Signed out shows the last edit made on this device.
+    expect(shown(undefined)).toBe('pride.trans')
+    expect(device().accounts[DID].local?.backdrop).toBe('pride.lesbian')
+    expect(device().accounts[DID].pending).toBeNull()
+    expect(scheduled).toEqual([])
+
+    // It survives a reload from storage.
+    store.resetAppearanceStoreForTests()
+    expect(shown(DID)).toBe('pride.lesbian')
+    expect(shown(BOB)).toBe('pride.trans')
+  })
+
   it('an account: pending, then record, then device', () => {
     const state = store.getAppearanceState()
     expect(store.effectiveAppearance(state, DID)).toBe(state.device.device)

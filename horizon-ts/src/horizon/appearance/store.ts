@@ -186,8 +186,11 @@ export function effectiveAppearance(
 ): Appearance {
   const {device} = current
   let result: Appearance
-  if (!did || !appearanceSyncs()) {
+  if (!did) {
     result = device.device
+  } else if (!appearanceSyncs()) {
+    // HORIZON: each account's own copy on this device, so switching swaps it.
+    result = device.accounts[did]?.local ?? device.device
   } else {
     const copy = device.accounts[did]
     result = copy?.pending?.appearance ?? copy?.record ?? device.device
@@ -251,9 +254,38 @@ export function editAppearance(
       accounts: {...device.accounts, [did]: {...copy, pending, fallback}},
     })
     syncHooks?.scheduleFlush(did)
+  } else if (did) {
+    // HORIZON: no sync here, so the account keeps its own copy (see `local`).
+    const copy = device.accounts[did] ?? emptyCopy()
+    const local = withoutThemePrefs(next)
+    setDeviceValue({
+      ...device,
+      device: local,
+      accounts: {
+        ...holdOtherAccounts(device, did),
+        [did]: {...copy, local},
+      },
+    })
   } else {
     setDeviceValue({...device, device: withoutThemePrefs(next)})
   }
+}
+
+/*
+ * HORIZON: on a device without sync, an account with no copy of its own
+ * shows the device's appearance. Before one account's edit changes that,
+ * every other account here keeps what it showed.
+ */
+function holdOtherAccounts(
+  device: DeviceAppearanceV1,
+  did: string,
+): Record<string, AccountCopy> {
+  const accounts: Record<string, AccountCopy> = {}
+  for (const [other, copy] of Object.entries(device.accounts)) {
+    accounts[other] =
+      other === did || copy.local ? copy : {...copy, local: device.device}
+  }
+  return accounts
 }
 
 /*

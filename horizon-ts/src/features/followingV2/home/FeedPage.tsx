@@ -28,15 +28,11 @@ import {FAB} from '#/view/com/util/fab/FAB'
 import {type ListMethods} from '#/view/com/util/List'
 import {LoadLatestBtn} from '#/view/com/util/load-latest/LoadLatestBtn'
 import {MainScrollProvider} from '#/view/com/util/MainScrollProvider'
-import {useBreakpoints, useTheme} from '#/alf'
+import {useTheme} from '#/alf'
 import {useHeaderOffset} from '#/components/hooks/useHeaderOffset'
 import {EditBig_Stroke2_Corner2_Rounded as EditBigIcon} from '#/components/icons/EditBig'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
-import {
-  isFollowingV2Eligible,
-  isFollowingV2HomeDotEnabled,
-} from '#/features/followingV2/eligibility'
 import {app} from '#/lexicons'
 import {PostFeed, type PostFeedRef} from './PostFeed'
 import {type FeedDescriptor, type FeedParams} from './queries/postFeed'
@@ -85,7 +81,6 @@ export function FeedPage({
     return IS_NATIVE && _isVideoFeed
   }, [feedInfo])
   const t = useTheme()
-  const {gtMobile} = useBreakpoints()
 
   useEffect(() => {
     if (isPageFocused) {
@@ -169,19 +164,23 @@ export function FeedPage({
         </FeedFeedbackProvider>
       </MainScrollProvider>
       {/*
-       * With Following v2, native replaces Load Latest with the new posts pill
-       * and mobile web relies on the Home tab dot. Tablet and desktop web have
-       * no pill, so they keep the button.
+       * HORIZON: Load Latest everywhere, the app and narrow web included.
+       * Upstream hides it there for the new posts pill, but the pill only
+       * covers posts already waiting on Following, so it left no way to jump
+       * to the top and refresh.
        */}
-      {(isScrolledDown || hasNew) &&
-        !isFollowingV2Eligible(ax) &&
-        !(isFollowingV2HomeDotEnabled(ax) && !gtMobile) && (
-          <LoadLatestBtn
-            onPress={onPressLoadLatest}
-            label={_(msg`Load new posts`)}
-            showIndicator={hasNew}
-          />
-        )}
+      {(isScrolledDown || hasNew) && (
+        <LoadLatestBtn
+          onPress={onPressLoadLatest}
+          label={
+            hasNew
+              ? _(msg`Load new posts`)
+              : _(msg`Scroll to top and refresh`)
+          }
+          hint={_(msg`Scrolls to the top and loads the latest posts`)}
+          showIndicator={hasNew}
+        />
+      )}
 
       {hasSession && (
         <FAB
