@@ -24,6 +24,8 @@ import {type ComposerImage} from '#/state/gallery'
 import {createComposerImage} from '#/state/gallery'
 import {type ChatInvitePreview} from '#/state/queries/join-links'
 import {type Gif} from '#/features/gifPicker/types'
+// HORIZON: a card image the card service can't fetch comes from the site
+import {thumbWithDirectFallback} from '#/horizon/link-cards/thumb'
 // HORIZON: a pasted private post link resolves through prism
 import {
   isPrivatePostLink,
@@ -306,7 +308,10 @@ async function resolveExternal(uri: string): Promise<ResolvedExternalLink> {
     uri: result.url,
     title: result.title ?? '',
     description: result.description ?? '',
-    thumb: result.image ? await imageToThumb(result.image) : undefined,
+    // HORIZON: falls back to the site's own image (see link-cards/thumb.ts)
+    thumb: result.image
+      ? await thumbWithDirectFallback(result.image, imageToThumb)
+      : undefined,
     authorDid: getAuthorDid(result.author),
     /*
      * New fields from Standard Site integration. Other fields are derived from
