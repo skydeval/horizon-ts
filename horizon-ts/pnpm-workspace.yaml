@@ -37,6 +37,7 @@ allowBuilds:
   'protobufjs': false
   'unrs-resolver': true
 patchedDependencies:
+  '@bsky.app/video@0.4.2': patches/@bsky.app__video@0.4.2.patch
   '@bsky/sdk@1.2.0': patches/@bsky__sdk@1.2.0.patch
   '@expo/cli@58.1.15': patches/@expo__cli@58.1.15.patch
   '@expo/ui@58.0.23': patches/@expo__ui@58.0.23.patch

@@ -8,6 +8,23 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
+    "build": 10,
+    "date": "2026-10-31",
+    "summary": "Steadier videos, a backdrop for each account and the jump to top button.",
+    "sections": [
+      {
+        "kind": "fixes",
+        "items": [
+          "Videos recover by themselves after a dropped connection, and start again when you come back to them, instead of freezing or going black. A slow video shows its spinner while it loads.",
+          "Each account keeps its own backdrop. Switching accounts shows the one you chose for it.",
+          "The jump to top and refresh button is back in the app. It shows a dot when new posts are waiting.",
+          "The Following feed's scroll bar no longer jumps about as you scroll. It's hidden there."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
     "build": 9,
     "date": "2026-10-31",
     "summary": "A steadier Following feed, bigger notification counts and a fixed launch screen.",

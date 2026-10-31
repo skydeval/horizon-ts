@@ -1,0 +1,214 @@
+diff --git a/android/src/main/java/expo/modules/blueskyvideo/BlueskyVideoView.kt b/android/src/main/java/expo/modules/blueskyvideo/BlueskyVideoView.kt
+index 24a40a3..06cbb13 100644
+--- a/android/src/main/java/expo/modules/blueskyvideo/BlueskyVideoView.kt
++++ b/android/src/main/java/expo/modules/blueskyvideo/BlueskyVideoView.kt
+@@ -5,6 +5,8 @@ import android.content.Intent
+ import android.graphics.Color
+ import android.graphics.Rect
+ import android.net.Uri
++import android.os.Handler
++import android.os.Looper
+ import android.view.LayoutInflater
+ import android.view.SurfaceHolder
+ import android.view.SurfaceView
+@@ -43,6 +45,12 @@ class BlueskyVideoView(
+     private var isRecoveringFromBackground = false
+     private var savedPosition: Long = 0L
+ 
++    // A failed player is prepared again a few times before the error is reported, so a dropped
++    // segment fetch or a busy decoder does not leave a frozen frame.
++    private val retryHandler = Handler(Looper.getMainLooper())
++    private var retryRunnable: Runnable? = null
++    private var errorRetries = 0
++
+     var url: Uri? = null
+     var autoplay = false
+     var beginMuted = true
+@@ -213,6 +221,8 @@ class BlueskyVideoView(
+     private fun destroy(surfaceIsGoingAway: Boolean = false) {
+         val player = this.player ?: return
+ 
++        this.cancelRetry()
++        this.errorRetries = 0
+         this.isLoading = false
+         this.ignoreAutoplay = false
+ 
+@@ -310,11 +320,20 @@ class BlueskyVideoView(
+         if (this.isPlaying) {
+             this.pause()
+         } else {
+-            if (this.player == null) {
++            val player = this.player
++            if (player == null) {
+                 ViewManager.setActiveView(this)
+                 this.ignoreAutoplay = true
+                 this.setup()
+             } else {
++                // A player that failed for good needs preparing again before it can play.
++                if (player.playbackState == Player.STATE_IDLE && !this.isRecoveringFromBackground) {
++                    this.cancelRetry()
++                    this.errorRetries = 0
++                    this.ignoreAutoplay = true
++                    this.isLoading = true
++                    player.prepare()
++                }
+                 this.play()
+             }
+         }
+@@ -387,6 +406,52 @@ class BlueskyVideoView(
+         }
+     }
+ 
++    // Errors
++
++    private fun cancelRetry() {
++        this.retryRunnable?.let { this.retryHandler.removeCallbacks(it) }
++        this.retryRunnable = null
++    }
++
++    private fun onPlaybackError(
++        player: ExoPlayer,
++        error: PlaybackException,
++    ) {
++        if (this.player !== player) return
++        this.cancelRetry()
++        if (this.errorRetries < MAX_ERROR_RETRIES) {
++            val delay = RETRY_BASE_DELAY_MS shl this.errorRetries
++            this.errorRetries += 1
++            if (!this.isLoading) this.isLoading = true
++            val retry =
++                Runnable {
++                    this.retryRunnable = null
++                    // In the background the foreground recovery prepares it instead.
++                    if (this.player === player &&
++                        player.playbackState == Player.STATE_IDLE &&
++                        !ViewManager.isAppBackgrounded
++                    ) {
++                        player.prepare()
++                    }
++                }
++            this.retryRunnable = retry
++            this.retryHandler.postDelayed(retry, delay)
++            return
++        }
++        this.errorRetries = 0
++        if (this.isLoading) this.isLoading = false
++        this.pause()
++        this.onError(mapOf("error" to (error.message ?: error.errorCodeName)))
++    }
++
++    /** Active since the last pick, but its player went away (the view was detached). */
++    internal fun needsPlayer(): Boolean = this.autoplay && this.player == null && !this.isFullscreen
++
++    /** Tell JS this view is no longer active, without touching the player. */
++    internal fun onRemovedWhileActive() {
++        if (this.isViewActive) this.isViewActive = false
++    }
++
+     // Visibility
+ 
+     fun setIsCurrentlyActive(isActive: Boolean): Boolean {
+@@ -465,11 +530,20 @@ class BlueskyVideoView(
+                     object : Player.Listener {
+                         override fun onPlaybackStateChanged(playbackState: Int) {
+                             super.onPlaybackStateChanged(playbackState)
++                            val view = this@BlueskyVideoView
+                             when (playbackState) {
++                                // Rebuffering mid-play shows the spinner, not a frozen frame.
++                                ExoPlayer.STATE_BUFFERING -> {
++                                    if (!view.isRecoveringFromBackground && playWhenReady && !view.isLoading) {
++                                        view.isLoading = true
++                                    }
++                                }
+                                 ExoPlayer.STATE_READY -> {
+-                                    val view = this@BlueskyVideoView
+-                                    if (!view.isRecoveringFromBackground && (view.autoplay || view.ignoreAutoplay)) {
++                                    view.errorRetries = 0
++                                    if (!view.isRecoveringFromBackground && view.isLoading) {
+                                         view.isLoading = false
++                                    }
++                                    if (!view.isRecoveringFromBackground && (view.autoplay || view.ignoreAutoplay)) {
+                                         view.play()
+                                         if (!view.beginMuted) {
+                                             view.unmute()
+@@ -479,6 +553,10 @@ class BlueskyVideoView(
+                             }
+                         }
+ 
++                        override fun onPlayerError(error: PlaybackException) {
++                            this@BlueskyVideoView.onPlaybackError(this@apply, error)
++                        }
++
+                         override fun onIsPlayingChanged(isPlaying: Boolean) {
+                             val view = this@BlueskyVideoView
+                             if (view.isPlaying != isPlaying) {
+@@ -527,4 +605,9 @@ class BlueskyVideoView(
+         super.requestLayout()
+         post(mLayoutRunnable)
+     }
++
++    companion object {
++        private const val MAX_ERROR_RETRIES = 3
++        private const val RETRY_BASE_DELAY_MS = 1000L
++    }
+ }
+diff --git a/android/src/main/java/expo/modules/blueskyvideo/ViewManager.kt b/android/src/main/java/expo/modules/blueskyvideo/ViewManager.kt
+index 9deebe9..6a66db2 100644
+--- a/android/src/main/java/expo/modules/blueskyvideo/ViewManager.kt
++++ b/android/src/main/java/expo/modules/blueskyvideo/ViewManager.kt
+@@ -26,11 +26,30 @@ class ViewManager {
+         private var pendingViewPosition: Rect? = null
+         private val checkPendingView = Runnable { this.activatePendingViewIfSettled() }
+ 
++        // A view attached or detached while nothing plays is re-picked once layout has settled,
++        // so a video that comes back (a covered screen returning, a clipped row) starts again
++        // without waiting for the next scroll.
++        private const val REPICK_DELAY_MS = 150L
++        private val repick =
++            Runnable {
++                if (!isAppBackgrounded && currentlyActiveView == null) {
++                    this.updateActiveView()
++                }
++            }
++
++        private fun scheduleRepick() {
++            handler.removeCallbacks(repick)
++            handler.postDelayed(repick, REPICK_DELAY_MS)
++        }
++
+         fun addView(view: BlueskyVideoView) {
+             views.add(view)
+             if (prevCount == 0) {
+                 this.updateActiveView()
+             }
++            if (currentlyActiveView == null) {
++                this.scheduleRepick()
++            }
+             prevCount = views.count()
+         }
+ 
+@@ -39,6 +58,13 @@ class ViewManager {
+             if (pendingView == view) {
+                 this.cancelPendingView()
+             }
++            // A detached view loses its player; forget it, or it stays "active" with none and
++            // nothing else can start.
++            if (currentlyActiveView == view && !view.isFullscreen) {
++                currentlyActiveView = null
++                view.onRemovedWhileActive()
++                this.scheduleRepick()
++            }
+             prevCount = views.count()
+         }
+ 
+@@ -80,6 +106,10 @@ class ViewManager {
+ 
+             if (activeView == currentlyActiveView) {
+                 this.cancelPendingView()
++                // Still the pick, but its player went away: start it again.
++                if (activeView != null && activeView.needsPlayer()) {
++                    activeView.setIsCurrentlyActive(true)
++                }
+                 return
+             }
+ 

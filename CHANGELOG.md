@@ -70,6 +70,13 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **Coming back to Following from a post no longer shows a black feed** or
   jumps away from your place. New posts wait until you're back.
 - **The Android launch screen shows the whole icon,** sky included.
+- **Android videos recover by themselves** after a dropped connection, and
+  start again when you come back to them, instead of freezing or going black.
+- **Each account in the Android app keeps its own backdrop.**
+- **The jump to top and refresh button is back** in the Android app and on
+  narrow screens.
+- **The Android Following feed's scroll bar no longer jumps about.** It's
+  hidden there.
 - **Only your own country's legal labelers apply on web.**
 - **Signing in with a handle works when it's typed or pasted loosely.**
 - **Notifications on web:** pills no longer go blank or slide under the
