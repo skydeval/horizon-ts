@@ -38,32 +38,36 @@ export function AppearanceSettingsScreen({}: Props) {
 
   const {colorMode, darkTheme} = useThemePrefs()
   const {setColorMode, setDarkTheme} = useSetThemePrefs()
-  // HORIZON: the theme settings follow the account (change list 2)
+  /*
+   * HORIZON: the theme settings follow the account (change list 2). Each
+   * save passes the value before the change, which the app holds for the
+   * other accounts on the device.
+   */
   const saveThemePref = useSaveThemePref()
 
   const onChangeAppearance = useCallback(
     (value: 'light' | 'system' | 'dark') => {
       setColorMode(value)
       // HORIZON: saved to the account (change list 2)
-      saveThemePref('colorMode', value)
+      saveThemePref('colorMode', value, colorMode)
     },
-    [setColorMode, saveThemePref],
+    [setColorMode, saveThemePref, colorMode],
   )
 
   const onChangeDarkTheme = useCallback(
     (value: 'dim' | 'dark') => {
       setDarkTheme(value)
       // HORIZON: saved to the account (change list 2)
-      saveThemePref('darkTheme', value)
+      saveThemePref('darkTheme', value, darkTheme ?? 'dim')
     },
-    [setDarkTheme, saveThemePref],
+    [setDarkTheme, saveThemePref, darkTheme],
   )
 
   const onChangeFontFamily = useCallback(
     (value: 'system' | 'theme') => {
       fonts.setFontFamily(value)
       // HORIZON: saved to the account (change list 2)
-      saveThemePref('font', value)
+      saveThemePref('font', value, fonts.family)
     },
     [fonts, saveThemePref],
   )
@@ -72,7 +76,11 @@ export function AppearanceSettingsScreen({}: Props) {
     (value: Alf['fonts']['scale']) => {
       fonts.setFontScale(value)
       // HORIZON: saved to the account (change list 2)
-      saveThemePref('fontSize', fontSizeOfScale(value))
+      saveThemePref(
+        'fontSize',
+        fontSizeOfScale(value),
+        fontSizeOfScale(fonts.scale),
+      )
     },
     [fonts, saveThemePref],
   )

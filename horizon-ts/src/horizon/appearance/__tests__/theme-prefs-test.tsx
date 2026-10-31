@@ -17,8 +17,11 @@ import {
 } from '#/horizon/appearance/theme-prefs'
 import {ThemePrefsSync} from '#/horizon/appearance/ThemePrefsSync'
 
+let mockSync = true
 jest.mock('#/horizon/switches', () => ({
-  APPEARANCE_SYNC: true,
+  get APPEARANCE_SYNC() {
+    return mockSync
+  },
   BACKDROPS: true,
 }))
 
@@ -167,6 +170,34 @@ describe('saving a theme setting', () => {
     expect(after.accounts[A].pending!.fields).toEqual(['colorMode', 'backdrop'])
     expect(after.accounts[A].pending!.appearance.colorMode).toBe('dark')
     expect('colorMode' in after.device).toBe(false)
+  })
+
+  it('without sync (the app): saved per account, the others hold theirs', () => {
+    mockSync = false
+    try {
+      seed({accounts: {[B]: emptyAccountCopy()}})
+      store.saveThemePref(A, 'colorMode', 'dark', 'system')
+      store.saveThemePref(A, 'font', 'system', 'theme')
+      const state = store.getAppearanceState()
+      expect(store.accountThemePrefs(state, A)).toEqual({
+        colorMode: 'dark',
+        font: 'system',
+      })
+      // B never chose, so it keeps what the device showed before.
+      expect(store.accountThemePrefs(state, B)).toEqual({
+        colorMode: 'system',
+        font: 'theme',
+      })
+      expect('colorMode' in state.device.device).toBe(false)
+      expect(scheduled).toEqual([])
+      // B's own choice is its own, and A keeps its value.
+      store.saveThemePref(B, 'colorMode', 'light', 'dark')
+      const after = store.getAppearanceState()
+      expect(store.accountThemePrefs(after, B).colorMode).toBe('light')
+      expect(store.accountThemePrefs(after, A).colorMode).toBe('dark')
+    } finally {
+      mockSync = true
+    }
   })
 
   it('signed out: nothing is saved', () => {

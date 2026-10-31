@@ -15,7 +15,11 @@ import {AppState} from 'react-native'
 
 import {useMaybePdsClient, useSession} from '#/state/session'
 import {IS_WEB} from '#/env'
-import {deleteAccountCopy, getAppearanceState} from '#/horizon/appearance/store'
+import {
+  deleteAccountCopy,
+  ensureAccountCopies,
+  getAppearanceState,
+} from '#/horizon/appearance/store'
 import {
   isStale,
   refresh,
@@ -66,6 +70,8 @@ export function AppearanceSync() {
     for (const copyDid of Object.keys(getAppearanceState().device.accounts)) {
       if (!known.has(copyDid)) deleteAccountCopy(copyDid)
     }
+    // HORIZON: in the app, every account here gets a copy of its own.
+    ensureAccountCopies([...known])
   }, [accounts])
 
   // The account's theme settings (change list 2, item 11).

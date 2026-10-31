@@ -229,6 +229,7 @@ export function editAppearance(
   did: string | undefined,
   fields: AppearanceField[],
   change: (base: Appearance) => Appearance,
+  held?: ThemePrefs,
 ) {
   const current = load()
   const base = effectiveAppearance({...current, preview: null}, did)
@@ -255,15 +256,18 @@ export function editAppearance(
     })
     syncHooks?.scheduleFlush(did)
   } else if (did) {
-    // HORIZON: no sync here, so the account keeps its own copy (see `local`).
+    /*
+     * HORIZON: no sync here, so the account keeps its own copy (see
+     * `local`), theme settings included; the device's own stays without
+     * them, as before.
+     */
     const copy = device.accounts[did] ?? emptyCopy()
-    const local = withoutThemePrefs(next)
     setDeviceValue({
       ...device,
-      device: local,
+      device: withoutThemePrefs(next),
       accounts: {
-        ...holdOtherAccounts(device, did),
-        [did]: {...copy, local},
+        ...holdOtherAccounts(device, did, held),
+        [did]: {...copy, local: next},
       },
     })
   } else {
@@ -273,19 +277,49 @@ export function editAppearance(
 
 /*
  * HORIZON: on a device without sync, an account with no copy of its own
- * shows the device's appearance. Before one account's edit changes that,
- * every other account here keeps what it showed.
+ * shows the device's appearance, and a theme setting it never saved shows
+ * whatever the device has. Before one account's edit changes either, every
+ * other account here keeps what it showed: the device's appearance, and
+ * `held`, the theme settings as they were before the edit.
  */
 function holdOtherAccounts(
   device: DeviceAppearanceV1,
   did: string,
+  held: ThemePrefs = {},
 ): Record<string, AccountCopy> {
   const accounts: Record<string, AccountCopy> = {}
   for (const [other, copy] of Object.entries(device.accounts)) {
+    if (other === did) {
+      accounts[other] = copy
+      continue
+    }
+    const local = copy.local ?? device.device
+    const missing: ThemePrefs = {}
+    for (const field of THEME_PREF_FIELDS) {
+      if (local[field] === undefined && held[field] !== undefined) {
+        Object.assign(missing, {[field]: held[field]})
+      }
+    }
     accounts[other] =
-      other === did || copy.local ? copy : {...copy, local: device.device}
+      copy.local && Object.keys(missing).length === 0
+        ? copy
+        : {...copy, local: {...local, ...missing}}
   }
   return accounts
+}
+
+/**
+ * HORIZON: on a device without sync, give every signed-in account a copy,
+ * so an edit by one can hold what the others show (`holdOtherAccounts`).
+ */
+export function ensureAccountCopies(dids: readonly string[]) {
+  if (appearanceSyncs() || !BACKDROPS) return
+  const device = load().device
+  const missing = dids.filter(did => !(did in device.accounts))
+  if (missing.length === 0) return
+  const accounts = {...device.accounts}
+  for (const did of missing) accounts[did] = emptyCopy()
+  setDeviceValue({...device, accounts})
 }
 
 /*
@@ -304,9 +338,12 @@ export function accountThemePrefs(
   did: string | undefined,
 ): ThemePrefs {
   const {device} = current
-  if (!did || !appearanceSyncs() || !BACKDROPS) return {}
+  if (!did || !BACKDROPS) return {}
   const copy = device.accounts[did]
-  const source = copy?.pending?.appearance ?? copy?.record
+  // HORIZON: without sync (the app), the account's copy on this device.
+  const source = appearanceSyncs()
+    ? (copy?.pending?.appearance ?? copy?.record)
+    : copy?.local
   if (!source) return {}
   const out: ThemePrefs = {}
   for (const field of THEME_PREF_FIELDS) {
@@ -318,15 +355,23 @@ export function accountThemePrefs(
 
 /**
  * Save one theme setting to `did`'s record, when signed in; nothing
- * otherwise (the stock setter has already set the device).
+ * otherwise (the stock setter has already set the device). Without sync
+ * (the app) it goes to the account's copy on this device, and `previous`,
+ * the device's value before the change, is held for the other accounts
+ * that never saved one.
  */
 export function saveThemePref<K extends ThemePrefField>(
   did: string | undefined,
   field: K,
   value: ThemePrefs[K],
+  previous?: ThemePrefs[K],
 ) {
-  if (!did || !appearanceSyncs() || !BACKDROPS) return
-  editAppearance(did, [field], base => ({...base, [field]: value}))
+  if (!did || !BACKDROPS) return
+  const held: ThemePrefs | undefined =
+    !appearanceSyncs() && previous !== undefined
+      ? {[field]: previous}
+      : undefined
+  editAppearance(did, [field], base => ({...base, [field]: value}), held)
 }
 
 /** Select a registry backdrop, `none` or `custom`. */
@@ -436,8 +481,11 @@ export function setBackdropSoftness(theme: SoftTheme, value: number) {
 export function useSaveThemePref() {
   const {currentAccount} = useSession()
   const did = currentAccount?.did
-  return <K extends ThemePrefField>(field: K, value: ThemePrefs[K]) =>
-    saveThemePref(did, field, value)
+  return <K extends ThemePrefField>(
+    field: K,
+    value: ThemePrefs[K],
+    previous?: ThemePrefs[K],
+  ) => saveThemePref(did, field, value, previous)
 }
 
 /** Film grain over the backdrop (change list 2, item 6). Device only. */
