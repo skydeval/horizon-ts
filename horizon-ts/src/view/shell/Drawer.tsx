@@ -507,17 +507,21 @@ let DrawerFooter = ({
           ),
         },
       ]}>
-      <Button
-        label={l`Send feedback`}
-        size="small"
-        variant="solid"
-        color="secondary"
-        onPress={onPressFeedback}>
-        <ButtonIcon icon={MessageIcon} position="left" />
-        <ButtonText>
-          <Trans>Feedback</Trans>
-        </ButtonText>
-      </Button>
+      {/* HORIZON: no Feedback in the app until Horizon has its own (start) */}
+      {!IS_NATIVE && (
+        <Button
+          label={l`Send feedback`}
+          size="small"
+          variant="solid"
+          color="secondary"
+          onPress={onPressFeedback}>
+          <ButtonIcon icon={MessageIcon} position="left" />
+          <ButtonText>
+            <Trans>Feedback</Trans>
+          </ButtonText>
+        </Button>
+      )}
+      {/* HORIZON: no Feedback in the app until Horizon has its own (end) */}
       {/* HORIZON: no Help in the app until Horizon has its own (start) */}
       {!IS_NATIVE && (
         <Button
