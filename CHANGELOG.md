@@ -58,6 +58,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
   profiles, no "Liked by …" row under posts (on trial), and no badge on reply,
   quote and mention notification avatars.
 - **"AppViews"** is written as one word.
+- **Notification badges count to 999** before showing 999+, instead of
+  stopping at 30+.
 - **Merged Bluesky's social-app up to 1.136.0,** including profile links,
   which never preview payment or support links.
 
@@ -65,6 +67,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 - **Videos in the Following feed no longer go black partway through,** and
   the feed no longer flashes and reloads while you scroll.
+- **Coming back to Following from a post no longer shows a black feed** or
+  jumps away from your place. New posts wait until you're back.
+- **The Android launch screen shows the whole icon,** sky included.
 - **Only your own country's legal labelers apply on web.**
 - **Signing in with a handle works when it's typed or pasted loosely.**
 - **Notifications on web:** pills no longer go blank or slide under the

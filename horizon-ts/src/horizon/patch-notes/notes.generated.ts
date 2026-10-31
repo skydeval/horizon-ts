@@ -8,6 +8,27 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
+    "build": 9,
+    "date": "2026-10-31",
+    "summary": "A steadier Following feed, bigger notification counts and a fixed launch screen.",
+    "sections": [
+      {
+        "kind": "horizon",
+        "items": [
+          "Notification badges count up to 999 before showing 999+, instead of stopping at 30+."
+        ]
+      },
+      {
+        "kind": "fixes",
+        "items": [
+          "Coming back to Following from a post no longer shows a black feed or jumps away from where you were. New posts wait until you're back, and the Home dot tells you they're there.",
+          "The Android launch screen shows Horizon's whole icon, sky included."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
     "build": 8,
     "date": "2026-10-30",
     "summary": "Notifications on Android, Horizon's own look, the moderation inbox, and the latest from Bluesky's app.",
