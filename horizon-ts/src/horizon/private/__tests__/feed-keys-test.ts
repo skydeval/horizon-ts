@@ -22,7 +22,12 @@ import {
   clearCurrentClients,
   publishCurrentClients,
 } from '#/horizon/routing/current-clients'
-import {privateTabDescriptor, privateTabDid, withPrivateKey} from '../feed/keys'
+import {
+  privateKeyDid,
+  privateTabDescriptor,
+  privateTabDid,
+  withPrivateKey,
+} from '../feed/keys'
 import {DID} from './fixtures'
 
 function publish() {
@@ -75,10 +80,20 @@ describe('withPrivateKey', () => {
     ])
   })
 
-  it('returns the stock array for a non-member', () => {
+  it('keeps the same key whatever the membership, so a change never re-keys the feed', () => {
     publish()
-    mockMembership = 'not-member'
-    expect(withPrivateKey('following', stock)).toBe(stock)
+    const asMember = withPrivateKey('following', stock)
+    for (const state of ['not-member', 'indexing', 'unknown']) {
+      mockMembership = state
+      expect(withPrivateKey('following', stock)).toEqual(asMember)
+    }
+  })
+
+  it('privateKeyDid reads the account back, and nothing from a stock key', () => {
+    publish()
+    expect(privateKeyDid(withPrivateKey('following', stock))).toBe(DID)
+    expect(privateKeyDid(stock)).toBeUndefined()
+    expect(privateKeyDid([])).toBeUndefined()
   })
 
   it('returns the stock array with no published account', () => {

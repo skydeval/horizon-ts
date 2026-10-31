@@ -1677,7 +1677,8 @@ describe('usePostFeedPrepend', () => {
 })
 
 describe('staging new posts on Home Following', () => {
-  const KEY = RQKEY('following')
+  // Read when used: the key names the account published in a test
+  const key = () => RQKEY('following')
   const SECOND = 1e3
   const MINUTE = 60 * SECOND
   /** How long the fake timeline takes to answer. */
@@ -1797,7 +1798,7 @@ describe('staging new posts on Home Following', () => {
     data = homeData(),
   }: {isActive?: boolean; data?: PostFeedData} = {}) {
     const queryClient = createQueryClient()
-    queryClient.setQueryData(KEY, data)
+    queryClient.setQueryData(key(), data)
     const onHasNew = jest.fn()
     const scrollToTop = jest.fn()
     const latest = {} as {
@@ -1921,7 +1922,7 @@ describe('staging new posts on Home Following', () => {
       },
     }
     act(() => first!.onLayout())
-    const cached = () => queryClient.getQueryData<PostFeedData>(KEY)!
+    const cached = () => queryClient.getQueryData<PostFeedData>(key())!
     const setActive = (isActive: boolean) =>
       view.rerender(
         <QueryClientProvider client={queryClient}>

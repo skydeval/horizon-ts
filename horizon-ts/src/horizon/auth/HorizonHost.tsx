@@ -2,7 +2,8 @@
  * One mount point for Horizon's app-wide pieces: the current-clients record
  * (first, so it is published before anything else runs), the in-place
  * sign-in window,
- * the password dialog, the membership probe and its notice, the write
+ * the password dialog, the membership probe and its notice, the feeds kept
+ * in step with membership in place, the write
  * routes' PDS cross-check, the private outbox and the direct `getPosts`
  * token's prefetch, the Thread Lens `getThread` token's prefetch and the
  * reader's mutes on the device (for a lens member), the identity
@@ -20,6 +21,7 @@
  */
 
 import {useEffect} from 'react'
+import {useQueryClient} from '@tanstack/react-query'
 
 import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
@@ -30,6 +32,7 @@ import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
 import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {LeftoverAudienceCleanup} from '#/horizon/private/audiences/LeftoverAudienceCleanup'
+import {startFeedMembershipSync} from '#/horizon/private/feed/membership-sync'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {RefractHost} from '#/horizon/refract/RefractHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
@@ -77,6 +80,16 @@ function AppViewChangeReload() {
 }
 
 /**
+ * Keeps the feeds that can carry private posts in step with membership, in
+ * place (`private/feed/membership-sync.ts`).
+ */
+function FeedMembershipSync() {
+  const queryClient = useQueryClient()
+  useEffect(() => startFeedMembershipSync(queryClient), [queryClient])
+  return null
+}
+
+/**
  * Horizon's app-wide host. See the file header.
  */
 export function HorizonHost() {
@@ -90,6 +103,7 @@ export function HorizonHost() {
       <AppViewChangeReload />
       <MembershipProbe />
       <MembershipNotice />
+      <FeedMembershipSync />
       <WriteRouteResolver />
       <DirectPrismPrefetch />
       <RefractHost />

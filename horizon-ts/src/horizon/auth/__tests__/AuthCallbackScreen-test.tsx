@@ -63,10 +63,19 @@ const mockLoginWithOAuth = jest.fn<(session: unknown) => Promise<void>>()
 jest.mock('#/horizon/session/HorizonSessionProvider', () => ({
   useHorizonSessionApi: () => ({loginWithOAuth: mockLoginWithOAuth}),
 }))
-const mockNavigation = {replace: jest.fn(), dispatch: jest.fn()}
+const mockNavigation = {
+  replace: jest.fn(),
+  dispatch: jest.fn(),
+  getState: () => undefined,
+}
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNavigation,
   StackActions: {replace: (name: string, params: unknown) => ({name, params})},
+}))
+jest.mock('#/lib/routes/navigation', () => ({
+  getHomeNavigationAction: (_state: unknown, mode: string) => ({
+    home: mode,
+  }),
 }))
 const mockResume = jest.fn<(account: unknown) => Promise<void>>()
 jest.mock('#/state/session', () => ({
@@ -163,7 +172,7 @@ describe('AuthCallbackScreen', () => {
     await renderScreen()
     expect(mockLoginWithOAuth).toHaveBeenCalledTimes(1)
     expect(mockInitCallback).toHaveBeenCalledTimes(1)
-    expect(mockNavigation.replace).toHaveBeenCalledWith('Home')
+    expect(mockNavigation.dispatch).toHaveBeenCalledWith({home: 'replace'})
   })
 
   it('ignores the popup hand-off', async () => {

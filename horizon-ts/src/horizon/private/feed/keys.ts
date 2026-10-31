@@ -1,13 +1,18 @@
 /*
- * Membership joins the feed query keys (O-9). A member's Following, Posts and
- * Replies tabs (merged with private posts, 6.3.1) and Private tab hold
- * private posts;
- * a non-member's do not. Appending the member's DID to those keys means the
- * two never share a cache entry, so a membership change starts a fresh query
- * instead of mixing pages. Cache-wide and prefix filters built from the stock
- * key still reach the longer one.
+ * The signed-in account joins the keys of the feeds that can carry private
+ * posts (O-9): Following, the Posts and Replies tabs (merged with private
+ * posts, 6.3.1) and the Private tab. Cache-wide and prefix filters built
+ * from the stock key still reach the longer one.
  *
- * Membership is read from the published current-clients record (see
+ * The key names the account, never its membership. A key that changed with
+ * membership started a fresh, empty query whenever membership flickered (a
+ * read answering NotEnrolled, a re-check): the whole feed blanked and
+ * remounted, which flashed the screen and killed every video playing in it.
+ * A membership change now updates the same query in place instead
+ * (`membership-sync.ts`): private posts leave the cached pages at once when
+ * membership is lost, and the pages are fetched again either way.
+ *
+ * The account is read from the published current-clients record (see
  * `routing/current-clients.ts`) so this also works outside render. During the
  * render after an account change in which the record is stale the key may
  * name the previous account; `usePrivateFeedSource` returns no source in that
@@ -15,7 +20,6 @@
  */
 
 import {getCurrentDid} from '#/horizon/routing/current-clients'
-import {isPrivateMember} from '#/horizon/routing/membership'
 import {PRIVATE_READING} from '#/horizon/switches'
 
 /**
@@ -44,7 +48,8 @@ export function privateTabDid(feedDesc: string): string | undefined {
   return did || undefined
 }
 
-function carriesPrivatePosts(feedDesc: string): boolean {
+/** Whether a feed descriptor names a feed that can carry private posts. */
+export function carriesPrivatePosts(feedDesc: string): boolean {
   return (
     feedDesc === 'following' ||
     (feedDesc.startsWith('author|') &&
@@ -55,9 +60,10 @@ function carriesPrivatePosts(feedDesc: string): boolean {
 }
 
 /**
- * The stock feed key, with `{horizonPrivate: <did>}` appended for a member's
- * feeds that carry private posts. Unchanged otherwise, and with
- * `PRIVATE_READING` off.
+ * The stock feed key, with `{horizonPrivate: <did>}` appended for the
+ * signed-in account's feeds that can carry private posts, member or not.
+ * Unchanged when signed out, for other feeds, and with `PRIVATE_READING`
+ * off.
  */
 export function withPrivateKey<K extends unknown[]>(
   feedDesc: string,
@@ -65,6 +71,14 @@ export function withPrivateKey<K extends unknown[]>(
 ): K | [...K, {horizonPrivate: string}] {
   if (!PRIVATE_READING || !carriesPrivatePosts(feedDesc)) return key
   const did = getCurrentDid()
-  if (!isPrivateMember(did)) return key
+  if (!did) return key
   return [...key, {horizonPrivate: did}]
+}
+
+/** The account a feed key from `withPrivateKey` names, or `undefined`. */
+export function privateKeyDid(queryKey: readonly unknown[]): string | undefined {
+  const last = queryKey[queryKey.length - 1]
+  if (typeof last !== 'object' || last === null) return undefined
+  const did = (last as {horizonPrivate?: unknown}).horizonPrivate
+  return typeof did === 'string' ? did : undefined
 }
