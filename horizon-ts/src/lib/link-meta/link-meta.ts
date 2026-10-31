@@ -2,7 +2,13 @@ import {LINK_META_PROXY} from '#/lib/constants'
 import {getGiphyMetaUri} from '#/lib/strings/embed-player'
 import {parseStarterPackUri} from '#/lib/strings/starter-pack'
 import {type app} from '#/lexicons'
-import {isBskyAppUrl} from '../strings/url-helpers'
+import {
+  isBskyAppUrl,
+  isBskyCustomFeedUrl,
+  isBskyListUrl,
+  isBskyPostUrl,
+  isHorizonAppUrl,
+} from '../strings/url-helpers'
 
 export enum LikelyType {
   HTML,
@@ -46,7 +52,15 @@ export async function getLinkMeta(
   url: string,
   timeout = 15e3,
 ): Promise<LinkMeta> {
-  if (isBskyAppUrl(url) && !parseStarterPackUri(url)) {
+  if (
+    isBskyAppUrl(url) &&
+    !parseStarterPackUri(url) &&
+    // HORIZON: Horizon's other pages (download, patch notes) keep their cards
+    (!isHorizonAppUrl(url) ||
+      isBskyPostUrl(url) ||
+      isBskyCustomFeedUrl(url) ||
+      isBskyListUrl(url))
+  ) {
     return {
       likelyType: LikelyType.AtpData,
       url,

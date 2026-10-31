@@ -141,8 +141,22 @@ export function isBlueskyHostedUrl(url: string): boolean {
   }
 }
 
+/*
+ * HORIZON: Horizon's own links (nearhorizon.app, or the preview's host)
+ * count as app links too, so a pasted Horizon post link quotes the post
+ * instead of making a link card, and Horizon links open in the app.
+ */
+const HORIZON_APP_PREFIXES = [
+  ...new Set(['https://nearhorizon.app/', `${SHARE_ORIGIN}/`]),
+]
+
+/** HORIZON: a link on one of Horizon's own hosts. */
+export function isHorizonAppUrl(url: string): boolean {
+  return HORIZON_APP_PREFIXES.some(prefix => url.startsWith(prefix))
+}
+
 export function isBskyAppUrl(url: string): boolean {
-  return url.startsWith('https://bsky.app/')
+  return url.startsWith('https://bsky.app/') || isHorizonAppUrl(url)
 }
 
 export function isRelativeUrl(url: string): boolean {
