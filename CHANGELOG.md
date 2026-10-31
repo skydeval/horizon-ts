@@ -72,7 +72,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **The Android launch screen shows the whole icon,** sky included.
 - **Android videos recover by themselves** after a dropped connection, and
   start again when you come back to them, instead of freezing or going black.
-- **Each account in the Android app keeps its own backdrop.**
+- **Each account in the Android app keeps its own backdrop** and theme
+  settings: colour mode, dark theme, font and font size.
 - **The jump to top and refresh button is back** in the Android app and on
   narrow screens.
 - **The Android Following feed's scroll bar no longer jumps about.** It's
