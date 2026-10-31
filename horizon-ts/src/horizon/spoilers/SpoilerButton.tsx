@@ -1,7 +1,7 @@
 /*
- * The composer's spoiler button (spoilers design, 7.1), web only: it asks the
- * active post's editor to wrap the selection in `||` markers. It shows a
- * hover hint (change list 2).
+ * The composer's spoiler button (spoilers design, 7.1): it asks the active
+ * post's editor to wrap the selection in `||` markers, on web and in the
+ * app. It shows a hover hint on web (change list 2).
  */
 
 import {useLingui} from '@lingui/react/macro'
@@ -10,14 +10,13 @@ import {textInputWebEmitter} from '#/view/com/composer/text-input/textInputWebEm
 import {atoms as a} from '#/alf'
 import {Button} from '#/components/Button'
 import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlashIcon} from '#/components/icons/EyeSlash'
-import {IS_WEB} from '#/env'
 import {ToolbarHint} from '#/horizon/composer-hints/ToolbarHint'
 import {SPOILER_TAGS} from '#/horizon/switches'
-import {SPOILER_WRAP_EVENT} from './editor'
+import {SPOILER_WRAP_EVENT} from './spoiler-action'
 
 export function SpoilerButton() {
   const {t: l} = useLingui()
-  if (!SPOILER_TAGS || !IS_WEB) return null
+  if (!SPOILER_TAGS) return null
   return (
     <ToolbarHint
       label={l({

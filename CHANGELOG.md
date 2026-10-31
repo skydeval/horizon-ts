@@ -18,6 +18,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
   decisions about your account, in Settings → Moderation.
 - **Saved images keep the same file name** every time, and Android saves
   them to a Horizon album.
+- **Spoiler and content warning buttons in the Android app's composer,**
+  as on the web.
 - **Push notifications in the Android app,** from Horizon's own push
   service. It only tells your phone to check; the app fetches your
   notifications with your own sign-in, so your push settings, mutes and
@@ -61,6 +63,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Videos in the Following feed no longer go black partway through,** and
+  the feed no longer flashes and reloads while you scroll.
 - **Only your own country's legal labelers apply on web.**
 - **Signing in with a handle works when it's typed or pasted loosely.**
 - **Notifications on web:** pills no longer go blank or slide under the

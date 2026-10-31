@@ -8,7 +8,7 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
-    "build": 6,
+    "build": 7,
     "date": "2026-10-30",
     "summary": "The moderation inbox, and the latest from Bluesky's app.",
     "sections": [
@@ -18,6 +18,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
           "Replies and mentions on private posts now notify you within seconds.",
           "Saving an image gives it the same file name every time, so saving it twice won't make two copies under different names.",
           "On Android, saved images go to a Horizon album.",
+          "The Android app's composer has the spoiler and content warning buttons, as on the web, for public and private posts.",
           "Patch notes, at nearhorizon.app/patch-notes and in Settings, About."
         ]
       },

@@ -24,7 +24,6 @@ import * as Toggle from '#/components/forms/Toggle'
 import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlashIcon} from '#/components/icons/EyeSlash'
 import {TriangleExclamation_Stroke2_Corner2_Rounded as WarningIcon} from '#/components/icons/TriangleExclamation'
 import {Text} from '#/components/Typography'
-import {IS_WEB} from '#/env'
 import {ToolbarHint} from '#/horizon/composer-hints/ToolbarHint'
 import {convertAltSpoilers} from '#/horizon/spoilers/alias'
 import {
@@ -202,12 +201,12 @@ export function ComposerVideoSpoilerBadge() {
 }
 
 /**
- * The footer's CW toggle for the active post, web only (MS-11).
+ * The footer's CW toggle for the active post (MS-11), on web and in the app.
  */
 export function ContentWarningButton({postId}: {postId: string}) {
   const {t: l} = useLingui()
   const snap = useComposeSpoilers()
-  if (!contentWarningsOn() || !IS_WEB) return null
+  if (!contentWarningsOn()) return null
   const on = contentWarningOf(snap, postId) !== undefined
   return (
     // A hover hint (change list 2).

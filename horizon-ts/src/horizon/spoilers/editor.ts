@@ -10,41 +10,13 @@ import {type Editor} from '@tiptap/react'
 
 import {textInputWebEmitter} from '#/view/com/composer/text-input/textInputWebEmitter'
 import {SPOILER_TAGS} from '#/horizon/switches'
+import {SPOILER_WRAP_EVENT, spoilerEditAction} from './spoiler-action'
 
-/**
- * The editor event the spoiler button emits, as the emoji picker emits its
- * own.
- */
-export const SPOILER_WRAP_EVENT = 'horizon-spoiler-wrap'
-
-export type SpoilerEditAction = 'insert' | 'wrap' | 'unwrap' | 'unwrapInner'
-
-/**
- * What the button does for a selection, from the two characters on each
- * side of it and the selected text.
- */
-export function spoilerEditAction({
-  empty,
-  before,
-  after,
-  selected,
-}: {
-  empty: boolean
-  before: string
-  after: string
-  selected: string
-}): SpoilerEditAction {
-  if (empty) return 'insert'
-  if (before === '||' && after === '||') return 'unwrap'
-  if (
-    selected.length > 4 &&
-    selected.startsWith('||') &&
-    selected.endsWith('||')
-  ) {
-    return 'unwrapInner'
-  }
-  return 'wrap'
-}
+export {
+  SPOILER_WRAP_EVENT,
+  type SpoilerEditAction,
+  spoilerEditAction,
+} from './spoiler-action'
 
 /**
  * Apply the button to the editor's selection, as one undo step.

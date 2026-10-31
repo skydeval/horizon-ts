@@ -27,6 +27,8 @@ import {
 import {atoms as a, useAlf} from '#/alf'
 import {normalizeTextStyles} from '#/alf/typography'
 import {IS_ANDROID} from '#/env'
+// HORIZON: the spoiler button on the native editor
+import {useNativeSpoilerWrap} from '#/horizon/spoilers/spoiler-text'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {Autocomplete} from './mobile/Autocomplete'
@@ -46,6 +48,8 @@ export function TextInput({
   onPhotoPasted,
   onNewLink,
   onError,
+  // HORIZON: the spoiler button acts on the active post's editor
+  isActive,
   ...props
 }: TextInputProps) {
   const {t: l} = useLingui()
@@ -148,6 +152,20 @@ export function TextInput({
     },
     [textInputSelection],
   )
+
+  // HORIZON: the spoiler button wraps the selection in spoiler markers
+  useNativeSpoilerWrap({
+    isActive,
+    getText: () => richtext.text,
+    getSelection: () => textInputSelection.current,
+    setText: text => {
+      void onChangeText(text)
+    },
+    setSelection: selection => {
+      textInputSelection.current = selection
+      textInput.current?.setSelection(selection.start, selection.end)
+    },
+  })
 
   const onSelectAutocompleteItem = useCallback(
     (item: string) => {
