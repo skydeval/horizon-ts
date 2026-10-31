@@ -27,15 +27,44 @@ import {isPrivatePostUri} from '#/horizon/private/uri'
 export {PRIVATE_UNREAD_OWN_ROOT, PRIVATE_UNREAD_ROOT}
 
 /**
- * The most private-only unread notifications counted; at this many the
- * badge shows "30+".
+ * The highest unread count a badge shows exactly; above it the badge shows
+ * "999+".
  */
-export const PRIVATE_ONLY_UNREAD_CAP = 30
+export const UNREAD_BADGE_CAP = 999
 
 /**
- * How many pages the private-only count reads at most.
+ * A badge's text for `count` unread: `''` for none, the number up to
+ * {@link UNREAD_BADGE_CAP}, then "999+".
  */
-export const PRIVATE_ONLY_UNREAD_PAGES = 3
+export function formatUnreadCount(count: number): string {
+  if (!(count > 0)) return ''
+  if (count > UNREAD_BADGE_CAP) return `${UNREAD_BADGE_CAP}+`
+  return String(Math.floor(count))
+}
+
+/**
+ * The count a badge's text stands for; "999+" reads as one more than the cap,
+ * so adding to it stays above the cap.
+ */
+export function parseUnreadCount(value: string): number {
+  if (value === '') return 0
+  const parsed = parseInt(value, 10)
+  if (Number.isNaN(parsed)) return 0
+  return value.endsWith('+') ? parsed + 1 : parsed
+}
+
+/**
+ * The most private-only unread notifications counted: one past the badge
+ * cap, enough to show "999+".
+ */
+export const PRIVATE_ONLY_UNREAD_CAP = UNREAD_BADGE_CAP + 1
+
+/**
+ * How many pages the private-only count reads at most: enough for the cap.
+ * It stops at the first read notification, so it reads this far only when
+ * that many are unread.
+ */
+export const PRIVATE_ONLY_UNREAD_PAGES = Math.ceil(PRIVATE_ONLY_UNREAD_CAP / 50)
 
 /**
  * The reader's unread private notifications that the public count cannot
@@ -87,25 +116,15 @@ function authorDid(item: Record<string, unknown>): string {
   return typeof author?.did === 'string' ? author.did : ''
 }
 
-function parseCount(value: string): number {
-  if (value === '') return 0
-  if (value === '30+') return 30
-  const parsed = parseInt(value, 10)
-  return Number.isNaN(parsed) ? 0 : parsed
-}
-
 /**
- * The nav badge: the public unread count (`''`, a number, or `'30+'`) plus
+ * The nav badge: the public unread count (`''`, a number, or `'999+'`) plus
  * the private-only one, in the same form.
  */
 export function composeUnreadCount(
   publicCount: string,
   privateCount: number | undefined,
 ): string {
-  const total = parseCount(publicCount) + (privateCount ?? 0)
-  if (total <= 0) return ''
-  if (total >= 30) return '30+'
-  return String(total)
+  return formatUnreadCount(parseUnreadCount(publicCount) + (privateCount ?? 0))
 }
 
 /**

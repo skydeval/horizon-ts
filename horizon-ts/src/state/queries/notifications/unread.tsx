@@ -22,8 +22,13 @@ import {truncateAndInvalidate} from '#/state/queries/util'
 import {useAppviewClient, useSession} from '#/state/session'
 // HORIZON: the badge adds private notifications the public count cannot hold
 import {usePrivateOnlyUnreadCount} from '#/horizon/private/notifications/query'
-// HORIZON: the badge adds private notifications the public count cannot hold
-import {composeUnreadCount} from '#/horizon/private/notifications/unread'
+// HORIZON: the badge adds private notifications the public count cannot hold, and counts to 999
+import {
+  composeUnreadCount,
+  formatUnreadCount,
+  parseUnreadCount,
+  UNREAD_BADGE_CAP,
+} from '#/horizon/private/notifications/unread'
 import {app} from '#/lexicons'
 import {RQKEY as RQKEY_NOTIFS} from './feed'
 import {type CachedFeedPage, type FeedPage, type UnreadCheck} from './types'
@@ -112,12 +117,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         usableInFeed: false,
         syncedAt: new Date(),
         data: undefined,
-        unreadCount:
-          data.event === '30+'
-            ? 30
-            : data.event === ''
-              ? 0
-              : parseInt(data.event, 10) || 1,
+        // HORIZON: counts to 999
+        unreadCount: parseUnreadCount(data.event),
       }
       setNumUnread(data.event)
     }
@@ -174,8 +175,12 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
 
           // reduce polling if unread count is set
           if (isPoll && cacheRef.current?.unreadCount !== 0) {
-            // if hit 30+ then don't poll, otherwise reduce polling by 50%
-            if (cacheRef.current?.unreadCount >= 30 || Math.random() >= 0.5) {
+            // if hit 999+ then don't poll, otherwise reduce polling by 50%
+            if (
+              // HORIZON: counts to 999
+              cacheRef.current?.unreadCount > UNREAD_BADGE_CAP ||
+              Math.random() >= 0.5
+            ) {
               return
             }
           }
@@ -208,13 +213,25 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
           if (!invalidate && requestedAt < lastMarkedReadAt.current) {
             return
           }
-          const unreadCount = countUnread(page)
-          const unreadCountStr =
-            unreadCount >= 30
-              ? '30+'
-              : unreadCount === 0
-                ? ''
-                : String(unreadCount)
+          // HORIZON: counts to 999 (start)
+          let unreadCount = countUnread(page)
+          if (pageIsAllUnread(page)) {
+            /*
+             * Every notification on the page is unread, so more may be. The
+             * server's count goes past the page.
+             */
+            try {
+              const {count} = await client.call(
+                app.bsky.notification.getUnreadCount,
+                {},
+              )
+              unreadCount = Math.max(unreadCount, count)
+            } catch {
+              // The page's count stands
+            }
+          }
+          const unreadCountStr = formatUnreadCount(unreadCount)
+          // HORIZON: counts to 999 (end)
 
           // track last sync
           const now = new Date()
@@ -296,6 +313,18 @@ function countUnread(page: FeedPage) {
     }
   }
   return num
+}
+
+// HORIZON: counts to 999
+function pageIsAllUnread(page: FeedPage) {
+  return (
+    page.items.length > 0 &&
+    page.items.every(
+      item =>
+        !item.notification.isRead &&
+        (item.additional ?? []).every(other => !other.isRead),
+    )
+  )
 }
 
 export function invalidateCachedUnreadPage() {

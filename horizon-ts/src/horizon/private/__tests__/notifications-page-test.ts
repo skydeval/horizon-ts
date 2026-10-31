@@ -36,7 +36,11 @@ import {
 import {
   composeUnreadCount,
   countPrivateOnlyUnread,
+  formatUnreadCount,
   markPrivateNotificationsSeen,
+  parseUnreadCount,
+  PRIVATE_ONLY_UNREAD_CAP,
+  PRIVATE_ONLY_UNREAD_PAGES,
   PRIVATE_UNREAD_OWN_ROOT,
   PRIVATE_UNREAD_ROOT,
 } from '../notifications/unread'
@@ -311,9 +315,26 @@ describe('the unread counts (2H design 10.5, T13)', () => {
     expect(composeUnreadCount('3', undefined)).toBe('3')
     expect(composeUnreadCount('3', 2)).toBe('5')
     expect(composeUnreadCount('', 4)).toBe('4')
-    expect(composeUnreadCount('29', 1)).toBe('30+')
-    expect(composeUnreadCount('30+', 0)).toBe('30+')
+    expect(composeUnreadCount('29', 1)).toBe('30')
+    expect(composeUnreadCount('998', 1)).toBe('999')
+    expect(composeUnreadCount('999', 1)).toBe('999+')
+    expect(composeUnreadCount('999+', 0)).toBe('999+')
+    expect(composeUnreadCount('', 1000)).toBe('999+')
     expect(composeUnreadCount('x', 2)).toBe('2')
+  })
+
+  it('formats and reads badge counts up to 999', () => {
+    expect(formatUnreadCount(0)).toBe('')
+    expect(formatUnreadCount(-1)).toBe('')
+    expect(formatUnreadCount(NaN)).toBe('')
+    expect(formatUnreadCount(31)).toBe('31')
+    expect(formatUnreadCount(999)).toBe('999')
+    expect(formatUnreadCount(1000)).toBe('999+')
+    expect(formatUnreadCount(25000)).toBe('999+')
+    expect(parseUnreadCount('')).toBe(0)
+    expect(parseUnreadCount('42')).toBe(42)
+    expect(parseUnreadCount('999+')).toBe(1000)
+    expect(parseUnreadCount('x')).toBe(0)
   })
 
   function unread(rkey: string, isRead = false, uri?: string) {
@@ -373,22 +394,24 @@ describe('the unread counts (2H design 10.5, T13)', () => {
     ])
   })
 
-  it('stops at 30 and at three pages', async () => {
+  it('stops past 999 and at twenty pages', async () => {
+    expect(PRIVATE_ONLY_UNREAD_CAP).toBe(1000)
+    expect(PRIVATE_ONLY_UNREAD_PAGES).toBe(20)
     prismHandler = (nsid, params) =>
       nsid === 'app.nearhorizon.private.listNotifications'
         ? listing(
-            Array.from({length: 12}, (_, i) => unread(`3k${i}`)),
+            Array.from({length: 60}, (_, i) => unread(`3k${i}`)),
             `more${params.get('cursor') ?? ''}`,
           )
         : undefined
     const {source} = setup()
     // Without the feature the read stops at the cap, as before.
-    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(30)
-    // With it every unread item of three pages is kept, for the mute filter;
-    // the cap of 30 is the count's (activity subscriptions T-18).
+    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(1000)
+    // With it every unread item of twenty pages is kept, for the mute filter;
+    // the cap is the count's (activity subscriptions T-18).
     const all = await countPrivateOnlyUnread(source.prism, {activity: true})
-    expect(all).toHaveLength(36)
-    expect(countUnmuted(all, new Set(), 30)).toBe(30)
+    expect(all).toHaveLength(1200)
+    expect(countUnmuted(all, new Set(), PRIVATE_ONLY_UNREAD_CAP)).toBe(1000)
 
     let pages = 0
     prismHandler = nsid => {
@@ -396,8 +419,8 @@ describe('the unread counts (2H design 10.5, T13)', () => {
       pages++
       return listing([unread(`3kp${pages}`)], `c${pages}`)
     }
-    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(3)
-    expect(pages).toBe(3)
+    expect(await countPrivateOnlyUnread(source.prism)).toHaveLength(20)
+    expect(pages).toBe(20)
   })
 
   it('marks seen with this run\u{2019}s answer only, then clears both counts', async () => {

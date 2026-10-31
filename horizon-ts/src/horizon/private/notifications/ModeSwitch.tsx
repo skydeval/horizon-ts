@@ -12,6 +12,7 @@ import {
 } from '#/horizon/private/notifications/mode'
 import {usePrivateUnreadCount} from '#/horizon/private/notifications/query'
 import {pressNotificationsModeTab} from '#/horizon/private/notifications/refresh'
+import {formatUnreadCount} from '#/horizon/private/notifications/unread'
 import {FolderTabs} from '#/horizon/private/tabs/FolderTabs'
 
 /**
@@ -28,7 +29,7 @@ export function NotificationsModeSwitch() {
   const isMember = useIsMember()
   const mode = useNotificationsMode()
   const unread = usePrivateUnreadCount()
-  const badge = !unread ? undefined : unread >= 30 ? '30+' : String(unread)
+  const badge = formatUnreadCount(unread ?? 0) || undefined
 
   if (!currentAccount || !offersNotificationsSwitch(isMember)) return null
 
