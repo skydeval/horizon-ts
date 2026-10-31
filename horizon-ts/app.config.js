@@ -489,17 +489,16 @@ module.exports = function (_config) {
               },
             },
             /*
-             * HORIZON: Horizon's mark. The icon's foreground layer keeps the
-             * sun inside the circle Android masks a splash icon to; the
-             * mark's sky shows behind it, and its ink at night
+             * HORIZON: Horizon's mark, the whole app icon with its sky, so
+             * the sun and hills never sit on a bare background
              */
             android: {
               backgroundColor: '#CFE5EE',
-              image: './assets/horizon/android-foreground.png',
+              image: './assets/horizon/android-icon.png',
               imageWidth: 160,
               dark: {
                 backgroundColor: '#1A1D33',
-                image: './assets/horizon/android-foreground.png',
+                image: './assets/horizon/android-icon.png',
                 imageWidth: 160,
               },
             },
