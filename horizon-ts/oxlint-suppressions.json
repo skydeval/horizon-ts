@@ -1092,7 +1092,7 @@
       "count": 1
     },
     "typescript/no-unsafe-member-access": {
-      "count": 4
+      "count": 2
     }
   },
   "src/state/queries/nuxs/definitions.ts": {
