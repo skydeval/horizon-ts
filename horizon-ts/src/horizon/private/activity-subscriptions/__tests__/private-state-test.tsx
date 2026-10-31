@@ -35,7 +35,7 @@ jest.mock('#/horizon/private/activity-subscriptions/saver', () => ({
 }))
 
 import {QueryClientProvider} from '@tanstack/react-query'
-import {act, renderHook} from '@testing-library/react-native'
+import {act, renderHook, waitFor} from '@testing-library/react-native'
 
 import {getPrismHealth} from '#/horizon/routing/health'
 import {getMembership, resetMembership} from '#/horizon/routing/membership'
@@ -125,8 +125,10 @@ describe('T7-6: prism’s list', () => {
     h.prism.rows.set(SUBJECT, ON)
     const {result} = renderHook(() => usePrivateFlags(SUBJECT_2), {wrapper})
     expect(result.current).toEqual({flags: OFF, loaded: false})
-    await act(() => settle())
-    expect(result.current).toEqual({flags: OFF, loaded: true})
+    // Waits for the read rather than a fixed number of ticks, which a busy machine can outrun.
+    await waitFor(() =>
+      expect(result.current).toEqual({flags: OFF, loaded: true}),
+    )
     expect(h.queryClient.getQueryData(LIST)).toEqual({[SUBJECT]: ON})
 
     for (const [source, shown] of [
