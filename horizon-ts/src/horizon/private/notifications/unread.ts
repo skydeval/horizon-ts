@@ -18,6 +18,11 @@ import {
   PRIVATE_UNREAD_ROOT,
 } from '#/horizon/private/cache-finders'
 import {
+  formatUnreadCount,
+  parseUnreadCount,
+  UNREAD_BADGE_CAP,
+} from '#/horizon/private/notifications/badge'
+import {
   PRIVATE_ONLY_REASONS,
   REPLY_REASONS,
 } from '#/horizon/private/notifications/page'
@@ -26,32 +31,7 @@ import {isPrivatePostUri} from '#/horizon/private/uri'
 
 export {PRIVATE_UNREAD_OWN_ROOT, PRIVATE_UNREAD_ROOT}
 
-/**
- * The highest unread count a badge shows exactly; above it the badge shows
- * "999+".
- */
-export const UNREAD_BADGE_CAP = 999
-
-/**
- * A badge's text for `count` unread: `''` for none, the number up to
- * {@link UNREAD_BADGE_CAP}, then "999+".
- */
-export function formatUnreadCount(count: number): string {
-  if (!(count > 0)) return ''
-  if (count > UNREAD_BADGE_CAP) return `${UNREAD_BADGE_CAP}+`
-  return String(Math.floor(count))
-}
-
-/**
- * The count a badge's text stands for; "999+" reads as one more than the cap,
- * so adding to it stays above the cap.
- */
-export function parseUnreadCount(value: string): number {
-  if (value === '') return 0
-  const parsed = parseInt(value, 10)
-  if (Number.isNaN(parsed)) return 0
-  return value.endsWith('+') ? parsed + 1 : parsed
-}
+export {formatUnreadCount, parseUnreadCount, UNREAD_BADGE_CAP}
 
 /**
  * The most private-only unread notifications counted: one past the badge

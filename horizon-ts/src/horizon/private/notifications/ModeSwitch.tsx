@@ -4,6 +4,7 @@ import {useQueryClient} from '@tanstack/react-query'
 import {emitSoftReset} from '#/state/events'
 import {useSession} from '#/state/session'
 import {useIsMember} from '#/horizon/private/membership'
+import {formatUnreadCount} from '#/horizon/private/notifications/badge'
 import {
   type NotificationsMode,
   offersNotificationsSwitch,
@@ -12,7 +13,6 @@ import {
 } from '#/horizon/private/notifications/mode'
 import {usePrivateUnreadCount} from '#/horizon/private/notifications/query'
 import {pressNotificationsModeTab} from '#/horizon/private/notifications/refresh'
-import {formatUnreadCount} from '#/horizon/private/notifications/unread'
 import {FolderTabs} from '#/horizon/private/tabs/FolderTabs'
 
 /**
