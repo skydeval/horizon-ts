@@ -537,14 +537,16 @@ describe('the feature list (11.6)', () => {
     const qc = publishClients({prism: client, appview: client})
     const spy = jest.spyOn(qc, 'invalidateQueries')
     answerPrismFeatures(READER, ['private', 'threadLens'])
-    expect(spy).toHaveBeenCalledTimes(2)
-    const [first, second] = spy.mock.calls.map(call => call[0]) as {
+    // The rest, then anchored Following and the lens, both left unfetched.
+    expect(spy).toHaveBeenCalledTimes(3)
+    const [first, following, lens] = spy.mock.calls.map(call => call[0]) as {
       predicate?: (query: {queryKey: unknown[]}) => boolean
       queryKey?: unknown[]
       refetchType?: string
     }[]
     expect(first.predicate?.({queryKey: [LENS_ROOT, {}]})).toBe(false)
     expect(first.predicate?.({queryKey: ['post-thread-v2', {}]})).toBe(true)
-    expect(second).toEqual({queryKey: [LENS_ROOT], refetchType: 'none'})
+    expect(following.refetchType).toBe('none')
+    expect(lens).toEqual({queryKey: [LENS_ROOT], refetchType: 'none'})
   })
 })
