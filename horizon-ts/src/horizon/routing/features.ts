@@ -20,6 +20,7 @@ import {
   getCurrentClients,
   getCurrentDid,
 } from '#/horizon/routing/current-clients'
+import {isAnchoredFollowingKey} from '#/horizon/private/feed/keys'
 import {readMembershipRecord} from '#/horizon/routing/membership-record'
 import {THREAD_LENS} from '#/horizon/switches'
 
@@ -205,17 +206,25 @@ function invalidateForFeatures(
     {invalidateQueries: QueryClient['invalidateQueries']} | undefined,
 ) {
   if (!queryClient) return
-  if (!THREAD_LENS) {
-    void queryClient.invalidateQueries()
-    return
-  }
   void queryClient.invalidateQueries({
-    predicate: query => query.queryKey[0] !== THREAD_LENS_ROOT,
+    predicate: query =>
+      !(THREAD_LENS && query.queryKey[0] === THREAD_LENS_ROOT) &&
+      !isAnchoredFollowingKey(query.queryKey),
   })
+  /*
+   * Marked stale only: anchored Following is refreshed by its view once it
+   * is on screen (see `isAnchoredFollowingKey`).
+   */
   void queryClient.invalidateQueries({
-    queryKey: [THREAD_LENS_ROOT],
+    predicate: query => isAnchoredFollowingKey(query.queryKey),
     refetchType: 'none',
   })
+  if (THREAD_LENS) {
+    void queryClient.invalidateQueries({
+      queryKey: [THREAD_LENS_ROOT],
+      refetchType: 'none',
+    })
+  }
 }
 
 /**

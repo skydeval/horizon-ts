@@ -236,6 +236,11 @@ export function usePostFeedQuery(
     // HORIZON: stale while a page is degraded (prism busy design 6.5)
     staleTime: query =>
       anyPageDegraded(query.state.data?.pages) ? 0 : STALE.INFINITY,
+    /*
+     * HORIZON: not refetched in place on reconnect, which may come while
+     * another screen covers it; its view refreshes it once it is on screen
+     */
+    refetchOnReconnect: false,
     queryKey: RQKEY(feedDesc, params),
     // HORIZON: a degraded top page carries the reader's own private posts (start)
     async queryFn(context) {

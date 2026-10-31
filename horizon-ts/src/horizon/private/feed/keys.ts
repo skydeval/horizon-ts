@@ -75,6 +75,19 @@ export function withPrivateKey<K extends unknown[]>(
   return [...key, {horizonPrivate: did}]
 }
 
+/**
+ * Whether `queryKey` is anchored Following's (`features/followingV2`, the
+ * `v2|following` key under the post-feed root). Its rows change only while
+ * it is on screen: on Android a list covered by another screen can't keep the
+ * reader's place, and comes back blank until it is scrolled. Cache-wide
+ * refetches mark it stale instead, and the view refreshes it when it is back
+ * (`useStaleFollowingRefresh`).
+ */
+export function isAnchoredFollowingKey(queryKey: readonly unknown[]): boolean {
+  // 'post-feed' is `RQKEY_ROOT` of `state/queries/post-feed`, not imported here
+  return queryKey[0] === 'post-feed' && queryKey[1] === 'v2|following'
+}
+
 /** The account a feed key from `withPrivateKey` names, or `undefined`. */
 export function privateKeyDid(queryKey: readonly unknown[]): string | undefined {
   const last = queryKey[queryKey.length - 1]

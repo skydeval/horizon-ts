@@ -76,6 +76,13 @@ import {
 } from '#/features/liveNow'
 // HORIZON: Following's load gate while prism is busy
 import {useFollowingBusy} from '#/horizon/private/feed/busy-view'
+// HORIZON: rows change only while Following is on screen
+import {
+  useActiveGate,
+  useQueryInvalidated,
+  useRescrollAfterCoveredChange,
+  useStaleFollowingRefresh,
+} from '#/horizon/private/feed/on-screen'
 // HORIZON: Following's load gate while prism is busy
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {app} from '#/lexicons'
@@ -412,10 +419,16 @@ let PostFeed = ({
     useAnchorCorrectionScrollHandlers(isAnchored),
     isAnchored,
   )
+  // HORIZON: a covered list can't keep its place on Android, so prepends wait for the screen
+  const activeGate = useActiveGate(isAnchored && isActive)
   const prepend = usePostFeedPrepend(feed, feedParams, {
     enabled: isAnchored && enabled !== false,
     topFetchedAt: lastFetchedAt,
-    listAtRest: listRest.atRest,
+    // HORIZON: a covered list can't keep its place on Android, so prepends wait for the screen
+    listAtRest: async () => {
+      await activeGate()
+      await listRest.atRest()
+    },
     isRefreshing: isRefreshPending,
     // HORIZON: a staged page removed with nothing newer puts the Home dot out (item 7 3.4)
     onWithdrawn: busy.onStagedWithdrawn,
@@ -557,6 +570,30 @@ let PostFeed = ({
     isScrolledDownRef.current = isScrolledDown
     onScrolledDownChange?.(isScrolledDown)
   }
+
+  // HORIZON: rows change only while Following is on screen (start)
+  const isInvalidated = useQueryInvalidated(RQKEY(feed, feedParams))
+  useStaleFollowingRefresh({
+    enabled: isAnchored && enabled !== false,
+    isActive,
+    isInvalidated,
+    isFetching,
+    isScrolledDown: () => isScrolledDownRef.current,
+    refreshToTop: () => void refreshToTop(),
+    onHasNew,
+  })
+  useRescrollAfterCoveredChange({
+    enabled: isAnchored,
+    isActive,
+    dataVersion: feedData,
+    rescroll: () => {
+      scrollElRef?.current?.scrollToOffset({
+        animated: false,
+        offset: listOffsetY.get(),
+      })
+    },
+  })
+  // HORIZON: rows change only while Following is on screen (end)
 
   const myDid = currentAccount?.did || ''
   const onPostCreated = useCallback(() => {

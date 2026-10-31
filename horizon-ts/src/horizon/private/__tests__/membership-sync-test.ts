@@ -45,6 +45,12 @@ function item(uri: string, parentUri?: string) {
 }
 
 const KEY = ['post-feed', 'v2|following', {}, {horizonPrivate: DID}]
+const AUTHOR_KEY = [
+  'post-feed',
+  `author|${DID}|posts_and_author_threads`,
+  {},
+  {horizonPrivate: DID},
+]
 const OTHER_ACCOUNT_KEY = [
   'post-feed',
   'v2|following',
@@ -132,13 +138,28 @@ describe('startFeedMembershipSync', () => {
     expect(uris(qc)).toEqual([PUBLIC])
     expect(invalidate).not.toHaveBeenCalled()
     jest.runAllTimers()
-    expect(invalidate).toHaveBeenCalledTimes(1)
-    const [{predicate}] = invalidate.mock.calls[0] as unknown as [
-      {predicate: (q: {queryKey: unknown[]}) => boolean},
-    ]
-    expect(predicate({queryKey: KEY})).toBe(true)
-    expect(predicate({queryKey: OTHER_ACCOUNT_KEY})).toBe(false)
-    expect(predicate({queryKey: ['post-feed', 'following', {}]})).toBe(false)
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    type Filters = {
+      predicate: (q: {queryKey: unknown[]}) => boolean
+      refetchType?: string
+    }
+    const [refetched] = invalidate.mock.calls[0] as unknown as [Filters]
+    const [held] = invalidate.mock.calls[1] as unknown as [Filters]
+    // The account's other feeds refetch in place
+    expect(refetched.refetchType).toBeUndefined()
+    expect(refetched.predicate({queryKey: AUTHOR_KEY})).toBe(true)
+    expect(refetched.predicate({queryKey: KEY})).toBe(false)
+    expect(refetched.predicate({queryKey: OTHER_ACCOUNT_KEY})).toBe(false)
+    expect(
+      refetched.predicate({queryKey: ['post-feed', 'following', {}]}),
+    ).toBe(false)
+    // Anchored Following is only marked stale, for its view to refresh on screen
+    expect(held.refetchType).toBe('none')
+    expect(held.predicate({queryKey: KEY})).toBe(true)
+    expect(held.predicate({queryKey: AUTHOR_KEY})).toBe(false)
+    expect(held.predicate({queryKey: OTHER_ACCOUNT_KEY})).toBe(false)
+    expect(qc.getQueryState(KEY)?.isInvalidated).toBe(true)
+    expect(qc.getQueryState(KEY)?.fetchStatus).toBe('idle')
     stop()
   })
 
@@ -152,7 +173,8 @@ describe('startFeedMembershipSync', () => {
     mockFeatureListeners.forEach(listener => listener())
     expect(uris(qc)).toHaveLength(3)
     jest.runAllTimers()
-    expect(invalidate).toHaveBeenCalledTimes(1)
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(qc.getQueryState(KEY)?.isInvalidated).toBe(true)
     stop()
   })
 

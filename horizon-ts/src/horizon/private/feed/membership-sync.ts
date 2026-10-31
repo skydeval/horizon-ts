@@ -11,7 +11,10 @@
 import {type InfiniteData, type QueryClient} from '@tanstack/react-query'
 
 import {RQKEY_ROOT} from '#/state/queries/post-feed'
-import {privateKeyDid} from '#/horizon/private/feed/keys'
+import {
+  isAnchoredFollowingKey,
+  privateKeyDid,
+} from '#/horizon/private/feed/keys'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {getCurrentDid} from '#/horizon/routing/current-clients'
 import {subscribePrismFeatures} from '#/horizon/routing/features'
@@ -83,7 +86,16 @@ export function startFeedMembershipSync(queryClient: QueryClient) {
     clearTimeout(refetchTimer)
     refetchTimer = setTimeout(() => {
       void queryClient.invalidateQueries({
-        predicate: query => isAccountFeed(query.queryKey, did),
+        predicate: query =>
+          isAccountFeed(query.queryKey, did) &&
+          !isAnchoredFollowingKey(query.queryKey),
+      })
+      // Refreshed by its view once it is on screen (see `isAnchoredFollowingKey`)
+      void queryClient.invalidateQueries({
+        predicate: query =>
+          isAccountFeed(query.queryKey, did) &&
+          isAnchoredFollowingKey(query.queryKey),
+        refetchType: 'none',
       })
     }, 0)
   }
