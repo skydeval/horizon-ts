@@ -8,7 +8,7 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
-    "build": 7,
+    "build": 8,
     "date": "2026-10-30",
     "summary": "The moderation inbox, and the latest from Bluesky's app.",
     "sections": [
@@ -19,7 +19,8 @@ export const PATCH_NOTES: readonly PatchNote[] = [
           "Saving an image gives it the same file name every time, so saving it twice won't make two copies under different names.",
           "On Android, saved images go to a Horizon album.",
           "The Android app's composer has the spoiler and content warning buttons, as on the web, for public and private posts.",
-          "Patch notes, at nearhorizon.app/patch-notes and in Settings, About."
+          "Patch notes, at nearhorizon.app/patch-notes and in Settings, About.",
+          "The Android app no longer links to Bluesky's help desk, status page and feedback form, until Horizon has its own."
         ]
       },
       {
@@ -35,7 +36,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       {
         "kind": "fixes",
         "items": [
-          "Videos in the Following feed no longer go black and stop partway through, and the feed no longer flashes and reloads while you scroll.",
+          "Videos in the Following feed no longer go black and stop partway through, and the feed no longer jitters, flashes or reloads while you scroll.",
           "Two-factor codes from an authenticator app are handled properly when signing in.",
           "Ordinary GitHub links on profiles are no longer treated as payment links. GitHub Sponsors links still are."
         ]
