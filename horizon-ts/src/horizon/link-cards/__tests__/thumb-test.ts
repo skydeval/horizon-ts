@@ -34,7 +34,7 @@ describe('a link card image', () => {
   })
 
   it('uses the card service image when it works', async () => {
-    const toThumb = jest.fn(async (uri: string) => `thumb:${uri}`)
+    const toThumb = jest.fn((uri: string) => Promise.resolve(`thumb:${uri}`))
     await expect(thumbWithDirectFallback(CARDYB, toThumb)).resolves.toBe(
       `thumb:${CARDYB}`,
     )
@@ -42,8 +42,8 @@ describe('a link card image', () => {
   })
 
   it('falls back to the site image when it fails', async () => {
-    const toThumb = jest.fn(async (uri: string) =>
-      uri === SITE_IMAGE ? 'site thumb' : undefined,
+    const toThumb = jest.fn((uri: string) =>
+      Promise.resolve(uri === SITE_IMAGE ? 'site thumb' : undefined),
     )
     await expect(thumbWithDirectFallback(CARDYB, toThumb)).resolves.toBe(
       'site thumb',
@@ -55,7 +55,7 @@ describe('a link card image', () => {
   })
 
   it('gives no thumbnail when both fail', async () => {
-    const toThumb = jest.fn(async () => undefined)
+    const toThumb = jest.fn(() => Promise.resolve(undefined))
     await expect(
       thumbWithDirectFallback(CARDYB, toThumb),
     ).resolves.toBeUndefined()
