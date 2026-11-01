@@ -10,12 +10,12 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     "version": "0.1.14",
     "build": 14,
     "date": "2026-11-01",
-    "summary": "Private notifications open faster.",
+    "summary": "Kryphocron notifications open faster.",
     "sections": [
       {
         "kind": "fixes",
         "items": [
-          "Private notifications open faster."
+          "Kryphocron notifications open faster."
         ]
       }
     ]

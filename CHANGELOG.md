@@ -65,7 +65,7 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
-- **Private notifications open faster.**
+- **Kryphocron notifications open faster.**
 - **Notifications are only marked read when you're looking at them.** A tab
   or app in the background no longer clears your badge and unread
   highlights.

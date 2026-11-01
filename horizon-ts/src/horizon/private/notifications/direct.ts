@@ -1,5 +1,5 @@
 /*
- * The Private notifications list reads prism directly rather than through
+ * The kryphocron notifications list reads prism directly rather than through
  * the reader's PDS, so the list and its posts skip the proxy hop and never
  * pass the PDS. prism checks a direct call exactly as it checks getPosts:
  * the service token's signature against the reader's DID document, aud,
@@ -22,7 +22,7 @@ import {
 } from '#/horizon/routing/prism-direct'
 
 /**
- * prism's private notifications list.
+ * prism's kryphocron notifications list.
  */
 export const PRIVATE_LIST_NOTIFICATIONS_LXM =
   'app.nearhorizon.private.listNotifications' as NsidString
@@ -56,7 +56,7 @@ export async function privateReadClient(
 }
 
 /**
- * Mints the list's tokens ahead while `active` (a member with the private
+ * Mints the list's tokens ahead while `active` (a member with the kryphocron
  * notifications list) and the app is in the foreground.
  */
 export function usePrivateNotificationsTokenPrefetch(active: boolean) {
