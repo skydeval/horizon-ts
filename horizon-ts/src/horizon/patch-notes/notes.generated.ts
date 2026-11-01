@@ -7,6 +7,20 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
+    "version": "0.1.14",
+    "build": 14,
+    "date": "2026-11-01",
+    "summary": "Private notifications open faster.",
+    "sections": [
+      {
+        "kind": "fixes",
+        "items": [
+          "Private notifications open faster."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.1.0",
     "build": 13,
     "date": "2026-11-01",

@@ -49,8 +49,13 @@ import {
 } from '#/horizon/private/known'
 import {readPrivatePostViewsAnswered} from '#/horizon/private/links'
 import {fetchStamp} from '#/horizon/private/load-gate'
+import {
+  PRIVATE_LIST_NOTIFICATIONS_LXM,
+  privateReadClient,
+} from '#/horizon/private/notifications/direct'
 import {isPrivatePostUri} from '#/horizon/private/uri'
 import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {PRIVATE_GET_POSTS_LXM} from '#/horizon/routing/prism-direct'
 import {app} from '#/lexicons'
 
 /**
@@ -160,7 +165,11 @@ function privatePageReader(source: PrivateSource, read: PageRead): PostReader {
       if (!privateUris.length) return new Map()
       try {
         const {views, answer} = await readPrivatePostViewsAnswered(
-          {prismClient: source.prism, appviewClient: source.appview},
+          {
+            // prism directly when a token can be had (direct.ts)
+            prismClient: await privateReadClient(source, PRIVATE_GET_POSTS_LXM),
+            appviewClient: source.appview,
+          },
           privateUris,
         )
         read.answers.push(answer)
@@ -208,9 +217,11 @@ export async function fetchPrivateNotificationsPage({
 }): Promise<PrivateNotificationsPage> {
   let seenAt: string | undefined
   const read: PageRead = {answers: [], incomplete: false}
+  // prism directly when a token can be had (direct.ts)
+  const prism = await privateReadClient(source, PRIVATE_LIST_NOTIFICATIONS_LXM)
   const loaded = await fetchUntilItems<Notification>(async next => {
     const {body: page, answer} = await listPrivateNotificationsAnswered(
-      source.prism,
+      prism,
       {
         limit: PRIVATE_NOTIFICATIONS_PAGE_SIZE,
         cursor: next,

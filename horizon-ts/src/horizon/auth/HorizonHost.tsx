@@ -33,6 +33,8 @@ import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {LeftoverAudienceCleanup} from '#/horizon/private/audiences/LeftoverAudienceCleanup'
 import {startFeedMembershipSync} from '#/horizon/private/feed/membership-sync'
+import {usePrivateFeedSource} from '#/horizon/private/membership'
+import {usePrivateNotificationsTokenPrefetch} from '#/horizon/private/notifications/direct'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
 import {RefractHost} from '#/horizon/refract/RefractHost'
 import {CurrentClientsPublisher} from '#/horizon/routing/CurrentClientsPublisher'
@@ -45,6 +47,7 @@ import {subscribePublicAppviewChoice} from '#/horizon/routing/public-appview'
 import {WriteRouteResolver} from '#/horizon/routing/WriteRouteResolver'
 import {OAuthBusyNotice} from '#/horizon/session/oauth-busy-notice'
 import {OtherAppSpoilersSync} from '#/horizon/spoilers/OtherAppSpoilers'
+import {PRIVATE_NOTIFICATIONS_SWITCH} from '#/horizon/switches'
 import {SystemAccountsHost} from '#/horizon/system-accounts/SystemAccountsHost'
 import {ThreadLensTokenPrefetch} from '#/horizon/thread-lens/TokenPrefetch'
 
@@ -95,6 +98,11 @@ function FeedMembershipSync() {
 export function HorizonHost() {
   // Pre-warms prism's list of private activity subscriptions for a member.
   usePrivateActivityPrefetch()
+  // Mints a member's tokens for reading the private notifications list directly.
+  const privateSource = usePrivateFeedSource()
+  usePrivateNotificationsTokenPrefetch(
+    PRIVATE_NOTIFICATIONS_SWITCH && !!privateSource,
+  )
   return (
     <>
       <CurrentClientsPublisher />

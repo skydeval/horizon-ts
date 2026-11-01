@@ -10,6 +10,15 @@ jest.mock('#/horizon/routing/membership', () => ({
   reportPrismError: () => {},
 }))
 jest.mock('#/state/queries/profile', () => ({precacheProfile: jest.fn()}))
+// The page's prism, as through the PDS; direct-test covers the direct pick.
+jest.mock('#/horizon/private/notifications/direct', () => ({
+  PRIVATE_LIST_NOTIFICATIONS_LXM: 'app.nearhorizon.private.listNotifications',
+  privateReadClient: (source: {prism: unknown}) =>
+    Promise.resolve(source.prism),
+}))
+jest.mock('#/horizon/routing/prism-direct', () => ({
+  PRIVATE_GET_POSTS_LXM: 'app.nearhorizon.private.getPosts',
+}))
 jest.mock('#/horizon/session/local-store', () => ({
   readLocal: () => undefined,
   writeLocal: () => {},
