@@ -8,6 +8,21 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
+    "build": 12,
+    "date": "2026-11-01",
+    "summary": "Right counts in threads, and link cards with their pictures.",
+    "sections": [
+      {
+        "kind": "fixes",
+        "items": [
+          "Threads show the right like, repost, quote and reply counts, and the line joining a post to its reply no longer breaks.",
+          "Pasted links get their card's picture again, for sites that turn Bluesky's card service away, such as GitHub."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
     "build": 11,
     "date": "2026-10-31",
     "summary": "Steadier videos and Following feed, a look for each account, quotes from pasted Horizon links, bigger notification counts and the jump to top button.",

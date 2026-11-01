@@ -119,9 +119,9 @@ describe('gate controls (Anchor 2, Menu 3)', () => {
     expect(hidesHideReply(PUBLIC, PUBLIC)).toBe(false)
     // Who can reply is unchanged: still left out under a public root.
     expect(hidesGateControls(PRIVATE_REPLY, PUBLIC)).toBe(true)
-    expect(
-      hidesGateControls(PRIVATE_REPLY, PUBLIC, {forWrite: true}),
-    ).toBe(true)
+    expect(hidesGateControls(PRIVATE_REPLY, PUBLIC, {forWrite: true})).toBe(
+      true,
+    )
   })
 
   it('hide reply is left out while the post or its root is pending-unwritten', () => {
@@ -197,7 +197,9 @@ describe('controls on private posts (Ctl 1-5, Anchor 1, Menu 4)', () => {
     expect(proxiesPostLinks(PRIVATE)).toBe(true)
     expect(isPrivateBadgeHref(`/profile/${DID}/ppost/3kpost222222`)).toBe(false)
     expect(privatePostStyle(PRIVATE, THEME)).toBe(undefined)
-    expect(threadRepliesCount(PRIVATE, undefined, 1, 2)).toBe(0)
+    // A shown reply still draws its line.
+    expect(threadRepliesCount(PRIVATE, undefined, 1, 2)).toBe(1)
+    expect(threadRepliesCount(PRIVATE, undefined, 1, 1)).toBe(0)
   })
 })
 
@@ -223,7 +225,16 @@ describe('marks (Mark 1-7)', () => {
 describe('thread reply lines (Thread 3)', () => {
   it('keeps the stock reply count for a public post', () => {
     expect(threadRepliesCount(PUBLIC, 5, 1, 1)).toBe(5)
-    expect(threadRepliesCount(PUBLIC, undefined, 1, 2)).toBe(0)
+    expect(threadRepliesCount(PUBLIC, 5, 1, 2)).toBe(5)
+    expect(threadRepliesCount(PUBLIC, undefined, 1, 1)).toBe(0)
+  })
+
+  it('never lets a short count cut the line to a reply on screen', () => {
+    // prism's own tally on the lens can say 0 under a shown reply.
+    expect(threadRepliesCount(PUBLIC, 0, 1, 2)).toBe(1)
+    expect(threadRepliesCount(PUBLIC, undefined, 1, 2)).toBe(1)
+    expect(threadRepliesCount(PUBLIC, 0, 2, 2)).toBe(0)
+    expect(threadRepliesCount(PUBLIC, 0, 2, undefined)).toBe(0)
   })
 
   it('counts a private post as replied to when the next item is deeper', () => {
@@ -235,7 +246,9 @@ describe('thread reply lines (Thread 3)', () => {
   it('uses the served reply count once prism serves counts', () => {
     countsServedOn(PRIVATE)
     expect(threadRepliesCount(PRIVATE, 4, 1, 1)).toBe(4)
-    expect(threadRepliesCount(PRIVATE, 0, 1, 2)).toBe(0)
+    expect(threadRepliesCount(PRIVATE, 0, 1, 1)).toBe(0)
+    // A served 0 under a shown reply still draws the line.
+    expect(threadRepliesCount(PRIVATE, 0, 1, 2)).toBe(1)
   })
 })
 

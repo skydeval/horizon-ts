@@ -25,7 +25,8 @@
  *   ({@link isHydratedSafe}) renders from that view with the device's
  *   mutes applied ({@link hydratedViewOf}), and only the rest go to
  *   `getPosts`. Visitors, and members without those, keep the pass for
- *   every post.
+ *   every post. prism's counts can be short, so the AppView's follow once
+ *   the thread shows (`counts.ts`, through `onSkipped`).
  */
 
 import {type Client} from '@atproto/lex'
@@ -563,7 +564,8 @@ export function bookmarkedInCache(qc: QueryClient, uri: string): boolean {
  * answer's labels. With `hydration` (a member, {@link lensHydrationOf}),
  * a post node prism's view can stand for ({@link hydratedViewOf}) skips
  * the pass: it takes its early view only when that has already answered,
- * else prism's view; no `getPosts` is sent for it.
+ * else prism's view; the pass sends no `getPosts` for it, and `onSkipped`
+ * names it for the counts read after the thread shows.
  */
 export async function readPublicViews(
   appview: Client,
@@ -574,12 +576,18 @@ export async function readPublicViews(
     lensLabels = false,
     hydration,
     onStats,
+    onSkipped,
   }: {
     did?: string
     lensLabels?: boolean
     hydration?: LensHydration
     /** Called once with what the pass did (the timing log). */
     onStats?: (stats: PublicPassStats) => void
+    /**
+     * Called once with the URIs that took prism's view, for the AppView's
+     * counts after the thread shows (`counts.ts`).
+     */
+    onSkipped?: (uris: string[]) => void
   } = {},
 ): Promise<Map<string, PublicOutcome>> {
   const outcomes = new Map<string, PublicOutcome>()
@@ -597,6 +605,7 @@ export async function readPublicViews(
   }
   const wanted = new Set(uris)
   const posts = new Map<string, CheckedPost>()
+  const tookPrism: string[] = []
   const now = Date.now()
   for (const node of checked) {
     if (node.type !== 'post' || !wanted.has(node.uri)) continue
@@ -619,8 +628,10 @@ export async function readPublicViews(
       outcomes.set(node.uri, publicOutcomeOf(node, early.view, {lensLabels}))
     } else {
       outcomes.set(node.uri, publicOutcomeOf(node, hydrated))
+      tookPrism.push(node.uri)
     }
   }
+  if (tookPrism.length > 0) onSkipped?.(tookPrism)
   const early = new Map<string, Promise<PostView | undefined>>()
   const missing: string[] = []
   for (const uri of posts.keys()) {

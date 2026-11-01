@@ -21,6 +21,15 @@ jest.mock('#/horizon/switches', () => ({
   ...jest.requireActual<object>('#/horizon/switches'),
   THREAD_LENS: true,
 }))
+/*
+ * The AppView's counts follow after the thread shows (counts.ts, its own
+ * suite); here only what is handed to it is recorded, so `asked()` stays
+ * the pass's own reads.
+ */
+const mockCountsRefresh = jest.fn((_args: unknown) => Promise.resolve())
+jest.mock('#/horizon/thread-lens/counts', () => ({
+  refreshLensCounts: (args: unknown) => mockCountsRefresh(args),
+}))
 
 import {moderatePost} from '@bsky/sdk/moderation'
 import {type QueryClient} from '@tanstack/react-query'
@@ -209,6 +218,7 @@ function mutedThread() {
 beforeEach(() => {
   posts = []
   lensReply = () => answer([])
+  mockCountsRefresh.mockClear()
   resetPrismHealth()
   resetPrismFeatures()
   resetLensWaits()
@@ -351,6 +361,18 @@ describe('which posts skip the pass', () => {
       ].sort(),
     )
     expect(snapshot.nodes.get(uriOf('3kpictured222'))?.kind).toBe('post')
+    // The posts drawn from prism's view get the AppView's counts after.
+    expect(mockCountsRefresh).toHaveBeenCalledTimes(1)
+    const handed = mockCountsRefresh.mock.calls[0][0] as {
+      queryKey: unknown
+      runId: string
+      uris: string[]
+    }
+    expect([...handed.uris].sort()).toEqual(
+      [ROOT, ANCHOR, uriOf('3kpictured222')].sort(),
+    )
+    expect(handed.queryKey).toEqual(lensKey())
+    expect(handed.runId).toBe(snapshot.runId)
   })
 
   it('keeps the pass for every post without a whole mute set on the device', async () => {

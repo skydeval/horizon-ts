@@ -65,6 +65,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Threads show the right like, repost, quote and reply counts,** and the
+  line joining a post to its reply no longer breaks.
 - **Videos in the Following feed no longer go black partway through,** and
   the feed no longer flashes and reloads while you scroll.
 - **Coming back to Following from a post no longer shows a black feed** or

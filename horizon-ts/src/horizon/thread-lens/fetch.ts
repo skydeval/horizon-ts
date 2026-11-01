@@ -44,6 +44,7 @@ import {
   lensThreadBody,
   resolveLens,
 } from '#/horizon/thread-lens/api'
+import {refreshLensCounts} from '#/horizon/thread-lens/counts'
 import {
   cachedHandleDid,
   rememberHandleDid,
@@ -84,6 +85,7 @@ import {
   lensKeyParams,
   type LensNote,
   type LensQueryData,
+  lensQueryKey,
   type LensSnapshot,
   type LensTaskOutcome,
   newRunId,
@@ -555,6 +557,7 @@ async function readLens(
       gate ? `member skip off: ${gate}` : 'member skip on',
     )
   }
+  let tookPrism: string[] = []
   const publicPass = readPublicViews(
     clients.appviewClient,
     checked,
@@ -566,6 +569,9 @@ async function readLens(
       onStats: lensTimingOn()
         ? stats => noteLensDetail(params.anchor, formatPassStats(stats))
         : undefined,
+      onSkipped: uris => {
+        tookPrism = uris
+      },
     },
   )
   /*
@@ -637,6 +643,14 @@ async function readLens(
         : undefined,
   })
   noteLensStep(params.anchor, 'snapshot built', started)
+  // HORIZON: the AppView's counts for nodes drawn from prism's view (counts.ts)
+  void refreshLensCounts({
+    qc: options.qc,
+    queryKey: lensQueryKey(params),
+    runId,
+    appview: clients.appviewClient,
+    uris: tookPrism,
+  })
   return {snapshot, gaps}
 }
 
@@ -722,13 +736,15 @@ export async function runLens(
  */
 async function readLater(
   qc: QueryClient,
-  did: string,
+  params: LensKeyParams,
   snapshot: LensSnapshot,
   checked: readonly CheckedNode[],
   {lensLabels, servedAs}: {lensLabels: boolean; servedAs: string | undefined},
 ) {
+  const {did} = params
   const clients = getCurrentClients()
   if (!clients || clients.did !== did) return undefined
+  let tookPrism: string[] = []
   const outcomes = await readPublicViews(
     clients.appviewClient,
     checked,
@@ -740,8 +756,19 @@ async function readLater(
         {servedAs, readerLabels: lensLabels},
         uri => bookmarkedInCache(qc, uri),
       ),
+      onSkipped: uris => {
+        tookPrism = uris
+      },
     },
   )
+  // The task's write lands first; the counts wait for it (counts.ts).
+  void refreshLensCounts({
+    qc,
+    queryKey: lensQueryKey(params),
+    runId: snapshot.runId,
+    appview: clients.appviewClient,
+    uris: tookPrism,
+  })
   const views: PostView[] = []
   for (const outcome of outcomes.values()) {
     if (outcome.kind !== 'gap') views.push(outcome.view)
@@ -814,7 +841,7 @@ function continuation(
     const checked = checkLensNodes(answer.nodes)
     let outcomes: Map<string, PublicOutcome> | undefined
     try {
-      outcomes = await readLater(qc, params.did, snapshot, checked, {
+      outcomes = await readLater(qc, params, snapshot, checked, {
         lensLabels: answer.readerLabels === true,
         servedAs: answer.servedAs,
       })
@@ -953,7 +980,7 @@ export function retryLensGaps(
       const all = batches.flatMap(batch => batch.checked)
       let outcomes: Map<string, PublicOutcome> | undefined
       try {
-        outcomes = await readLater(qc, params.did, snapshot, all, {
+        outcomes = await readLater(qc, params, snapshot, all, {
           lensLabels: batches.every(batch => batch.readerLabels),
           servedAs: batches.every(batch => batch.servedAs === 'member')
             ? 'member'

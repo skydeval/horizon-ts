@@ -211,7 +211,9 @@ export function proxiesPostLinks(uri: string | undefined): boolean {
  * The stock value is the post's `replyCount`, which a private post has once
  * prism serves its counts. Without them it counts as having replies when the
  * next item of the thread is deeper, which in the depth-first item list
- * means a reply to it is shown (D2-33).
+ * means a reply to it is shown (D2-33). A shown reply also sets the floor
+ * for a public post: a count served short (prism's own tally on the lens,
+ * before the AppView's arrives) never cuts the line to a reply on screen.
  */
 export function threadRepliesCount(
   uri: string | undefined,
@@ -219,8 +221,7 @@ export function threadRepliesCount(
   depth: number,
   nextItemDepth: number | undefined,
 ): number {
-  if (privateControlsFor(uri).hideCounts) {
-    return nextItemDepth !== undefined && nextItemDepth > depth ? 1 : 0
-  }
-  return replyCount || 0
+  const replyShown = nextItemDepth !== undefined && nextItemDepth > depth
+  if (privateControlsFor(uri).hideCounts) return replyShown ? 1 : 0
+  return Math.max(replyCount || 0, replyShown ? 1 : 0)
 }

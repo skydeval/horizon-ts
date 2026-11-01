@@ -20,6 +20,8 @@ import {findHorizonPrivatePosts} from '#/horizon/private/cache-finders'
 import {findRestoredPosts} from '#/horizon/refract/finders'
 // HORIZON: Thread Lens import
 import {findLensPosts} from '#/horizon/thread-lens/cache-finders'
+// HORIZON: a lens view patched with the AppView's counts keeps its shadow
+import {setLensShadowCarrier} from '#/horizon/thread-lens/shadow-carry'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {castAsShadow, type Shadow} from './types'
@@ -55,6 +57,15 @@ const shadows: WeakMap<
 export function dangerousGetPostShadow(post: app.bsky.feed.defs.PostView) {
   return shadows.get(post)
 }
+
+/**
+ * HORIZON: a lens post view replaced by a copy with the AppView's counts
+ * keeps the shadow the old object held (`horizon/thread-lens/counts.ts`).
+ */
+setLensShadowCarrier((from, to) => {
+  const shadow = shadows.get(from as app.bsky.feed.defs.PostView)
+  if (shadow) shadows.set(to as app.bsky.feed.defs.PostView, shadow)
+})
 
 export function usePostShadow(
   post: app.bsky.feed.defs.PostView,
