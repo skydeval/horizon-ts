@@ -4,13 +4,14 @@ What changed in each Horizon release, for the people who use it. The app's
 Patch notes screen (Settings → About, and `nearhorizon.app/patch-notes`)
 and the Android download page are built from these files.
 
-One file per release, named `<version>-<build>.md`:
+One file per release, named `<version>-<build>.md`. From build 14 on, the
+version's last part is the build number, so build 14 is `0.1.14-14.md`:
 
 ```md
 ---
-version: 0.1.0
-build: 5
-date: 2026-10-30
+version: 0.1.14
+build: 14
+date: 2026-11-02
 ---
 
 An optional one-line summary.
