@@ -48,6 +48,7 @@ import {RefreshPill} from '#/screens/Notifications/components/RefreshPill'
 import {atoms as a, useTheme} from '#/alf'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+import {useAppIsActive} from '#/horizon/notifications/mark-seen-in-view'
 import {isTransientPrismError} from '#/horizon/private/api/transient'
 import {usePrismFeatureForWrite} from '#/horizon/private/features-hooks'
 import {isPageDegraded} from '#/horizon/private/feed/degraded'
@@ -120,6 +121,8 @@ export function PrivateNotificationsList({
   const t = useTheme()
   const queryClient = useQueryClient()
   const isFocused = useIsFocused()
+  // Marking seen also waits for the tab or app to be in the foreground
+  const appIsActive = useAppIsActive()
   const source = usePrivateFeedSource()
   const canMarkSeen = usePrismFeatureForWrite('private.notifications')
   const initialNumToRender = useInitialNumToRender()
@@ -188,6 +191,7 @@ export function PrivateNotificationsList({
       topRequestedAt < mountedAt ||
       markedAt.current === topRequestedAt ||
       !isFocused ||
+      !appIsActive ||
       !canMarkSeen ||
       !source
     ) {
@@ -199,7 +203,15 @@ export function PrivateNotificationsList({
       did: source.did,
       requestedAt: topRequestedAt,
     })
-  }, [topRequestedAt, mountedAt, isFocused, canMarkSeen, source, queryClient])
+  }, [
+    topRequestedAt,
+    mountedAt,
+    isFocused,
+    appIsActive,
+    canMarkSeen,
+    source,
+    queryClient,
+  ])
 
   /*
    * Back to the top and ask again, keeping the list shown while it asks. A

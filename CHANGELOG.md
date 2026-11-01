@@ -65,6 +65,11 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Notifications are only marked read when you're looking at them.** A tab
+  or app in the background no longer clears your badge and unread
+  highlights.
+- **Switching accounts is faster,** and switching back to an account you
+  just used shows its feed straight away.
 - **Threads show the right like, repost, quote and reply counts,** and the
   line joining a post to its reply no longer breaks.
 - **Videos in the Following feed no longer go black partway through,** and

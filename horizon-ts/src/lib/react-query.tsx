@@ -10,6 +10,7 @@ import {
 import {
   type PersistQueryClientOptions,
   PersistQueryClientProvider,
+  persistQueryClientRestore,
 } from '@tanstack/react-query-persist-client'
 
 import {createPersistedQueryStorage} from '#/lib/persisted-query-storage'
@@ -22,6 +23,8 @@ import {
   loadFollowingSnapshot,
   saveFollowingSnapshot,
 } from '#/features/followingV2/home/queries/followingSnapshot'
+// HORIZON: each account's query client lives across account switches
+import {takeLiveQueryClient} from '#/horizon/session/live-query-clients'
 
 declare global {
   interface Window {
@@ -151,6 +154,41 @@ const dehydrateOptions: DehydrateOptions = {
   },
 }
 
+// HORIZON: persistence options, built once per account's live client
+function createPersistOptions(currentDid: string | undefined) {
+  const storage = createPersistedQueryStorage(currentDid ?? 'logged-out')
+  const asyncPersister = createAsyncStoragePersister({
+    storage,
+    key: 'queryClient-' + (currentDid ?? 'logged-out'),
+    // JSON, as by default, but with Following v2's Home Following snapshot.
+    serialize: client => JSON.stringify(saveFollowingSnapshot(client)),
+    deserialize: cached => loadFollowingSnapshot(JSON.parse(cached)),
+  })
+  return {
+    persister: asyncPersister,
+    dehydrateOptions,
+    buster: env.APP_VERSION,
+  } satisfies Omit<PersistQueryClientOptions, 'queryClient'>
+}
+
+/**
+ * HORIZON: read an account's saved cache into its live client ahead of a
+ * switch, while the session resumes, so the app it remounts into already
+ * holds what that account saw last. A failed read leaves the provider's own
+ * restore to try again.
+ */
+export async function prewarmAccountQueryClient(did: string) {
+  const {queryClient, persistOptions} = takeLiveQueryClient(did, () => ({
+    queryClient: createQueryClient(),
+    persistOptions: createPersistOptions(did),
+  }))
+  try {
+    await persistQueryClientRestore({queryClient, ...persistOptions})
+  } catch {
+    // The provider restores on mount anyway
+  }
+}
+
 export function QueryProvider({
   children,
   currentDid,
@@ -182,24 +220,19 @@ function QueryProviderInner({
       'Something is very wrong. Expected did to be stable due to key above.',
     )
   }
-  // We create the query client here so that it's scoped to a specific DID.
-  // Do not move the query client creation outside of this component.
-  const [queryClient, _setQueryClient] = useState(() => createQueryClient())
-  const [persistOptions, _setPersistOptions] = useState(() => {
-    const storage = createPersistedQueryStorage(currentDid ?? 'logged-out')
-    const asyncPersister = createAsyncStoragePersister({
-      storage,
-      key: 'queryClient-' + (currentDid ?? 'logged-out'),
-      // JSON, as by default, but with Following v2's Home Following snapshot.
-      serialize: client => JSON.stringify(saveFollowingSnapshot(client)),
-      deserialize: cached => loadFollowingSnapshot(JSON.parse(cached)),
-    })
-    return {
-      persister: asyncPersister,
-      dehydrateOptions,
-      buster: env.APP_VERSION,
-    } satisfies Omit<PersistQueryClientOptions, 'queryClient'>
-  })
+  /*
+   * HORIZON: each account keeps its own query client while the app runs, so
+   * switching back shows its feed, avatar and notifications at once rather
+   * than an empty app while everything loads again. A client still belongs
+   * to one DID only, and its queries are collected as in-session ones are.
+   */
+  const [liveClient, _setLiveClient] = useState(() =>
+    takeLiveQueryClient(currentDid, () => ({
+      queryClient: createQueryClient(),
+      persistOptions: createPersistOptions(currentDid),
+    })),
+  )
+  const {queryClient, persistOptions} = liveClient
   useEffect(() => {
     if (IS_WEB) {
       // WARNING, BROKEN

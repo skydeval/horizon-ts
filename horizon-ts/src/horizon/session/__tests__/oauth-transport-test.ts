@@ -16,6 +16,7 @@ import {
   createOAuthTransport,
   PROBE_WINDOW_MS,
   resetOAuthTransportProbes,
+  SESSION_REUSE_MS,
 } from '../oauth-transport.web'
 
 const DID = 'did:plc:transportaaaaaaaaaaaaaaa'
@@ -171,6 +172,74 @@ describe('the OAuth transport 401 probe', () => {
 
   it('a restore that fails on the network is not a loss', async () => {
     mockRestore.mockImplementation(() =>
+      Promise.reject(new Error('Failed to fetch')),
+    )
+    await expect(send()).rejects.toThrow('Failed to fetch')
+    expect(mockLost).not.toHaveBeenCalled()
+  })
+})
+
+describe('the OAuth transport shared restore', () => {
+  function autoRestores() {
+    return mockRestore.mock.calls.filter(([, refresh]) => refresh === undefined)
+      .length
+  }
+
+  it('requests sent together share one restore', async () => {
+    for (let i = 0; i < 20; i++) responses.push(xrpcResponse(200))
+    const all = await Promise.all(Array.from({length: 20}, () => send()))
+    expect(all.every(response => response.status === 200)).toBe(true)
+    expect(autoRestores()).toBe(1)
+    expect(session.fetchHandler).toHaveBeenCalledTimes(20)
+  })
+
+  it('restores again once the reuse window has passed', async () => {
+    responses.push(xrpcResponse(200), xrpcResponse(200), xrpcResponse(200))
+    await send()
+    now += SESSION_REUSE_MS - 1
+    await send()
+    expect(autoRestores()).toBe(1)
+    now += 1
+    await send()
+    expect(autoRestores()).toBe(2)
+  })
+
+  it('a failed restore is not handed to the next request', async () => {
+    mockRestore.mockImplementationOnce(() =>
+      Promise.reject(new Error('Failed to fetch')),
+    )
+    await expect(send()).rejects.toThrow('Failed to fetch')
+    responses.push(xrpcResponse(200))
+    const response = await send()
+    expect(response.status).toBe(200)
+    expect(autoRestores()).toBe(2)
+  })
+
+  it('a forced refresh after a 401 makes the next request restore again', async () => {
+    responses.push(xrpcResponse(401, 'AuthenticationRequired'))
+    responses.push(xrpcResponse(200))
+    await send()
+    expect(forcedRefreshes()).toBe(1)
+    now += 1_000
+    await send()
+    expect(autoRestores()).toBe(2)
+  })
+
+  it('a shared session refused as an auth error reports the loss', async () => {
+    responses.push(xrpcResponse(200))
+    await send()
+    session.fetchHandler.mockImplementationOnce(() =>
+      Promise.reject(new Error('The session was deleted by another process')),
+    )
+    await expect(send()).rejects.toThrow('deleted by another process')
+    expect(mockLost).toHaveBeenCalledWith(DID)
+    responses.push(xrpcResponse(200))
+    await send()
+    expect(autoRestores()).toBe(2)
+  })
+
+  it('a network failure from a shared session is not a loss', async () => {
+    session.fetchHandler.mockImplementationOnce(() =>
       Promise.reject(new Error('Failed to fetch')),
     )
     await expect(send()).rejects.toThrow('Failed to fetch')

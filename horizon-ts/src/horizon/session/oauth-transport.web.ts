@@ -53,6 +53,8 @@ export function restoreOAuthSession(
   refresh: boolean | 'auto',
 ): Promise<OAuthSession> {
   const client = getOAuthClient()
+  // A forced refresh may follow a re-authorization: requests restore afresh
+  if (refresh === true) sharedRestores.delete(did)
   const previous = restoreChains.get(did)
   const turn = previous
     ? bounded(previous, OAUTH_WAIT_MS, () => new OAuthSessionBusyError()).catch(
@@ -70,6 +72,53 @@ export function restoreOAuthSession(
   return result
 }
 
+/**
+ * How long a request may reuse a session another request restored. The
+ * session reads its tokens from the store on every request (refreshing an
+ * expired one), so reuse only keeps the DPoP key it was restored with. This
+ * bounds how long a re-authorization in another tab goes unseen; a 401 from
+ * an old key forces a refresh, which drops the reuse at once.
+ */
+export const SESSION_REUSE_MS = 15_000
+
+type SharedRestore = {
+  session: Promise<OAuthSession>
+  /** When the restore started. */
+  startedAt: number
+}
+
+const sharedRestores = new Map<string, SharedRestore>()
+
+/**
+ * The session a request signs with. Requests sent together (a screen
+ * mounting, an account switch) share one restore rather than queueing one
+ * each behind the library's lock, which held a switch on empty screens for
+ * seconds. Each restore after the reuse window reads the store again.
+ */
+function restoreForRequest(did: string): Promise<OAuthSession> {
+  const shared = sharedRestores.get(did)
+  if (shared && Date.now() - shared.startedAt < SESSION_REUSE_MS) {
+    return shared.session
+  }
+  const entry: SharedRestore = {
+    session: restoreOAuthSession(did, 'auto'),
+    startedAt: Date.now(),
+  }
+  sharedRestores.set(did, entry)
+  entry.session.catch(() => {
+    // A failed restore is never handed to a later request.
+    if (sharedRestores.get(did) === entry) sharedRestores.delete(did)
+  })
+  return entry.session
+}
+
+/**
+ * Stop reusing `did`'s restored session: the next request restores again.
+ */
+export function forgetSharedOAuthSession(did: string) {
+  sharedRestores.delete(did)
+}
+
 type ProbeState = {
   /** When the last forced refresh started. */
   forcedAt: number
@@ -85,6 +134,7 @@ const probes = new Map<string, ProbeState>()
 export function resetOAuthTransportProbes() {
   probes.clear()
   restoreChains.clear()
+  sharedRestores.clear()
 }
 
 async function readXrpcError(response: Response): Promise<string | undefined> {
@@ -127,6 +177,7 @@ async function onPdsUnauthorized(
     const error = await readXrpcError(response)
     if (isTokenRefusal(response.status, error)) {
       probes.delete(did)
+      forgetSharedOAuthSession(did)
       try {
         const session = await restoreOAuthSession(did, false)
         await session.signOut()
@@ -144,6 +195,8 @@ async function onPdsUnauthorized(
 
   const next: ProbeState = {forcedAt: now, refreshedAt: undefined}
   probes.set(did, next)
+  // Later requests restore again, picking up a key re-authorized elsewhere
+  forgetSharedOAuthSession(did)
   try {
     await restoreOAuthSession(did, true)
     next.refreshedAt = Date.now()
@@ -210,7 +263,7 @@ export function createOAuthTransport(
       }
       let session: OAuthSession
       try {
-        session = await restoreOAuthSession(did, 'auto')
+        session = await restoreForRequest(did)
       } catch (e) {
         if (isAuthError(e)) {
           reportOAuthSessionLost(did)
@@ -222,7 +275,20 @@ export function createOAuthTransport(
       }
       const restoredAt = Date.now()
       const proxied = new Headers(init.headers).has('atproto-proxy')
-      const response = await session.fetchHandler(path, init)
+      let response: Response
+      try {
+        response = await session.fetchHandler(path, init)
+      } catch (e) {
+        /*
+         * A shared session reads its tokens on each request, so one deleted
+         * or refused since the restore fails here, as the restore would have
+         */
+        if (isAuthError(e)) {
+          forgetSharedOAuthSession(did)
+          reportOAuthSessionLost(did)
+        }
+        throw e
+      }
       if (response.status === 401 && !proxied) {
         await onPdsUnauthorized(did, response, restoredAt)
       }

@@ -71,6 +71,8 @@ import {Features, isOnForBetaUser} from '#/analytics/features'
 import {IS_INTERNAL, IS_LIQUID_GLASS, IS_WEB} from '#/env'
 // HORIZON: the header's web backgrounds stay on the reading surface (Phase 3)
 import {useReadingColumnBox} from '#/horizon/backdrops/surface-box'
+// HORIZON: a hidden screen waits to mark seen until it's in view
+import {useMarkSeenInView} from '#/horizon/notifications/mark-seen-in-view'
 // HORIZON: the Public | Private switch and the Private view for members
 import {usePrivateNotificationsMode} from '#/horizon/private/notifications/mode'
 // HORIZON: the Public | Private switch and the Private view for members
@@ -516,11 +518,17 @@ function useSessionSeenAt() {
    */
   const latestRefreshes = useRef(new Map<GroupedNotificationsFeed, object>())
 
+  // HORIZON: a hidden screen (a background tab, the app in the background) waits to mark seen until it's in view
+  const markSeen = useMarkSeenInView(at => {
+    void unreadApi.markAllRead({seenAt: at})
+  })
+
   const applyLoad = (load: FeedLoad, isRefresh: boolean) => {
     setSeenAt(snapshot => nextSeenAt({load, isRefresh, snapshot}))
     const markReadAt = getMarkReadAt(load)
     if (markReadAt) {
-      void unreadApi.markAllRead({seenAt: markReadAt})
+      // HORIZON: a hidden screen waits to mark seen until it's in view
+      markSeen(markReadAt)
     }
   }
 

@@ -1,3 +1,5 @@
+// HORIZON: the account's in-memory client goes with its persisted cache
+import {forgetLiveQueryClient} from '#/horizon/session/live-query-clients'
 import {create as createArchiveDB} from '#/storage/archive/db'
 
 /**
@@ -36,6 +38,8 @@ export function createPersistedQueryStorage(id: string): PersistedQueryStorage {
 }
 
 export async function clearPersistedQueryStorage(id: string) {
+  // HORIZON: the account's in-memory client goes with its persisted cache
+  forgetLiveQueryClient(id)
   const store = createArchiveDB({id: createId(id)})
   await store.clear()
 }

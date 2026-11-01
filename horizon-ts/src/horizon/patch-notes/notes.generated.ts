@@ -8,6 +8,21 @@ import {type PatchNote} from './types'
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
     "version": "0.1.0",
+    "build": 13,
+    "date": "2026-11-01",
+    "summary": "Notifications stay unread until you see them, and faster account switching.",
+    "sections": [
+      {
+        "kind": "fixes",
+        "items": [
+          "Notifications are only marked read when you're looking at them. A tab or app in the background no longer clears your badge and unread highlights.",
+          "Switching accounts is faster, and switching back to an account you just used shows its feed straight away."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.1.0",
     "build": 12,
     "date": "2026-11-01",
     "summary": "Right counts in threads, and link cards with their pictures.",

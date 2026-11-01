@@ -2,6 +2,8 @@ import {useCallback, useState} from 'react'
 import {msg} from '@lingui/core/macro'
 import {useLingui} from '@lingui/react'
 
+// HORIZON: read the account's saved cache while its session resumes
+import {prewarmAccountQueryClient} from '#/lib/react-query'
 import {logger} from '#/logger'
 import {type SessionAccount, useSessionApi} from '#/state/session'
 import {useLoggedOutViewControls} from '#/state/shell/logged-out'
@@ -48,6 +50,8 @@ export function useAccountSwitcher() {
             // So we change the URL ourselves. The navigator will pick it up on remount.
             history.pushState(null, '', '/')
           }
+          // HORIZON: read the account's saved cache while its session resumes
+          void prewarmAccountQueryClient(account.did)
           await resumeSession(account, true)
           ax.metric('account:loggedIn', {logContext, withPassword: false})
           Toast.show(_(msg`Signed in as @${account.handle}`))
