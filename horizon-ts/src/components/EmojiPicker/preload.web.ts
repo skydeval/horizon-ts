@@ -1,5 +1,7 @@
 import {init} from 'emoji-mart'
 
+import {dropStarterEmoji} from '#/horizon/emoji/frequent'
+
 /**
  * Only load the emoji picker data once per page load.
  */
@@ -18,6 +20,8 @@ let loadRequested = false
 async function loadEmojiData() {
   if (loadRequested) return
   loadRequested = true
+  // HORIZON: before emoji-mart reads "Frequently used", drop its starters
+  dropStarterEmoji(localStorageOrUndefined())
   try {
     const data = (await import('@emoji-mart/data')).default
     init({data})
@@ -27,4 +31,12 @@ async function loadEmojiData() {
 export function useWebPreloadEmoji({immediate}: {immediate?: boolean} = {}) {
   if (immediate) loadEmojiData()
   return loadEmojiData
+}
+
+function localStorageOrUndefined(): Storage | undefined {
+  try {
+    return window.localStorage
+  } catch {
+    return undefined
+  }
 }

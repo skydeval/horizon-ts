@@ -65,6 +65,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **The emoji picker on web remembers what you use.** "Frequently used"
+  now holds only your emoji, not a starter set that outranked them, and
+  shows a new pick the next time you open it.
 - **Thread Lens no longer calls a deleted post "hidden by a block".** It
   says "Deleted post", and still shows the thread's first post above it,
   with a note that some posts in between aren't available.

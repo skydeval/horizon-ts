@@ -1,10 +1,12 @@
 import {createContext, useContext, useEffect, useMemo, useRef} from 'react'
 import EmojiPicker from '@emoji-mart/react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import {Data} from 'emoji-mart'
 
 import {useA11y} from '#/state/a11y'
 import {textInputWebEmitter} from '#/view/com/composer/text-input/textInputWebEmitter'
 import {atoms as a, flatten} from '#/alf'
+import {restoreFrequentRow} from '#/horizon/emoji/frequent'
 import * as Menu from '../Menu'
 import {useWebPreloadEmoji} from './preload'
 import {
@@ -127,6 +129,8 @@ export function Picker({keepOpenWhenShiftHeld = true}: PickerProps) {
           <EmojiPicker
             autoFocus
             onEmojiSelect={(emoji: Emoji) => {
+              // HORIZON: the next picker opened shows this pick
+              restoreFrequentRow(Data)
               onEmojiSelect(emoji)
 
               if (!keepOpenWhenShiftHeld || !isShiftDown.current) {
