@@ -100,14 +100,14 @@ describe('the repo notes', () => {
 })
 
 describe('renderLatestHtml', () => {
-  it('shows only the newest release, collapsed, with a link to the page', () => {
+  it('shows only the newest release, collapsed, with no link to older ones', () => {
     const older = parsePatchNote('0.1.0-7.md', NOTE)
     const newer = {...older, build: 8, summary: 'Newer.'}
-    const html = renderLatestHtml([newer, older], 'https://example.com/notes')
+    const html = renderLatestHtml([newer, older])
     expect(html.startsWith('<details')).toBe(true)
     expect(html).toContain("What's new in build 8")
     expect(html).not.toContain('build 7')
-    expect(html).toContain('<a href="https://example.com/notes">')
+    expect(html).not.toContain('<a ')
   })
 
   it('escapes the text', () => {

@@ -6,9 +6,9 @@
  *     writes src/horizon/patch-notes/notes.generated.ts (the app's copy)
  *   node scripts/horizon-patch-notes.js check
  *     fails if that file is out of date
- *   node scripts/horizon-patch-notes.js html-latest [page-url]
+ *   node scripts/horizon-patch-notes.js html-latest
  *     prints the newest release as an HTML fragment
- *   node scripts/horizon-patch-notes.js html-build <build> [page-url]
+ *   node scripts/horizon-patch-notes.js html-build <build>
  *     the same for one build; fails when that build has no notes
  *
  * The pure functions are exported for the unit test in
@@ -28,7 +28,6 @@ const GENERATED = path.join(
   'patch-notes',
   'notes.generated.ts',
 )
-const PAGE_URL = 'https://nearhorizon.app/patch-notes'
 
 /** Section headings, in the order they must appear, and their keys. */
 const SECTIONS = [
@@ -143,15 +142,15 @@ const SECTION_TITLES = Object.fromEntries(
 )
 
 /**
- * The newest release as a collapsed `<details>` block, with a link to the
- * full page. Empty when there are no notes.
+ * The newest release as a collapsed `<details>` block. Empty when there
+ * are no notes.
  */
-function renderLatestHtml(notes, pageUrl = PAGE_URL) {
-  return notes[0] ? renderReleaseHtml(notes[0], pageUrl) : ''
+function renderLatestHtml(notes) {
+  return notes[0] ? renderReleaseHtml(notes[0]) : ''
 }
 
-/** One release as a collapsed `<details>` block, with a link to the page. */
-function renderReleaseHtml(latest, pageUrl = PAGE_URL) {
+/** One release as a collapsed `<details>` block, its notes only. */
+function renderReleaseHtml(latest) {
   const out = [
     '<details class="notes">',
     `  <summary>What's new in build ${latest.build}</summary>`,
@@ -165,10 +164,8 @@ function renderReleaseHtml(latest, pageUrl = PAGE_URL) {
     }
     out.push('  </ul>')
   }
-  out.push(
-    `  <p><a href="${escapeHtml(pageUrl)}">All patch notes</a></p>`,
-    '</details>',
-  )
+  // Only this release's notes: no link to older ones (skydeval, 2026-11-01)
+  out.push('</details>')
   return out.join('\n')
 }
 
@@ -189,7 +186,7 @@ function main(argv) {
     return 0
   }
   if (command === 'html-latest') {
-    process.stdout.write(renderLatestHtml(loadPatchNotes(), arg || PAGE_URL))
+    process.stdout.write(renderLatestHtml(loadPatchNotes()))
     return 0
   }
   if (command === 'html-build') {
@@ -198,11 +195,11 @@ function main(argv) {
       console.error(`no patch notes for build ${arg}`)
       return 1
     }
-    process.stdout.write(renderReleaseHtml(note, argv[2] || PAGE_URL))
+    process.stdout.write(renderReleaseHtml(note))
     return 0
   }
   console.error(
-    'usage: horizon-patch-notes.js generate|check|html-latest [url]|html-build <build> [url]',
+    'usage: horizon-patch-notes.js generate|check|html-latest|html-build <build>',
   )
   return 2
 }

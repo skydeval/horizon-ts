@@ -1,6 +1,7 @@
 /*
- * Patch notes: what changed in each release, newest first. The same notes
- * as the Android download page, from patch-notes/*.md. Open without
+ * Patch notes: what changed in the newest release only (skydeval,
+ * 2026-11-01: no need to show every release since the beginning). The same
+ * notes as the Android download page, from patch-notes/*.md. Open without
  * signing in (nearhorizon.app/patch-notes).
  */
 
@@ -20,6 +21,7 @@ import {type PatchNote, type PatchNoteKind} from './types'
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PatchNotes'>
 
 export function PatchNotesScreen(_props: Props) {
+  const latest = PATCH_NOTES[0]
   return (
     <Layout.Screen testID="patchNotesScreen">
       <Layout.Header.Outer>
@@ -33,9 +35,7 @@ export function PatchNotesScreen(_props: Props) {
       </Layout.Header.Outer>
       <Layout.Content>
         <View style={[a.px_lg, a.py_lg, a.gap_2xl]}>
-          {PATCH_NOTES.map(note => (
-            <Release key={`${note.version}-${note.build}`} note={note} />
-          ))}
+          {latest && <Release note={latest} />}
         </View>
       </Layout.Content>
     </Layout.Screen>
