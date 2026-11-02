@@ -33,6 +33,7 @@ import {
 import {atoms as a, useTheme} from '#/alf'
 import {Button, ButtonIcon, ButtonText} from '#/components/Button'
 import {CircleQuestion_Stroke2_Corner2_Rounded as QuestionIcon} from '#/components/icons/CircleQuestion'
+import {DotGrid3x1_Stroke2_Corner0_Rounded as DotsIcon} from '#/components/icons/DotGrid'
 import {ExclamationCircle_Stroke2_Corner0_Rounded as CloudIcon} from '#/components/icons/ExclamationCircle'
 import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlashIcon} from '#/components/icons/EyeSlash'
 import {PersonX_Stroke2_Corner0_Rounded as PersonXIcon} from '#/components/icons/Person'
@@ -47,6 +48,7 @@ import {type GapInfo} from '#/horizon/thread-lens/adapt'
 import {useLensWaiting} from '#/horizon/thread-lens/api'
 import {retryLensGaps} from '#/horizon/thread-lens/fetch'
 import {useLensListName} from '#/horizon/thread-lens/lists'
+import {GAP_BELOW_ROW} from '#/horizon/thread-lens/nodes'
 import {useLensRowState} from '#/horizon/thread-lens/snapshot'
 import {
   BLOCKED_BY_A_LIST,
@@ -77,6 +79,7 @@ function iconOf(gap: string) {
   if (BLOCK_KINDS.has(gap)) return PersonXIcon
   if (BIN_KINDS.has(gap)) return TrashIcon
   if (gap === 'block-state-unknown') return QuestionIcon
+  if (gap === GAP_BELOW_ROW) return DotsIcon
   if (gap === 'upstream-unavailable') return CloudIcon
   return EyeSlashIcon
 }

@@ -65,6 +65,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Thread Lens no longer calls a deleted post "hidden by a block".** It
+  says "Deleted post", and still shows the thread's first post above it,
+  with a note that some posts in between aren't available.
 - **Kryphocron notifications open faster.**
 - **Notifications are only marked read when you're looking at them.** A tab
   or app in the background no longer clears your badge and unread

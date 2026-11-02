@@ -600,3 +600,95 @@ describe('lensState (4.3, 10)', () => {
     )
   })
 })
+
+describe('a root above a broken chain (gapBelow)', () => {
+  const DELETED = uriOf('3kdeleted2222', BLOCKED)
+  const BETWEEN = `${ROOT}#gap-below`
+  const raw = [
+    postNode(view('3kroot2222222'), {gapBelow: true}),
+    gapNode(DELETED, 'deleted'),
+    postNode(view('3kanchor22222', {parent: DELETED, root: ROOT})),
+  ]
+
+  it.each(['linear', 'tree'] as const)(
+    'draws the root, a row for the unknown posts, the gap and the anchor (%s)',
+    viewKind => {
+      const output = select(snapshotOf(raw), {
+        view: viewKind,
+        below: viewKind === 'tree' ? 4 : 10,
+      })
+      expect(uris(output)).toEqual([
+        [ROOT, -3],
+        [BETWEEN, -2],
+        [DELETED, -1],
+        [ANCHOR, 0],
+      ])
+      const between = gapInfoOf(postOf(output.thread[1]))
+      expect(between).toMatchObject({gap: 'gap-below', retryable: false})
+      expect(gapInfoOf(postOf(output.thread[2]))?.gap).toBe('deleted')
+      // The in-between row is drawn only: not a gap URI, not in the map.
+      expect(Array.from(output.lensState.gapUris)).toEqual([DELETED])
+      const {threadItems} = sortAndAnnotateThreadItems(output.thread, {
+        threadgateHiddenReplies: new Set(),
+        moderationOpts: MODERATION_OPTS,
+        view: viewKind,
+      })
+      expect(threadItems.map(item => (item as {uri: string}).uri)).toEqual([
+        ROOT,
+        BETWEEN,
+        DELETED,
+        ANCHOR,
+      ])
+    },
+  )
+
+  it('keeps the row out of the snapshot', () => {
+    const snapshot = snapshotOf(raw)
+    select(snapshot)
+    expect(snapshot.nodes.has(BETWEEN)).toBe(false)
+    expect(snapshot.nodes.get(ROOT)).toMatchObject({gapBelow: true})
+  })
+
+  it('stops at a parentless gap when no root is marked', () => {
+    const output = select(
+      snapshotOf([
+        postNode(view('3kroot2222222')),
+        gapNode(DELETED, 'deleted'),
+        postNode(view('3kanchor22222', {parent: DELETED, root: ROOT})),
+      ]),
+    )
+    expect(uris(output)).toEqual([
+      [DELETED, -1],
+      [ANCHOR, 0],
+    ])
+  })
+
+  it('never jumps to the root above a gap that names its parent', () => {
+    const output = select(
+      snapshotOf([
+        postNode(view('3kroot2222222'), {gapBelow: true}),
+        gapNode(DELETED, 'deleted', {parentUri: uriOf('3kunknown2222')}),
+        postNode(view('3kanchor22222', {parent: DELETED, root: ROOT})),
+      ]),
+    )
+    expect(uris(output)).toEqual([
+      [DELETED, -1],
+      [ANCHOR, 0],
+    ])
+  })
+
+  it('keeps the flag when a later response sends the root without it', () => {
+    const first = snapshotOf(raw)
+    const again = mergeLensNodes(
+      first,
+      checkLensNodes([postNode(view('3kroot2222222'))]),
+      {request: {kind: 'resolve'}, bridging: 'full', outcomes: new Map()},
+    )
+    const root = again.nodes.get(ROOT)
+    expect(root).toMatchObject({gapBelow: true})
+    // The held view object is carried by reference.
+    expect((root as {view: unknown}).view).toBe(
+      (first.nodes.get(ROOT) as {view: unknown}).view,
+    )
+  })
+})

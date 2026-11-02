@@ -48,6 +48,13 @@ export const KNOWN_GAP_KINDS = [
  */
 export const UNVERIFIED_GAP = 'unverified'
 
+/**
+ * Horizon's own kind for the row between a `gapBelow` root and the gap
+ * under it: the posts in between are not known. Never a prism value, and
+ * never in the node map.
+ */
+export const GAP_BELOW_ROW = 'gap-below'
+
 /** The two gap kinds that may carry markers and a list (`defs.json`). */
 function isBlockKind(gap: string): boolean {
   return gap === 'blocked-by-you' || gap === 'blocking-you'
@@ -64,6 +71,12 @@ type CheckedBase = {
   parentUri?: string
   markers: LensMarkers
   hidden: boolean
+  /**
+   * prism's `gapBelow` (2026-11-02): this node is the thread root, put on
+   * top because the chain under it stops at a deleted or not-found post
+   * whose parent is not known. Kept only when exactly `true`.
+   */
+  gapBelow?: true
 }
 
 /** A post node as prism sent it. `post` is prism's view, unchecked. */
@@ -107,6 +120,8 @@ export type LensNode =
       rootUri?: string
       view: PostView
       restored?: true
+      /** The root of a broken chain (`gapBelow`), or-ed across responses. */
+      gapBelow?: true
     }
   | {
       kind: 'gap'
@@ -117,6 +132,8 @@ export type LensNode =
       /** The list view, when the public view named it (6.3). */
       list?: ListViewBasic
       bridging: string
+      /** The root of a broken chain (`gapBelow`), or-ed across responses. */
+      gapBelow?: true
     }
   | {kind: 'private'; uri: string; parentUri?: string; view: PostView}
   | {kind: 'optimistic'; uri: string; parentUri?: string; view: PostView}
@@ -177,7 +194,12 @@ export function checkLensNode(raw: unknown): CheckedNode | undefined {
   const uri = raw.uri
   const parentUri = isLensAtUri(raw.parentUri) ? raw.parentUri : undefined
   const hidden = raw.hiddenByThreadgate === true
-  const base = {uri, ...(parentUri ? {parentUri} : {}), hidden}
+  const base = {
+    uri,
+    ...(parentUri ? {parentUri} : {}),
+    hidden,
+    ...(raw.gapBelow === true ? {gapBelow: true as const} : {}),
+  }
   if (isObject(raw.post) && raw.post.uri === uri) {
     if (isPrivatePostUri(uri)) {
       logger.warn('thread lens: a post node with a private URI', {uri})
@@ -485,6 +507,15 @@ export function mergeLensNodes(
         newViews.push(next.view)
       }
     }
+    // The flag is or-ed, like the hidden flag; the held view is kept.
+    const placed = nodes.get(node.uri)
+    if (
+      (node.gapBelow || hasGapBelow(held)) &&
+      (placed?.kind === 'post' || placed?.kind === 'gap') &&
+      !placed.gapBelow
+    ) {
+      nodes.set(node.uri, {...placed, gapBelow: true})
+    }
     const current = nodes.get(node.uri)
     if (current?.kind === 'gap') gaps.set(node.uri, current.gap)
     else gaps.delete(node.uri)
@@ -509,10 +540,19 @@ export function mergeLensNodes(
   }
 }
 
+function hasGapBelow(node: LensNode | undefined): boolean {
+  return (node?.kind === 'post' || node?.kind === 'gap') && !!node.gapBelow
+}
+
 /** The lens tree on a merged map (step 3). */
 export type LensTree = {
   /** The parent chain, the top first, without the anchor. */
   chain: LensNode[]
+  /**
+   * Whether `chain[0]` is a `gapBelow` root put above a top gap with no
+   * parent link: the posts between it and `chain[1]` are not known.
+   */
+  gapBelow: boolean
   anchor: LensNode | undefined
   /** The children of every node, by its URI, in map order. */
   children: ReadonlyMap<string, LensNode[]>
@@ -539,6 +579,22 @@ export function lensTree(
     onChain.add(parentUri)
     parentUri = parent.parentUri
   }
+  /*
+   * A top gap with no parent link: the root prism marked `gapBelow` goes
+   * above it, with no link guessed between them.
+   */
+  let gapBelow = false
+  const top = chain[0] ?? anchor
+  if (anchor && top?.kind === 'gap' && !top.parentUri) {
+    for (const node of nodes.values()) {
+      if (hasGapBelow(node) && !onChain.has(node.uri)) {
+        chain.unshift(node)
+        onChain.add(node.uri)
+        gapBelow = true
+        break
+      }
+    }
+  }
   const children = new Map<string, LensNode[]>()
   for (const node of nodes.values()) {
     if (onChain.has(node.uri) || !node.parentUri) continue
@@ -546,7 +602,7 @@ export function lensTree(
     if (list) list.push(node)
     else children.set(node.parentUri, [node])
   }
-  return {chain, anchor, children}
+  return {chain, gapBelow, anchor, children}
 }
 
 /** The view a node renders, when it has one. */

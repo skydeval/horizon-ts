@@ -47,6 +47,11 @@ export const GAP_TEXT = {
     message: 'Post unavailable',
     comment: 'Thread Lens: a placeholder for a post that is not available',
   }),
+  'gap-below': msg({
+    message: 'Some posts in between aren’t available',
+    comment:
+      'Thread Lens: a row between the first post of a thread and a deleted post, when the posts between them can’t be found',
+  }),
   unverified: msg({
     message: 'Post not loaded',
     comment:

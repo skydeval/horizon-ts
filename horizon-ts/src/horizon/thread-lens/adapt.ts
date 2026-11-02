@@ -31,6 +31,7 @@ import {type UsePostThreadQueryResult} from '#/state/queries/usePostThread/types
 import {getThreadgateRecord} from '#/state/queries/usePostThread/utils'
 import {THREAD_LENS} from '#/horizon/switches'
 import {
+  GAP_BELOW_ROW,
   type LensNode,
   lensRootUri,
   lensTree,
@@ -354,10 +355,30 @@ function buildFromSnapshot(
   const form = snapshot.form
   const inPlace = form === 'snapshot'
   // prism's anchor: the node map is keyed by DID-form URIs (5.2).
-  const {chain, anchor, children} = lensTree(
-    snapshot.nodes,
-    snapshot.anchor.prismAnchor,
-  )
+  const {
+    chain: linked,
+    gapBelow,
+    anchor,
+    children,
+  } = lensTree(snapshot.nodes, snapshot.anchor.prismAnchor)
+  /*
+   * Under a `gapBelow` root, a row saying the posts in between are not
+   * known. It is drawn only, never held, and has no action.
+   */
+  const chain: LensNode[] =
+    gapBelow && linked[0]
+      ? [
+          linked[0],
+          {
+            kind: 'gap',
+            uri: `${linked[0].uri}#${GAP_BELOW_ROW}`,
+            parentUri: linked[0].uri,
+            gap: GAP_BELOW_ROW,
+            bridging: 'full',
+          },
+          ...linked.slice(1),
+        ]
+      : linked
   const thread: ThreadItem[] = []
   const markers = new Map<string, LensMarkerRow>()
   const gapUris = new Set<string>()
@@ -391,7 +412,7 @@ function buildFromSnapshot(
   ) => {
     const hidden = snapshot.hidden.has(node.uri)
     if (node.kind === 'gap') {
-      gapUris.add(node.uri)
+      if (node.gap !== GAP_BELOW_ROW) gapUris.add(node.uri)
       const replyCount = attached + (markerOf(node.uri)?.moreReplies ? 1 : 0)
       const placeholder = placeholderView(node, rootUri, replyCount)
       placeholders.set(placeholder, {
