@@ -7,112 +7,23 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    "version": "0.1.14",
-    "build": 14,
-    "date": "2026-11-01",
-    "summary": "Kryphocron notifications open faster.",
-    "sections": [
-      {
-        "kind": "fixes",
-        "items": [
-          "Kryphocron notifications open faster."
-        ]
-      }
-    ]
-  },
-  {
-    "version": "0.1.0",
-    "build": 13,
-    "date": "2026-11-01",
-    "summary": "Notifications stay unread until you see them, and faster account switching.",
-    "sections": [
-      {
-        "kind": "fixes",
-        "items": [
-          "Notifications are only marked read when you're looking at them. A tab or app in the background no longer clears your badge and unread highlights.",
-          "Switching accounts is faster, and switching back to an account you just used shows its feed straight away."
-        ]
-      }
-    ]
-  },
-  {
-    "version": "0.1.0",
-    "build": 12,
-    "date": "2026-11-01",
-    "summary": "Right counts in threads, and link cards with their pictures.",
-    "sections": [
-      {
-        "kind": "fixes",
-        "items": [
-          "Threads show the right like, repost, quote and reply counts, and the line joining a post to its reply no longer breaks.",
-          "Pasted links get their card's picture again, for sites that turn Bluesky's card service away, such as GitHub."
-        ]
-      }
-    ]
-  },
-  {
-    "version": "0.1.0",
-    "build": 11,
-    "date": "2026-10-31",
-    "summary": "Steadier videos and Following feed, a look for each account, quotes from pasted Horizon links, bigger notification counts and the jump to top button.",
+    "version": "0.1.15",
+    "build": 15,
+    "date": "2026-11-04",
+    "summary": "Push notifications now arrive within seconds, and Horizon post links show their link cards in Discord.",
     "sections": [
       {
         "kind": "horizon",
         "items": [
-          "Notification badges count up to 999 before showing 999+, instead of stopping at 30+."
+          "Horizon post links shared in Discord show the post's link card: its title, description and site, beside the thumbnail."
         ]
       },
       {
         "kind": "fixes",
         "items": [
-          "Pasting a Horizon link to a post quotes the post, as a bsky.app link does, instead of making a link card. That works in replies too.",
-          "Videos recover by themselves after a dropped connection, and start again when you come back to them, instead of freezing or going black. A slow video shows its spinner while it loads.",
-          "Coming back to Following from a post no longer shows a black feed or jumps away from where you were. New posts wait until you're back, and the Home dot tells you they're there.",
-          "Each account keeps its own backdrop, colour mode, dark theme, font and font size. Switching accounts shows the ones you chose for it.",
-          "The jump to top and refresh button is back in the app. It shows a dot when new posts are waiting.",
-          "The Following feed's scroll bar no longer jumps about as you scroll. It's hidden there.",
-          "The Android launch screen shows Horizon's whole icon, sky included."
-        ]
-      }
-    ]
-  },
-  {
-    "version": "0.1.0",
-    "build": 8,
-    "date": "2026-10-30",
-    "summary": "Notifications on Android, Horizon's own look, the moderation inbox, and the latest from Bluesky's app.",
-    "sections": [
-      {
-        "kind": "horizon",
-        "items": [
-          "Push notifications on Android, for likes, reposts, replies, quotes, mentions and follows.",
-          "Replies and mentions on kryphocron posts notify you within seconds.",
-          "Direct messages and kryphocron notifications are checked about every 15 minutes.",
-          "Horizon has its own app icon, notification icon and launch screen.",
-          "Android builds can be downloaded from nearhorizon.app/download, and Obtainium can keep them up to date.",
-          "Patch notes, at nearhorizon.app/patch-notes and in Settings, About."
-        ]
-      },
-      {
-        "kind": "upstream",
-        "items": [
-          "The moderation inbox: see the reports you've made and any moderation decisions about your account, in Settings, Moderation.",
-          "A trending topics widget for your Android home screen.",
-          "Notifications line up with the feed, and the Activity tab is now called Post alerts.",
-          "Links can open a profile straight to one of its tabs, such as its lists.",
-          "Tabs with something unread show a dot."
-        ]
-      },
-      {
-        "kind": "fixes",
-        "items": [
-          "Videos in the Following feed no longer go black and stop partway through, and the feed no longer jitters, flashes or reloads while you scroll.",
-          "Saving an image gives it the same file name every time, so saving it twice won't make two copies under different names.",
-          "On Android, saved images go to a Horizon album instead of a Bluesky one.",
-          "The Android app's composer has the spoiler and content warning buttons, as on the web, for public and kryphocron posts.",
-          "The Android app no longer links to Bluesky's help desk, status page and feedback form, until Horizon has its own.",
-          "Two-factor codes from an authenticator app are handled properly when signing in.",
-          "Ordinary GitHub links on profiles are no longer treated as payment links. GitHub Sponsors links still are."
+          "Push notifications for likes, replies, reposts, follows, mentions and quotes now arrive within seconds, without waiting for Bluesky. Your mutes, blocks and push settings still apply.",
+          "The emoji picker on the web remembers the emoji you use, and shows a new pick the next time you open it.",
+          "Thread Lens shows a deleted post as \"Deleted post\" instead of \"Post hidden by a block\", with the thread's first post still shown above it."
         ]
       }
     ]
