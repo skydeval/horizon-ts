@@ -47,7 +47,12 @@ export function pickNewDms(
     prefs,
     lastShown,
     now,
-  }: {me: string; prefs: ChatPrefs | undefined; lastShown: string | undefined; now: number},
+  }: {
+    me: string
+    prefs: ChatPrefs | undefined
+    lastShown: string | undefined
+    now: number
+  },
 ): Convo[] {
   const since = lastShown ?? new Date(now - FIRST_DM_WINDOW_MS).toISOString()
   return convos
@@ -57,7 +62,9 @@ export function pickNewDms(
       if (!m || m.sender.did === me || m.sentAt <= since) return false
       const pref = convo.status === 'request' ? prefs?.chatRequest : prefs?.chat
       if (pref?.push === false) return false
-      const viewer = convo.members.find(member => member.did === m.sender.did)?.viewer
+      const viewer = convo.members.find(
+        member => member.did === m.sender.did,
+      )?.viewer
       if (pref?.include === 'follows' && !viewer?.following) return false
       return !(viewer?.muted || viewer?.blocking || viewer?.blockedBy)
     })
@@ -75,11 +82,16 @@ export function newestDmShown(convos: Convo[], lastShown: string | undefined) {
 }
 
 /** How a conversation's newest message reads. */
-export function describeDm(i18n: I18n, convo: Convo, recipientDid: string): Shown {
+export function describeDm(
+  i18n: I18n,
+  convo: Convo,
+  recipientDid: string,
+): Shown {
   const m = lastMessage(convo)!
   const sender = convo.members.find(member => member.did === m.sender.did)
-  const name = sender?.displayName?.trim() || (sender ? `@${sender.handle}` : '')
-  const group = (convo.kind as {$type?: string; name?: string} | undefined)
+  const name =
+    sender?.displayName?.trim() || (sender ? `@${sender.handle}` : '')
+  const group = convo.kind as {$type?: string; name?: string} | undefined
   const groupName =
     group?.$type === 'chat.bsky.convo.defs#groupConvo' && group.name?.trim()
       ? group.name.trim()

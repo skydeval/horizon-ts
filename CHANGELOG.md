@@ -68,6 +68,10 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Push notifications arrive at once.** Public notifications from Horizon's
+  own push service now reached Bluesky-hosted accounts, and each wake carries
+  what happened, so likes, replies and follows show without waiting for
+  Bluesky to index them. Your mutes, blocks and push settings still apply.
 - **The emoji picker on web remembers what you use.** "Frequently used"
   now holds only your emoji, not a starter set that outranked them, and
   shows a new pick the next time you open it.

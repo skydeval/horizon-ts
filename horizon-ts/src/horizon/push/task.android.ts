@@ -24,9 +24,9 @@ import {logger} from '#/logger'
 import * as persisted from '#/state/persisted'
 import {canAccountAct} from '#/horizon/session/accounts'
 import {PUSH_OFF} from '#/horizon/switches'
-import {checkAccount, ready} from './check'
+import {checkAccount, ready, showEvent} from './check'
 import {HORIZON_DM_TASK, HORIZON_PUSH_TASK} from './config'
-import {checkedDid} from './payload'
+import {checkedDid, pushEventOf} from './payload'
 
 /** Minutes between DM checks; Android's floor is 15. */
 const DM_INTERVAL_MINUTES = 15
@@ -34,8 +34,13 @@ const DM_INTERVAL_MINUTES = 15
 if (!PUSH_OFF) {
   TaskManager.defineTask(HORIZON_PUSH_TASK, async ({data, error}) => {
     if (error) return
+    // A check that carries its event shows it at once; the rest still runs
+    const event = pushEventOf(data)
+    if (event) await showEvent(event)
     const did = checkedDid(data)
-    if (did) await checkAccount(did, {activity: true, private: true, dms: true})
+    if (did) {
+      await checkAccount(did, {activity: !event, private: true, dms: true})
+    }
   })
 
   TaskManager.defineTask(HORIZON_DM_TASK, async () => {
@@ -47,7 +52,11 @@ if (!PUSH_OFF) {
       const accounts = persisted.get('session').accounts.filter(canAccountAct)
       for (const account of accounts) {
         // kryphocron too, until prism wakes phones itself
-        await checkAccount(account.did, {activity: false, private: true, dms: true})
+        await checkAccount(account.did, {
+          activity: false,
+          private: true,
+          dms: true,
+        })
       }
       return BackgroundTask.BackgroundTaskResult.Success
     } catch {

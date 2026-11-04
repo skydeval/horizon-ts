@@ -52,8 +52,7 @@ function wanted(n: Notif, prefs: Prefs | undefined): boolean {
   const reason = REASONS[n.reason]
   if (!reason) return false
   const pref = prefs?.[reason.pref] as
-    | {push?: boolean; include?: string}
-    | undefined
+    {push?: boolean; include?: string} | undefined
   if (pref?.push === false) return false
   if (pref?.include === 'follows' && !n.author.viewer?.following) return false
   return true
@@ -62,6 +61,14 @@ function wanted(n: Notif, prefs: Prefs | undefined): boolean {
 function hidden(n: Notif): boolean {
   const v = n.author.viewer
   return Boolean(v?.muted || v?.blocking || v?.blockedBy)
+}
+
+/**
+ * Whether one notification may show: wanted by the account's push settings
+ * and not from a muted or blocked account.
+ */
+export function allowed(n: Notif, prefs: Prefs | undefined): boolean {
+  return wanted(n, prefs) && !hidden(n)
 }
 
 /**
@@ -79,7 +86,9 @@ export function pickNew(
 ): Notif[] {
   const since = lastShown ?? new Date(now - FIRST_CHECK_WINDOW_MS).toISOString()
   return notifications
-    .filter(n => !n.isRead && n.indexedAt > since && wanted(n, prefs) && !hidden(n))
+    .filter(
+      n => !n.isRead && n.indexedAt > since && wanted(n, prefs) && !hidden(n),
+    )
     .sort((a, b) => (a.indexedAt < b.indexedAt ? -1 : 1))
 }
 
@@ -164,7 +173,11 @@ export function describe(
 }
 
 /** One notification standing for several, opening the notifications tab. */
-export function summarize(i18n: I18n, count: number, recipientDid: string): Shown {
+export function summarize(
+  i18n: I18n,
+  count: number,
+  recipientDid: string,
+): Shown {
   return {
     title: i18n._(
       plural(count, {one: '# new notification', other: '# new notifications'}),

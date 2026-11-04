@@ -12,12 +12,13 @@ import {
   MAX_RESUME_AGE_US,
   MAX_TOKENS_PER_ACCOUNT,
   FOLLOW_UP_MS,
+  MAX_EVENTS_PER_NUDGE,
   NUDGE_COOLDOWN_MS,
   NUDGE_DELAY_MS,
   RESUME_OVERLAP_US,
   WANTED_COLLECTIONS,
 } from '../config'
-import {cursorOf, targetsOf} from '../events'
+import {cursorOf, type Notice, noticesOf} from '../events'
 import {Fcm} from '../fcm'
 import {type HubApi} from '../routes'
 
@@ -79,6 +80,8 @@ export class NodeHub implements HubApi {
   private ticker?: ReturnType<typeof setInterval>
   /** Account -> when its first unsent event arrived. */
   private pending = new Map<string, number>()
+  /** Account -> the notices waiting for its next nudge. */
+  private notices = new Map<string, Notice[]>()
   /** Account -> when its follow-up nudges are due, earliest first. */
   private followUps = new Map<string, number[]>()
   /** Account -> when it was last nudged. */
@@ -177,6 +180,7 @@ export class NodeHub implements HubApi {
     if (left === 0) {
       this.accounts.delete(did)
       this.pending.delete(did)
+      this.notices.delete(did)
       this.followUps.delete(did)
     }
   }
@@ -295,10 +299,14 @@ export class NodeHub implements HubApi {
     this.lastEventAt = Date.now()
     const cursor = cursorOf(event)
     if (cursor && (!this.cursor || cursor > this.cursor)) this.cursor = cursor
-    for (const did of targetsOf(event)) {
-      if (this.accounts.has(did) && !this.pending.has(did)) {
-        this.pending.set(did, Date.now())
-      }
+    for (const notice of noticesOf(event)) {
+      const did = notice.did
+      if (!this.accounts.has(did)) continue
+      if (!this.pending.has(did)) this.pending.set(did, Date.now())
+      const list = this.notices.get(did) ?? []
+      // One past the limit is enough to know a check is due instead
+      if (list.length <= MAX_EVENTS_PER_NUDGE) list.push(notice)
+      this.notices.set(did, list)
     }
   }
 
@@ -328,12 +336,17 @@ export class NodeHub implements HubApi {
     }
     for (const did of due) {
       this.pending.delete(did)
+      const notices = this.notices.get(did) ?? []
+      this.notices.delete(did)
       this.lastSent.set(did, now)
       this.followUps.set(
         did,
         FOLLOW_UP_MS.map(delay => now + delay),
       )
-      await this.nudge(did)
+      await this.nudge(
+        did,
+        notices.length > 0 && notices.length <= MAX_EVENTS_PER_NUDGE ? notices : [],
+      )
     }
     for (const [did, times] of this.followUps) {
       if (this.pending.has(did)) continue
@@ -350,21 +363,30 @@ export class NodeHub implements HubApi {
     }
   }
 
-  private async nudge(did: string): Promise<void> {
+  /**
+   * Wake `did`'s phones: one event message per notice, or one check when
+   * there are none (a notify, or more than fit in one burst).
+   */
+  private async nudge(did: string, notices: Notice[] = []): Promise<void> {
     this.fcm ??= new Fcm(this.fcmServiceAccount)
     const phones = this.sql
       .exec<{token: string}>(`SELECT token FROM phones WHERE did = ?`, did)
       .toArray()
     const results: string[] = []
     for (const {token} of phones) {
-      const result = await this.fcm.send(token, did)
-      results.push(result)
-      if (result === 'gone') {
-        this.sql.exec(`DELETE FROM phones WHERE did = ? AND token = ?`, did, token)
+      let gone = false
+      for (const notice of notices.length > 0 ? notices : [undefined]) {
+        const result = await this.fcm.send(token, did, notice)
+        results.push(result)
+        if (result === 'gone') {
+          gone = true
+          break
+        }
       }
+      if (gone) this.sql.exec(`DELETE FROM phones WHERE did = ? AND token = ?`, did, token)
     }
-    // No account or token: only that a nudge went out, and how it went.
-    console.log(`nudge: ${results.join(', ') || 'no phones'}`)
+    // No account or token: only the kind of wake and how it went.
+    console.log(`nudge (${notices.length > 0 ? `${notices.length} event` : 'check'}): ${results.join(', ') || 'no phones'}`)
     this.forgetIfEmpty(did)
   }
 }

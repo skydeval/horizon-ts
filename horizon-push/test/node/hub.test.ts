@@ -62,23 +62,49 @@ describe('the Node hub', () => {
 })
 
 describe('nudge timing', () => {
-  it('nudges once after the delay, with no follow-ups', async () => {
+  const like = (n: number) => ({
+    did: 'did:plc:ffffffffffffffffffffffff',
+    kind: 'commit',
+    time_us: 1_700_000_000_000_000 + n,
+    commit: {
+      operation: 'create',
+      collection: 'app.bsky.feed.like',
+      rkey: `3k${n}`,
+      record: {subject: {uri: `at://${DID}/app.bsky.feed.post/3p`}},
+    },
+  })
+
+  async function run(events: number, notify = false) {
     vi.useFakeTimers({toFake: ['Date']})
     const start = new Date('2026-11-04T12:00:00Z').getTime()
     vi.setSystemTime(start)
     const {hub} = hubAt()
-    const sent: number[] = []
-    const internals = hub as unknown as {nudge: (did: string) => Promise<void>; tick: () => Promise<void>}
-    internals.nudge = async () => {
-      sent.push(Date.now() - start)
+    const sent: {at: number; events: number}[] = []
+    const internals = hub as unknown as {
+      nudge: (did: string, notices?: unknown[]) => Promise<void>
+      tick: () => Promise<void>
+      onMessage: (data: string) => void
+    }
+    internals.nudge = async (_did, notices = []) => {
+      sent.push({at: Date.now() - start, events: notices.length})
     }
     await hub.register(DID, 'token-1', 'android')
-    await hub.notify([DID])
-    for (let t = 0; t <= 90_000; t += 1_000) {
+    for (let i = 0; i < events; i++) internals.onMessage(JSON.stringify(like(i)))
+    if (notify) await hub.notify([DID])
+    for (let t = 0; t <= 90_000; t += 500) {
       vi.setSystemTime(start + t)
       await internals.tick()
     }
-    expect(sent).toEqual([3_000])
     hub.stop()
+    return sent
+  }
+
+  it('sends a burst’s events once, after the delay, with no follow-ups', async () => {
+    expect(await run(2)).toEqual([{at: 1_000, events: 2}])
+  })
+
+  it('sends one check for more events than fit, or for a notify', async () => {
+    expect(await run(6)).toEqual([{at: 1_000, events: 0}])
+    expect(await run(0, true)).toEqual([{at: 1_000, events: 0}])
   })
 })

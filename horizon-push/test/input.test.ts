@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest'
 
 import {notifySources, SERVICE_DID} from '../src/config'
-import {buildMessage, classifyFailure} from '../src/fcm'
+import {buildEventMessage, buildMessage, classifyFailure} from '../src/fcm'
 import {DID_DOC, readNotifyInput, readPushInput} from '../src/input'
 
 describe('notifySources', () => {
@@ -71,6 +71,27 @@ describe('DID document', () => {
 })
 
 describe('Firebase messages', () => {
+  it('carry an event’s public details, all as strings, uncollapsed', () => {
+    const {message} = buildEventMessage('tok', {
+      did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa',
+      reason: 'like',
+      actor: 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb',
+      uri: 'at://did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/app.bsky.feed.like/3k',
+      subject: 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/app.bsky.feed.post/3p',
+    })
+    expect(message.data).toEqual({
+      kind: 'check',
+      did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa',
+      reason: 'like',
+      actor: 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb',
+      uri: 'at://did:plc:bbbbbbbbbbbbbbbbbbbbbbbb/app.bsky.feed.like/3k',
+      subject: 'at://did:plc:aaaaaaaaaaaaaaaaaaaaaaaa/app.bsky.feed.post/3p',
+    })
+    expect(Object.values(message.data).every(v => typeof v === 'string')).toBe(true)
+    expect(message.android).not.toHaveProperty('collapse_key')
+    expect(message).not.toHaveProperty('notification')
+  })
+
   it('carry no text, only which account should check', () => {
     const {message} = buildMessage('tok', 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa')
     expect(message.data).toEqual({kind: 'check', did: 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'})

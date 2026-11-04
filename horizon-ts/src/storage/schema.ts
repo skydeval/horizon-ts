@@ -109,6 +109,13 @@ export type Device = {
    * notification a push check has shown on this phone (`#/horizon/push`).
    */
   horizonPushShownPrivate?: Record<string, string>
+
+  /**
+   * HORIZON: per account DID, the record URIs of the newest notifications a
+   * push event showed at once, so a later check doesn't show them again
+   * (`#/horizon/push`).
+   */
+  horizonPushShownEvents?: Record<string, string[]>
 }
 
 export type Account = {

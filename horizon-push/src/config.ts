@@ -64,13 +64,19 @@ export const WANTED_COLLECTIONS = [
 ]
 
 /**
- * A nudge waits this long after the event, so the AppView has indexed it by
- * the time the phone asks for its notifications.
+ * A nudge waits this long after the first event, so a burst goes out
+ * together. Events carry what happened, so no AppView indexing is awaited.
  */
-export const NUDGE_DELAY_MS = 3_000
+export const NUDGE_DELAY_MS = 1_000
 
 /** At most one nudge per account in this window; later events join the next. */
 export const NUDGE_COOLDOWN_MS = 2_000
+
+/**
+ * At most this many events go out as their own messages per nudge; more
+ * than that becomes one check, which the app summarises.
+ */
+export const MAX_EVENTS_PER_NUDGE = 4
 
 /**
  * After a nudge, the phone is nudged again at these delays (none now).

@@ -38,7 +38,10 @@ import {
 } from '#/horizon/session/accounts'
 import {isAppSessionLive, liveBundleFor} from '#/horizon/session/live'
 import {createOAuthBundle} from '#/horizon/session/oauth-bundle-factory'
-import {disposeOAuthBundle, isSignedInBundle} from '#/horizon/session/oauth-bundles'
+import {
+  disposeOAuthBundle,
+  isSignedInBundle,
+} from '#/horizon/session/oauth-bundles'
 import {passwordRoute} from './route'
 
 export type PushClients = {
@@ -68,7 +71,10 @@ const ignoreChanges: OnSessionChange = () => {}
 export function openClients(account: SessionAccount): PushClients | undefined {
   if (isOauthAccount(account)) {
     if (isOAuthSignedOut(account) || !account.service) return undefined
-    const bundle = createOAuthBundle({did: account.did, service: account.service})
+    const bundle = createOAuthBundle({
+      did: account.did,
+      service: account.service,
+    })
     return {
       appview: bundle.appviewClient,
       chat: bundle.chatClient,
@@ -81,7 +87,8 @@ export function openClients(account: SessionAccount): PushClients | undefined {
   const route = passwordRoute({
     hasLiveBundle: Boolean(live && isSignedInBundle(live)),
     appRunning: isAppSessionLive(),
-    accessValid: Boolean(account.accessJwt) && !isJwtExpired(account.accessJwt!),
+    accessValid:
+      Boolean(account.accessJwt) && !isJwtExpired(account.accessJwt!),
     canAct: canAccountAct(account),
   })
   switch (route) {

@@ -4,10 +4,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+import {type Notice} from './events'
+
 /**
- * Firebase Cloud Messaging (HTTP v1). Messages are data-only: they carry no
- * text, just which account should check, and the app fetches and shows the
- * notifications itself with its own sign-in.
+ * Firebase Cloud Messaging (HTTP v1). Messages are data-only. A check says
+ * which account should look; an event also says what happened (public data
+ * from the stream), so the app can show it at once. Either way the app
+ * applies the account's mutes, blocks and push settings itself.
  */
 
 type ServiceAccount = {
@@ -59,6 +62,25 @@ export function buildMessage(token: string, did: string) {
       },
     },
   }
+}
+
+/**
+ * The message for one notice: data only, high priority, a check that also
+ * carries what happened, so an app that reads it can show it at once. Each is kept (no collapse key):
+ * a phone gets at most a few per burst.
+ */
+export function buildEventMessage(token: string, notice: Notice) {
+  const data: Record<string, string> = {
+    // Still a check, so an app that predates events checks as before
+    kind: 'check',
+    did: notice.did,
+    reason: notice.reason,
+    actor: notice.actor,
+    uri: notice.uri,
+  }
+  if (notice.subject) data.subject = notice.subject
+  if (notice.text) data.text = notice.text
+  return {message: {token, data, android: {priority: 'HIGH', ttl: '3600s'}}}
 }
 
 export class Fcm {
@@ -113,7 +135,8 @@ export class Fcm {
     return body.access_token
   }
 
-  async send(token: string, did: string): Promise<SendResult> {
+  /** Send a check for `did`, or the event `notice` when given. */
+  async send(token: string, did: string, notice?: Notice): Promise<SendResult> {
     let access: string
     try {
       access = await this.token()
@@ -128,7 +151,7 @@ export class Fcm {
           authorization: `Bearer ${access}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify(buildMessage(token, did)),
+        body: JSON.stringify(notice ? buildEventMessage(token, notice) : buildMessage(token, did)),
       },
     )
     if (res.ok) return 'sent'

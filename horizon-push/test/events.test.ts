@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 
-import {cursorOf, didOfUri, targetsOf} from '../src/events'
+import {cursorOf, didOfUri, NOTICE_TEXT_MAX, noticesOf, targetsOf} from '../src/events'
 
 const ME = 'did:plc:aaaaaaaaaaaaaaaaaaaaaaaa'
 const YOU = 'did:plc:bbbbbbbbbbbbbbbbbbbbbbbb'
@@ -82,5 +82,53 @@ describe('helpers', () => {
   it('cursorOf reads time_us', () => {
     expect(cursorOf({time_us: 5})).toBe(5)
     expect(cursorOf({time_us: '5'})).toBeUndefined()
+  })
+})
+
+describe('noticesOf', () => {
+  it('says what happened, who did it, the record and its subject', () => {
+    expect(noticesOf(create('app.bsky.feed.like', {subject: {uri: post(YOU)}}))).toEqual([
+      {did: YOU, reason: 'like', actor: ME, uri: `at://${ME}/app.bsky.feed.like/3k`, subject: post(YOU)},
+    ])
+    expect(noticesOf(create('app.bsky.graph.follow', {subject: YOU}))).toEqual([
+      {did: YOU, reason: 'follow', actor: ME, uri: `at://${ME}/app.bsky.graph.follow/3k`},
+    ])
+  })
+
+  it('tells a repost’s author of a like through it', () => {
+    const reposted = `at://${THEM}/app.bsky.feed.repost/3kr`
+    const notices = noticesOf(
+      create('app.bsky.feed.like', {subject: {uri: post(YOU)}, via: {uri: reposted}}),
+    )
+    expect(notices.map(n => [n.did, n.reason])).toEqual([
+      [YOU, 'like'],
+      [THEM, 'like-via-repost'],
+    ])
+  })
+
+  it('gives one notice per account, reply before quote before mention, with the text', () => {
+    const record = {
+      text: 'hello',
+      reply: {parent: {uri: post(YOU)}, root: {uri: post(YOU)}},
+      embed: {$type: 'app.bsky.embed.record', record: {uri: post(YOU)}},
+      facets: [
+        {features: [{$type: 'app.bsky.richtext.facet#mention', did: YOU}]},
+        {features: [{$type: 'app.bsky.richtext.facet#mention', did: THEM}]},
+      ],
+    }
+    expect(noticesOf(create('app.bsky.feed.post', record))).toEqual([
+      {did: YOU, reason: 'reply', actor: ME, uri: `at://${ME}/app.bsky.feed.post/3k`, subject: post(YOU), text: 'hello'},
+      {did: THEM, reason: 'mention', actor: ME, uri: `at://${ME}/app.bsky.feed.post/3k`, subject: `at://${ME}/app.bsky.feed.post/3k`, text: 'hello'},
+    ])
+  })
+
+  it('shortens long text and skips its own author and bad record keys', () => {
+    const long = 'x'.repeat(NOTICE_TEXT_MAX + 50)
+    const [notice] = noticesOf(create('app.bsky.feed.post', {text: long, reply: {parent: {uri: post(YOU)}, root: {uri: post(YOU)}}}))
+    expect([...(notice?.text ?? '')].length).toBe(NOTICE_TEXT_MAX)
+    expect(noticesOf(create('app.bsky.feed.like', {subject: {uri: post(ME)}}))).toEqual([])
+    const bad = create('app.bsky.feed.like', {subject: {uri: post(YOU)}})
+    bad.commit.rkey = '../x'
+    expect(noticesOf(bad)).toEqual([])
   })
 })

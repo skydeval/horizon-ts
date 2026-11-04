@@ -26,7 +26,9 @@ import {PRIVATE_NOTIFICATIONS_SWITCH} from '#/horizon/switches'
 import {app, chat} from '#/lexicons'
 import {device} from '#/storage'
 import {openClients} from './clients'
+import {type PushEvent} from './payload'
 import {
+  allowed,
   describe,
   MAX_SINGLE,
   newestShown,
@@ -46,6 +48,85 @@ export type CheckWhat = {activity: boolean; private: boolean; dms: boolean}
 /** One check at a time per account; asks made meanwhile run once after. */
 const running = new Map<string, Promise<void>>()
 const pending = new Map<string, CheckWhat>()
+
+/** How many event URIs are remembered per account, to skip them later. */
+const SHOWN_EVENTS_MAX = 100
+
+function shownEvents(did: string): string[] {
+  return device.get(['horizonPushShownEvents'])?.[did] ?? []
+}
+
+function rememberEvent(did: string, uri: string) {
+  const all = device.get(['horizonPushShownEvents']) ?? {}
+  const list = [...(all[did] ?? []).filter(u => u !== uri), uri].slice(
+    -SHOWN_EVENTS_MAX,
+  )
+  device.set(['horizonPushShownEvents'], {...all, [did]: list})
+}
+
+/**
+ * Show one event a check carried, at once: the actor's profile gives the
+ * name and whether they are muted, blocked or followed, and the account's
+ * push settings decide, as for any notification. Shown once per record. If
+ * it can't be built, the account is checked the usual way instead.
+ */
+export async function showEvent(event: PushEvent): Promise<void> {
+  await ready()
+  const account = persisted
+    .get('session')
+    .accounts.find(a => a.did === event.did)
+  if (!account) return
+  if (shownEvents(event.did).includes(event.uri)) return
+  const clients = openClients(account)
+  if (!clients) return
+  let fallback = false
+  try {
+    const [prefs, profile] = await Promise.all([
+      clients.appview
+        .call(app.bsky.notification.getPreferences)
+        .then(r => r.preferences)
+        .catch(() => undefined),
+      clients.appview.call(app.bsky.actor.getProfile, {
+        actor: event.actor as never,
+      }),
+    ])
+    const n = {
+      uri: event.uri,
+      cid: '',
+      author: profile,
+      reason: event.reason,
+      ...(event.subject ? {reasonSubject: event.subject} : {}),
+      record: {
+        $type: 'app.bsky.feed.post',
+        text: event.text ?? '',
+        createdAt: '',
+      },
+      isRead: false,
+      indexedAt: new Date().toISOString(),
+    } as unknown as Notif
+    if (!allowed(n, prefs)) {
+      rememberEvent(event.did, event.uri)
+      return
+    }
+    const texts = await subjectTexts(clients.appview, subjectsToFetch([n]))
+    await present([
+      describe(
+        i18n,
+        n,
+        event.did,
+        event.subject ? texts.get(event.subject) : undefined,
+      ),
+    ])
+    rememberEvent(event.did, event.uri)
+  } catch (e) {
+    warn('event', e)
+    fallback = true
+  } finally {
+    clients.dispose()
+  }
+  if (fallback)
+    await checkAccount(event.did, {activity: true, private: false, dms: false})
+}
 
 /** How long to wait for the AppView when the first read finds nothing new. */
 const RETRY_EMPTY_MS = 4_000
@@ -138,14 +219,21 @@ async function showActivity(client: Client, did: string) {
         .catch(() => undefined),
       client.call(app.bsky.notification.listNotifications, {limit: 30}),
     ])
-    let picked = pickNew(first.notifications, {prefs, lastShown, now: Date.now()})
+    // What an event already showed is skipped here
+    const already = new Set(shownEvents(did))
+    const fresh = (list: Notif[]) => list.filter(n => !already.has(n.uri))
+    let picked = fresh(
+      pickNew(first.notifications, {prefs, lastShown, now: Date.now()}),
+    )
     if (picked.length === 0) {
       // The push can beat the AppView's indexing by a moment: look once more
       await new Promise(r => setTimeout(r, RETRY_EMPTY_MS))
       const again = await client.call(app.bsky.notification.listNotifications, {
         limit: 30,
       })
-      picked = pickNew(again.notifications, {prefs, lastShown, now: Date.now()})
+      picked = fresh(
+        pickNew(again.notifications, {prefs, lastShown, now: Date.now()}),
+      )
     }
     if (picked.length === 0) return
 
@@ -156,7 +244,12 @@ async function showActivity(client: Client, did: string) {
       const texts = await subjectTexts(client, subjectsToFetch(picked))
       for (const n of picked) {
         shown.push(
-          describe(i18n, n, did, n.reasonSubject ? texts.get(n.reasonSubject) : undefined),
+          describe(
+            i18n,
+            n,
+            did,
+            n.reasonSubject ? texts.get(n.reasonSubject) : undefined,
+          ),
         )
       }
     }
@@ -234,12 +327,17 @@ async function showDms(client: Client, did: string) {
         .catch(() => undefined),
       client.call(chat.bsky.convo.listConvos, {readState: 'unread', limit: 20}),
     ])
-    const picked = pickNewDms(convos, {me: did, prefs, lastShown, now: Date.now()})
+    const picked = pickNewDms(convos, {
+      me: did,
+      prefs,
+      lastShown,
+      now: Date.now(),
+    })
     if (picked.length === 0) return
     // Bluesky's "play a sound for chat" setting picks the channel
-    const sound = await BackgroundNotificationHandler.getBoolAsync('playSoundChat').catch(
-      () => true,
-    )
+    const sound = await BackgroundNotificationHandler.getBoolAsync(
+      'playSoundChat',
+    ).catch(() => true)
     await present(
       picked.map(convo => ({
         ...describeDm(i18n, convo, did),
