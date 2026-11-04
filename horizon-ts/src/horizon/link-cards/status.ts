@@ -100,6 +100,8 @@ export type PostCard = {
   contentWarning?: string
   replyTo?: string
   quote?: {author: string; handle: string; text: string}
+  /** The post's link card, when it has one (not a GIF from the picker). */
+  link?: {url: string; title: string; description: string; domain: string}
   media: CardMedia[]
   /** Why some media was left out, to say so on the card. */
   mediaNote?: string
@@ -188,7 +190,6 @@ function selfLabelValues(record: Obj | undefined): string[] {
     .filter((val): val is string => !!val)
 }
 
-
 function authorOf(view: Obj | undefined, pronouns?: string): CardAuthor {
   return {
     did: str(view?.did) ?? '',
@@ -273,7 +274,7 @@ function mediaOf(
     // A GIF from Bluesky's picker: an external link to a Tenor GIF.
     const external = obj(embedView.external)
     const uri = str(external?.uri) ?? ''
-    if (/^https:\/\/media\.tenor\.com\/.+\.gif(\?|$)/.test(uri)) {
+    if (isPickerGif(uri)) {
       const size = new URL(uri).searchParams
       out.media.push({
         type: 'image',
@@ -288,6 +289,38 @@ function mediaOf(
     return out
   }
   return out
+}
+
+/** A GIF from Bluesky's picker, which shows as an image, not a link. */
+function isPickerGif(uri: string): boolean {
+  return /^https:\/\/media\.tenor\.com\/.+\.gif(\?|$)/.test(uri)
+}
+
+/** The link card of an embed view, also beside a quote. */
+function linkOf(embedView: Obj | undefined): PostCard['link'] {
+  if (!embedView) return undefined
+  const type = str(embedView.$type) ?? ''
+  const view = type.startsWith('app.bsky.embed.recordWithMedia')
+    ? obj(embedView.media)
+    : embedView
+  if (!(str(view?.$type) ?? '').startsWith('app.bsky.embed.external')) {
+    return undefined
+  }
+  const external = obj(view?.external)
+  const url = str(external?.uri) ?? ''
+  if (!/^https?:\/\//.test(url) || isPickerGif(url)) return undefined
+  let domain = ''
+  try {
+    domain = new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return undefined
+  }
+  return {
+    url,
+    title: (str(external?.title) ?? '').trim(),
+    description: (str(external?.description) ?? '').trim(),
+    domain,
+  }
 }
 
 /** The quoted post of an embed view, when it is a viewable record. */
@@ -374,6 +407,7 @@ export function buildPostCard({
 
   card.text = maskSpoilers(text, record?.facets)
   card.quote = quoteOf(obj(post.embed))
+  card.link = linkOf(obj(post.embed))
   const adult = labels.some(label => ADULT_LABELS.has(label))
   const {media, hiddenFlagged} = mediaOf(
     obj(post.embed),
@@ -425,6 +459,15 @@ export function statusContent(card: PostCard): string {
         card.quote.handle,
       )})<br>${paragraphs(card.quote.text)}</blockquote>`,
     )
+  }
+  if (card.link) {
+    const {url, title, description, domain} = card.link
+    const lines = [
+      `🔗 <a href="${escapeHtml(url)}">${escapeHtml(title || domain)}</a>`,
+      ...(description ? [paragraphs(description)] : []),
+      `<i>${escapeHtml(domain)}</i>`,
+    ]
+    parts.push(`<blockquote>${lines.join('<br>')}</blockquote>`)
   }
   if (card.mediaNote) parts.push(`<p><i>${escapeHtml(card.mediaNote)}</i></p>`)
   const {replies, reposts, likes} = card.counts
@@ -496,7 +539,25 @@ export function toMastodonStatus(
     mentions: [],
     tags: [],
     emojis: [],
-    card: null,
+    // Mastodon's own link preview, for readers that draw it
+    card: card.link
+      ? {
+          url: card.link.url,
+          title: card.link.title || card.link.domain,
+          description: card.link.description,
+          type: 'link',
+          author_name: '',
+          author_url: '',
+          provider_name: card.link.domain,
+          provider_url: '',
+          html: '',
+          width: 0,
+          height: 0,
+          image: null,
+          embed_url: '',
+          blurhash: null,
+        }
+      : null,
     poll: null,
     reblog: null,
   }

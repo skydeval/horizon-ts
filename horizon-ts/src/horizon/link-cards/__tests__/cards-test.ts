@@ -116,7 +116,8 @@ function images(items: ReturnType<typeof image>[]) {
 }
 
 function asPost(card: ReturnType<typeof buildPostCard>): PostCard {
-  if (card.kind !== 'post') throw new Error(`expected a post card: ${card.kind}`)
+  if (card.kind !== 'post')
+    throw new Error(`expected a post card: ${card.kind}`)
   return card
 }
 
@@ -179,12 +180,17 @@ describe('the post card', () => {
     const before = new TextEncoder().encode('🐝 the ending: ').length
     const facets = [
       {
-        index: {byteStart: before, byteEnd: new TextEncoder().encode(text).length},
+        index: {
+          byteStart: before,
+          byteEnd: new TextEncoder().encode(text).length,
+        },
         features: [{$type: 'app.nearhorizon.richtext.facet#spoiler'}],
       },
     ]
     expect(maskSpoilers(text, facets)).toBe('🐝 the ending: ▒▒▒')
-    const card = asPost(buildPostCard({thread: post({text, facets}), url: URL_}))
+    const card = asPost(
+      buildPostCard({thread: post({text, facets}), url: URL_}),
+    )
     expect(statusContent(card)).not.toContain('ghost')
   })
 
@@ -268,6 +274,73 @@ describe('the post card', () => {
     )
   })
 
+  it('shows a link card’s title, description and site, beside its thumbnail', () => {
+    const external = {
+      uri: 'https://www.news.example/story/1?ref=x',
+      title: 'A <big> story',
+      description: 'What happened, briefly.',
+      thumb: 'https://cdn.example/thumb.jpg',
+    }
+    const card = asPost(
+      buildPostCard({
+        thread: post({
+          embed: {$type: 'app.bsky.embed.external#view', external},
+        }),
+        url: URL_,
+      }),
+    )
+    expect(card.link).toEqual({
+      url: external.uri,
+      title: 'A <big> story',
+      description: 'What happened, briefly.',
+      domain: 'news.example',
+    })
+    expect(card.media).toEqual([
+      {type: 'image', url: 'https://cdn.example/thumb.jpg'},
+    ])
+    const content = statusContent(card)
+    expect(content).toContain(
+      '🔗 <a href="https://www.news.example/story/1?ref=x">A &lt;big&gt; story</a>',
+    )
+    expect(content).toContain('What happened, briefly.')
+    expect(content).toContain('<i>news.example</i>')
+    const status = toMastodonStatus(card, {id: 'x', origin: ORIGIN})
+    expect(status.card).toEqual(
+      expect.objectContaining({
+        url: external.uri,
+        title: 'A <big> story',
+        type: 'link',
+        provider_name: 'news.example',
+      }),
+    )
+    // A link beside a quote is shown too; a picker GIF is not a link.
+    const withQuote = asPost(
+      buildPostCard({
+        thread: post({
+          embed: {
+            $type: 'app.bsky.embed.recordWithMedia#view',
+            record: {record: {$type: 'app.bsky.embed.record#viewNotFound'}},
+            media: {$type: 'app.bsky.embed.external#view', external},
+          },
+        }),
+        url: URL_,
+      }),
+    )
+    expect(withQuote.link?.domain).toBe('news.example')
+    const gif = asPost(
+      buildPostCard({
+        thread: post({
+          embed: {
+            $type: 'app.bsky.embed.external#view',
+            external: {uri: 'https://media.tenor.com/abc/bees.gif', title: ''},
+          },
+        }),
+        url: URL_,
+      }),
+    )
+    expect(gif.link).toBeUndefined()
+  })
+
   it('a missing post gives the not-found card', () => {
     expect(buildPostCard({thread: undefined, url: URL_}).kind).toBe('missing')
   })
@@ -345,8 +418,10 @@ describe('who gets a card', () => {
   })
 })
 
-const DISCORD = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
-const FIREFOX = 'Mozilla/5.0 (Android 15; Mobile; rv:140.0) Gecko/140.0 Firefox/140.0'
+const DISCORD =
+  'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
+const FIREFOX =
+  'Mozilla/5.0 (Android 15; Mobile; rv:140.0) Gecko/140.0 Firefox/140.0'
 
 function ctx(
   path: string,
@@ -413,12 +488,12 @@ describe('the handlers', () => {
     })
     const html = await (await handlePostPage(c, net.fetchImpl)).text()
     expect(c.next).not.toHaveBeenCalled()
-    expect(html).toContain('<meta property="og:title" content="Wren · she/they (@wren.example)">')
+    expect(html).toContain(
+      '<meta property="og:title" content="Wren · she/they (@wren.example)">',
+    )
     expect(html).toContain('og:image" content="https://cdn.example/full/1"')
     const id = encodeStatusId(DID, '3mytuuvegrc2q')
-    expect(html).toContain(
-      `href="${ORIGIN}/users/wren.example/statuses/${id}"`,
-    )
+    expect(html).toContain(`href="${ORIGIN}/users/wren.example/statuses/${id}"`)
   })
 
   it('a kryphocron post gets the hidden card, with nothing looked up', async () => {

@@ -10,6 +10,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Link cards show in Discord.** A Horizon post link shared in Discord now
+  shows the post's link card: its title, description and site, beside the
+  thumbnail.
 - **Patch notes** at nearhorizon.app/patch-notes and in Settings → About:
   what each release brings, sorted into new Horizon features, features from
   Bluesky's app, and fixes. The Android download page shows the latest
