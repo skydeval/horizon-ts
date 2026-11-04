@@ -9,7 +9,11 @@
  * - **The short field, for context.** With no pronouns record and the
  *   Bluesky short field set, a note shows what readers see now, with "Show
  *   no pronouns", which writes a record with empty `sets` on Save. Read from
- *   the profile view the dialog already holds; never written (Q7).
+ *   the profile view the dialog already holds.
+ * - **The short field follows a save** (skydeval, 2026-11-04, replacing Q7's
+ *   "never written"): when the pronouns change, Bluesky's profile field gets
+ *   them in its own form (`blueskyPronouns`), so Bluesky's app shows them
+ *   too; no sets clears it. Other profile saves leave it alone.
  * - **Untouched rows keep their forms as read**, and the record is spread
  *   under the edit (P5R1-N6).
  */
@@ -36,6 +40,7 @@ import {
   setsFromRows,
 } from '#/horizon/identity/edit/pronoun-rows'
 import {PronounSetsEditor} from '#/horizon/identity/edit/PronounSetsEditor'
+import {blueskyPronouns} from '#/horizon/identity/format'
 import {type DisplayMode} from '#/horizon/identity/parse'
 import {savePronouns} from '#/horizon/identity/writes'
 import {PRONOUNS} from '#/horizon/switches'
@@ -115,6 +120,16 @@ export function useIdentityEditParts(profile: {
     hasRecord: !!record,
     hadSets: (record?.sets.length ?? 0) > 0,
     shortField: profile.pronouns?.trim() || undefined,
+    /**
+     * Bluesky's profile field for this save: `undefined` to leave it, `''`
+     * to clear it, else the pronouns in its form.
+     */
+    blueskyField: dirty
+      ? (blueskyPronouns(
+          sets.map(set => set.forms),
+          displayMode,
+        ) ?? '')
+      : undefined,
     dirty,
     invalid,
     saving,

@@ -210,6 +210,10 @@ export function useProfileUpdateMutation() {
           if ('links' in updates) {
             next.links = updates.links
           }
+          // HORIZON: pronouns from Horizon's editor, in Bluesky's form
+          if ('pronouns' in updates) {
+            next.pronouns = updates.pronouns
+          }
         }
         if (newUserAvatarPromise) {
           const res = await newUserAvatarPromise

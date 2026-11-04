@@ -7,6 +7,7 @@
 
 import {type MessageDescriptor} from '@lingui/core'
 import {msg} from '@lingui/core/macro'
+import {countGraphemes} from 'unicode-segmenter/grapheme'
 
 import {type Pronouns} from '#/horizon/identity/parse'
 
@@ -57,6 +58,43 @@ export function formatPronouns(
   return mode === 'firstOnly'
     ? formatSet(pronouns.sets[0])
     : formatSets(pronouns.sets)
+}
+
+/** The longest pronouns Bluesky's profile field takes, in graphemes. */
+export const BLUESKY_PRONOUNS_MAX = 20
+
+/**
+ * Pronouns in the form of Bluesky's profile field (`app.bsky.actor.profile`
+ * `pronouns`, plain text): one set as typed ("she/her", "xe/xem/xyr");
+ * several as the first form of each ("she/they"), as Bluesky's app combines
+ * them. `firstOnly` gives the first set. Sets are dropped from the end, and
+ * then forms, until it fits {@link BLUESKY_PRONOUNS_MAX}. `undefined` when
+ * there is nothing to write.
+ */
+export function blueskyPronouns(
+  sets: readonly (readonly string[])[],
+  displayMode: Pronouns['displayMode'] = 'all',
+): string | undefined {
+  const kept = sets
+    .map(set => set.map(form => form.trim()).filter(form => form.length > 0))
+    .filter(set => set.length > 0)
+  const chosen = displayMode === 'firstOnly' ? kept.slice(0, 1) : kept
+  const fits = (text: string) =>
+    text.length > 0 && countGraphemes(text) <= BLUESKY_PRONOUNS_MAX
+  for (let n = chosen.length; n > 1; n--) {
+    const combined = chosen
+      .slice(0, n)
+      .map(set => set[0])
+      .join('/')
+    if (fits(combined)) return combined
+  }
+  const first = chosen[0]
+  if (!first) return undefined
+  for (let n = first.length; n > 0; n--) {
+    const text = first.slice(0, n).join('/')
+    if (fits(text)) return text
+  }
+  return undefined
 }
 
 /**

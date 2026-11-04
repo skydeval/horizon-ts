@@ -292,6 +292,8 @@ describe('the pronouns field (7.1)', () => {
     fireEvent.press(view.getByTestId('pronounsAddRow'))
     fireEvent.changeText(view.getByTestId('pronounsRow1'), 'fae/faer/faerself')
     expect(ref.parts?.dirty).toBe(true)
+    // Bluesky's profile field gets them in its own form
+    expect(ref.parts?.blueskyField).toBe('she/fae')
     await act(async () => {
       await ref.parts?.save()
     })
@@ -315,6 +317,8 @@ describe('the pronouns field (7.1)', () => {
     // A record exists, so the short field is not offered.
     expect(view.queryByTestId('pronounsShortFieldNote')).toBeNull()
     expect(view.getByText('No pronouns will show once you save.')).toBeTruthy()
+    // No sets clears Bluesky's field
+    expect(ref.parts?.blueskyField).toBe('')
     await act(async () => {
       await ref.parts?.save()
     })

@@ -10,6 +10,11 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Your pronouns show in Bluesky's app too.** Saving pronouns in Horizon
+  also fills in Bluesky's profile pronouns in its own form ("she/her", or
+  "she/they" for several sets), while Horizon keeps showing them in full.
+- **Pronouns in the reply composer,** after the name of the person you're
+  replying to.
 - **Link cards show in Discord.** A Horizon post link shared in Discord now
   shows the post's link card: its title, description and site, beside the
   thumbnail.

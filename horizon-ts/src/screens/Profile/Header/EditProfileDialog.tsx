@@ -265,6 +265,7 @@ function DialogInner({
         ? await writeProfileLinks(profile.did, nextLinks, storedLinks ?? [])
         : undefined
       // HORIZON: identity ID-22: the pronouns write (only when changed), before the profile's
+      const blueskyField = identityParts.blueskyField
       await identityParts.save()
       await updateProfileMutation({
         profile,
@@ -273,6 +274,10 @@ function DialogInner({
           description: description.trimEnd(),
           ...(written && {
             links: written.refs.length ? written.refs : undefined,
+          }),
+          // HORIZON: changed pronouns also go to Bluesky's field, in its form
+          ...(blueskyField !== undefined && {
+            pronouns: blueskyField || undefined,
           }),
         },
         newUserAvatar,

@@ -13,6 +13,8 @@ import {atoms as a, useTheme, utils, web} from '#/alf'
 import {QuoteEmbed} from '#/components/Post/Embed'
 import {ProfileBadges} from '#/components/ProfileBadges'
 import {Text} from '#/components/Typography'
+// HORIZON: the replied-to account's pronouns
+import {PronounsText, stockPronouns} from '#/horizon/identity/PronounsText'
 // HORIZON: the replied-to post's spoiler images are not drawn
 import {useReplyToMediaCovered} from '#/horizon/media-spoilers/reply-preview'
 // HORIZON: the replied-to post's spoilers are drawn covered
@@ -125,6 +127,13 @@ export function ComposerReplyTo({replyTo}: {replyTo: ComposerOptsPostRef}) {
             )}
           </Text>
           <ProfileBadges profile={replyTo.author} size="sm" style={[a.pl_xs]} />
+          {/* HORIZON: the replied-to account's pronouns, after its name and badges */}
+          <PronounsText
+            did={replyTo.author.did}
+            fallback={stockPronouns(replyTo.author)}
+            inline
+            style={[a.pl_xs]}
+          />
         </View>
         <View style={[a.flex_row, a.gap_md]}>
           <View style={[a.flex_1, a.flex_grow]}>
