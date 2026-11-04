@@ -32,7 +32,9 @@ import {type AtUriString} from '@atproto/syntax'
 import {nearhorizon} from '#/horizon/lexicons'
 import {reportedPrismCall} from '#/horizon/private/api/reads'
 import {leadErrorOf, retryAfterMs} from '#/horizon/private/api/transient'
+import {clearAster} from '#/horizon/routing/aster'
 import {
+  ASTER_GET_POST_LXM,
   LENS_GET_THREAD_LXM,
   LENS_RESOLVE_LXM,
   sendLensCall,
@@ -534,4 +536,52 @@ export async function resolveLens(
     noteLensError(did, error, Date.now())
     throw error
   }
+}
+
+/**
+ * `aster.getPost` for `did`: one post as an aster node, through the same
+ * path as {@link resolveLens}. `NotPermitted` clears `did`'s aster grant,
+ * so the action goes away; it never asks for a membership recheck.
+ */
+export async function getAsterPost(
+  prism: Client,
+  did: string,
+  uri: string,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  throwIfWaiting(did)
+  const input = {uri: uri as AtUriString}
+  try {
+    const res = await reportedPrismCall(nearhorizon.asterGetPost, {
+      did,
+      params: input,
+      signal,
+      send: callSignal =>
+        sendLensCall(
+          prism,
+          did,
+          ASTER_GET_POST_LXM,
+          callSignal,
+          async client => {
+            const answer = await client.xrpc(nearhorizon.asterGetPost, {
+              body: input,
+              signal: callSignal,
+            })
+            return answer.body
+          },
+        ),
+    })
+    return res.body.node
+  } catch (error) {
+    if (isNotPermitted(error)) clearAster(did)
+    else noteLensError(did, error, Date.now())
+    throw error
+  }
+}
+
+function isNotPermitted(error: unknown): boolean {
+  return (
+    error instanceof XrpcResponseError &&
+    (error as {error?: unknown}).error === 'NotPermitted'
+  )
 }

@@ -24,9 +24,12 @@ import {
   subscribeRefractGate,
 } from '#/horizon/refract/gate'
 import {readRestored, stampOf, viewerCheckedOf} from '#/horizon/refract/marker'
+import {isAsterView} from '#/horizon/thread-lens/aster'
 
 /** Whether like, repost and follow are hidden on `view` (9.2). */
 export function restoredActionsHidden(view: unknown): boolean {
+  // An aster copy is read-only, whatever Refract's state.
+  if (isAsterView(view)) return true
   if (!view || !refractActive()) return false
   const stamp = stampOf(view)
   if (stamp === 'visitor') return !viewerCheckedOf(view)

@@ -311,6 +311,12 @@ export const REPLY_BLOCK_CHECK: boolean = true
 export const THREAD_LENS: boolean = true
 
 /**
+ * Aster nodes on Thread Lens placeholders (`thread-lens/aster.ts`). Inert
+ * unless prism grants the account `permissions.aster`.
+ */
+export const ASTER: boolean = true
+
+/**
  * Restored accounts (refract client design RF-1, RF-12; code under
  * `refract/`): accounts Bluesky's AppView withholds that a community prism
  * trusts still hosts, read through prism's `app.nearhorizon.refract.*` and

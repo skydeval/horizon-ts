@@ -67,6 +67,9 @@ export const LENS_GET_THREAD_LXM =
 export const LENS_RESOLVE_LXM =
   'app.nearhorizon.threadLens.resolve' as NsidString
 
+/** `aster.getPost`'s method, the token's `lxm`. */
+export const ASTER_GET_POST_LXM = 'app.nearhorizon.aster.getPost' as NsidString
+
 /**
  * The private replies' method (a lens read's private branches, 2026-10-26),
  * the token's `lxm`: sent directly like `getThread`, the proxy the fallback.

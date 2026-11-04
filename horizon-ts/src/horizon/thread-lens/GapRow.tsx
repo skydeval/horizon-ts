@@ -14,7 +14,7 @@
  * store read. Both announce a new state politely (4.4).
  */
 
-import {useEffect} from 'react'
+import {useEffect, useRef, useState} from 'react'
 import {AccessibilityInfo, View} from 'react-native'
 import {AtUri} from '@atproto/syntax'
 import {type MessageDescriptor} from '@lingui/core'
@@ -44,8 +44,17 @@ import {Text} from '#/components/Typography'
 import {useIsMember} from '#/horizon/private/membership'
 import {StandIn} from '#/horizon/private/render/StandIn'
 import {isPrivateRead, privatePostPath} from '#/horizon/private/uri'
+import {useAsterLabels} from '#/horizon/routing/aster'
+import {getCurrentClients} from '#/horizon/routing/current-clients'
+import {ASTER} from '#/horizon/switches'
 import {type GapInfo} from '#/horizon/thread-lens/adapt'
-import {useLensWaiting} from '#/horizon/thread-lens/api'
+import {getAsterPost, useLensWaiting} from '#/horizon/thread-lens/api'
+import {
+  type AsterOutcome,
+  asterOutcome,
+  offersAster,
+} from '#/horizon/thread-lens/aster'
+import {AsterNode} from '#/horizon/thread-lens/AsterNode'
 import {retryLensGaps} from '#/horizon/thread-lens/fetch'
 import {useLensListName} from '#/horizon/thread-lens/lists'
 import {GAP_BELOW_ROW} from '#/horizon/thread-lens/nodes'
@@ -120,6 +129,39 @@ export function GapRow({
     }
   }, [row.status, i18n])
 
+  // Aster: the labels come from prism with the grant; none, no action.
+  const asterLabels = useAsterLabels(currentAccount?.did)
+  const asterOn = ASTER && !!asterLabels && offersAster(gap.uri, gap.gap)
+  const [aster, setAster] = useState<
+    | {status: 'idle' | 'loading' | 'error'}
+    | {status: 'done'; outcome: AsterOutcome}
+  >({status: 'idle'})
+  const asterAbort = useRef<AbortController | undefined>(undefined)
+  useEffect(() => () => asterAbort.current?.abort(), [])
+  const asterView =
+    asterOn && aster.status === 'done' && aster.outcome.kind === 'post'
+      ? aster.outcome.view
+      : undefined
+  const onAster = () => {
+    const did = currentAccount?.did
+    const clients = getCurrentClients()
+    if (!did || !clients || clients.did !== did) return
+    asterAbort.current?.abort()
+    const controller = new AbortController()
+    asterAbort.current = controller
+    setAster({status: 'loading'})
+    getAsterPost(clients.prismClient, did, gap.uri, controller.signal).then(
+      node => {
+        if (controller.signal.aborted) return
+        setAster({status: 'done', outcome: asterOutcome(node, gap.uri)})
+      },
+      () => {
+        if (controller.signal.aborted) return
+        setAster({status: 'error'})
+      },
+    )
+  }
+
   const tierHidden = gap.gap === 'tier-hidden'
   const text = tierHidden
     ? undefined
@@ -173,60 +215,93 @@ export function GapRow({
     )
   }
 
+  const asterStatus = !asterOn
+    ? undefined
+    : aster.status === 'error'
+      ? i18n._(ROW_FAILED)
+      : aster.status === 'done' && aster.outcome.kind === 'gap'
+        ? i18n._(gapTextOf(aster.outcome.gap))
+        : aster.status === 'done' && aster.outcome.kind === 'none'
+          ? i18n._(STILL_UNAVAILABLE)
+          : undefined
   const status =
-    row.status === 'error'
+    asterStatus ??
+    (row.status === 'error'
       ? i18n._(ROW_FAILED)
       : row.status === 'still-unavailable'
         ? i18n._(STILL_UNAVAILABLE)
-        : undefined
+        : undefined)
 
-  const card = tierHidden ? (
-    <View style={[a.gap_sm]}>
-      <StandIn />
-      {action ? <View style={[a.flex_row]}>{action}</View> : null}
-    </View>
-  ) : (
-    <View
-      style={[
-        a.flex_row,
-        a.align_center,
-        a.rounded_sm,
-        t.atoms.bg_contrast_25,
-        isAnchor || view === 'linear' ? a.py_md : a.py_sm,
-        a.pr_md,
-      ]}>
-      <View
-        accessible
-        accessibilityLabel={text}
-        accessibilityHint=""
-        style={[a.flex_row, a.align_center, a.flex_1]}>
-        <View
-          style={[
-            a.flex_row,
-            a.align_center,
-            a.justify_center,
-            {
-              width:
-                view === 'tree' && !isAnchor
-                  ? TREE_AVI_WIDTH + 12
-                  : LINEAR_AVI_WIDTH,
-            },
-          ]}>
-          <Icon style={[t.atoms.text_contrast_medium]} />
-        </View>
-        <Text
-          style={[
-            a.flex_1,
-            isAnchor || view === 'linear' ? a.text_md : a.text_sm,
-            a.font_semi_bold,
-            t.atoms.text_contrast_medium,
-          ]}>
-          {text}
-        </Text>
+  const asterButton =
+    asterOn && asterLabels && !asterView ? (
+      <Button
+        label={asterLabels.action}
+        size="small"
+        color="secondary"
+        disabled={aster.status === 'loading' || waiting}
+        onPress={onAster}>
+        {aster.status === 'loading' ? <ButtonIcon icon={Loader} /> : null}
+        <ButtonText>{asterLabels.action}</ButtonText>
+      </Button>
+    ) : null
+
+  const card =
+    asterView && asterLabels ? (
+      <AsterNode
+        view={asterView}
+        labels={asterLabels}
+        onUndo={() => setAster({status: 'idle'})}
+      />
+    ) : tierHidden ? (
+      <View style={[a.gap_sm]}>
+        <StandIn />
+        {action ? <View style={[a.flex_row]}>{action}</View> : null}
       </View>
-      {action}
-    </View>
-  )
+    ) : (
+      <View
+        style={[
+          a.flex_row,
+          a.align_center,
+          a.rounded_sm,
+          t.atoms.bg_contrast_25,
+          isAnchor || view === 'linear' ? a.py_md : a.py_sm,
+          a.pr_md,
+        ]}>
+        <View
+          accessible
+          accessibilityLabel={text}
+          accessibilityHint=""
+          style={[a.flex_row, a.align_center, a.flex_1]}>
+          <View
+            style={[
+              a.flex_row,
+              a.align_center,
+              a.justify_center,
+              {
+                width:
+                  view === 'tree' && !isAnchor
+                    ? TREE_AVI_WIDTH + 12
+                    : LINEAR_AVI_WIDTH,
+              },
+            ]}>
+            <Icon style={[t.atoms.text_contrast_medium]} />
+          </View>
+          <Text
+            style={[
+              a.flex_1,
+              isAnchor || view === 'linear' ? a.text_md : a.text_sm,
+              a.font_semi_bold,
+              t.atoms.text_contrast_medium,
+            ]}>
+            {text}
+          </Text>
+        </View>
+        <View style={[a.flex_row, a.gap_xs]}>
+          {action}
+          {asterButton}
+        </View>
+      </View>
+    )
 
   const statusLine = status ? (
     <Text

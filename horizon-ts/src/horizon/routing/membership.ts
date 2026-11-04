@@ -29,6 +29,7 @@ import {
   retryAfterMs,
   secondsToMs,
 } from '#/horizon/private/api/transient'
+import {answerAster, resetAster} from '#/horizon/routing/aster'
 import {
   answerPrismFeatures,
   featuresAnswered,
@@ -263,6 +264,7 @@ export function resetMembership() {
   states.clear()
   confirmed.clear()
   privateIndexed.clear()
+  resetAster()
 }
 
 /**
@@ -508,6 +510,8 @@ export function startMembershipProbe(
       return askLegacy()
     }
     const {status, features, permissions, validForSecs} = res.body
+    // The aster grant rides on every answer, whatever the status.
+    if (!cancelled) answerAster(did, permissions, res.body.aster)
     // The development fault switch (L-0): the probe answers `reindexing`.
     const fault = devPrismFault()
     const faulted = fault === 'reindexing' || fault === 'reindexing-bare'

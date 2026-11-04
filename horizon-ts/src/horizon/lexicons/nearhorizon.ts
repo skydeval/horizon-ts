@@ -282,6 +282,8 @@ export const getMembership = l.query(
     features: l.array(l.string()),
     permissions: l.optional(l.lexMap()),
     validForSecs: l.optional(l.integer()),
+    /** The aster labels, sent only with `permissions.aster` (`routing/aster.ts`). */
+    aster: l.optional(l.lexMap()),
   }),
   ['RateLimitExceeded'],
 )
@@ -772,6 +774,19 @@ export const threadLensResolve = l.procedure(
     servedAs: l.optional(l.string()),
   }),
   THREAD_LENS_ERRORS,
+)
+
+/**
+ * `app.nearhorizon.aster.getPost`: one post as an aster node, a
+ * `threadLens.defs#postNode` or `#gapNode`, typed as a map and checked where
+ * it is read. `NotPermitted` means the caller has no aster grant.
+ */
+export const asterGetPost = l.procedure(
+  'app.nearhorizon.aster.getPost',
+  l.params(),
+  l.jsonPayload({uri: l.string({format: 'at-uri'})}),
+  l.jsonPayload({node: l.lexMap()}),
+  ['InvalidRequest', 'NotPermitted', 'Unavailable'],
 )
 
 /*

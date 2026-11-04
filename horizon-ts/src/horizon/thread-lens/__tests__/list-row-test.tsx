@@ -37,6 +37,7 @@ jest.mock('#/state/session', () => ({
 }))
 jest.mock('#/horizon/private/membership', () => ({useIsMember: () => false}))
 jest.mock('#/horizon/thread-lens/MarkerRow', () => ({MarkerRow: () => null}))
+jest.mock('#/horizon/thread-lens/AsterNode', () => ({AsterNode: () => null}))
 jest.mock('#/screens/PostThread/components/ThreadItemReadMore', () => ({
   ThreadItemReadMore: () => null,
 }))
