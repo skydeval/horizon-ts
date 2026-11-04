@@ -62,7 +62,7 @@ describe('the Node hub', () => {
 })
 
 describe('nudge timing', () => {
-  it('nudges after the delay, then follows up at 15 s and 45 s, then stops', async () => {
+  it('nudges once after the delay, with no follow-ups', async () => {
     vi.useFakeTimers({toFake: ['Date']})
     const start = new Date('2026-11-04T12:00:00Z').getTime()
     vi.setSystemTime(start)
@@ -78,7 +78,7 @@ describe('nudge timing', () => {
       vi.setSystemTime(start + t)
       await internals.tick()
     }
-    expect(sent).toEqual([3_000, 18_000, 48_000])
+    expect(sent).toEqual([3_000])
     hub.stop()
   })
 })
