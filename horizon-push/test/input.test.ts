@@ -60,6 +60,14 @@ describe('DID document', () => {
       serviceEndpoint: 'https://push.nearhorizon.app',
     })
   })
+
+  it('names the entry Bluesky’s PDS needs to forward a registration', () => {
+    expect(DID_DOC.service).toContainEqual({
+      id: '#bsky_notif',
+      type: 'BskyNotificationService',
+      serviceEndpoint: 'https://push.nearhorizon.app',
+    })
+  })
 })
 
 describe('Firebase messages', () => {

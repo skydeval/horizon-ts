@@ -6,7 +6,7 @@
 
 import {verifySignature} from '@atproto/crypto'
 
-import {SERVICE_DID, SERVICE_ID} from './config'
+import {NOTIF_SERVICE_ID, SERVICE_DID, SERVICE_ID} from './config'
 
 /**
  * Checks the service token a PDS attaches when it forwards a request here
@@ -26,7 +26,11 @@ const ALGS = new Set(['ES256K', 'ES256'])
 const MAX_LIFETIME_S = 5 * 60
 const CLOCK_SKEW_S = 30
 
-const AUDIENCES = new Set([SERVICE_DID, `${SERVICE_DID}${SERVICE_ID}`])
+const AUDIENCES = new Set([
+  SERVICE_DID,
+  `${SERVICE_DID}${SERVICE_ID}`,
+  `${SERVICE_DID}${NOTIF_SERVICE_ID}`,
+])
 
 function b64urlBytes(part: string): Uint8Array {
   const b64 = part.replace(/-/g, '+').replace(/_/g, '/')

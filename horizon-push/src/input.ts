@@ -7,6 +7,7 @@
 import {
   APP_ID,
   MAX_NOTIFY_DIDS,
+  NOTIF_SERVICE_ID,
   PLATFORMS,
   SERVICE_DID,
   SERVICE_ENDPOINT,
@@ -32,6 +33,11 @@ export const DID_DOC = {
     {
       id: SERVICE_ID,
       type: 'HorizonPushService',
+      serviceEndpoint: SERVICE_ENDPOINT,
+    },
+    {
+      id: NOTIF_SERVICE_ID,
+      type: 'BskyNotificationService',
       serviceEndpoint: SERVICE_ENDPOINT,
     },
   ],

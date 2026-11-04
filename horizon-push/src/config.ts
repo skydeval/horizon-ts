@@ -9,6 +9,12 @@ export const SERVICE_DID = 'did:web:push.nearhorizon.app'
 
 /** The service entry apps name in their `atproto-proxy` header. */
 export const SERVICE_ID = '#horizon_push'
+/**
+ * The entry Bluesky's PDS looks for before it forwards a push registration:
+ * it handles `registerPush` itself and accepts only a service DID whose
+ * document has `#bsky_notif` of type `BskyNotificationService`.
+ */
+export const NOTIF_SERVICE_ID = '#bsky_notif'
 
 /** Where the service answers. */
 export const SERVICE_ENDPOINT = 'https://push.nearhorizon.app'
