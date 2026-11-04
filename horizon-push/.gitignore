@@ -4,3 +4,4 @@ dist/
 .dev.vars
 *.json.key
 service-account*.json
+dist-node/

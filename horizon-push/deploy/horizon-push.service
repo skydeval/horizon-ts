@@ -1,0 +1,52 @@
+# The push service on Node (src/node/main.ts), behind a TLS reverse proxy.
+# Install: /opt/horizon-push/node (Node 24), /opt/horizon-push/app/horizon-push.mjs
+# (pnpm run build:node), the Firebase service account at /etc/horizon-push/fcm.json
+# (root, 0600).
+[Unit]
+Description=Horizon push service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=horizon-push
+Group=horizon-push
+ExecStart=/opt/horizon-push/node/bin/node /opt/horizon-push/app/horizon-push.mjs
+Environment=PUSH_HOST=127.0.0.1
+Environment=PUSH_PORT=8790
+Environment=PUSH_DB=/var/lib/horizon-push/push.db
+Environment=NODE_ENV=production
+LoadCredential=fcm.json:/etc/horizon-push/fcm.json
+StateDirectory=horizon-push
+StateDirectoryMode=0700
+Restart=always
+RestartSec=5
+MemoryMax=512M
+# Little is logged; keep it that way
+LogRateLimitIntervalSec=60
+LogRateLimitBurst=20
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

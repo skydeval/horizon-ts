@@ -1,13 +1,17 @@
 # Horizon push
 
-Push notifications for Horizon's Android app, as a Cloudflare Worker at
-`push.nearhorizon.app`.
+Push notifications for Horizon's Android app, at `push.nearhorizon.app`. It
+runs either as a Cloudflare Worker (`src/index.ts`) or as a Node service
+behind a TLS reverse proxy (`src/node/main.ts`); both share the same routes
+and logic.
 
 - The app registers its Firebase token with
   `app.bsky.notification.registerPush`, sent through the account's PDS
   (`atproto-proxy: did:web:push.nearhorizon.app#horizon_push`). The PDS signs
-  a short service token, so the Worker knows which account is asking; it
-  stores only account and token.
+  a short service token, so the service knows which account is asking; it
+  stores only account and token. Bluesky's PDS handles `registerPush` itself
+  and forwards it only to a service whose DID document has a `#bsky_notif`
+  entry of type `BskyNotificationService`, so the document carries both.
 - A Durable Object follows Jetstream for posts, likes, reposts and follows,
   and notes the accounts each one concerns (replies, quotes, mentions,
   likes, reposts, follows).
@@ -47,6 +51,17 @@ pnpm deploy
 
 `GET /status` reports whether the listener is connected and how far behind
 the stream it is.
+
+## On Node
+
+```sh
+pnpm run build:node   # dist-node/horizon-push.mjs, one file
+```
+
+`deploy/horizon-push.service` is a hardened systemd unit for it: its own user,
+the SQLite file under `/var/lib/horizon-push`, the Firebase service account
+loaded as a systemd credential, listening on `127.0.0.1:8790` for the reverse
+proxy. Settings are in `src/node/main.ts`.
 
 ## Licence
 

@@ -87,7 +87,7 @@ export class Fcm {
     )}`
     const key = await crypto.subtle.importKey(
       'pkcs8',
-      pemBody(this.sa.private_key),
+      pemBody(this.sa.private_key) as Uint8Array<ArrayBuffer>,
       {name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256'},
       false,
       ['sign'],
