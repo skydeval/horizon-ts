@@ -70,7 +70,14 @@ export const WANTED_COLLECTIONS = [
 export const NUDGE_DELAY_MS = 3_000
 
 /** At most one nudge per account in this window; later events join the next. */
-export const NUDGE_COOLDOWN_MS = 10_000
+export const NUDGE_COOLDOWN_MS = 2_000
+
+/**
+ * After a nudge, the phone is nudged again at these delays, so a
+ * notification the AppView indexed late still shows soon. The app skips what
+ * it has already shown. A new event restarts the series.
+ */
+export const FOLLOW_UP_MS = [15_000, 45_000]
 
 /** How far back a reconnect resumes, to cover events in flight at the drop. */
 export const RESUME_OVERLAP_US = 5_000_000

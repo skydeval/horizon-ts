@@ -8,7 +8,7 @@ import {mkdtempSync, rmSync} from 'node:fs'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 
-import {afterEach, describe, expect, it} from 'vitest'
+import {afterEach, describe, expect, it, vi} from 'vitest'
 
 import {NodeHub} from '../../src/node/hub'
 import {handleRequest} from '../../src/routes'
@@ -23,6 +23,8 @@ function hubAt(dir?: string) {
 }
 
 afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   for (const dir of dirs.splice(0)) rmSync(dir, {recursive: true, force: true})
 })
 
@@ -55,6 +57,28 @@ describe('the Node hub', () => {
       hub,
     )
     expect(unauth.status).toBe(401)
+    hub.stop()
+  })
+})
+
+describe('nudge timing', () => {
+  it('nudges after the delay, then follows up at 15 s and 45 s, then stops', async () => {
+    vi.useFakeTimers({toFake: ['Date']})
+    const start = new Date('2026-11-04T12:00:00Z').getTime()
+    vi.setSystemTime(start)
+    const {hub} = hubAt()
+    const sent: number[] = []
+    const internals = hub as unknown as {nudge: (did: string) => Promise<void>; tick: () => Promise<void>}
+    internals.nudge = async () => {
+      sent.push(Date.now() - start)
+    }
+    await hub.register(DID, 'token-1', 'android')
+    await hub.notify([DID])
+    for (let t = 0; t <= 90_000; t += 1_000) {
+      vi.setSystemTime(start + t)
+      await internals.tick()
+    }
+    expect(sent).toEqual([3_000, 18_000, 48_000])
     hub.stop()
   })
 })

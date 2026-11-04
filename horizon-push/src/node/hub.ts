@@ -11,6 +11,7 @@ import {
   JETSTREAM_HOSTS,
   MAX_RESUME_AGE_US,
   MAX_TOKENS_PER_ACCOUNT,
+  FOLLOW_UP_MS,
   NUDGE_COOLDOWN_MS,
   NUDGE_DELAY_MS,
   RESUME_OVERLAP_US,
@@ -78,6 +79,8 @@ export class NodeHub implements HubApi {
   private ticker?: ReturnType<typeof setInterval>
   /** Account -> when its first unsent event arrived. */
   private pending = new Map<string, number>()
+  /** Account -> when its follow-up nudges are due, earliest first. */
+  private followUps = new Map<string, number[]>()
   /** Account -> when it was last nudged. */
   private lastSent = new Map<string, number>()
   private fcm?: Fcm
@@ -174,6 +177,7 @@ export class NodeHub implements HubApi {
     if (left === 0) {
       this.accounts.delete(did)
       this.pending.delete(did)
+      this.followUps.delete(did)
     }
   }
 
@@ -325,6 +329,23 @@ export class NodeHub implements HubApi {
     for (const did of due) {
       this.pending.delete(did)
       this.lastSent.set(did, now)
+      this.followUps.set(
+        did,
+        FOLLOW_UP_MS.map(delay => now + delay),
+      )
+      await this.nudge(did)
+    }
+    for (const [did, times] of this.followUps) {
+      if (this.pending.has(did)) continue
+      const cooled = now - (this.lastSent.get(did) ?? 0) >= NUDGE_COOLDOWN_MS
+      if (times[0] === undefined || times[0] > now || !cooled) continue
+      times.shift()
+      if (times.length === 0) this.followUps.delete(did)
+      if (!this.accounts.has(did)) {
+        this.followUps.delete(did)
+        continue
+      }
+      this.lastSent.set(did, now)
       await this.nudge(did)
     }
   }
@@ -334,11 +355,16 @@ export class NodeHub implements HubApi {
     const phones = this.sql
       .exec<{token: string}>(`SELECT token FROM phones WHERE did = ?`, did)
       .toArray()
+    const results: string[] = []
     for (const {token} of phones) {
-      if ((await this.fcm.send(token, did)) === 'gone') {
+      const result = await this.fcm.send(token, did)
+      results.push(result)
+      if (result === 'gone') {
         this.sql.exec(`DELETE FROM phones WHERE did = ? AND token = ?`, did, token)
       }
     }
+    // No account or token: only that a nudge went out, and how it went.
+    console.log(`nudge: ${results.join(', ') || 'no phones'}`)
     this.forgetIfEmpty(did)
   }
 }
