@@ -7,6 +7,11 @@
  * without the network. Relative imports only (see `status.ts`).
  */
 
+import {
+  buildProfileCard,
+  type MissingProfileCard,
+  type ProfileCard,
+} from './profile'
 import {buildPostCard, type Card} from './status'
 
 /** Bluesky's public AppView, as a signed-out bsky.app reads it. */
@@ -117,16 +122,14 @@ function formOk(form: unknown): form is string {
 
 /** The record's sets within the spec's limits, or `undefined`. */
 function pronounSets(value: unknown): string[][] | undefined {
-  const record = value as
-    | {$type?: unknown; sets?: unknown}
-    | null
-    | undefined
+  const record = value as {$type?: unknown; sets?: unknown} | null | undefined
   if (typeof record !== 'object' || record === null) return undefined
   if (record.$type !== undefined && record.$type !== PRONOUNS_COLLECTION) {
     return undefined
   }
   const sets = record.sets
-  if (!Array.isArray(sets) || sets.length > PRONOUN_LIMITS.sets) return undefined
+  if (!Array.isArray(sets) || sets.length > PRONOUN_LIMITS.sets)
+    return undefined
   const out: string[][] = []
   for (const set of sets) {
     const forms = (set as {forms?: unknown} | null)?.forms
@@ -177,6 +180,33 @@ async function fetchPronouns(
     `${pds}/xrpc/com.atproto.repo.getRecord?repo=${encodeURIComponent(did)}&collection=app.nearhorizon.actor.pronouns&rkey=self`,
   )
   return formatPronounRecord(body?.value)
+}
+
+/**
+ * The card for a profile link, `/profile/<name>`: the profile from the
+ * public AppView, and Horizon's pronouns from the account's repo (Bluesky's
+ * field when it has none). `url` is the link as the card names it.
+ */
+export async function loadProfileCard({
+  name,
+  url,
+  fetchImpl,
+}: {
+  name: string
+  url: string
+  fetchImpl: Fetch
+}): Promise<ProfileCard | MissingProfileCard> {
+  const did = await resolveName(name, fetchImpl)
+  if (!did) return {kind: 'missing-profile', url}
+  const [profile, pds] = await Promise.all([
+    getJson(
+      fetchImpl,
+      `${PUBLIC_APPVIEW}/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(did)}`,
+    ),
+    resolvePds(did, fetchImpl),
+  ])
+  const pronouns = pds ? await fetchPronouns(pds, did, fetchImpl) : undefined
+  return buildProfileCard({profile, url, pronouns})
 }
 
 /**

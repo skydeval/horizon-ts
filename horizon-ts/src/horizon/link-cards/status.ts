@@ -31,7 +31,12 @@ export const CARD_SITE_NAME = 'Horizon'
 export const CARD_THEME_COLOR = '#3f9b5a'
 
 /** Labels whose media never goes on a card. */
-const ADULT_LABELS = new Set(['porn', 'sexual', 'nudity', 'graphic-media'])
+export const ADULT_LABELS: ReadonlySet<string> = new Set([
+  'porn',
+  'sexual',
+  'nudity',
+  'graphic-media',
+])
 
 /** At most this many media items, as Discord's grid. */
 const MAX_MEDIA = 4

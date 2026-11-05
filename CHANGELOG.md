@@ -15,6 +15,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
   "she/they" for several sets), while Horizon keeps showing them in full.
 - **Pronouns in the reply composer,** after the name of the person you're
   replying to.
+- **Profile links show a card in Discord:** the avatar, name and pronouns,
+  the bio, follower, following and post counts, and the banner.
 - **Link cards show in Discord.** A Horizon post link shared in Discord now
   shows the post's link card: its title, description and site, beside the
   thumbnail.

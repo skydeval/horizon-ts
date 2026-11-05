@@ -6,15 +6,22 @@
  *   else gets the app, untouched.
  * - `/profile/:name/ppost/:rkey`: a link fetcher gets the hidden card. A
  *   kryphocron post is never looked up, not even its author.
+ * - `/profile/:name`: a link fetcher gets the profile's card page; anyone
+ *   else gets the app, untouched.
  * - `/api/v1/statuses/:id`: the Mastodon-shaped status the card page's
- *   alternate link leads Discord to; public posts only.
+ *   alternate link leads Discord to; public posts and profiles only.
  *
  * A failure on the card side falls back to the app (pages) or a 404
  * (status), never an error page. Relative imports only (see `status.ts`).
  */
 
-import {loadPostCard} from './fetch'
+import {loadPostCard, loadProfileCard} from './fetch'
 import {isLinkFetcher, linkCardPage} from './page'
+import {
+  decodeProfileStatusId,
+  profileCardPage,
+  toMastodonProfileStatus,
+} from './profile'
 import {decodeStatusId, toMastodonStatus} from './status'
 
 /** The parts of a Pages function context the handlers use. */
@@ -62,6 +69,23 @@ export async function handlePostPage(
   }
 }
 
+/** `/profile/:name` */
+export async function handleProfilePage(
+  ctx: PagesContext,
+  fetchImpl: Fetch = fetch,
+): Promise<Response> {
+  if (!isLinkFetcher(ctx.request.headers.get('user-agent'))) return ctx.next()
+  try {
+    const origin = new URL(ctx.request.url).origin
+    const name = param(ctx, 'name')
+    const url = `${origin}/profile/${encodeURIComponent(name)}`
+    const card = await loadProfileCard({name, url, fetchImpl})
+    return cardResponse(profileCardPage(card, origin))
+  } catch {
+    return ctx.next()
+  }
+}
+
 /** `/profile/:name/ppost/:rkey` */
 export async function handlePrivatePostPage(
   ctx: PagesContext,
@@ -83,6 +107,28 @@ export async function handleStatus(
       headers: {'content-type': 'application/json'},
     })
   const id = param(ctx, 'id')
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': `public, max-age=${CARD_MAX_AGE}`,
+        'access-control-allow-origin': '*',
+      },
+    })
+  const profileDid = decodeProfileStatusId(id)
+  if (profileDid) {
+    try {
+      const origin = new URL(ctx.request.url).origin
+      const card = await loadProfileCard({name: profileDid, url: '', fetchImpl})
+      if (card.kind !== 'profile') return notFound()
+      card.url = `${origin}/profile/${encodeURIComponent(
+        card.author.handle || card.author.did,
+      )}`
+      return json(toMastodonProfileStatus(card, {id, origin}))
+    } catch {
+      return notFound()
+    }
+  }
   const decoded = decodeStatusId(id)
   if (!decoded) return notFound()
   try {
