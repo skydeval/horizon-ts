@@ -14,7 +14,7 @@
  * store read. Both announce a new state politely (4.4).
  */
 
-import {useEffect, useRef, useState} from 'react'
+import {useEffect} from 'react'
 import {AccessibilityInfo, View} from 'react-native'
 import {AtUri} from '@atproto/syntax'
 import {type MessageDescriptor} from '@lingui/core'
@@ -44,16 +44,9 @@ import {Text} from '#/components/Typography'
 import {useIsMember} from '#/horizon/private/membership'
 import {StandIn} from '#/horizon/private/render/StandIn'
 import {isPrivateRead, privatePostPath} from '#/horizon/private/uri'
-import {useAsterLabels} from '#/horizon/routing/aster'
-import {getCurrentClients} from '#/horizon/routing/current-clients'
-import {ASTER} from '#/horizon/switches'
 import {type GapInfo} from '#/horizon/thread-lens/adapt'
-import {getAsterPost, useLensWaiting} from '#/horizon/thread-lens/api'
-import {
-  type AsterOutcome,
-  asterOutcome,
-  offersAster,
-} from '#/horizon/thread-lens/aster'
+import {useLensWaiting} from '#/horizon/thread-lens/api'
+import {offersAster} from '#/horizon/thread-lens/aster'
 import {AsterNode} from '#/horizon/thread-lens/AsterNode'
 import {retryLensGaps} from '#/horizon/thread-lens/fetch'
 import {useLensListName} from '#/horizon/thread-lens/lists'
@@ -69,6 +62,7 @@ import {
   STILL_UNAVAILABLE,
   VIEW_LIST,
 } from '#/horizon/thread-lens/strings'
+import {useAster} from '#/horizon/thread-lens/use-aster'
 
 type PostItem = Extract<ThreadItem, {type: 'threadPost'}>
 
@@ -130,37 +124,12 @@ export function GapRow({
   }, [row.status, i18n])
 
   // Aster: the labels come from prism with the grant; none, no action.
-  const asterLabels = useAsterLabels(currentAccount?.did)
-  const asterOn = ASTER && !!asterLabels && offersAster(gap.uri, gap.gap)
-  const [aster, setAster] = useState<
-    | {status: 'idle' | 'loading' | 'error'}
-    | {status: 'done'; outcome: AsterOutcome}
-  >({status: 'idle'})
-  const asterAbort = useRef<AbortController | undefined>(undefined)
-  useEffect(() => () => asterAbort.current?.abort(), [])
-  const asterView =
-    asterOn && aster.status === 'done' && aster.outcome.kind === 'post'
-      ? aster.outcome.view
-      : undefined
-  const onAster = () => {
-    const did = currentAccount?.did
-    const clients = getCurrentClients()
-    if (!did || !clients || clients.did !== did) return
-    asterAbort.current?.abort()
-    const controller = new AbortController()
-    asterAbort.current = controller
-    setAster({status: 'loading'})
-    getAsterPost(clients.prismClient, did, gap.uri, controller.signal).then(
-      node => {
-        if (controller.signal.aborted) return
-        setAster({status: 'done', outcome: asterOutcome(node, gap.uri)})
-      },
-      () => {
-        if (controller.signal.aborted) return
-        setAster({status: 'error'})
-      },
-    )
-  }
+  const asterAction = useAster(gap.uri, offersAster(gap.uri, gap.gap))
+  const asterLabels = asterAction.labels
+  const asterOn = !!asterLabels
+  const aster = asterAction.state
+  const asterView = asterAction.view
+  const onAster = asterAction.run
 
   const tierHidden = gap.gap === 'tier-hidden'
   const text = tierHidden
@@ -250,7 +219,7 @@ export function GapRow({
       <AsterNode
         view={asterView}
         labels={asterLabels}
-        onUndo={() => setAster({status: 'idle'})}
+        onUndo={asterAction.undo}
       />
     ) : tierHidden ? (
       <View style={[a.gap_sm]}>

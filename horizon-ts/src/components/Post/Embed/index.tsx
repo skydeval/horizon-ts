@@ -57,6 +57,8 @@ import {
 } from '#/horizon/refract/RestoredQuote'
 // HORIZON: a CW post's line reads as a warning
 import {withContentWarningRecord} from '#/horizon/spoilers/cw-line'
+// HORIZON: Aster on a blocked quote card
+import {AsterQuote} from '#/horizon/thread-lens/AsterQuote'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 import {
@@ -326,15 +328,33 @@ function RecordEmbed({
                 allowNestedQuotes={rest.allowNestedQuotes}
               />
             )}
-            placeholder={kind => (
-              <PostPlaceholderText>
-                {kind === 'blocked' ? (
-                  <Trans>Blocked</Trans>
-                ) : (
+            placeholder={kind =>
+              kind === 'blocked' ? (
+                // HORIZON: Aster on a blocked quote card, for a granted account
+                <AsterQuote
+                  uri={embed.view.uri}
+                  placeholder={
+                    <PostPlaceholderText>
+                      <Trans>Blocked</Trans>
+                    </PostPlaceholderText>
+                  }
+                  render={quote => (
+                    <QuoteEmbed
+                      {...rest}
+                      embed={quote}
+                      viewContext={rest.viewContext}
+                      isWithinQuote={rest.isWithinQuote}
+                      allowNestedQuotes={rest.allowNestedQuotes}
+                      linkDisabled
+                    />
+                  )}
+                />
+              ) : (
+                <PostPlaceholderText>
                   <Trans>Deleted</Trans>
-                )}
-              </PostPlaceholderText>
-            )}
+                </PostPlaceholderText>
+              )
+            }
           />
         )
       }
@@ -346,10 +366,26 @@ function RecordEmbed({
       )
     }
     case 'post_blocked': {
+      // HORIZON: Aster on a blocked quote card, for a granted account
       return (
-        <PostPlaceholderText>
-          <Trans>Blocked</Trans>
-        </PostPlaceholderText>
+        <AsterQuote
+          uri={embed.view.uri}
+          placeholder={
+            <PostPlaceholderText>
+              <Trans>Blocked</Trans>
+            </PostPlaceholderText>
+          }
+          render={quote => (
+            <QuoteEmbed
+              {...rest}
+              embed={quote}
+              viewContext={rest.viewContext}
+              isWithinQuote={rest.isWithinQuote}
+              allowNestedQuotes={rest.allowNestedQuotes}
+              linkDisabled
+            />
+          )}
+        />
       )
     }
     case 'post_detached': {

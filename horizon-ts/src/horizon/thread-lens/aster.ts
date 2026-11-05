@@ -31,7 +31,40 @@ export function offersAster(uri: string, gap: string): boolean {
   return ASTER_GAP_KINDS.has(gap) && !isPrivatePostUri(uri)
 }
 
+/**
+ * Whether a blocked quote card of `uri` offers the aster action: a post's
+ * URI only (a blocked feed or list card never does), never a kryphocron one.
+ */
+export function offersAsterQuote(uri: string): boolean {
+  return /^at:\/\/did:[^/]+\/app\.bsky\.feed\.post\/[^/]+$/.test(uri)
+}
+
 const stamped = new WeakSet<object>()
+
+/**
+ * An aster node as the quoted record a quote card draws (`#viewRecord`),
+ * stamped like the view it came from.
+ */
+export function asterQuoteRecord(
+  view: PostView,
+): app.bsky.embed.record.ViewRecord {
+  const record = {
+    $type: 'app.bsky.embed.record#viewRecord',
+    uri: view.uri,
+    cid: view.cid,
+    author: view.author,
+    value: view.record,
+    labels: view.labels ?? [],
+    indexedAt: view.indexedAt,
+    embeds: view.embed ? [view.embed] : [],
+    likeCount: view.likeCount,
+    repostCount: view.repostCount,
+    replyCount: view.replyCount,
+    quoteCount: view.quoteCount,
+  } as unknown as app.bsky.embed.record.ViewRecord
+  stamped.add(record)
+  return record
+}
 
 /** Whether `view` is an aster copy (read-only). */
 export function isAsterView(view: unknown): boolean {

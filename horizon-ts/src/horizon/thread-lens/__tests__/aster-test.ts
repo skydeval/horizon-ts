@@ -9,8 +9,10 @@ import {
 } from '#/horizon/routing/aster'
 import {
   asterOutcome,
+  asterQuoteRecord,
   isAsterView,
   offersAster,
+  offersAsterQuote,
 } from '#/horizon/thread-lens/aster'
 
 /*
@@ -124,5 +126,35 @@ describe('asterOutcome', () => {
     expect(asterOutcome({uri: URI, post: {uri: URI}}, URI)).toEqual({
       kind: 'none',
     })
+  })
+})
+
+describe('aster on blocked quote cards', () => {
+  it('offers on a post’s card only, never a feed, list or kryphocron one', () => {
+    expect(offersAsterQuote(URI)).toBe(true)
+    expect(
+      offersAsterQuote(`at://${AUTHOR}/app.bsky.feed.generator/feedname`),
+    ).toBe(false)
+    expect(offersAsterQuote(`at://${AUTHOR}/app.bsky.graph.list/3klist`)).toBe(
+      false,
+    )
+    expect(
+      offersAsterQuote(
+        `at://${AUTHOR}/tools.kryphocron.feed.postPrivate/3kastpost2222`,
+      ),
+    ).toBe(false)
+  })
+
+  it('draws the aster node as a stamped quoted record', () => {
+    const outcome = asterOutcome({uri: URI, post: postView()}, URI)
+    if (outcome.kind !== 'post') throw new Error('expected a post')
+    const record = asterQuoteRecord(outcome.view)
+    expect(record).toMatchObject({
+      $type: 'app.bsky.embed.record#viewRecord',
+      uri: URI,
+      value: {text: 'synthetic'},
+      embeds: [],
+    })
+    expect(isAsterView(record)).toBe(true)
   })
 })
