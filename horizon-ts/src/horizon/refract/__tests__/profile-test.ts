@@ -107,6 +107,18 @@ describe('the profile query', () => {
     expect(h.fills()).toHaveLength(1)
   })
 
+  it('a deactivated account gives the stock error at once, asking prism nothing', async () => {
+    // Even a prism that can't answer never puts "Oops!" before it
+    h.respond(() => {
+      throw new TypeError('network down')
+    })
+    const error = xrpcError(400, 'AccountDeactivated', 'Account is deactivated')
+    const result = run(() => Promise.reject(error))
+    await jest.advanceTimersByTimeAsync(0)
+    expect(result()?.error).toBe(error)
+    expect(h.fills()).toHaveLength(0)
+  })
+
   it('a transient refract failure is ProfileUnavailableError, never the stock error', async () => {
     h.respond(() => {
       throw new TypeError('network down')

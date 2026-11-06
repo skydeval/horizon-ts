@@ -80,9 +80,14 @@ function profileKey(did: string) {
   return ['profile', did]
 }
 
-/** A stock failure that hands the profile to Refract (4.1). */
+/**
+ * A stock failure that hands the profile to Refract (4.1). A deactivated
+ * account is its owner's own choice, not a takedown, so stock's answer shows
+ * at once: no wait on prism, no "Oops!" in between.
+ */
 export function isRefractableProfileError(error: unknown): boolean {
   if (!(error instanceof XrpcResponseError)) return false
+  if ((error as {error?: unknown}).error === 'AccountDeactivated') return false
   const status = error.status
   return status >= 400 && status < 500 && status !== 401 && status !== 429
 }

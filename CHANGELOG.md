@@ -75,6 +75,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **A deactivated account's profile says so straight away,** instead of
+  loading, then "can't be found", then loading again.
 - **Push notifications arrive at once.** Public notifications from Horizon's
   own push service now reached Bluesky-hosted accounts, and each wake carries
   what happened, so likes, replies and follows show without waiting for
