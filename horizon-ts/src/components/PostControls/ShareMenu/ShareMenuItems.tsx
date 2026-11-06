@@ -8,7 +8,7 @@ import {useQueryClient} from '@tanstack/react-query'
 import {makeProfileLink} from '#/lib/routes/links'
 import {type NavigationProp} from '#/lib/routes/types'
 import {shareUrl, simpleShareText} from '#/lib/sharing'
-import {toShareUrl} from '#/lib/strings/url-helpers'
+import {toBskyAppUrl, toShareUrl} from '#/lib/strings/url-helpers'
 import {useProfileShadow} from '#/state/cache/profile-shadow'
 import {precachePost} from '#/state/queries/post'
 import {useSession} from '#/state/session'
@@ -89,6 +89,20 @@ let ShareMenuItems = ({
     onShareProp()
   }
 
+  // HORIZON: the same post on bsky.app, for sharing without naming Horizon
+  const onCopyBskyLink = async () => {
+    const url = toBskyAppUrl(href)
+    if (IS_IOS) {
+      await ExpoClipboard.setUrlAsync(url)
+    } else {
+      await ExpoClipboard.setStringAsync(url)
+    }
+    Toast.show(l`Copied to clipboard`, {
+      type: 'success',
+    })
+    onShareProp()
+  }
+
   const onBeforeShareViaChat = () => {
     precachePost(queryClient, postUri, post)
   }
@@ -158,6 +172,24 @@ let ShareMenuItems = ({
             </Menu.ItemText>
             <Menu.ItemIcon icon={ChainLinkIcon} position="right" />
           </Menu.Item>
+
+          {/* HORIZON: the same post on bsky.app; a kryphocron post has none */}
+          {!hidesBlueskyShare(postUri) && (
+            <Menu.Item
+              testID="postDropdownCopyBskyLinkBtn"
+              label={l({
+                message: 'Copy bsky.app link to post',
+                comment: 'Share menu: copies the post’s link on bsky.app',
+              })}
+              onPress={() => void onCopyBskyLink()}>
+              <Menu.ItemText>
+                <Trans comment="Share menu: copies the post’s link on bsky.app">
+                  Copy bsky.app link to post
+                </Trans>
+              </Menu.ItemText>
+              <Menu.ItemIcon icon={ChainLinkIcon} position="right" />
+            </Menu.Item>
+          )}
         </Menu.Group>
 
         {hideInPWI && (
