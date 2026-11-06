@@ -10,6 +10,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **"Copy bsky.app link to post"** in a post's share menu, under "Copy link
+  to post", for sharing the same post on bsky.app.
 - **Your pronouns show in Bluesky's app too.** Saving pronouns in Horizon
   also fills in Bluesky's profile pronouns in its own form ("she/her", or
   "she/they" for several sets), while Horizon keeps showing them in full.
