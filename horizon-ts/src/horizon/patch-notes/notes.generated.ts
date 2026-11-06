@@ -7,15 +7,15 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    "version": "0.1.18",
-    "build": 18,
+    "version": "0.1.19",
+    "build": 19,
     "date": "2026-11-05",
-    "summary": "Small improvements behind the scenes.",
+    "summary": "Deactivated accounts' profiles say so straight away.",
     "sections": [
       {
         "kind": "fixes",
         "items": [
-          "Small fixes and improvements."
+          "Opening a deactivated account's profile now says \"Account is deactivated\" straight away, instead of loading, then saying it can't be found, then loading again."
         ]
       }
     ]
