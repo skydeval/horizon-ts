@@ -10,6 +10,11 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Gallery or Carousel for 2 to 4 images.** A drop-down beside Labels in
+  the composer shows posts with several images as a carousel instead of a
+  grid.
+- **Horizon's own support, privacy and terms pages.** Help now opens
+  Horizon's support page, in the app too.
 - **Send feedback from the app.** Feedback in the menu and the sidebar now
   opens a short form for a bug, an idea or anything else, sent to Horizon's
   team while signed in. Technical details (Horizon's version and your device
