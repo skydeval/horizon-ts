@@ -1,6 +1,6 @@
 /*
- * The AppView switcher (Settings > AppViews): prism shown greyed out (always
- * connected), and the public AppView, Bluesky's or a custom one.
+ * The AppView switcher (Settings > AppViews): the public AppView, Bluesky's
+ * or a custom one. prism is always connected and not listed here.
  *
  * Adapted from the Witchsky client (MIT),
  * src/screens/Login/components/AppServerDialog.tsx (the dialog and the quiet
@@ -29,7 +29,6 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {IS_WEB} from '#/env'
 import {openInPlaceSignIn} from '#/horizon/auth/in-place-store'
-import {PRODUCT_NAME} from '#/horizon/branding'
 import {Computer_Stroke2_Corner2_Rounded as ComputerIcon} from '#/horizon/icons/Computer'
 import {validatePublicAppview} from '#/horizon/routing/appview-validation'
 import {
@@ -121,9 +120,7 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
         setError(l`That doesn’t look like a web address.`)
         break
       case 'prism':
-        setError(
-          l`That’s ${PRODUCT_NAME}’s AppView, which is always connected. Enter a public AppView.`,
-        )
+        setError(l`That AppView is already connected.`)
         break
       case 'pds':
         setError(l`This is a PDS, not an AppView.`)
@@ -142,25 +139,6 @@ function AppViewSwitcherInner({control}: {control: Dialog.DialogControlProps}) {
         <Text style={[a.text_2xl, a.font_bold]}>
           <Trans>AppViews</Trans>
         </Text>
-
-        <View
-          accessibilityState={{disabled: true}}
-          style={[
-            a.p_md,
-            a.rounded_md,
-            a.border,
-            a.gap_xs,
-            t.atoms.border_contrast_low,
-            t.atoms.bg_contrast_25,
-            {opacity: 0.6},
-          ]}>
-          <Text style={[a.text_md, a.font_semi_bold]}>
-            <Trans>{PRODUCT_NAME} AppView</Trans>
-          </Text>
-          <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
-            <Trans>Always connected. Powers {PRODUCT_NAME}’s features.</Trans>
-          </Text>
-        </View>
 
         <View style={[a.gap_sm]}>
           <Text style={[a.text_md, a.font_semi_bold]}>
