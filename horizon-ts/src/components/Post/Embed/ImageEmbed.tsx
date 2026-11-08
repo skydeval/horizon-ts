@@ -24,8 +24,6 @@ import * as bsky from '#/types/bsky'
 import {type EmbedType} from '#/types/bsky/post'
 import {type CommonProps} from './types'
 
-const MAX_GRID_IMAGES = 4
-
 export function ImageEmbed({
   embed,
   ...rest
@@ -47,9 +45,11 @@ export function ImageEmbed({
             aspectRatio: item.aspectRatio,
           }))
       : embed.view.images
+  // HORIZON: every gallery is a carousel; 2 to 4 images arrive as a gallery
+  // only when the author chose Carousel (Bluesky's app sends a grid)
   const useExpandedLayout =
     embed.type === 'gallery'
-      ? images.length > MAX_GRID_IMAGES
+      ? true
       : ax.features.enabled(ax.features.PostGalleryEmbedEnable)
 
   const layout: 'single' | 'grid' | 'carousel' =

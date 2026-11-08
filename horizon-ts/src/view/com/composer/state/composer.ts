@@ -43,6 +43,11 @@ type ImagesMedia = {
 type GalleryMedia = {
   type: 'gallery'
   images: ComposerImage[]
+  /**
+   * HORIZON: the author chose "Show as carousel", so 2 to 4 images are sent
+   * as a gallery (which Horizon shows as a carousel) instead of a grid.
+   */
+  carousel?: boolean
 }
 
 type VideoMedia = {
@@ -90,6 +95,8 @@ export type PostAction =
   | {type: 'embed_add_images'; images: ComposerImage[]}
   | {type: 'embed_update_image'; image: ComposerImage}
   | {type: 'embed_remove_image'; image: ComposerImage}
+  // HORIZON: "Show as carousel" for 2 to 4 images
+  | {type: 'embed_set_carousel'; carousel: boolean}
   | {
       type: 'embed_add_video'
       asset: ImagePickerAsset
@@ -187,10 +194,25 @@ export const MAX_GALLERY_IMAGES = 10
  */
 function imagesToMediaVariant(
   images: ComposerImage[],
+  // HORIZON: "Show as carousel" sends 2 to 4 images as a gallery
+  carousel = false,
 ): ImagesMedia | GalleryMedia {
-  return images.length <= LEGACY_IMAGES_EMBED_MAX
-    ? {type: 'images', images: images.slice(0, LEGACY_IMAGES_EMBED_MAX)}
-    : {type: 'gallery', images: images.slice(0, MAX_GALLERY_IMAGES)}
+  if (images.length > LEGACY_IMAGES_EMBED_MAX) {
+    return {
+      type: 'gallery',
+      images: images.slice(0, MAX_GALLERY_IMAGES),
+      ...(carousel ? {carousel} : {}),
+    }
+  }
+  if (carousel && images.length >= 2) {
+    return {type: 'gallery', images, carousel}
+  }
+  return {type: 'images', images: images.slice(0, LEGACY_IMAGES_EMBED_MAX)}
+}
+
+/** HORIZON: whether the author chose "Show as carousel". */
+function chosenCarousel(media: EmbedDraft['media']): boolean {
+  return media?.type === 'gallery' && media.carousel === true
 }
 
 export function composerReducer(
@@ -394,10 +416,10 @@ function postReducer(state: PostDraft, action: PostAction): PostDraft {
       if (!prevMedia) {
         nextMedia = imagesToMediaVariant(action.images)
       } else if (prevMedia.type === 'images' || prevMedia.type === 'gallery') {
-        nextMedia = imagesToMediaVariant([
-          ...prevMedia.images,
-          ...action.images,
-        ])
+        nextMedia = imagesToMediaVariant(
+          [...prevMedia.images, ...action.images],
+          chosenCarousel(prevMedia),
+        )
       }
       return {
         ...state,
@@ -448,7 +470,10 @@ function postReducer(state: PostDraft, action: PostAction): PostDraft {
           // Re-pick the variant so a gallery that shrinks to <=4 demotes
           // back to the legacy `app.bsky.embed.images` shape - keeps old
           // clients rendering it when possible.
-          nextMedia = imagesToMediaVariant(remainingImages)
+          nextMedia = imagesToMediaVariant(
+            remainingImages,
+            chosenCarousel(prevMedia),
+          )
         }
         return {
           ...state,
@@ -460,6 +485,20 @@ function postReducer(state: PostDraft, action: PostAction): PostDraft {
         }
       }
       return state
+    }
+    // HORIZON: "Show as carousel" for 2 to 4 images
+    case 'embed_set_carousel': {
+      const prevMedia = state.embed.media
+      if (prevMedia?.type !== 'images' && prevMedia?.type !== 'gallery') {
+        return state
+      }
+      return {
+        ...state,
+        embed: {
+          ...state.embed,
+          media: imagesToMediaVariant(prevMedia.images, action.carousel),
+        },
+      }
     }
     case 'embed_add_video': {
       const prevMedia = state.embed.media

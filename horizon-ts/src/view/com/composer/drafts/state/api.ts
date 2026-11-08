@@ -534,8 +534,14 @@ export async function draftToComposerPosts(
         )
       }
       if (restoredImages.length > 0) {
-        embed.media =
+        // HORIZON: a saved gallery of 2 to 4 images was a Carousel choice
+        const chosenCarousel =
+          !!post.embedGallery?.items.length &&
+          restoredImages.length >= 2 &&
           restoredImages.length <= LEGACY_IMAGES_EMBED_MAX
+        embed.media = chosenCarousel
+          ? {type: 'gallery', images: restoredImages, carousel: true}
+          : restoredImages.length <= LEGACY_IMAGES_EMBED_MAX
             ? {type: 'images', images: restoredImages}
             : {type: 'gallery', images: restoredImages}
       }

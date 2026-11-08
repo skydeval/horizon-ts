@@ -146,6 +146,8 @@ import {
 } from '#/env'
 import {type Gif} from '#/features/gifPicker/types'
 // HORIZON: hover hints on the composer toolbar (change list 2)
+// HORIZON: Gallery or Carousel for 2 to 4 images
+import {ImageLayoutBtn} from '#/horizon/composer/ImageLayoutBtn'
 import {ToolbarHint} from '#/horizon/composer-hints/ToolbarHint'
 // HORIZON: media spoilers and content warnings
 import {
@@ -251,6 +253,7 @@ import {
   composerReducer,
   createComposerState,
   type EmbedDraft,
+  LEGACY_IMAGES_EMBED_MAX,
   MAX_GALLERY_IMAGES,
   type PostAction,
   type PostDraft,
@@ -2299,6 +2302,21 @@ function ComposerPills({
                   type: 'update_labels',
                   labels: nextLabels,
                 },
+              })
+            }}
+          />
+        ) : null}
+        {/* HORIZON: Gallery or Carousel for 2 to 4 images */}
+        {(media?.type === 'images' || media?.type === 'gallery') &&
+        media.images.length >= 2 &&
+        media.images.length <= LEGACY_IMAGES_EMBED_MAX ? (
+          <ImageLayoutBtn
+            carousel={media.type === 'gallery'}
+            onChange={carousel => {
+              dispatch({
+                type: 'update_post',
+                postId: post.id,
+                postAction: {type: 'embed_set_carousel', carousel},
               })
             }}
           />
