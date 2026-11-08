@@ -8,7 +8,7 @@ import {Trans, useLingui} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 import {type NativeStackScreenProps} from '@react-navigation/native-stack'
 
-import {HELP_DESK_URL, HITSLOP_10} from '#/lib/constants'
+import {HITSLOP_10} from '#/lib/constants'
 import {useAccountSwitcher} from '#/lib/hooks/useAccountSwitcher'
 import {useApplyPullRequestOTAUpdate} from '#/lib/hooks/useOTAUpdates'
 import {getHomeNavigationAction} from '#/lib/routes/navigation'
@@ -83,6 +83,8 @@ import {AudiencesSettingsItem} from '#/horizon/private/audiences/AudiencesSettin
 import {AppViewSettingsItem} from '#/horizon/routing/AppViewSwitcher'
 // HORIZON: Interaction settings as a main row
 import {InteractionSettingsItem} from '#/horizon/settings/InteractionSettingsItem'
+// HORIZON: Help opens Horizon's support page
+import {HORIZON_SUPPORT_URL} from '#/horizon/support/links'
 // HORIZON: hide "Beta features"; the local flag table has none
 import {SHOW_BETA_FEATURES} from '#/horizon/switches'
 import {type app} from '#/lexicons'
@@ -300,20 +302,17 @@ export function SettingsScreen({}: Props) {
               </SettingsList.ItemText>
             </SettingsList.LinkItem>
           )}
-          {/* HORIZON: no Help in the app until Horizon has its own (start) */}
-          {!IS_NATIVE && (
-            <SettingsList.PressableItem
-              onPress={() => void Linking.openURL(HELP_DESK_URL)}
-              label={l`Help`}
-              accessibilityHint={l`Opens helpdesk in browser`}>
-              <SettingsList.ItemIcon icon={CircleQuestionIcon} />
-              <SettingsList.ItemText>
-                <Trans>Help</Trans>
-              </SettingsList.ItemText>
-              <SettingsList.Chevron />
-            </SettingsList.PressableItem>
-          )}
-          {/* HORIZON: no Help in the app until Horizon has its own (end) */}
+          {/* HORIZON: Help opens Horizon's support page, in the app too */}
+          <SettingsList.PressableItem
+            onPress={() => void Linking.openURL(HORIZON_SUPPORT_URL)}
+            label={l`Help`}
+            accessibilityHint={l`Opens Horizon support in your browser`}>
+            <SettingsList.ItemIcon icon={CircleQuestionIcon} />
+            <SettingsList.ItemText>
+              <Trans>Help</Trans>
+            </SettingsList.ItemText>
+            <SettingsList.Chevron />
+          </SettingsList.PressableItem>
           <SettingsList.LinkItem to="/settings/about" label={l`About`}>
             <SettingsList.ItemIcon icon={BubbleInfoIcon} />
             <SettingsList.ItemText>

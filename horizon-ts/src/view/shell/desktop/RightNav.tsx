@@ -5,7 +5,6 @@ import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {HELP_DESK_URL} from '#/lib/constants'
 import {useSession} from '#/state/session'
 import {useLogoVariant} from '#/view/icons/useLogoVariant'
 import {DesktopFeeds} from '#/view/shell/desktop/Feeds'
@@ -36,6 +35,12 @@ import {
 } from '#/horizon/backdrops/RailCard'
 // HORIZON: Horizon's own feedback form
 import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
+// HORIZON: Horizon's own support, privacy and terms pages
+import {
+  HORIZON_PRIVACY_URL,
+  HORIZON_SUPPORT_URL,
+  HORIZON_TERMS_URL,
+} from '#/horizon/support/links'
 
 /** Looks like the footer's links, but is a button: it opens a dialog. */
 function FeedbackTextButton({
@@ -185,14 +190,16 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
             </>
           )}
           <InlineLinkText
-            to="https://bsky.social/about/support/privacy-policy"
+            // HORIZON: Horizon's own privacy policy
+            to={HORIZON_PRIVACY_URL}
             style={[t.atoms.text_contrast_medium]}
             label={_(msg`Privacy`)}>
             {_(msg`Privacy`)}
           </InlineLinkText>
           <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
           <InlineLinkText
-            to="https://bsky.social/about/support/tos"
+            // HORIZON: Horizon's own terms
+            to={HORIZON_TERMS_URL}
             style={[t.atoms.text_contrast_medium]}
             label={_(msg`Terms`)}>
             {_(msg`Terms`)}
@@ -200,7 +207,8 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
           <InlineLinkText
             label={_(msg`Help`)}
-            to={HELP_DESK_URL}
+            // HORIZON: Horizon's own support page
+            to={HORIZON_SUPPORT_URL}
             style={[t.atoms.text_contrast_medium]}>
             {_(msg`Help`)}
           </InlineLinkText>

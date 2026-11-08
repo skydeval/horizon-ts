@@ -13,6 +13,8 @@ import {TextLink} from '#/view/com/util/Link'
 import {Text} from '#/view/com/util/text/Text'
 import {ScrollView} from '#/view/com/util/Views'
 import * as Layout from '#/components/Layout'
+// HORIZON: Horizon's own privacy policy
+import {HORIZON_PRIVACY_URL} from '#/horizon/support/links'
 import {ViewHeader} from '../com/util/ViewHeader'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PrivacyPolicy'>
@@ -30,8 +32,9 @@ export const PrivacyPolicyScreen = (_props: Props) => {
               The Privacy Policy has been moved to{' '}
               <TextLink
                 style={pal.link}
-                href="https://bsky.social/about/support/privacy-policy"
-                text="bsky.social/about/support/privacy-policy"
+                // HORIZON: Horizon's own privacy policy
+                href={HORIZON_PRIVACY_URL}
+                text="nearhorizon.app/about/support/privacy-policy"
               />
             </Trans>
           </Text>

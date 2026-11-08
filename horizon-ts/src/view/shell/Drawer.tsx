@@ -12,7 +12,7 @@ import {Plural, Trans, useLingui} from '@lingui/react/macro'
 import {type NavigationState} from '@react-navigation/native'
 import {StackActions, useNavigation} from '@react-navigation/native'
 
-import {HELP_DESK_URL, UNREAD_NOTIFICATION_CAP} from '#/lib/constants'
+import {UNREAD_NOTIFICATION_CAP} from '#/lib/constants'
 import {type PressableScale} from '#/lib/custom-animations/PressableScale'
 import {useNavigationTabState} from '#/lib/hooks/useNavigationTabState'
 import {getTabState, TabState} from '#/lib/routes/helpers'
@@ -86,6 +86,12 @@ import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {Outlined} from '#/horizon/backdrops/Outlined'
 // HORIZON: Horizon's own feedback form
 import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
+// HORIZON: Horizon's own support, privacy and terms pages
+import {
+  HORIZON_PRIVACY_URL,
+  HORIZON_SUPPORT_URL,
+  HORIZON_TERMS_URL,
+} from '#/horizon/support/links'
 
 const iconWidth = 26
 type SecondarySidebarTab =
@@ -375,7 +381,8 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
   }, [feedbackControl])
 
   const onPressHelp = useCallback(() => {
-    void Linking.openURL(HELP_DESK_URL)
+    // HORIZON: Horizon's own support page
+    void Linking.openURL(HORIZON_SUPPORT_URL)
   }, [])
 
   // rendering
@@ -520,26 +527,23 @@ let DrawerFooter = ({
           </ButtonText>
         </Button>
       ) : null}
-      {/* HORIZON: no Help in the app until Horizon has its own (start) */}
-      {!IS_NATIVE && (
-        <Button
-          label={l`Get help`}
-          size="small"
-          variant="outline"
-          color="secondary"
-          onPress={onPressHelp}
-          style={{
-            backgroundColor: 'transparent',
-          }}>
-          {/* HORIZON: outlined over the bare drawer, in the app */}
-          <Outlined>
-            <ButtonText>
-              <Trans>Help</Trans>
-            </ButtonText>
-          </Outlined>
-        </Button>
-      )}
-      {/* HORIZON: no Help in the app until Horizon has its own (end) */}
+      {/* HORIZON: Help opens Horizon's support page, in the app too */}
+      <Button
+        label={l`Get help`}
+        size="small"
+        variant="outline"
+        color="secondary"
+        onPress={onPressHelp}
+        style={{
+          backgroundColor: 'transparent',
+        }}>
+        {/* HORIZON: outlined over the bare drawer, in the app */}
+        <Outlined>
+          <ButtonText>
+            <Trans>Help</Trans>
+          </ButtonText>
+        </Outlined>
+      </Button>
     </View>
   )
 }
@@ -920,12 +924,14 @@ function ExtraLinks() {
       <InlineLinkText
         style={[a.text_md]}
         label={l`Terms of Service`}
-        to="https://bsky.social/about/support/tos">
+        // HORIZON: Horizon's own terms
+        to={HORIZON_TERMS_URL}>
         <Trans>Terms of Service</Trans>
       </InlineLinkText>
       <InlineLinkText
         style={[a.text_md]}
-        to="https://bsky.social/about/support/privacy-policy"
+        // HORIZON: Horizon's own privacy policy
+        to={HORIZON_PRIVACY_URL}
         label={l`Privacy Policy`}>
         <Trans>Privacy Policy</Trans>
       </InlineLinkText>

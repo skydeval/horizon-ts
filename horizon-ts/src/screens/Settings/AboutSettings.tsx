@@ -28,6 +28,8 @@ import {getDeviceId} from '#/analytics/identifiers'
 import * as env from '#/env'
 import {IS_ANDROID, IS_IOS, IS_NATIVE} from '#/env'
 // HORIZON: hide "Send error report" while error reporting is off
+// HORIZON: Horizon's own privacy and terms pages
+import {HORIZON_PRIVACY_URL, HORIZON_TERMS_URL} from '#/horizon/support/links'
 import {SHOW_ERROR_REPORT} from '#/horizon/switches'
 import {useDemoMode} from '#/storage/hooks/demo-mode'
 import {useDevMode} from '#/storage/hooks/dev-mode'
@@ -92,9 +94,7 @@ export function AboutSettingsScreen({}: Props) {
       <Layout.Content>
         <SettingsList.Container>
           {/* HORIZON: patch notes (start) */}
-          <SettingsList.LinkItem
-            to="/patch-notes"
-            label={_(msg`Patch notes`)}>
+          <SettingsList.LinkItem to="/patch-notes" label={_(msg`Patch notes`)}>
             <SettingsList.ItemIcon icon={NewspaperIcon} />
             <SettingsList.ItemText>
               <Trans>Patch notes</Trans>
@@ -103,7 +103,8 @@ export function AboutSettingsScreen({}: Props) {
           <SettingsList.Divider />
           {/* HORIZON: patch notes (end) */}
           <SettingsList.LinkItem
-            to="https://bsky.social/about/support/tos"
+            // HORIZON: Horizon's own terms
+            to={HORIZON_TERMS_URL}
             label={_(msg`Terms of Service`)}>
             <SettingsList.ItemIcon icon={NewspaperIcon} />
             <SettingsList.ItemText>
@@ -111,7 +112,8 @@ export function AboutSettingsScreen({}: Props) {
             </SettingsList.ItemText>
           </SettingsList.LinkItem>
           <SettingsList.LinkItem
-            to="https://bsky.social/about/support/privacy-policy"
+            // HORIZON: Horizon's own privacy policy
+            to={HORIZON_PRIVACY_URL}
             label={_(msg`Privacy Policy`)}>
             <SettingsList.ItemIcon icon={NewspaperIcon} />
             <SettingsList.ItemText>
