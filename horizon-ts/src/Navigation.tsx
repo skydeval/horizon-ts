@@ -162,6 +162,8 @@ import {InviteScannerScreen} from '#/features/inviteFriends'
 import {AuthCallbackScreen} from '#/horizon/auth/AuthCallbackScreen'
 // HORIZON: transparent screens over the web backdrop (Phase 3)
 import {horizonContentStyle, horizonNavTheme} from '#/horizon/backdrops/nav'
+// HORIZON: the feedback inbox
+import {FeedbackInboxScreen} from '#/horizon/feedback/FeedbackInboxScreen'
 // HORIZON: patch notes
 import {PatchNotesScreen} from '#/horizon/patch-notes/PatchNotesScreen'
 // HORIZON: private posting screens
@@ -385,6 +387,12 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="AudiencesSettings"
         getComponent={() => AudiencesSettingsScreen}
         options={{title: title(msg`Audiences`), requireAuth: true}}
+      />
+      {/* HORIZON: the feedback inbox */}
+      <Stack.Screen
+        name="FeedbackInbox"
+        getComponent={() => FeedbackInboxScreen}
+        options={{title: title(msg`Feedback`), requireAuth: true}}
       />
       {/* HORIZON: patch notes, open without signing in */}
       <Stack.Screen

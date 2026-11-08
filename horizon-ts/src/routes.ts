@@ -47,6 +47,8 @@ export const router = new Router<AllNavigatableRoutes>({
   PrivatePostRepostedBy: '/profile/:name/ppost/:rkey/reposted-by',
   PrivatePostQuotes: '/profile/:name/ppost/:rkey/quotes',
   AudiencesSettings: '/settings/audiences',
+  // HORIZON: the feedback inbox, for feedback admins
+  FeedbackInbox: '/settings/feedback',
   // HORIZON: patch notes, open without signing in
   PatchNotes: '/patch-notes',
   CustomFeed: '/profile/:name/feed/:rkey',

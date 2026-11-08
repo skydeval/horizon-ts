@@ -10,6 +10,10 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Send feedback from the app.** Feedback in the menu and the sidebar now
+  opens a short form for a bug, an idea or anything else, sent to Horizon's
+  team while signed in. Technical details (Horizon's version and your device
+  or browser) are included only if you leave the box ticked.
 - **Your pronouns show in Bluesky's app too.** Saving pronouns in Horizon
   also fills in Bluesky's profile pronouns in its own form ("she/her", or
   "she/they" for several sets), while Horizon keeps showing them in full.

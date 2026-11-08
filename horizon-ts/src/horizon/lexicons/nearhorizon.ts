@@ -1117,3 +1117,46 @@ export const accountLeaveSystemAccounts = l.procedure(
   l.jsonPayload({}),
   SYSTEM_ACCOUNTS_ERRORS,
 )
+
+/*
+ * Feedback, served by Horizon's push service (`horizon-push`), sent through
+ * the account's PDS like `registerPush`. Reports are typed as maps and
+ * checked where they are read.
+ */
+
+/** `app.nearhorizon.feedback.submit`: send one report, signed in. */
+export const feedbackSubmit = l.procedure(
+  'app.nearhorizon.feedback.submit',
+  l.params(),
+  l.jsonPayload({
+    kind: l.string<{knownValues: ['bug', 'idea', 'other']}>(),
+    text: l.string(),
+    details: l.optional(l.lexMap()),
+  }),
+  l.jsonPayload({id: l.integer()}),
+  ['InvalidRequest', 'RateLimitExceeded'],
+)
+
+/** `app.nearhorizon.feedback.list`: reports, newest first, for admins. */
+export const feedbackList = l.query(
+  'app.nearhorizon.feedback.list',
+  l.params({
+    limit: l.optional(l.integer({minimum: 1, maximum: 100})),
+    cursor: l.optional(l.string()),
+    done: l.optional(l.boolean()),
+  }),
+  l.jsonPayload({
+    items: l.array(l.lexMap()),
+    cursor: l.optional(l.string()),
+  }),
+  ['Forbidden'],
+)
+
+/** `app.nearhorizon.feedback.update`: mark a report done, or not. */
+export const feedbackUpdate = l.procedure(
+  'app.nearhorizon.feedback.update',
+  l.params(),
+  l.jsonPayload({id: l.integer(), done: l.boolean()}),
+  l.payload(),
+  ['Forbidden', 'NotFound'],
+)

@@ -15,7 +15,7 @@ function hub(env: Env) {
 
 export default {
   async fetch(request, env): Promise<Response> {
-    return handleRequest(request, hub(env), env.NOTIFY_SOURCES)
+    return handleRequest(request, hub(env), {sources: env.NOTIFY_SOURCES})
   },
 
   /** Every minute: make sure the listener is up (the alarm is the first line). */

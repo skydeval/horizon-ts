@@ -12,11 +12,7 @@ import {Plural, Trans, useLingui} from '@lingui/react/macro'
 import {type NavigationState} from '@react-navigation/native'
 import {StackActions, useNavigation} from '@react-navigation/native'
 
-import {
-  FEEDBACK_FORM_URL,
-  HELP_DESK_URL,
-  UNREAD_NOTIFICATION_CAP,
-} from '#/lib/constants'
+import {HELP_DESK_URL, UNREAD_NOTIFICATION_CAP} from '#/lib/constants'
 import {type PressableScale} from '#/lib/custom-animations/PressableScale'
 import {useNavigationTabState} from '#/lib/hooks/useNavigationTabState'
 import {getTabState, TabState} from '#/lib/routes/helpers'
@@ -88,6 +84,8 @@ import {BarHaloScope} from '#/horizon/backdrops/BarHalo'
 // HORIZON: the drawer's window (Phase 3)
 import {FrameWindow} from '#/horizon/backdrops/FrameWindow'
 import {Outlined} from '#/horizon/backdrops/Outlined'
+// HORIZON: Horizon's own feedback form
+import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
 
 const iconWidth = 26
 type SecondarySidebarTab =
@@ -370,14 +368,11 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     if (IS_WEB) setDrawerOpen(false)
   }, [navigation, navigateToSecondaryTab, setDrawerOpen, ax])
 
+  // HORIZON: Feedback opens Horizon's own form, not Bluesky's help desk
+  const feedbackControl = useDialogControl()
   const onPressFeedback = useCallback(() => {
-    void Linking.openURL(
-      FEEDBACK_FORM_URL({
-        email: currentAccount?.email,
-        handle: currentAccount?.handle,
-      }),
-    )
-  }, [currentAccount])
+    feedbackControl.open()
+  }, [feedbackControl])
 
   const onPressHelp = useCallback(() => {
     void Linking.openURL(HELP_DESK_URL)
@@ -472,11 +467,14 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
         </ScrollView>
 
         <DrawerFooter
-          onPressFeedback={onPressFeedback}
+          // HORIZON: feedback is sent signed in
+          onPressFeedback={hasSession ? onPressFeedback : undefined}
           onPressHelp={onPressHelp}
         />
       </BarHaloScope>
       <InviteFriendsDialog control={inviteFriendsControl} />
+      {/* HORIZON: Horizon's own feedback form */}
+      <FeedbackDialog control={feedbackControl} />
     </View>
   )
 }
@@ -487,7 +485,8 @@ let DrawerFooter = ({
   onPressFeedback,
   onPressHelp,
 }: {
-  onPressFeedback: () => void
+  /** HORIZON: no Feedback button signed out */
+  onPressFeedback?: () => void
   onPressHelp: () => void
 }): React.ReactNode => {
   const {t: l} = useLingui()
@@ -507,8 +506,8 @@ let DrawerFooter = ({
           ),
         },
       ]}>
-      {/* HORIZON: no Feedback in the app until Horizon has its own (start) */}
-      {!IS_NATIVE && (
+      {/* HORIZON: Feedback opens Horizon's own form, in the app too */}
+      {onPressFeedback ? (
         <Button
           label={l`Send feedback`}
           size="small"
@@ -520,8 +519,7 @@ let DrawerFooter = ({
             <Trans>Feedback</Trans>
           </ButtonText>
         </Button>
-      )}
-      {/* HORIZON: no Feedback in the app until Horizon has its own (end) */}
+      ) : null}
       {/* HORIZON: no Help in the app until Horizon has its own (start) */}
       {!IS_NATIVE && (
         <Button

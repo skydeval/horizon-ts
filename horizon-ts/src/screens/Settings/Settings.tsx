@@ -75,6 +75,8 @@ import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL, IS_IOS, IS_NATIVE} from '#/env'
 import {useActorStatus} from '#/features/liveNow'
+// HORIZON: the feedback inbox, for feedback admins
+import {FeedbackSettingsItem} from '#/horizon/feedback/FeedbackSettingsItem'
 // HORIZON: Audiences for private posts, for members (in Interaction settings while PRIVATE_POSTING_DEFAULTS)
 import {AudiencesSettingsItem} from '#/horizon/private/audiences/AudiencesSettingsItem'
 // HORIZON: App views: prism (always connected) and the public app view
@@ -285,6 +287,8 @@ export function SettingsScreen({}: Props) {
           <AppViewSettingsItem />
           {/* HORIZON: Audiences for private posts, for members (in Interaction settings while PRIVATE_POSTING_DEFAULTS) */}
           <AudiencesSettingsItem />
+          {/* HORIZON: the feedback inbox, for feedback admins */}
+          <FeedbackSettingsItem />
           {/* HORIZON: hide "Beta features"; the local flag table has none */}
           {SHOW_BETA_FEATURES && (
             <SettingsList.LinkItem

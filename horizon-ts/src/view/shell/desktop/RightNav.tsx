@@ -5,7 +5,7 @@ import {useLingui} from '@lingui/react'
 import {Trans} from '@lingui/react/macro'
 import {useNavigation} from '@react-navigation/native'
 
-import {FEEDBACK_FORM_URL, HELP_DESK_URL} from '#/lib/constants'
+import {HELP_DESK_URL} from '#/lib/constants'
 import {useSession} from '#/state/session'
 import {useLogoVariant} from '#/view/icons/useLogoVariant'
 import {DesktopFeeds} from '#/view/shell/desktop/Feeds'
@@ -19,6 +19,8 @@ import {
   web,
 } from '#/alf'
 import {AppLanguageDropdown} from '#/components/AppLanguageDropdown'
+import {useDialogControl} from '#/components/Dialog'
+import {useInteractionState} from '#/components/hooks/useInteractionState'
 import {CENTER_COLUMN_OFFSET} from '#/components/Layout'
 import {InlineLinkText} from '#/components/Link'
 import {ProgressGuideList} from '#/components/ProgressGuide/List'
@@ -32,6 +34,53 @@ import {
   RAIL_SCROLL_STYLE,
   RailCard,
 } from '#/horizon/backdrops/RailCard'
+// HORIZON: Horizon's own feedback form
+import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
+
+/** Looks like the footer's links, but is a button: it opens a dialog. */
+function FeedbackTextButton({
+  label,
+  onPress,
+}: {
+  label: string
+  onPress: () => void
+}) {
+  const t = useTheme()
+  const {state: interacted, onIn, onOut} = useInteractionState()
+  return (
+    <Text
+      testID="rightNavFeedback"
+      role="button"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint=""
+      tabIndex={0}
+      onPress={onPress}
+      onFocus={onIn}
+      onBlur={onOut}
+      {...web({
+        onMouseEnter: onIn,
+        onMouseLeave: onOut,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onPress()
+          }
+        },
+      })}
+      style={[
+        t.atoms.text_contrast_medium,
+        web({cursor: 'pointer'}),
+        interacted &&
+          web({
+            outline: 0,
+            textDecorationLine: 'underline',
+          }),
+      ]}>
+      {label}
+    </Text>
+  )
+}
 
 function useWebQueryParams() {
   const navigation = useNavigation()
@@ -53,7 +102,9 @@ function useWebQueryParams() {
 export function DesktopRightNav({routeName}: {routeName: string}) {
   const t = useTheme()
   const {_} = useLingui()
-  const {hasSession, currentAccount} = useSession()
+  const {hasSession} = useSession()
+  // HORIZON: Horizon's own feedback form
+  const feedbackControl = useDialogControl()
   const logoVariant = useLogoVariant()
   const gutters = useGutters(['base', 0, 'base', 'wide'])
   const isSearchScreen = routeName === 'Search'
@@ -125,15 +176,11 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
         <Text style={[a.leading_snug, t.atoms.text_contrast_low]}>
           {hasSession && (
             <>
-              <InlineLinkText
-                to={FEEDBACK_FORM_URL({
-                  email: currentAccount?.email,
-                  handle: currentAccount?.handle,
-                })}
-                style={[t.atoms.text_contrast_medium]}
-                label={_(msg`Feedback`)}>
-                {_(msg`Feedback`)}
-              </InlineLinkText>
+              {/* HORIZON: opens Horizon's own feedback form */}
+              <FeedbackTextButton
+                label={_(msg`Feedback`)}
+                onPress={() => feedbackControl.open()}
+              />
               <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
             </>
           )}
@@ -160,6 +207,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
         </Text>
         {/* HORIZON: end of the footer card (Phase 3, BD-8) */}
       </RailCard>
+      {hasSession && <FeedbackDialog control={feedbackControl} />}
 
       {logoVariant === 'kawaii' && (
         <Text style={[t.atoms.text_contrast_medium, {marginTop: 12}]}>

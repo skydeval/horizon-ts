@@ -14,6 +14,9 @@
  *   PUSH_FCM_FILE    the Firebase service account JSON; under systemd,
  *                    $CREDENTIALS_DIRECTORY/fcm.json by default
  *   NOTIFY_SOURCES   comma-separated DIDs allowed to call notify
+ *   PUSH_FEEDBACK_DB feedback SQLite file (default
+ *                    /var/lib/horizon-push/feedback.db)
+ *   FEEDBACK_ADMINS  comma-separated DIDs allowed to read feedback
  */
 
 import {readFileSync} from 'node:fs'
@@ -21,6 +24,7 @@ import {createServer, type IncomingMessage, type ServerResponse} from 'node:http
 import {join} from 'node:path'
 
 import {handleRequest} from '../routes'
+import {FeedbackStore} from './feedback'
 import {NodeHub} from './hub'
 
 /** The largest request body read. */
@@ -35,6 +39,9 @@ const fcmFile =
 if (!fcmFile) throw new Error('set PUSH_FCM_FILE or run under systemd with LoadCredential=fcm.json')
 
 const hub = new NodeHub({dbPath, fcmServiceAccount: readFileSync(fcmFile, 'utf8')})
+const feedback = new FeedbackStore(
+  process.env.PUSH_FEEDBACK_DB ?? '/var/lib/horizon-push/feedback.db',
+)
 
 async function readBody(req: IncomingMessage): Promise<Buffer | undefined> {
   const chunks: Buffer[] = []
@@ -63,7 +70,11 @@ async function answer(req: IncomingMessage, res: ServerResponse) {
     headers,
     body: body && body.length > 0 ? new Uint8Array(body) : undefined,
   })
-  const response = await handleRequest(request, hub, process.env.NOTIFY_SOURCES)
+  const response = await handleRequest(request, hub, {
+    sources: process.env.NOTIFY_SOURCES,
+    feedback,
+    admins: process.env.FEEDBACK_ADMINS,
+  })
   res.writeHead(response.status, Object.fromEntries(response.headers))
   res.end(Buffer.from(await response.arrayBuffer()))
 }
@@ -83,6 +94,7 @@ server.listen(port, host, () => {
 function shutdown() {
   server.close()
   hub.stop()
+  feedback.close()
   process.exit(0)
 }
 process.on('SIGTERM', shutdown)

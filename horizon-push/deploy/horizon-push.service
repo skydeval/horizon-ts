@@ -17,6 +17,8 @@ Environment=PUSH_PORT=8790
 Environment=PUSH_DB=/var/lib/horizon-push/push.db
 Environment=NODE_ENV=production
 LoadCredential=fcm.json:/etc/horizon-push/fcm.json
+# Server-only settings, such as FEEDBACK_ADMINS (optional file)
+EnvironmentFile=-/etc/horizon-push/env
 StateDirectory=horizon-push
 StateDirectoryMode=0700
 Restart=always
