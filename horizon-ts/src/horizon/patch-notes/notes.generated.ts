@@ -7,15 +7,16 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    "version": "0.1.21",
-    "build": 21,
+    "version": "0.1.22",
+    "build": 22,
     "date": "2026-11-08",
-    "summary": "Send feedback from inside Horizon.",
+    "summary": "Carousels for your images, and Horizon's own support page.",
     "sections": [
       {
         "kind": "horizon",
         "items": [
-          "Feedback is back in the side menu, and in the sidebar on the web. It opens a short form for a bug, an idea or anything else, sent while signed in. Technical details (Horizon's version and your device or browser) go along only if you leave the box ticked."
+          "When you attach 2 to 4 images, choose Gallery or Carousel from the new drop-down beside Labels. Carousel lets people swipe through your images one at a time.",
+          "Help now opens Horizon's own support page, with links to Horizon's privacy policy and terms."
         ]
       }
     ]
