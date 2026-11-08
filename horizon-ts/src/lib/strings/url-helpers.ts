@@ -150,9 +150,16 @@ const HORIZON_APP_PREFIXES = [
   ...new Set(['https://nearhorizon.app/', `${SHARE_ORIGIN}/`]),
 ]
 
-/** HORIZON: a link on one of Horizon's own hosts. */
+/**
+ * HORIZON: a link on one of Horizon's own hosts that the app opens itself.
+ * The plain pages beside the app (support, privacy and terms, under
+ * `/about/`) are not app screens, so they open as web pages.
+ */
 export function isHorizonAppUrl(url: string): boolean {
-  return HORIZON_APP_PREFIXES.some(prefix => url.startsWith(prefix))
+  const prefix = HORIZON_APP_PREFIXES.find(p => url.startsWith(p))
+  if (!prefix) return false
+  const rest = url.slice(prefix.length).replace(/^\/+/, '')
+  return !/^about(\/|$|\?|#)/.test(rest)
 }
 
 export function isBskyAppUrl(url: string): boolean {
