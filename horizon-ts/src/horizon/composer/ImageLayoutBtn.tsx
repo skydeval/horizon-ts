@@ -2,7 +2,8 @@
  * The composer's image layout drop-down, beside Labels: Gallery (the usual
  * grid) or Carousel. Carousel sends 2 to 4 images as a gallery embed, which
  * Horizon shows as a carousel; Bluesky's app shows it as a grid. With more
- * than 4 images every post is a gallery already, so the drop-down hides.
+ * than 4 images every post is a carousel (a grid holds 4), so Gallery shows
+ * greyed out with the reason.
  */
 
 import {Keyboard} from 'react-native'
@@ -15,9 +16,12 @@ import * as Menu from '#/components/Menu'
 
 export function ImageLayoutBtn({
   carousel,
+  galleryAvailable = true,
   onChange,
 }: {
   carousel: boolean
+  /** False with 5 or more images: a grid holds 4, so it's a carousel. */
+  galleryAvailable?: boolean
   onChange: (carousel: boolean) => void
 }) {
   const {t: l} = useLingui()
@@ -25,6 +29,13 @@ export function ImageLayoutBtn({
     message: 'Gallery',
     comment: 'Image layout in a post: the usual grid of images',
   })
+  const galleryItemLabel = galleryAvailable
+    ? gallery
+    : l({
+        message: 'Gallery (up to 4 images)',
+        comment:
+          'Image layout option shown greyed out when 5 or more images are attached',
+      })
   const carouselLabel = l({
     message: 'Carousel',
     comment: 'Image layout in a post: images you swipe through one at a time',
@@ -57,9 +68,10 @@ export function ImageLayoutBtn({
         <Menu.Group>
           <Menu.Item
             testID="imageLayoutGallery"
-            label={gallery}
+            label={galleryItemLabel}
+            disabled={!galleryAvailable}
             onPress={() => onChange(false)}>
-            <Menu.ItemText>{gallery}</Menu.ItemText>
+            <Menu.ItemText>{galleryItemLabel}</Menu.ItemText>
             <Menu.ItemRadio selected={!carousel} />
           </Menu.Item>
           <Menu.Item

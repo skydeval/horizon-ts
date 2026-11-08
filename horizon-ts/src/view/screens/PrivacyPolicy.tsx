@@ -14,7 +14,7 @@ import {Text} from '#/view/com/util/text/Text'
 import {ScrollView} from '#/view/com/util/Views'
 import * as Layout from '#/components/Layout'
 // HORIZON: Horizon's own privacy policy
-import {HORIZON_PRIVACY_URL} from '#/horizon/support/links'
+import {HORIZON_PRIVACY_PATH} from '#/horizon/support/links'
 import {ViewHeader} from '../com/util/ViewHeader'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'PrivacyPolicy'>
@@ -33,7 +33,7 @@ export const PrivacyPolicyScreen = (_props: Props) => {
               <TextLink
                 style={pal.link}
                 // HORIZON: Horizon's own privacy policy
-                href={HORIZON_PRIVACY_URL}
+                href={HORIZON_PRIVACY_PATH}
                 text="nearhorizon.app/about/support/privacy-policy"
               />
             </Trans>

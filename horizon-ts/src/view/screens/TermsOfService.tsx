@@ -14,7 +14,7 @@ import {Text} from '#/view/com/util/text/Text'
 import {ScrollView} from '#/view/com/util/Views'
 import * as Layout from '#/components/Layout'
 // HORIZON: Horizon's own terms
-import {HORIZON_TERMS_URL} from '#/horizon/support/links'
+import {HORIZON_TERMS_PATH} from '#/horizon/support/links'
 import {ViewHeader} from '../com/util/ViewHeader'
 
 type Props = NativeStackScreenProps<CommonNavigatorParams, 'TermsOfService'>
@@ -32,7 +32,7 @@ export const TermsOfServiceScreen = (_props: Props) => {
             <TextLink
               style={pal.link}
               // HORIZON: Horizon's own terms
-              href={HORIZON_TERMS_URL}
+              href={HORIZON_TERMS_PATH}
               text="nearhorizon.app/about/support/tos"
             />
           </Text>

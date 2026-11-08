@@ -2306,12 +2306,12 @@ function ComposerPills({
             }}
           />
         ) : null}
-        {/* HORIZON: Gallery or Carousel for 2 to 4 images */}
+        {/* HORIZON: Gallery or Carousel for 2 or more images (5+ are a carousel) */}
         {(media?.type === 'images' || media?.type === 'gallery') &&
-        media.images.length >= 2 &&
-        media.images.length <= LEGACY_IMAGES_EMBED_MAX ? (
+        media.images.length >= 2 ? (
           <ImageLayoutBtn
             carousel={media.type === 'gallery'}
+            galleryAvailable={media.images.length <= LEGACY_IMAGES_EMBED_MAX}
             onChange={carousel => {
               dispatch({
                 type: 'update_post',

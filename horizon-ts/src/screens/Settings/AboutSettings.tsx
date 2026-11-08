@@ -29,7 +29,7 @@ import * as env from '#/env'
 import {IS_ANDROID, IS_IOS, IS_NATIVE} from '#/env'
 // HORIZON: hide "Send error report" while error reporting is off
 // HORIZON: Horizon's own privacy and terms pages
-import {HORIZON_PRIVACY_URL, HORIZON_TERMS_URL} from '#/horizon/support/links'
+import {HORIZON_PRIVACY_PATH, HORIZON_TERMS_PATH} from '#/horizon/support/links'
 import {SHOW_ERROR_REPORT} from '#/horizon/switches'
 import {useDemoMode} from '#/storage/hooks/demo-mode'
 import {useDevMode} from '#/storage/hooks/dev-mode'
@@ -104,7 +104,7 @@ export function AboutSettingsScreen({}: Props) {
           {/* HORIZON: patch notes (end) */}
           <SettingsList.LinkItem
             // HORIZON: Horizon's own terms
-            to={HORIZON_TERMS_URL}
+            to={HORIZON_TERMS_PATH}
             label={_(msg`Terms of Service`)}>
             <SettingsList.ItemIcon icon={NewspaperIcon} />
             <SettingsList.ItemText>
@@ -113,7 +113,7 @@ export function AboutSettingsScreen({}: Props) {
           </SettingsList.LinkItem>
           <SettingsList.LinkItem
             // HORIZON: Horizon's own privacy policy
-            to={HORIZON_PRIVACY_URL}
+            to={HORIZON_PRIVACY_PATH}
             label={_(msg`Privacy Policy`)}>
             <SettingsList.ItemIcon icon={NewspaperIcon} />
             <SettingsList.ItemText>

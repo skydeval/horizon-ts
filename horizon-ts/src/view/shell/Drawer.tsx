@@ -1,11 +1,5 @@
 import {type ComponentProps, type JSX, memo, useCallback} from 'react'
-import {
-  Linking,
-  Pressable,
-  ScrollView,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import {Pressable, ScrollView, TouchableOpacity, View} from 'react-native'
 import {useSafeAreaInsets} from 'react-native-safe-area-context'
 import {plural} from '@lingui/core/macro'
 import {Plural, Trans, useLingui} from '@lingui/react/macro'
@@ -70,7 +64,7 @@ import {
   UserCircle_Filled_Corner0_Rounded as UserCircleFilledIcon,
   UserCircle_Stroke2_Corner0_Rounded as UserCircleIcon,
 } from '#/components/icons/UserCircle'
-import {InlineLinkText} from '#/components/Link'
+import {InlineLinkText, Link} from '#/components/Link'
 import {OTAChannelNotice} from '#/components/OTAChannelNotice'
 import {ProfileBadges} from '#/components/ProfileBadges'
 import {Text} from '#/components/Typography'
@@ -88,9 +82,9 @@ import {Outlined} from '#/horizon/backdrops/Outlined'
 import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
 // HORIZON: Horizon's own support, privacy and terms pages
 import {
-  HORIZON_PRIVACY_URL,
-  HORIZON_SUPPORT_URL,
-  HORIZON_TERMS_URL,
+  HORIZON_PRIVACY_PATH,
+  HORIZON_SUPPORT_PATH,
+  HORIZON_TERMS_PATH,
 } from '#/horizon/support/links'
 
 const iconWidth = 26
@@ -380,10 +374,10 @@ let DrawerContent = ({}: React.PropsWithoutRef<{}>): React.ReactNode => {
     feedbackControl.open()
   }, [feedbackControl])
 
+  // HORIZON: Help is a link to Horizon's support screen; close the drawer
   const onPressHelp = useCallback(() => {
-    // HORIZON: Horizon's own support page
-    void Linking.openURL(HORIZON_SUPPORT_URL)
-  }, [])
+    setDrawerOpen(false)
+  }, [setDrawerOpen])
 
   // rendering
   // =
@@ -527,8 +521,9 @@ let DrawerFooter = ({
           </ButtonText>
         </Button>
       ) : null}
-      {/* HORIZON: Help opens Horizon's support page, in the app too */}
-      <Button
+      {/* HORIZON: Help opens Horizon's support screen, in the app too */}
+      <Link
+        to={HORIZON_SUPPORT_PATH}
         label={l`Get help`}
         size="small"
         variant="outline"
@@ -543,7 +538,7 @@ let DrawerFooter = ({
             <Trans>Help</Trans>
           </ButtonText>
         </Outlined>
-      </Button>
+      </Link>
     </View>
   )
 }
@@ -925,13 +920,13 @@ function ExtraLinks() {
         style={[a.text_md]}
         label={l`Terms of Service`}
         // HORIZON: Horizon's own terms
-        to={HORIZON_TERMS_URL}>
+        to={HORIZON_TERMS_PATH}>
         <Trans>Terms of Service</Trans>
       </InlineLinkText>
       <InlineLinkText
         style={[a.text_md]}
         // HORIZON: Horizon's own privacy policy
-        to={HORIZON_PRIVACY_URL}
+        to={HORIZON_PRIVACY_PATH}
         label={l`Privacy Policy`}>
         <Trans>Privacy Policy</Trans>
       </InlineLinkText>

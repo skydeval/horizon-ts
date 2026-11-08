@@ -1,5 +1,5 @@
 import {useState} from 'react'
-import {Alert, LayoutAnimation, Linking, Pressable, View} from 'react-native'
+import {Alert, LayoutAnimation, Pressable, View} from 'react-native'
 import {useReducedMotion} from 'react-native-reanimated'
 import {removeNuxs} from '@bsky/sdk'
 import {moderateProfile} from '@bsky/sdk/moderation'
@@ -84,7 +84,7 @@ import {AppViewSettingsItem} from '#/horizon/routing/AppViewSwitcher'
 // HORIZON: Interaction settings as a main row
 import {InteractionSettingsItem} from '#/horizon/settings/InteractionSettingsItem'
 // HORIZON: Help opens Horizon's support page
-import {HORIZON_SUPPORT_URL} from '#/horizon/support/links'
+import {HORIZON_SUPPORT_PATH} from '#/horizon/support/links'
 // HORIZON: hide "Beta features"; the local flag table has none
 import {SHOW_BETA_FEATURES} from '#/horizon/switches'
 import {type app} from '#/lexicons'
@@ -302,17 +302,13 @@ export function SettingsScreen({}: Props) {
               </SettingsList.ItemText>
             </SettingsList.LinkItem>
           )}
-          {/* HORIZON: Help opens Horizon's support page, in the app too */}
-          <SettingsList.PressableItem
-            onPress={() => void Linking.openURL(HORIZON_SUPPORT_URL)}
-            label={l`Help`}
-            accessibilityHint={l`Opens Horizon support in your browser`}>
+          {/* HORIZON: Help opens Horizon's support screen, in the app too */}
+          <SettingsList.LinkItem to={HORIZON_SUPPORT_PATH} label={l`Help`}>
             <SettingsList.ItemIcon icon={CircleQuestionIcon} />
             <SettingsList.ItemText>
               <Trans>Help</Trans>
             </SettingsList.ItemText>
-            <SettingsList.Chevron />
-          </SettingsList.PressableItem>
+          </SettingsList.LinkItem>
           <SettingsList.LinkItem to="/settings/about" label={l`About`}>
             <SettingsList.ItemIcon icon={BubbleInfoIcon} />
             <SettingsList.ItemText>

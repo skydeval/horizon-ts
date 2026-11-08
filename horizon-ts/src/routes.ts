@@ -49,6 +49,10 @@ export const router = new Router<AllNavigatableRoutes>({
   AudiencesSettings: '/settings/audiences',
   // HORIZON: the feedback inbox, for feedback admins
   FeedbackInbox: '/settings/feedback',
+  // HORIZON: Horizon's support, privacy and terms, open without signing in
+  HorizonSupport: '/about/support',
+  HorizonPrivacy: '/about/support/privacy-policy',
+  HorizonTerms: '/about/support/tos',
   // HORIZON: patch notes, open without signing in
   PatchNotes: '/patch-notes',
   CustomFeed: '/profile/:name/feed/:rkey',

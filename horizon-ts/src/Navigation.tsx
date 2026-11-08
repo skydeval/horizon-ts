@@ -174,6 +174,12 @@ import {
   PrivatePostRepostedByScreen,
   PrivatePostThreadScreen,
 } from '#/horizon/private/thread/screens'
+// HORIZON: Horizon's support, privacy and terms
+import {
+  HorizonPrivacyScreen,
+  HorizonSupportScreen,
+  HorizonTermsScreen,
+} from '#/horizon/support/SupportScreens'
 import {router} from '#/routes'
 
 const navigationRef = createNavigationContainerRef<RootNavigatorParams>()
@@ -393,6 +399,22 @@ function commonScreens(Stack: typeof Flat, unreadCountLabel?: string) {
         name="FeedbackInbox"
         getComponent={() => FeedbackInboxScreen}
         options={{title: title(msg`Feedback`), requireAuth: true}}
+      />
+      {/* HORIZON: Horizon's support, privacy and terms, open without signing in */}
+      <Stack.Screen
+        name="HorizonSupport"
+        getComponent={() => HorizonSupportScreen}
+        options={{title: title(msg`Support`)}}
+      />
+      <Stack.Screen
+        name="HorizonPrivacy"
+        getComponent={() => HorizonPrivacyScreen}
+        options={{title: title(msg`Privacy policy`)}}
+      />
+      <Stack.Screen
+        name="HorizonTerms"
+        getComponent={() => HorizonTermsScreen}
+        options={{title: title(msg`Terms of use`)}}
       />
       {/* HORIZON: patch notes, open without signing in */}
       <Stack.Screen

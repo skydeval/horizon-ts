@@ -37,9 +37,9 @@ import {
 import {FeedbackDialog} from '#/horizon/feedback/FeedbackDialog'
 // HORIZON: Horizon's own support, privacy and terms pages
 import {
-  HORIZON_PRIVACY_URL,
-  HORIZON_SUPPORT_URL,
-  HORIZON_TERMS_URL,
+  HORIZON_PRIVACY_PATH,
+  HORIZON_SUPPORT_PATH,
+  HORIZON_TERMS_PATH,
 } from '#/horizon/support/links'
 
 /** Looks like the footer's links, but is a button: it opens a dialog. */
@@ -191,7 +191,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           )}
           <InlineLinkText
             // HORIZON: Horizon's own privacy policy
-            to={HORIZON_PRIVACY_URL}
+            to={HORIZON_PRIVACY_PATH}
             style={[t.atoms.text_contrast_medium]}
             label={_(msg`Privacy`)}>
             {_(msg`Privacy`)}
@@ -199,7 +199,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           <Text style={[t.atoms.text_contrast_low]}>{' ∙ '}</Text>
           <InlineLinkText
             // HORIZON: Horizon's own terms
-            to={HORIZON_TERMS_URL}
+            to={HORIZON_TERMS_PATH}
             style={[t.atoms.text_contrast_medium]}
             label={_(msg`Terms`)}>
             {_(msg`Terms`)}
@@ -208,7 +208,7 @@ export function DesktopRightNav({routeName}: {routeName: string}) {
           <InlineLinkText
             label={_(msg`Help`)}
             // HORIZON: Horizon's own support page
-            to={HORIZON_SUPPORT_URL}
+            to={HORIZON_SUPPORT_PATH}
             style={[t.atoms.text_contrast_medium]}>
             {_(msg`Help`)}
           </InlineLinkText>

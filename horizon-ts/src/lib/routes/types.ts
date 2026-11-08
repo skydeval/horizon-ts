@@ -64,6 +64,10 @@ export type CommonNavigatorParams = {
   AudiencesSettings: undefined
   // HORIZON: the feedback inbox
   FeedbackInbox: undefined
+  // HORIZON: Horizon's support, privacy and terms
+  HorizonSupport: undefined
+  HorizonPrivacy: undefined
+  HorizonTerms: undefined
   // HORIZON: patch notes
   PatchNotes: undefined
   CustomFeed: {
