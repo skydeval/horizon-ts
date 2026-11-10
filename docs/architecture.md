@@ -29,7 +29,7 @@ server, and how Horizon's code sits inside Bluesky's app.
 | Service | What it does for Horizon |
 |---|---|
 | **Your PDS** | Sign-in, every write to your repository, and the proxy that forwards your reads to AppViews. Any atproto PDS works. |
-| **prism** (`prism.nearhorizon.app`) | Horizon's AppView. Serves kryphocron posts to their audiences, membership, Thread Lens, restored accounts, private bookmarks, notifications and search, and every `app.nearhorizon.*` call. It does not index public posts. |
+| **prism** (`prism.nearhorizon.app`) | Horizon's AppView. Serves kryphocron posts to their audiences, membership, Thread Lens, private bookmarks, notifications and search, and every `app.nearhorizon.*` call. It does not index public posts. |
 | **The public AppView** | Ordinary `app.bsky.*` reads: timelines, profiles, public threads. Bluesky's AppView by default; you can switch it. |
 | **Bluesky's other services** | Chat, video upload, push notifications, custom feeds and labelers work as in Bluesky's app. One difference: an adult can turn Bluesky's own moderation labeler off in Moderation settings. Minors, and accounts whose age Horizon can't tell, keep it. Takedowns and the legal labelers for the user's country stay either way. |
 | **locus** (`locus.nearhorizon.app`) | A PDS with kryphocron support. Accounts hosted there write kryphocron posts through locus's own procedures. Accounts elsewhere don't need it. |
@@ -38,8 +38,8 @@ server, and how Horizon's code sits inside Bluesky's app.
 
 Horizon is always connected to two AppViews:
 
-- **prism is fixed.** Horizon's features always go to prism. In the AppView
-  switcher it shows as a greyed row: "Always connected".
+- **prism is fixed.** Horizon's features always go to prism. The AppView
+  switcher doesn't list it.
 - **The public AppView is switchable.** It defaults to Bluesky's. The
   switcher (a row in Settings, or a button under the OAuth sign-in form) accepts
   any AppView whose `did:web` document lists a `#bsky_appview` service.
@@ -67,7 +67,7 @@ One routing table in Horizon's code decides where each call goes:
 naming the AppView. The PDS mints a short-lived service token for that one
 method and forwards the call. Horizon holds no long-lived prism token.
 
-For a few kryphocron and Refract reads Horizon calls prism directly, with a
+For a few kryphocron reads Horizon calls prism directly, with a
 short-lived service token for that method from your PDS.
 
 **Signed out**, Horizon calls the public AppView directly, and prism only
@@ -100,8 +100,8 @@ that work:
 - **Horizon's code lives in `horizon-ts/src/horizon/`.** Folders there
   include `session/` and `auth/` (sign-in), `routing/` (the AppViews,
   membership, the routing table), `private/` (kryphocron posts), `spoilers/`
-  and `media-spoilers/`, `backdrops/` and `appearance/`, `thread-lens/`,
-  `refract/` and `lexicons/`.
+  and `media-spoilers/`, `backdrops/` and `appearance/`, `thread-lens/` and
+  `lexicons/`.
 - **Changes to Bluesky's files are hooks**: an import and one call, value,
   guard or component, with a `// HORIZON:` comment on the line above.
   `git grep -n "HORIZON:"` lists them all.

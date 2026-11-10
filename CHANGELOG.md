@@ -60,8 +60,7 @@ Phase 6, optimisation, branding and tweaks, is under way.
   out by screen readers. They use the open
   [atproto-profile-alt](https://github.com/skydeval/atproto-profile-alt)
   format, so any app can show them.
-- **Thread Lens shows your labelers' labels,** and **restored accounts appear
-  in search.**
+- **Thread Lens shows your labelers' labels.**
 
 ### Changed
 
@@ -124,8 +123,7 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **Signing in with a handle works when it's typed or pasted loosely.**
 - **Notifications on web:** pills no longer go blank or slide under the
   header, and the bell no longer vanishes in Firefox for Android.
-- **Quotes:** restored quotes survive a refresh, and quotes of deleted posts
-  say "Deleted" at once.
+- **Quotes of deleted posts say "Deleted" at once.**
 - **Private replies from some people no longer vanish.**
 - **Threads open faster on web,** and Thread Lens no longer warns on nearly
   every thread that posts may be missing.
@@ -194,22 +192,6 @@ deleted, with a labelled placeholder in each gap, for every signed-in reader.
 ### Fixed
 
 - **The toggle is per account**, and a list block names its list.
-
-## Refract (2026-10-23)
-
-Restored accounts: accounts Bluesky's AppView no longer serves can appear in
-Horizon and be replied to.
-
-### Added
-
-- **Restored accounts look like any other account** in profiles, feeds,
-  threads and quotes. Horizon members can also like, repost, quote and follow
-  them.
-
-### Fixed
-
-- **A restored profile no longer flashes "Account has been suspended"**, and
-  your reposts of restored posts show on your profile.
 
 ## Phase 3: Backdrops and themes (2026-10-19 – 2026-10-23)
 

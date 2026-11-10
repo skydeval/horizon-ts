@@ -27,9 +27,6 @@ members of the Horizon network.
   replies" row Bluesky uses.
 - **Reply blocks**: Horizon won't send a kryphocron reply across a block
   with the person you're replying to, or with the thread's original poster.
-- **Restored accounts (Refract)**: accounts that Bluesky's AppView no
-  longer serves, shown when a community that prism's operator trusts still
-  hosts them.
 - **Pronouns and plural systems**: pronouns beside every name, plural
   system profiles with members and front, posts that show which members
   wrote them, and posting as another signed-in account or as members.
@@ -37,7 +34,6 @@ members of the Horizon network.
   read out by screen readers, in the open
   [atproto-profile-alt](https://github.com/skydeval/atproto-profile-alt)
   format so any app can show them.
-- **Planned**: polls and fundraisers.
 
 ## Status
 

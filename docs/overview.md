@@ -24,11 +24,9 @@ Horizon is in alpha.
 | Backdrops and themes | yes, saved on the device | yes | yes |
 | Spoilers and content warnings | read | read and write | read and write |
 | Thread Lens | no | yes, off by default | yes, on by default |
-| Restored accounts (Refract) | no | view and reply | view and interact |
 | Read and write kryphocron posts | no | no | yes |
 | Pronouns and plural systems | see | see and edit | see and edit |
 | Avatar and banner descriptions | read | read and write | read and write |
-| Polls (planned) | view | view | create and vote |
 
 A feature that a reader doesn't have is left out of their interface, not
 shown disabled.
