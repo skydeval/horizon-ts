@@ -1,6 +1,6 @@
 # Horizon overview
 
-_Last updated: 2026-10-24_
+_Last updated: 2026-11-10_
 
 ## What Horizon is
 
@@ -14,7 +14,7 @@ On top of that, Horizon connects to **prism**, an AppView that serves
 Horizon's own features. Some of these work for anyone who signs in. Others
 are for members of the Horizon network.
 
-Horizon is in early development.
+Horizon is in alpha.
 
 ## Who gets what
 

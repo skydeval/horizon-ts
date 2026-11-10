@@ -37,10 +37,10 @@ members of the Horizon network.
 
 ## Status
 
-**Early development, pre-alpha.** Nothing is released. The web app runs
-for a handful of testers. Features change often, and stored settings may be
-reset without migration. Native iOS and Android builds are not a near-term
-goal: web comes first.
+**Alpha.** Horizon runs on the web at [nearhorizon.app](https://nearhorizon.app),
+with an Android app at [dl.nearhorizon.app](https://dl.nearhorizon.app), for a
+small group of testers. Features still change often. There is no iOS app
+yet.
 
 ## Building
 

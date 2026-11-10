@@ -13,7 +13,7 @@
  * `member`.
  *
  * The old unkeyed `horizon:threadLens` (one value for the whole device) is
- * ignored: Horizon is pre-alpha, so it is not migrated.
+ * ignored: it was retired before alpha, so it is not migrated.
  *
  * Render-time readers subscribe (TL-34): the account's key through
  * `subscribeLocal`, membership through `useMembership`.

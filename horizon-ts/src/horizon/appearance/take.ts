@@ -1,5 +1,5 @@
 /*
- * The take (removed members design, section 6, simplified for pre-alpha; see
+ * The take (removed members design, section 6, simplified for alpha; see
  * the implementation log). skydeval's rule: when a member is removed, prism
  * keeps their appearance for 7 days. The next time they sign in on a device,
  * Horizon copies it to that device and deletes prism's copy. If they are

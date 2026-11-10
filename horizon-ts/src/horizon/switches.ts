@@ -34,7 +34,7 @@ export const PUSH_OFF: boolean = Platform.OS !== 'android'
 
 /**
  * The "Oh no!" screen shows the crash's stack under its message, selectable,
- * so testers can send it (pre-alpha and the first native builds).
+ * so testers can send it (during alpha).
  */
 export const SHOW_ERROR_STACK: boolean = true
 
