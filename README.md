@@ -33,6 +33,10 @@ members of the Horizon network.
 - **Pronouns and plural systems**: pronouns beside every name, plural
   system profiles with members and front, posts that show which members
   wrote them, and posting as another signed-in account or as members.
+- **Avatar and banner descriptions**: alt text for your profile pictures,
+  read out by screen readers, in the open
+  [atproto-profile-alt](https://github.com/skydeval/atproto-profile-alt)
+  format so any app can show them.
 - **Planned**: polls and fundraisers.
 
 ## Status
