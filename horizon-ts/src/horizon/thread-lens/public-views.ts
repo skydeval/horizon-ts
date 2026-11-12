@@ -246,6 +246,10 @@ export function warmPublicViews(
   uris: Iterable<string>,
 ) {
   const now = Date.now()
+  // Drop views nobody took in time, so the pool can't grow on a long session
+  for (const [uri, entry] of pool) {
+    if (now - entry.at > LENS_VIEW_POOL_MS) pool.delete(uri)
+  }
   const missing = Array.from(new Set(uris)).filter(
     uri => !pooled(did, uri, now),
   )

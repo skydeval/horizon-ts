@@ -471,3 +471,11 @@ export const REFRACT_DEV_FIXTURES: boolean = false
  * read, written or shown.
  */
 export const PROFILE_ALT_TEXT: boolean = true
+
+/**
+ * Web lists keep only the rows near the screen mounted (`list-window/`).
+ * A row more than a few screens away is swapped for an empty box of its
+ * own height, so a long scroll no longer grows memory without end.
+ * `false`: every loaded row stays mounted, as in Bluesky.
+ */
+export const WEB_LIST_WINDOWING: boolean = true

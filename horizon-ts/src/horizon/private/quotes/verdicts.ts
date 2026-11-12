@@ -39,8 +39,11 @@ type PostView = app.bsky.feed.defs.PostView
 /** How long a quote read is used before it is read again. */
 export const QUOTE_STALE_MS = STALE.MINUTES.FIVE
 
-/** How long an unused quote stays in the cache, and on disk. */
-export const QUOTE_GC_MS = 24 * 60 * 60 * 1000
+/**
+ * How long an unused quote stays in the cache, and on disk. Half an hour,
+ * so a long scroll's quotes don't pile up in memory.
+ */
+export const QUOTE_GC_MS = 30 * 60 * 1000
 
 /** A quote prism cannot answer for now: the quiet card (6.3). */
 export type UnavailableQuote = {unavailable: true; uri: string}

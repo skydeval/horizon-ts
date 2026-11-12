@@ -111,7 +111,7 @@ const withDefaults = new WeakSet<QueryClient>()
 
 /**
  * The identity roots' stale and gc times as the client's defaults, so an
- * entry seeded with `setQueryData` keeps its 24 h (P5R1-N4).
+ * entry seeded with `setQueryData` keeps its gcTime (P5R1-N4).
  */
 function ensureDefaults(queryClient: QueryClient) {
   if (withDefaults.has(queryClient)) return

@@ -83,6 +83,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Long scrolls on the web no longer run the browser out of memory.**
+  Posts far above or below the screen are set aside and come back as you
+  scroll to them, so memory stays about the same however far you go.
 - **A deactivated account's profile says so straight away,** instead of
   loading, then "can't be found", then loading again.
 - **Push notifications arrive at once.** Public notifications from Horizon's

@@ -75,12 +75,18 @@ export const STALE_MS = {
   front: 2 * MINUTE,
 } as const
 
-/** gcTime, at least the persisted window (4.5, P5R1-N4). */
+/**
+ * gcTime (4.5, P5R1-N4): long enough that an entry is saved before it is
+ * dropped (the persister writes within a second), and short enough that
+ * memory, and the saved cache rewritten on every change, only hold authors
+ * seen in the last half hour. Was 24 h, which grew without end on a long
+ * scroll.
+ */
 export const GC_MS = {
-  pronouns: 24 * HOUR,
-  system: 24 * HOUR,
-  member: 24 * HOUR,
-  members: 24 * HOUR,
+  pronouns: 30 * MINUTE,
+  system: 30 * MINUTE,
+  member: 30 * MINUTE,
+  members: 30 * MINUTE,
   front: 5 * MINUTE,
 } as const
 

@@ -26,6 +26,8 @@ import {useIsWithinSplitView} from '#/screens/Messages/components/splitView/cont
 import {useTheme, web} from '#/alf'
 import * as Layout from '#/components/Layout'
 import {useAnalytics} from '#/analytics'
+// HORIZON: far-away rows render as empty boxes of their height
+import {useRowWindow} from '#/horizon/list-window/useRowWindow'
 
 export type ListMethods = {
   scrollToTop: () => void
@@ -452,6 +454,8 @@ function ListImpl<ItemT>(
                     extraData={extraData}
                     onItemSeen={onItemSeen}
                     registerRowNode={registerRowNode}
+                    // HORIZON: the scroll root the row's window is measured in
+                    windowRoot={disableFullWindowScroll ? nativeRef : null}
                   />
                 )
               })}
@@ -641,6 +645,7 @@ let Row = function RowImpl<ItemT>({
   extraData: _unused,
   onItemSeen,
   registerRowNode,
+  windowRoot,
 }: {
   item: ItemT
   index: number
@@ -649,8 +654,11 @@ let Row = function RowImpl<ItemT>({
   extraData: unknown
   onItemSeen: ((item: ItemT) => void) | undefined
   registerRowNode: (index: number, node: HTMLElement | null) => void
+  windowRoot?: React.RefObject<HTMLDivElement | null> | null
 }): React.ReactNode {
-  const rowRef = useRef(null)
+  const rowRef = useRef<HTMLDivElement>(null)
+  // HORIZON: whether a far-away row is held, and the height it keeps
+  const rowWindow = useRowWindow(rowRef, windowRoot)
   const intersectionTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   )
@@ -714,14 +722,26 @@ let Row = function RowImpl<ItemT>({
 
   return (
     <View
-      ref={rowRef}
+      ref={rowRef as unknown as React.Ref<React.ComponentRef<typeof View>>}
       // @ts-expect-error web only, for the tooltip rule in style.css
-      dataSet={{listRow: ''}}>
-      {renderItem({
-        item,
-        index,
-        separators: null as unknown as ListRenderItemInfo<ItemT>['separators'],
-      })}
+      dataSet={{listRow: ''}}
+      // HORIZON: a held row keeps its height and renders nothing; one that
+      // just came back keeps at least that height while it settles
+      style={
+        rowWindow.held
+          ? {height: rowWindow.height}
+          : rowWindow.height != null
+            ? {minHeight: rowWindow.height}
+            : undefined
+      }>
+      {rowWindow.held
+        ? null
+        : renderItem({
+            item,
+            index,
+            separators:
+              null as unknown as ListRenderItemInfo<ItemT>['separators'],
+          })}
     </View>
   )
 }
@@ -733,6 +753,7 @@ Row = memo(Row) as <ItemT>(props: {
   extraData: unknown
   onItemSeen: ((item: ItemT) => void) | undefined
   registerRowNode: (index: number, node: HTMLElement | null) => void
+  windowRoot?: React.RefObject<HTMLDivElement | null> | null
 }) => React.ReactNode
 
 let Visibility = ({

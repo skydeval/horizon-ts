@@ -19,7 +19,7 @@ import {PROFILE_ALT_TEXT} from '#/horizon/switches'
 const ROOT = 'horizon-profile-alt'
 
 const STALE_MS = 5 * 60 * 1000
-const GC_MS = 24 * 60 * 60 * 1000
+const GC_MS = 30 * 60 * 1000
 
 /** The record as read: parsed (or `null` for none) and its CID. */
 export type ProfileAltAnswer = {record: ProfileAlt | null; cid?: string}
