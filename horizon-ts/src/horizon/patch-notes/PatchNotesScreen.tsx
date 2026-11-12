@@ -54,9 +54,7 @@ function Release({note}: {note: PatchNote}) {
     <View style={[a.gap_md]}>
       <View style={[a.gap_xs]}>
         <H2 style={[a.text_xl, a.font_bold]}>
-          <Trans>
-            Version {note.version}, build {note.build}
-          </Trans>
+          <Trans>Version {note.version}</Trans>
         </H2>
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>{date}</Text>
         {note.summary ? (

@@ -102,11 +102,12 @@ describe('the repo notes', () => {
 describe('renderLatestHtml', () => {
   it('shows only the newest release, collapsed, with no link to older ones', () => {
     const older = parsePatchNote('0.1.0-7.md', NOTE)
-    const newer = {...older, build: 8, summary: 'Newer.'}
+    const newer = {...older, version: '0.1.1', build: 8, summary: 'Newer.'}
     const html = renderLatestHtml([newer, older])
     expect(html.startsWith('<details')).toBe(true)
-    expect(html).toContain("What's new in build 8")
-    expect(html).not.toContain('build 7')
+    expect(html).toContain("What's new in 0.1.1")
+    expect(html).not.toContain('build')
+    expect(html).not.toContain('0.1.0')
     expect(html).not.toContain('<a ')
   })
 

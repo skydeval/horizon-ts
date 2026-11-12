@@ -153,7 +153,7 @@ function renderLatestHtml(notes) {
 function renderReleaseHtml(latest) {
   const out = [
     '<details class="notes">',
-    `  <summary>What's new in build ${latest.build}</summary>`,
+    `  <summary>What's new in ${escapeHtml(latest.version)}</summary>`,
   ]
   if (latest.summary) out.push(`  <p>${escapeHtml(latest.summary)}</p>`)
   for (const section of latest.sections) {
