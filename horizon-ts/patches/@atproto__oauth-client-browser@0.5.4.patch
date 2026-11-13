@@ -1,0 +1,27 @@
+diff --git a/dist/browser-oauth-client.d.ts b/dist/browser-oauth-client.d.ts
+index fa126b8d719782f3b08951f566b4c2a753fc03ec..0f7d3f0a1193be5c5dc32722061b487ec55aad3b 100644
+--- a/dist/browser-oauth-client.d.ts
++++ b/dist/browser-oauth-client.d.ts
+@@ -5,7 +5,7 @@ export type BrowserOAuthClientOptions = Simplify<{
+     clientMetadata?: Readonly<OAuthClientMetadataInput>;
+     responseMode?: Exclude<OAuthResponseMode, 'form_post'>;
+     fetch?: Fetch;
+-} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'keyset' | 'fetch' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
++} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'fetch' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
+ export type BrowserOAuthClientLoadOptions = Simplify<{
+     clientId: string;
+     signal?: AbortSignal;
+diff --git a/dist/browser-oauth-client.js b/dist/browser-oauth-client.js
+index fc248844b83f896d343fb70c55c7a5793ab984f4..46553b49ab3f098cc7c95f060a29ed23433e7407 100644
+--- a/dist/browser-oauth-client.js
++++ b/dist/browser-oauth-client.js
+@@ -43,7 +43,8 @@ export class BrowserOAuthClient extends OAuthClient {
+             ...options,
+             clientMetadata,
+             responseMode,
+-            keyset: undefined,
++            // HORIZON: a remote-signing keyset makes this a confidential client
++            keyset: options.keyset,
+             runtimeImplementation,
+             sessionStore: database.getSessionStore(),
+             stateStore: database.getStateStore(),

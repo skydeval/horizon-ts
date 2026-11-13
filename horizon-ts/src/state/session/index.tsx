@@ -21,6 +21,8 @@ import {IS_WEB} from '#/env'
 import {isOauthAccount, isSignedInAccount} from '#/horizon/session/accounts'
 // HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
 import {adoptOAuthAccount} from '#/horizon/session/adopt'
+// HORIZON: quick reconnect opens the dropped account's sign-in
+import {noteDroppedAccount} from '#/horizon/session/dropped-account'
 // HORIZON: session kinds (password, OAuth), Horizon sign-out and the Horizon session provider
 import {HorizonSessionProvider} from '#/horizon/session/HorizonSessionProvider'
 // HORIZON: the push task borrows the live session
@@ -268,6 +270,8 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
         sessionEvent === 'expired' &&
         store.getState().currentBundleState.bundle === bundle
       ) {
+        // HORIZON: the signed-out view opens on this account's sign-in
+        noteDroppedAccount(accountDid)
         emitSessionDropped()
       }
       // Bundle identity prevents stale sessions from changing the active account.

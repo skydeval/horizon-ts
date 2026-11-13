@@ -37,6 +37,12 @@ allowBuilds:
   'protobufjs': false
   'unrs-resolver': true
 patchedDependencies:
+  # HORIZON: the OAuth clients take a remote-signing keyset (confidential
+  # client), a session made as a public client signs from its next
+  # refresh, and the app's client returns through an https page
+  '@atproto/oauth-client@0.8.10': patches/@atproto__oauth-client@0.8.10.patch
+  '@atproto/oauth-client-browser@0.5.4': patches/@atproto__oauth-client-browser@0.5.4.patch
+  '@atproto/oauth-client-expo@0.1.12': patches/@atproto__oauth-client-expo@0.1.12.patch
   # HORIZON: Android video player recovers from errors and detached views
   '@bsky.app/video@0.4.2': patches/@bsky.app__video@0.4.2.patch
   '@bsky/sdk@1.2.0': patches/@bsky__sdk@1.2.0.patch

@@ -14,6 +14,7 @@
  */
 
 import {emitSessionDropped} from '#/state/events'
+import {noteDroppedAccount} from '#/horizon/session/dropped-account'
 import {getOAuthBundleDid} from '#/horizon/session/oauth-bundles'
 import {
   addOAuthSessionDeletedListener,
@@ -54,6 +55,7 @@ export function reportOAuthSessionLost(did: string) {
   if (!store) return
   const bundle = currentBundle(store)
   if (getOAuthBundleDid(bundle) !== did) return
+  noteDroppedAccount(did)
   emitSessionDropped()
   store.dispatch({
     type: 'received-session-event',
