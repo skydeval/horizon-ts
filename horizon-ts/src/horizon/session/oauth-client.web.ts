@@ -100,6 +100,12 @@ export function isOAuthRefreshFailure(cause: unknown): boolean {
 
 const clients = new Map<string, BrowserOAuthClient>()
 
+/** The library's own session database, used by builds before signing. */
+export const PUBLIC_SESSION_DATABASE = '@atproto-oauth-client'
+
+/** Where a signed client keeps its sessions. */
+export const SIGNED_SESSION_DATABASE = '@atproto-oauth-client:horizon-signed'
+
 function buildMetadata() {
   switch (getOAuthClientMode()) {
     case 'hosted-dev':
@@ -123,10 +129,21 @@ export function getOAuthClient(): BrowserOAuthClient {
   const clientMetadata = buildMetadata()
   let client = clients.get(clientMetadata.client_id)
   if (!client) {
+    const signed = isSignedClient(clientMetadata)
     client = new BrowserOAuthClient({
       clientMetadata,
+      /*
+       * Signed sessions live in a database of their own (patched library).
+       * A page still running a build from before signing shares this origin,
+       * and would delete a signed session it cannot use, signing every tab
+       * out. The first load moves the older database's sessions in and out of
+       * its reach.
+       */
+      database: signed
+        ? {name: SIGNED_SESSION_DATABASE, migrateFrom: PUBLIC_SESSION_DATABASE}
+        : undefined,
       // A signed document is a confidential client (patched library)
-      keyset: isSignedClient(clientMetadata)
+      keyset: signed
         ? (remoteKeyset(
             new URL(clientMetadata.client_id).origin,
           ) as unknown as Iterable<Key>)

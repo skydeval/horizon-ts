@@ -1,21 +1,44 @@
 diff --git a/dist/browser-oauth-client.d.ts b/dist/browser-oauth-client.d.ts
-index fa126b8d719782f3b08951f566b4c2a753fc03ec..0f7d3f0a1193be5c5dc32722061b487ec55aad3b 100644
+index fa126b8d719782f3b08951f566b4c2a753fc03ec..f0e8af96d4d2ebddb74b54678a8eab02f9f2661e 100644
 --- a/dist/browser-oauth-client.d.ts
 +++ b/dist/browser-oauth-client.d.ts
-@@ -5,7 +5,7 @@ export type BrowserOAuthClientOptions = Simplify<{
+@@ -5,7 +5,12 @@ export type BrowserOAuthClientOptions = Simplify<{
      clientMetadata?: Readonly<OAuthClientMetadataInput>;
      responseMode?: Exclude<OAuthResponseMode, 'form_post'>;
      fetch?: Fetch;
 -} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'keyset' | 'fetch' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
++    /** HORIZON: the database to keep sessions in, and an older one to move them from */
++    database?: {
++        name?: string;
++        migrateFrom?: string;
++    };
 +} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'fetch' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
  export type BrowserOAuthClientLoadOptions = Simplify<{
      clientId: string;
      signal?: AbortSignal;
 diff --git a/dist/browser-oauth-client.js b/dist/browser-oauth-client.js
-index fc248844b83f896d343fb70c55c7a5793ab984f4..46553b49ab3f098cc7c95f060a29ed23433e7407 100644
+index fc248844b83f896d343fb70c55c7a5793ab984f4..8b7c1be98aa35b21bd0f53609f598bbaab0e0be5 100644
 --- a/dist/browser-oauth-client.js
 +++ b/dist/browser-oauth-client.js
-@@ -43,7 +43,8 @@ export class BrowserOAuthClient extends OAuthClient {
+@@ -8,7 +8,9 @@ const NAMESPACE = `@@atproto/oauth-client-browser`;
+ //- Popup channel
+ const POPUP_CHANNEL_NAME = `${NAMESPACE}(popup-channel)`;
+ const POPUP_STATE_PREFIX = `${NAMESPACE}(popup-state):`;
+-const syncChannel = new BroadcastChannel(`${NAMESPACE}(synchronization-channel:2)`);
++// HORIZON: its own channel, so pages of an older Horizon build (which share
++// the origin) never replay their session events into this one
++const syncChannel = new BroadcastChannel(`${NAMESPACE}(synchronization-channel:horizon-1)`);
+ const runtimeImplementation = new BrowserRuntimeImplementation();
+ export class BrowserOAuthClient extends OAuthClient {
+     static async load({ clientId, ...options }) {
+@@ -38,12 +40,14 @@ export class BrowserOAuthClient extends OAuthClient {
+             // Make sure "form_post" is not used as it is not supported in the browser
+             throw new TypeError(`Invalid response mode: ${responseMode}`);
+         }
+-        const database = new BrowserOAuthDatabase();
++        // HORIZON: an optional database of its own, filled once from an older one
++        const database = new BrowserOAuthDatabase(options.database);
+         super({
              ...options,
              clientMetadata,
              responseMode,
@@ -25,3 +48,92 @@ index fc248844b83f896d343fb70c55c7a5793ab984f4..46553b49ab3f098cc7c95f060a29ed23
              runtimeImplementation,
              sessionStore: database.getSessionStore(),
              stateStore: database.getStateStore(),
+diff --git a/dist/browser-oauth-database.js b/dist/browser-oauth-database.js
+index dc46131f28ba4a65bd2b9c572735aca2991d8ef3..e46a9e2ff13862a8cd964fb499235e38156590c5 100644
+--- a/dist/browser-oauth-database.js
++++ b/dist/browser-oauth-database.js
+@@ -21,6 +21,69 @@ const STORES = [
+     'authorizationServerMetadataCache',
+     'protectedResourceMetadataCache',
+ ];
++// HORIZON: plain IndexedDB helpers for moveSessions
++function idbRequest(request) {
++    return new Promise((resolve, reject) => {
++        request.onsuccess = () => resolve(request.result);
++        request.onerror = () => reject(request.error);
++    });
++}
++function idbDone(tx) {
++    return new Promise((resolve, reject) => {
++        tx.oncomplete = () => resolve();
++        tx.onerror = () => reject(tx.error);
++        tx.onabort = () => reject(tx.error || new Error('Transaction aborted'));
++    });
++}
++/**
++ * HORIZON: move every session from the database `fromName` into `db` (one
++ * already holding a session keeps it), then delete the moved ones from
++ * `fromName`, so a page still running an older build finds them gone instead
++ * of using (or deleting) them. A missing old database is not created.
++ */
++async function moveSessions(fromName, db) {
++    const old = await new Promise((resolve, reject) => {
++        const request = indexedDB.open(fromName);
++        // The old database does not exist: do not create it
++        request.onupgradeneeded = () => request.transaction.abort();
++        request.onsuccess = () => resolve(request.result);
++        request.onerror = () => resolve(undefined);
++        request.onblocked = () => reject(new Error('blocked'));
++    });
++    if (!old)
++        return;
++    try {
++        if (!old.objectStoreNames.contains('session'))
++            return;
++        const readTx = old.transaction(['session'], 'readonly');
++        const readStore = readTx.objectStore('session');
++        const keysRequest = idbRequest(readStore.getAllKeys());
++        const valuesRequest = idbRequest(readStore.getAll());
++        const [keys, values] = await Promise.all([keysRequest, valuesRequest]);
++        await idbDone(readTx).catch(() => { });
++        if (!keys.length)
++            return;
++        const writeTx = db.db.transaction(['session'], 'readwrite');
++        const writeStore = writeTx.objectStore('session');
++        const existing = new Set(await idbRequest(writeStore.getAllKeys()));
++        const moved = [];
++        keys.forEach((key, i) => {
++            if (!existing.has(key)) {
++                writeStore.put(values[i], key);
++            }
++            moved.push(key);
++        });
++        await idbDone(writeTx);
++        const deleteTx = old.transaction(['session'], 'readwrite');
++        const deleteStore = deleteTx.objectStore('session');
++        for (const key of moved)
++            deleteStore.delete(key);
++        await idbDone(deleteTx);
++    }
++    finally {
++        old.close();
++    }
++}
+ export class BrowserOAuthDatabase {
+     #dbPromise;
+     #cleanupInterval;
+@@ -32,7 +95,13 @@ export class BrowserOAuthDatabase {
+                     store.createIndex('expiresAt', 'expiresAt', { unique: false });
+                 }
+             },
+-        ], { durability: options?.durability ?? 'strict' });
++        ], { durability: options?.durability ?? 'strict' }).then(async (db) => {
++            // HORIZON: move the sessions of an older database in, once
++            if (options?.migrateFrom) {
++                await moveSessions(options.migrateFrom, db).catch(() => { });
++            }
++            return db;
++        });
+         this.#cleanupInterval = setInterval(() => {
+             void this.cleanup();
+         }, options?.cleanupInterval ?? 30e3);
