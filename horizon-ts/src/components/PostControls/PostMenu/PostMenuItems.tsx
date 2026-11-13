@@ -830,17 +830,13 @@ let PostMenuItems = ({
                     </Menu.Item>
                   )}
 
-                  {/* HORIZON: reporting private posts waits on its own design (start) */}
-                  {!isPrivateDisplay(postUri) && (
-                    <Menu.Item
-                      testID="postDropdownReportBtn"
-                      label={l`Report post`}
-                      onPress={() => reportDialogControl.open()}>
-                      <Menu.ItemText>{l`Report post`}</Menu.ItemText>
-                      <Menu.ItemIcon icon={Warning} position="right" />
-                    </Menu.Item>
-                  )}
-                  {/* HORIZON: reporting private posts waits on its own design (end) */}
+                  <Menu.Item
+                    testID="postDropdownReportBtn"
+                    label={l`Report post`}
+                    onPress={() => reportDialogControl.open()}>
+                    <Menu.ItemText>{l`Report post`}</Menu.ItemText>
+                    <Menu.ItemIcon icon={Warning} position="right" />
+                  </Menu.Item>
                 </>
               )}
 

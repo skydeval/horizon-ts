@@ -2,6 +2,7 @@ import {
   type ParsedReportSubject,
   type ReportSubject,
 } from '#/components/moderation/ReportDialog/types'
+import {reportPostCollection} from '#/horizon/report/kryphocron-report'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -78,7 +79,8 @@ export function parseReportSubject(
         type: 'post',
         uri: subject.uri,
         cid: subject.cid,
-        nsid: 'app.bsky.feed.post',
+        // HORIZON: a kryphocron post names its own collection
+        nsid: reportPostCollection(subject.uri),
         attributes: {
           reply: !!record.reply,
           image:

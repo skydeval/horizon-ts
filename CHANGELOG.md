@@ -83,6 +83,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Kryphocron posts can be reported** from the ••• menu, to the
+  moderation services that can read them.
 - **Signing up for a bsky.social account on the web** no longer stops at a
   blank captcha. Horizon's website now sends you to bsky.app to create the
   account; then you sign in to Horizon as usual.

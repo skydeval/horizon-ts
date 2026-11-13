@@ -38,6 +38,10 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
+import {
+  canReceiveKryphocronReport,
+  isKryphocronReportSubject,
+} from '#/horizon/report/kryphocron-report'
 import {type app} from '#/lexicons'
 import {useSubmitReportMutation} from './action'
 import {
@@ -188,6 +192,11 @@ function Inner(
   const isBskyOnlySubject = BSKY_LABELER_ONLY_SUBJECT_TYPES.has(
     props.subject.type,
   )
+  // HORIZON: a kryphocron record goes only to labelers that can read it
+  const kryphocronNsid =
+    'nsid' in props.subject && isKryphocronReportSubject(props.subject.nsid)
+      ? props.subject.nsid
+      : undefined
 
   /**
    * Labelers that support this `subject` and its NSID collection
@@ -211,6 +220,16 @@ function Inner(
       })
       .filter(l => {
         const collections: string[] | undefined = l.subjectCollections
+        // HORIZON: kryphocron records (start)
+        if (kryphocronNsid) {
+          return canReceiveKryphocronReport({
+            did: l.creator.did,
+            collections,
+            nsid: kryphocronNsid,
+            bskyModerationDid: api.moderation.did,
+          })
+        }
+        // HORIZON: kryphocron records (end)
         if (collections === undefined) return true
         // all chat collections accepted, since only Bluesky handles chats
         if (
@@ -222,7 +241,8 @@ function Inner(
       })
       .filter(l => {
         if (!state.selectedOption) return false
-        if (isBskyOnlyReason || isBskyOnlySubject) {
+        // HORIZON: Bluesky cannot read a kryphocron record, so every reason stays with its labelers
+        if (!kryphocronNsid && (isBskyOnlyReason || isBskyOnlySubject)) {
           return l.creator.did === api.moderation.did
         }
         const supportedReasonTypes: string[] | undefined = l.reasonTypes
@@ -242,6 +262,7 @@ function Inner(
     state.selectedOption,
     isBskyOnlyReason,
     isBskyOnlySubject,
+    kryphocronNsid,
   ])
   const hasSupportedLabelers = !!supportedLabelers.length
   const hasSingleSupportedLabeler = supportedLabelers.length === 1
@@ -253,7 +274,9 @@ function Inner(
    * step in the UI.
    */
   const isAlwaysBskyLabeler =
-    hasSingleSupportedLabeler && (isBskyOnlyReason || isBskyOnlySubject)
+    hasSingleSupportedLabeler &&
+    !kryphocronNsid &&
+    (isBskyOnlyReason || isBskyOnlySubject)
 
   const onSubmit = useCallback(async () => {
     dispatch({type: 'clearError'})
