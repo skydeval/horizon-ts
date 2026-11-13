@@ -28,6 +28,7 @@ import {List} from '#/view/com/util/List'
 import {NotFoundScreen} from '#/view/screens/NotFound'
 import {atoms as a, useTheme} from '#/alf'
 import {ButtonIcon} from '#/components/Button'
+import * as SegmentedControl from '#/components/forms/SegmentedControl'
 import {Inbox_Stroke2_Corner2_Rounded_Large as InboxIcon} from '#/components/icons/Inbox'
 import {SettingsGear2_Stroke2_Corner0_Rounded as SettingsIcon} from '#/components/icons/Settings'
 import * as Layout from '#/components/Layout'
@@ -35,6 +36,14 @@ import {createStaticClick, Link, SimpleInlineLinkText} from '#/components/Link'
 import {ListFooter} from '#/components/Lists'
 import {Loader} from '#/components/Loader'
 import {useAnalytics} from '#/analytics'
+// HORIZON: the operator's cairn instance's reports
+import {
+  useCairnInboxReportsQuery,
+  useCairnInboxUnreadReportsQuery,
+  useMarkCairnReportsSeenMutation,
+} from '#/horizon/cairn/inbox'
+import {useCairnPrimaryLabeler} from '#/horizon/cairn/primary-labeler'
+import {isKryphocronReport} from '#/horizon/report/kryphocron-report'
 import {type tools} from '#/lexicons'
 import {AccountStatus} from './components/AccountStatus'
 import {FilterMenu} from './components/FilterMenu'
@@ -44,6 +53,16 @@ import {YourReportRow} from './components/YourReportRow'
 
 type ReportFilter = 'all' | 'pending' | 'resolved' | 'unread'
 type InboxReport = tools.ozone.inbox.listReports.$OutputBody['reports'][number]
+// HORIZON: which of the user's reports Your reports shows
+type ReportScope = 'public' | 'private'
+
+/** HORIZON: reports from two moderation services, newest first. */
+function mergeReports(first: InboxReport[], second: InboxReport[]) {
+  if (!second.length) return first
+  return [...first, ...second].sort(
+    (x, y) => Date.parse(y.updatedAt) - Date.parse(x.updatedAt),
+  )
+}
 
 export function ModerationInboxScreen() {
   const {t: l} = useLingui()
@@ -72,6 +91,8 @@ export function ModerationInboxScreen() {
   const isEnabled = ax.features.enabled(ax.features.ModerationInboxEnable)
   const unreadCountQuery = useModerationInboxUnreadCountQuery(isEnabled)
   const unreadCounts = unreadCountQuery.data?.unreadCounts
+  // HORIZON: the cairn instance's unread reports count too
+  const cairnUnread = useCairnInboxUnreadReportsQuery()
 
   useFocusEffect(
     useCallback(() => {
@@ -119,7 +140,7 @@ export function ModerationInboxScreen() {
               testID="moderationInboxTabs"
               items={[l`Your reports`, l`Your account`]}
               unread={[
-                (unreadCounts?.reports ?? 0) > 0,
+                (unreadCounts?.reports ?? 0) + (cairnUnread.data ?? 0) > 0,
                 (unreadCounts?.subjects ?? 0) +
                   (unreadCounts?.accountStatus ?? 0) >
                   0,
@@ -146,19 +167,46 @@ function YourReports() {
   const reportsQuery = useModerationInboxReportsQuery(filter)
   const unreadCountQuery = useModerationInboxUnreadCountQuery()
   const markSeen = useUpdateModerationInboxSeenMutation()
-  const reports = reportsQuery.data?.pages.flatMap(page => page.reports) ?? []
-  const hasUnread = (unreadCountQuery.data?.unreadCounts.reports ?? 0) > 0
-  const isLoading = reportsQuery.isLoading
+  /*
+   * HORIZON: with an operator cairn instance, Public (Bluesky's reports and
+   * cairn's public ones) and Private (cairn's reports on kryphocron posts)
+   * (start)
+   */
+  const cairnPrimary = useCairnPrimaryLabeler()
+  const [scope, setScope] = useState<ReportScope>('public')
+  const cairnQuery = useCairnInboxReportsQuery(filter)
+  const cairnUnread = useCairnInboxUnreadReportsQuery()
+  const markCairnSeen = useMarkCairnReportsSeenMutation()
+  const showPrivate = !!cairnPrimary && scope === 'private'
+  const cairnReports = cairnPrimary
+    ? (cairnQuery.data?.pages.flatMap(page => page.reports) ?? [])
+    : []
+  const bskyReports =
+    reportsQuery.data?.pages.flatMap(page => page.reports) ?? []
+  const reports = showPrivate
+    ? cairnReports.filter(isKryphocronReport)
+    : mergeReports(
+        bskyReports,
+        cairnReports.filter(report => !isKryphocronReport(report)),
+      )
+  const listQuery = showPrivate ? cairnQuery : reportsQuery
+  const hasUnread =
+    (unreadCountQuery.data?.unreadCounts.reports ?? 0) > 0 ||
+    (cairnUnread.data ?? 0) > 0
+  const isLoading =
+    listQuery.isLoading || (!!cairnPrimary && cairnQuery.isLoading)
   const isEmpty =
-    reportsQuery.data !== undefined &&
-    reports.length === 0 &&
-    !reportsQuery.error
-  const hideFilterMenu = isEmpty && filter === 'all'
+    listQuery.data !== undefined && reports.length === 0 && !listQuery.error
+  const hideFilterMenu = isEmpty && filter === 'all' && !cairnPrimary
 
   const onRefresh = async () => {
     setIsPTRing(true)
     try {
-      await Promise.all([reportsQuery.refetch(), unreadCountQuery.refetch()])
+      await Promise.all([
+        reportsQuery.refetch(),
+        unreadCountQuery.refetch(),
+        ...(cairnPrimary ? [cairnQuery.refetch(), cairnUnread.refetch()] : []),
+      ])
     } catch (err) {
       logger.error('Failed to refresh moderation inbox reports', {error: err})
     } finally {
@@ -167,24 +215,56 @@ function YourReports() {
   }
 
   const onEndReached = async () => {
-    if (
-      reportsQuery.isFetchingNextPage ||
-      !reportsQuery.hasNextPage ||
-      reportsQuery.error
-    ) {
-      return
-    }
+    const queries = showPrivate
+      ? [cairnQuery]
+      : cairnPrimary
+        ? [reportsQuery, cairnQuery]
+        : [reportsQuery]
     try {
-      await reportsQuery.fetchNextPage()
+      await Promise.all(
+        queries
+          .filter(
+            query =>
+              !query.isFetchingNextPage && query.hasNextPage && !query.error,
+          )
+          .map(query => query.fetchNextPage()),
+      )
     } catch (err) {
       logger.error('Failed to load more moderation inbox reports', {
         error: err,
       })
     }
   }
+  // HORIZON: Public and Private (end)
 
   const listHeader = (
     <Layout.Center>
+      {/* HORIZON: Public and Private under Your reports (start) */}
+      {cairnPrimary ? (
+        <View style={[a.px_lg, a.pt_md]}>
+          <SegmentedControl.Root
+            type="tabs"
+            label={l`Which reports`}
+            value={scope}
+            onChange={setScope}>
+            <SegmentedControl.Item
+              testID="moderationInboxPublicReports"
+              value="public"
+              label={l`Public`}>
+              <SegmentedControl.ItemText>{l`Public`}</SegmentedControl.ItemText>
+            </SegmentedControl.Item>
+            <SegmentedControl.Item
+              testID="moderationInboxPrivateReports"
+              value="private"
+              label={l`Private`}>
+              <SegmentedControl.ItemText>
+                {l`Private`}
+              </SegmentedControl.ItemText>
+            </SegmentedControl.Item>
+          </SegmentedControl.Root>
+        </View>
+      ) : null}
+      {/* HORIZON: Public and Private under Your reports (end) */}
       <View
         style={[
           a.flex_row,
@@ -205,6 +285,8 @@ function YourReports() {
             {...createStaticClick(() => {
               ax.metric('moderation:inbox:markAllAsRead', {tab: 'reports'})
               markSeen.mutate({sections: ['reports']})
+              // HORIZON: and the cairn instance's
+              if (cairnPrimary) markCairnSeen.mutate()
             })}>
             <Trans>Mark all as read</Trans>
           </SimpleInlineLinkText>
@@ -216,7 +298,8 @@ function YourReports() {
   return (
     <List
       data={reports}
-      keyExtractor={(report: InboxReport) => report.id.toString()}
+      // HORIZON: ids are per moderation service
+      keyExtractor={(report: InboxReport) => `${report.src}:${report.id}`}
       refreshing={isPTRing}
       onRefresh={() => void onRefresh()}
       renderItem={({item}: ListRenderItemInfo<InboxReport>) => (
@@ -231,9 +314,11 @@ function YourReports() {
         ) : isEmpty ? (
           <InboxEmptyState
             message={
-              filter === 'all'
-                ? l`You haven’t reported anything yet`
-                : l`No reports match this filter`
+              filter !== 'all'
+                ? l`No reports match this filter`
+                : showPrivate
+                  ? l`Nothing reported here yet`
+                  : l`You haven’t reported anything yet`
             }
           />
         ) : undefined
@@ -242,10 +327,10 @@ function YourReports() {
       ListFooterComponent={
         <ListFooter
           style={a.border_t_0}
-          isFetchingNextPage={reportsQuery.isFetchingNextPage}
-          hasNextPage={reportsQuery.hasNextPage}
-          error={cleanError(reportsQuery.error)}
-          onRetry={reportsQuery.fetchNextPage}
+          isFetchingNextPage={listQuery.isFetchingNextPage}
+          hasNextPage={listQuery.hasNextPage}
+          error={cleanError(listQuery.error)}
+          onRetry={listQuery.fetchNextPage}
         />
       }
       onEndReached={() => void onEndReached()}

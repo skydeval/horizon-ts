@@ -7,6 +7,7 @@ import {atoms as a, useTheme} from '#/alf'
 import {ButtonText} from '#/components/Button'
 import {Link} from '#/components/Link'
 import {Text} from '#/components/Typography'
+import {postThreadRouteName,PP_COLLECTION} from '#/horizon/private/uri'
 import {type tools} from '#/lexicons'
 import {AccountSubjectPreview} from './AccountSubjectPreview'
 import {ChatSubjectPreview} from './ChatSubjectPreview'
@@ -54,6 +55,8 @@ export function ReportSubjectPreview({
   } else {
     switch (uri?.collection) {
       case 'app.bsky.feed.post':
+      // HORIZON: a kryphocron post previews as a post, read through prism
+      case PP_COLLECTION:
         preview = (
           <PostSubjectPreview
             report={report}
@@ -142,7 +145,9 @@ function getSubjectLink(
     const rkey = uri.rkey
     switch (uri.collection) {
       case 'app.bsky.feed.post':
-        return {screen: 'PostThread', params: {name, rkey}}
+      // HORIZON: a kryphocron post opens on its own thread route
+      case PP_COLLECTION:
+        return {screen: postThreadRouteName(subject.uri), params: {name, rkey}}
       case 'app.bsky.graph.list':
         return {screen: 'ProfileList', params: {name, rkey}}
       case 'app.bsky.feed.generator':

@@ -15,6 +15,7 @@ import {Loader} from '#/components/Loader'
 import {ContentHider} from '#/components/moderation/ContentHider'
 import {PostAlerts} from '#/components/moderation/PostAlerts'
 import {Text} from '#/components/Typography'
+import {postThreadRouteName} from '#/horizon/private/uri'
 import {app, type tools} from '#/lexicons'
 import * as bsky from '#/types/bsky'
 
@@ -128,7 +129,8 @@ export function PostSubjectPreview({
               <Link
                 testID="moderationInboxOpenPost"
                 to={{
-                  screen: 'PostThread',
+                  // HORIZON: a kryphocron post opens on its own thread route
+                  screen: postThreadRouteName(uri.toString()),
                   params: {name: uri.host, rkey: uri.rkey},
                 }}
                 label={l`Open post`}

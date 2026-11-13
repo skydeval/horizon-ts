@@ -12,6 +12,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 - **Horizon's own moderation is built in,** next to Bluesky's: always on,
   and offered whenever you report something.
+- **Your reports on kryphocron posts in the moderation inbox,** under Your
+  reports → Private, with their review status and outcome.
 - **Gallery or Carousel for 2 to 4 images.** A drop-down beside Labels in
   the composer shows posts with several images as a carousel instead of a
   grid.

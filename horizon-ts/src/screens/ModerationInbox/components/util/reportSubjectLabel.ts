@@ -2,6 +2,7 @@ import {AtUri, isAtUriString} from '@atproto/syntax'
 import {type MessageDescriptor} from '@lingui/core'
 import {msg} from '@lingui/core/macro'
 
+import {PP_COLLECTION} from '#/horizon/private/uri'
 import {type tools} from '#/lexicons'
 
 export type ReportSubject =
@@ -33,6 +34,8 @@ export function getReportSubjectLabel(
   ) {
     switch (new AtUri(subject.uri).collection) {
       case 'app.bsky.feed.post':
+      // HORIZON: a kryphocron post reads as a post
+      case PP_COLLECTION:
         return authorName ? msg`Post by ${authorName}` : msg`Post`
       case 'app.bsky.actor.status':
         return authorName ? msg`Livestream by ${authorName}` : msg`Livestream`

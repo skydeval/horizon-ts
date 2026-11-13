@@ -32,6 +32,16 @@ export function isKryphocronReportSubject(nsid: string | undefined): boolean {
 }
 
 /**
+ * Whether a moderation inbox report's subject is a kryphocron record (its
+ * URI's collection).
+ */
+export function isKryphocronReport(report: {subject: object}): boolean {
+  const subject = report.subject as {uri?: unknown}
+  if (typeof subject.uri !== 'string') return false
+  return isKryphocronReportSubject(subject.uri.split('/')[3])
+}
+
+/**
  * Whether the labeler `did`, declaring `collections` (absent when it accepts
  * any record), may be offered a report on the kryphocron record `nsid`.
  * `bskyModerationDid` is Bluesky's moderation service.
