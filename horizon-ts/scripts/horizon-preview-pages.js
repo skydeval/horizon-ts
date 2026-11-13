@@ -62,9 +62,10 @@ function checkPreviewOrigin(raw) {
  * The preview's client document: the production document with its client
  * ID, client URI and redirect URI moved to `origin` (same paths), and
  * " (preview)" after the client name. Everything else, scope included, is
- * the production document's.
+ * the production document's, except that only the production origin keeps
+ * the signed client fields (the signing key is deployed only there).
  *
- * @template {{client_id: string, client_name: string, client_uri: string, redirect_uris: string[]}} T
+ * @template {{client_id: string, client_name: string, client_uri: string, redirect_uris: string[], token_endpoint_auth_method: string, token_endpoint_auth_signing_alg?: string, jwks_uri?: string}} T
  * @param {T} production
  * @param {string} origin
  * @returns {T}
@@ -74,13 +75,26 @@ function previewClientMetadata(production, origin) {
     const url = new URL(value)
     return `${origin}${url.pathname === '/' ? '' : url.pathname}${url.search}`
   }
-  return {
+  /** @type {T} */
+  const document = {
     ...production,
     client_id: move(production.client_id),
     client_name: `${production.client_name} (preview)`,
     client_uri: move(production.client_uri),
     redirect_uris: production.redirect_uris.map(move),
   }
+  // Signed only where the signing key is deployed (nearhorizon.app); a
+  // preview on another origin is a public client.
+  if (production.jwks_uri) {
+    if (origin === new URL(production.client_uri).origin) {
+      document.jwks_uri = move(production.jwks_uri)
+    } else {
+      document.token_endpoint_auth_method = 'none'
+      delete document.token_endpoint_auth_signing_alg
+      delete document.jwks_uri
+    }
+  }
+  return document
 }
 
 /**
@@ -124,6 +138,16 @@ const PAGES_HEADERS = `/*
   Cache-Control: no-store
 
 /oauth-client-metadata.json
+  Access-Control-Allow-Origin: *
+  ! Cache-Control
+  Cache-Control: no-cache
+
+/oauth-client-metadata-android.json
+  Access-Control-Allow-Origin: *
+  ! Cache-Control
+  Cache-Control: no-cache
+
+/oauth/jwks.json
   Access-Control-Allow-Origin: *
   ! Cache-Control
   Cache-Control: no-cache

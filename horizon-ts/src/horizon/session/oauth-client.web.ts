@@ -7,6 +7,7 @@
 import {
   atprotoLoopbackClientMetadata,
   BrowserOAuthClient,
+  type Key,
   TokenInvalidError,
   TokenRefreshError,
   TokenRevokedError,
@@ -18,11 +19,13 @@ import {PREVIEW_ORIGIN} from '#/horizon/preview'
 import {
   createPreviewClientMetadata,
   HOSTED_DEV_CLIENT_METADATA,
+  isSignedClient,
   loopbackClientId,
   type OAuthClientMode,
   PRODUCTION_CLIENT_METADATA,
   selectOAuthClientMode,
 } from '#/horizon/session/oauth-metadata'
+import {remoteKeyset} from '#/horizon/session/oauth-signing'
 
 /**
  * OAuth sign-in is available on this platform.
@@ -122,6 +125,12 @@ export function getOAuthClient(): BrowserOAuthClient {
   if (!client) {
     client = new BrowserOAuthClient({
       clientMetadata,
+      // A signed document is a confidential client (patched library)
+      keyset: isSignedClient(clientMetadata)
+        ? (remoteKeyset(
+            new URL(clientMetadata.client_id).origin,
+          ) as unknown as Iterable<Key>)
+        : undefined,
       handleResolver: OAUTH_HANDLE_RESOLVER,
       onSessionDeleted(sub, cause) {
         deletedListeners.forEach(listener => listener(sub, cause))

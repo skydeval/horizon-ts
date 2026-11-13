@@ -208,6 +208,9 @@ overrides:
 packageExtensionsChecksum: sha256-KbeCj471Qk3TA758q8nLPkiGCPDA0TX18iO/Coy89lo=
 
 patchedDependencies:
+  '@atproto/oauth-client-browser@0.5.4': d9752e43b6d175be8c60dfddbb678f8c614f5b2ed5d1bcc8a4b7d175e21df474
+  '@atproto/oauth-client-expo@0.1.12': b459a4f79feb38684a3d84e8b268c09dad5e9f3aeb468e6a2c721210f8b8ddf0
+  '@atproto/oauth-client@0.8.10': 54d47ad7b5a7d46606bdb55da07bcdb9d46f42de370daef72ba16ab0872a6fb9
   '@bsky.app/video@0.4.2': f797284afe9abfee18f4f33c3972141e18144272cb5c9671b2643fd854852dab
   '@bsky/sdk@1.2.0': 05f97d1f7e9b6341cd13d3f08fe430e5b539c0df8ff5474e2cd9e9281f0e0e5a
   '@expo/cli@58.1.15': e1e6ca6311d03c9e5605eb2a37ba850af9cca678b6cd0b504cd4c693375f3ceb
@@ -247,10 +250,10 @@ importers:
         version: 0.2.2
       '@atproto/oauth-client-browser':
         specifier: 0.5.4
-        version: 0.5.4
+        version: 0.5.4(patch_hash=d9752e43b6d175be8c60dfddbb678f8c614f5b2ed5d1bcc8a4b7d175e21df474)
       '@atproto/oauth-client-expo':
         specifier: 0.1.12
-        version: 0.1.12(expo@58.0.19)(react-native@0.88.0(patch_hash=1f80f55b2279e2e11bc734ee488debb302cbca469cd25a4720eae9ff2211d691)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
+        version: 0.1.12(patch_hash=b459a4f79feb38684a3d84e8b268c09dad5e9f3aeb468e6a2c721210f8b8ddf0)(expo@58.0.19)(react-native@0.88.0(patch_hash=1f80f55b2279e2e11bc734ee488debb302cbca469cd25a4720eae9ff2211d691)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       '@atproto/syntax':
         specifier: 0.7.5
         version: 0.7.5
@@ -10213,7 +10216,7 @@ snapshots:
       multiformats: 13.4.2
       zod: 3.25.76
 
-  '@atproto/oauth-client-browser@0.5.4':
+  '@atproto/oauth-client-browser@0.5.4(patch_hash=d9752e43b6d175be8c60dfddbb678f8c614f5b2ed5d1bcc8a4b7d175e21df474)':
     dependencies:
       '@atproto-labs/did-resolver': 0.3.7
       '@atproto-labs/handle-resolver': 0.4.8
@@ -10221,15 +10224,15 @@ snapshots:
       '@atproto/did': 0.5.4
       '@atproto/jwk': 0.7.4
       '@atproto/jwk-webcrypto': 0.3.4
-      '@atproto/oauth-client': 0.8.10
+      '@atproto/oauth-client': 0.8.10(patch_hash=54d47ad7b5a7d46606bdb55da07bcdb9d46f42de370daef72ba16ab0872a6fb9)
       '@atproto/oauth-types': 0.7.7
       core-js: 3.50.0
 
-  '@atproto/oauth-client-expo@0.1.12(expo@58.0.19)(react-native@0.88.0(patch_hash=1f80f55b2279e2e11bc734ee488debb302cbca469cd25a4720eae9ff2211d691)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)':
+  '@atproto/oauth-client-expo@0.1.12(patch_hash=b459a4f79feb38684a3d84e8b268c09dad5e9f3aeb468e6a2c721210f8b8ddf0)(expo@58.0.19)(react-native@0.88.0(patch_hash=1f80f55b2279e2e11bc734ee488debb302cbca469cd25a4720eae9ff2211d691)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)':
     dependencies:
       '@atproto-labs/simple-store': 0.5.1
-      '@atproto/oauth-client': 0.8.10
-      '@atproto/oauth-client-browser': 0.5.4
+      '@atproto/oauth-client': 0.8.10(patch_hash=54d47ad7b5a7d46606bdb55da07bcdb9d46f42de370daef72ba16ab0872a6fb9)
+      '@atproto/oauth-client-browser': 0.5.4(patch_hash=d9752e43b6d175be8c60dfddbb678f8c614f5b2ed5d1bcc8a4b7d175e21df474)
       core-js: 3.50.0
       expo: 58.0.19(patch_hash=bea8fdd7e1792895062ad85158cb414704bb5823395b7c07910b7126372496e2)(2446ded10b246d02073ea15fd270980c)
       expo-web-browser: 58.0.6(expo@58.0.19)(react-native@0.88.0(patch_hash=1f80f55b2279e2e11bc734ee488debb302cbca469cd25a4720eae9ff2211d691)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.0(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.3.0)(react@19.3.0)(supports-color@8.1.1))
@@ -10239,7 +10242,7 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  '@atproto/oauth-client@0.8.10':
+  '@atproto/oauth-client@0.8.10(patch_hash=54d47ad7b5a7d46606bdb55da07bcdb9d46f42de370daef72ba16ab0872a6fb9)':
     dependencies:
       '@atproto-labs/did-resolver': 0.3.11
       '@atproto-labs/fetch': 0.4.0

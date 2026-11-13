@@ -64,7 +64,15 @@ export type OAuthClientMode =
 export const CLIENT_METADATA_PATH = '/oauth-client-metadata.json'
 
 /**
- * The client metadata document Horizon publishes.
+ * Where a signed client's public keys are served, relative to its origin.
+ */
+export const OAUTH_JWKS_PATH = '/oauth/jwks.json'
+
+/**
+ * The client metadata document Horizon publishes. A signed document is a
+ * confidential client (`private_key_jwt`): its sessions last up to two years
+ * instead of two weeks, with the assertions signed by nearhorizon.app's
+ * signer (`oauth-signing.ts`).
  */
 export type OAuthClientMetadataDocument = {
   client_id: string
@@ -72,7 +80,9 @@ export type OAuthClientMetadataDocument = {
   client_uri: string
   redirect_uris: [string]
   scope: string
-  token_endpoint_auth_method: 'none'
+  token_endpoint_auth_method: 'none' | 'private_key_jwt'
+  token_endpoint_auth_signing_alg?: 'ES256'
+  jwks_uri?: string
   response_types: ['code']
   grant_types: ['authorization_code', 'refresh_token']
   application_type: 'web' | 'native'
@@ -80,9 +90,10 @@ export type OAuthClientMetadataDocument = {
 }
 
 /**
- * Build a public, DPoP-bound client document, for the web unless
- * `applicationType` says `native`. The key order matches the committed JSON
- * files.
+ * Build a DPoP-bound client document, for the web unless `applicationType`
+ * says `native`. `signed` makes it a confidential client whose keys are at
+ * `jwksOrigin` (a web document only: the authorization server refuses a
+ * signed native client). The key order matches the committed JSON files.
  */
 export function createOAuthClientMetadata({
   clientId,
@@ -90,12 +101,14 @@ export function createOAuthClientMetadata({
   redirectUri,
   clientName,
   applicationType = 'web',
+  signed,
 }: {
   clientId: string
   clientUri: string
   redirectUri: string
   clientName: string
   applicationType?: 'web' | 'native'
+  signed?: {jwksOrigin: string}
 }): OAuthClientMetadataDocument {
   return {
     client_id: clientId,
@@ -103,7 +116,13 @@ export function createOAuthClientMetadata({
     client_uri: clientUri,
     redirect_uris: [redirectUri],
     scope: OAUTH_SCOPE,
-    token_endpoint_auth_method: 'none',
+    ...(signed && applicationType === 'web'
+      ? {
+          token_endpoint_auth_method: 'private_key_jwt' as const,
+          token_endpoint_auth_signing_alg: 'ES256' as const,
+          jwks_uri: `${signed.jwksOrigin}${OAUTH_JWKS_PATH}`,
+        }
+      : {token_endpoint_auth_method: 'none' as const}),
     response_types: ['code'],
     grant_types: ['authorization_code', 'refresh_token'],
     application_type: applicationType,
@@ -111,15 +130,23 @@ export function createOAuthClientMetadata({
   }
 }
 
+/** Whether a document is a confidential (signed) client. */
+export function isSignedClient(metadata: {
+  token_endpoint_auth_method?: string
+}) {
+  return metadata.token_endpoint_auth_method === 'private_key_jwt'
+}
+
 /**
  * The production document, served at
- * `https://nearhorizon.app/oauth-client-metadata.json`.
+ * `https://nearhorizon.app/oauth-client-metadata.json`. Signed.
  */
 export const PRODUCTION_CLIENT_METADATA = createOAuthClientMetadata({
   clientId: `${HORIZON_ORIGIN}${CLIENT_METADATA_PATH}`,
   clientUri: HORIZON_ORIGIN,
   redirectUri: `${HORIZON_ORIGIN}${OAUTH_CALLBACK_PATH}`,
   clientName: PRODUCT_NAME,
+  signed: {jwksOrigin: HORIZON_ORIGIN},
 })
 
 /**
@@ -146,8 +173,10 @@ export const NATIVE_CLIENT_ID = `${HORIZON_ORIGIN}/oauth-client-metadata-native.
 export const NATIVE_REDIRECT_URI = 'app.nearhorizon:/oauth/callback'
 
 /**
- * The Android (and later iOS) app's document, served at
- * `https://nearhorizon.app/oauth-client-metadata-native.json`.
+ * The app's first document, served at
+ * `https://nearhorizon.app/oauth-client-metadata-native.json`: a public
+ * native client. Builds before the signed Android document still sign in
+ * with it, so it stays published unchanged.
  */
 export const NATIVE_CLIENT_METADATA = createOAuthClientMetadata({
   clientId: NATIVE_CLIENT_ID,
@@ -158,9 +187,36 @@ export const NATIVE_CLIENT_METADATA = createOAuthClientMetadata({
 })
 
 /**
+ * The Android app's signed document's client ID, beside the others.
+ */
+export const ANDROID_CLIENT_ID = `${HORIZON_ORIGIN}/oauth-client-metadata-android.json`
+
+/**
+ * The Android app's return page (`oauth-signer/app-callback.ts`), which
+ * forwards to {@link NATIVE_REDIRECT_URI}. A signed client must be a web
+ * client, and a web client returns to an https address.
+ */
+export const ANDROID_REDIRECT_URI = `${HORIZON_ORIGIN}/auth/app/callback`
+
+/**
+ * The Android app's document, served at
+ * `https://nearhorizon.app/oauth-client-metadata-android.json`: a signed
+ * web client that returns through {@link ANDROID_REDIRECT_URI}.
+ */
+export const ANDROID_CLIENT_METADATA = createOAuthClientMetadata({
+  clientId: ANDROID_CLIENT_ID,
+  clientUri: HORIZON_ORIGIN,
+  redirectUri: ANDROID_REDIRECT_URI,
+  clientName: PRODUCT_NAME,
+  signed: {jwksOrigin: HORIZON_ORIGIN},
+})
+
+/**
  * A preview build's document: the production document moved to `origin`
  * (an https origin with no trailing slash), under its own name so the
- * authorization page says which build is asking.
+ * authorization page says which build is asking. Signed only on
+ * nearhorizon.app, whose deployment holds the signing key; a preview on
+ * another origin is a public client.
  */
 export function createPreviewClientMetadata(
   origin: string,
@@ -170,6 +226,7 @@ export function createPreviewClientMetadata(
     clientUri: origin,
     redirectUri: `${origin}${OAUTH_CALLBACK_PATH}`,
     clientName: `${PRODUCT_NAME} (preview)`,
+    signed: origin === HORIZON_ORIGIN ? {jwksOrigin: origin} : undefined,
   })
 }
 

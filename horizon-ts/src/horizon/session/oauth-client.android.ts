@@ -1,14 +1,19 @@
 /*
  * The Android OAuth client: one `ExpoOAuthClient` over the app's own client
- * document (`NATIVE_CLIENT_METADATA`). Sign-in opens the authorization server
- * in a Custom Tab and returns to the app through its `app.nearhorizon` scheme;
- * sessions and DPoP keys are kept in the library's MMKV stores. The app is one
- * process, so there is no cross-tab lock or broadcast to follow, and the
- * library's own in-process lock serialises reads and refreshes.
+ * document (`ANDROID_CLIENT_METADATA`), a signed (confidential) client whose
+ * assertions nearhorizon.app's signer makes (`oauth-signing.ts`), so a
+ * session lasts up to two years. Sign-in opens the authorization server in a
+ * Custom Tab; the server returns to nearhorizon.app's return page, which
+ * forwards to the app's `app.nearhorizon` scheme (patched library:
+ * `appReturnUri`). Sessions and DPoP keys are kept in the library's MMKV
+ * stores. The app is one process, so there is no cross-tab lock or
+ * broadcast to follow, and the library's own in-process lock serialises
+ * reads and refreshes.
  */
 
 import {
   ExpoOAuthClient,
+  type Key,
   TokenInvalidError,
   TokenRefreshError,
   TokenRevokedError,
@@ -17,9 +22,12 @@ import {
 import {PUBLIC_BSKY_SERVICE} from '#/lib/constants'
 import {bufferedFetch} from '#/horizon/session/oauth-fetch'
 import {
-  NATIVE_CLIENT_METADATA,
+  ANDROID_CLIENT_METADATA,
+  HORIZON_ORIGIN,
+  NATIVE_REDIRECT_URI,
   type OAuthClientMode,
 } from '#/horizon/session/oauth-metadata'
+import {remoteKeyset} from '#/horizon/session/oauth-signing'
 
 /**
  * OAuth sign-in is available on this platform.
@@ -78,7 +86,9 @@ let client: ExpoOAuthClient | undefined
 export function getOAuthClient(): ExpoOAuthClient {
   if (!client) {
     client = new ExpoOAuthClient({
-      clientMetadata: NATIVE_CLIENT_METADATA,
+      clientMetadata: ANDROID_CLIENT_METADATA,
+      keyset: remoteKeyset(HORIZON_ORIGIN) as unknown as Iterable<Key>,
+      appReturnUri: NATIVE_REDIRECT_URI,
       handleResolver: OAUTH_HANDLE_RESOLVER,
       // Plain responses, so the DPoP nonce retry runs (see oauth-fetch.ts)
       fetch: bufferedFetch,

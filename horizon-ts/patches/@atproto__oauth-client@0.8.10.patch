@@ -1,0 +1,25 @@
+diff --git a/dist/oauth-server-factory.js b/dist/oauth-server-factory.js
+index 1949669a5a2bcaacecaa9e59478214f822755775..566154c50b1cc8e4fc1f92afa7ecaf4e1285def3 100644
+--- a/dist/oauth-server-factory.js
++++ b/dist/oauth-server-factory.js
+@@ -1,3 +1,4 @@
++import { negotiateClientAuthMethod } from './oauth-client-auth.js';
+ import { OAuthServerAgent } from './oauth-server-agent.js';
+ export class OAuthServerFactory {
+     constructor(clientMetadata, runtime, resolver, fetch, keyset, dpopNonceCache) {
+@@ -25,6 +26,15 @@ export class OAuthServerFactory {
+      * @throws see {@link OAuthServerAgent}
+      */
+     async fromMetadata(serverMetadata, authMethod, dpopKey) {
++        // HORIZON: a session made while the client was public signs once the
++        // client is confidential. The authorization server lets a public
++        // session become confidential on refresh, and the session getter
++        // stores the upgraded method with the new tokens.
++        if (authMethod?.method === 'none' &&
++            this.clientMetadata.token_endpoint_auth_method === 'private_key_jwt' &&
++            this.keyset) {
++            authMethod = negotiateClientAuthMethod(serverMetadata, this.clientMetadata, this.keyset);
++        }
+         return new OAuthServerAgent(authMethod, dpopKey, serverMetadata, this.clientMetadata, this.dpopNonceCache, this.resolver, this.runtime, this.keyset, this.fetch);
+     }
+ }

@@ -1,0 +1,75 @@
+diff --git a/dist/expo-oauth-client-options.d.ts b/dist/expo-oauth-client-options.d.ts
+index 5ce765e970936598057078a7b164dfa2e9b260fa..ad4803a267bc4177b51bd86455ca61342a08989a 100644
+--- a/dist/expo-oauth-client-options.d.ts
++++ b/dist/expo-oauth-client-options.d.ts
+@@ -5,5 +5,7 @@ export type Simplify<T> = {
+ export type ExpoOAuthClientOptions = Simplify<{
+     clientMetadata: Readonly<OAuthClientMetadataInput>;
+     responseMode?: Exclude<OAuthResponseMode, 'form_post'>;
+-} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'keyset' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
++    /** HORIZON: where the app listens when the document's redirect is https. */
++    appReturnUri?: string;
++} & Omit<OAuthClientOptions, 'clientMetadata' | 'responseMode' | 'runtimeImplementation' | 'sessionStore' | 'stateStore' | 'didCache' | 'handleCache' | 'dpopNonceCache' | 'authorizationServerMetadataCache' | 'protectedResourceMetadataCache'>>;
+ //# sourceMappingURL=expo-oauth-client-options.d.ts.map
+\ No newline at end of file
+diff --git a/dist/expo-oauth-client.native.js b/dist/expo-oauth-client.native.js
+index 4a95562aaeb63905a185ebbcb1a9240f7750fd54..75af688f151242db37edb275c2b3dc67af66794a 100644
+--- a/dist/expo-oauth-client.native.js
++++ b/dist/expo-oauth-client.native.js
+@@ -64,14 +64,18 @@ const runtimeImplementation = {
+ };
+ export class ExpoOAuthClient extends OAuthClient {
+     #disposables;
++    // HORIZON: where the app listens when the document's redirect is https
++    #appReturnUri;
+     constructor(options) {
+         const env_1 = { stack: [], error: void 0, hasError: false };
+         try {
+             const stack = __addDisposableResource(env_1, new DisposableStack(), false);
++            const { appReturnUri, ...clientOptions } = options;
+             super({
+-                ...options,
++                ...clientOptions,
+                 responseMode: options.responseMode ?? 'query',
+-                keyset: undefined,
++                // HORIZON: a remote-signing keyset makes this a confidential client
++                keyset: options.keyset,
+                 runtimeImplementation,
+                 sessionStore: stack.use(new SessionStore()),
+                 stateStore: stack.use(new StateStore()),
+@@ -82,6 +86,7 @@ export class ExpoOAuthClient extends OAuthClient {
+                 protectedResourceMetadataCache: stack.use(new ProtectedResourceMetadataCache()),
+             });
+             this.#disposables = stack.move();
++            this.#appReturnUri = appReturnUri;
+         }
+         catch (e_1) {
+             env_1.error = e_1;
+@@ -95,17 +100,25 @@ export class ExpoOAuthClient extends OAuthClient {
+         return null;
+     }
+     async signIn(input, options) {
++        // HORIZON: an https redirect is a page that forwards to appReturnUri
+         const redirectUri = options?.redirect_uri ??
+-            this.clientMetadata.redirect_uris.find(isCustomUriScheme);
++            this.clientMetadata.redirect_uris.find(isCustomUriScheme) ??
++            (this.#appReturnUri ? this.clientMetadata.redirect_uris[0] : undefined);
+         if (!redirectUri) {
+             throw new TypeError('A redirect URI with a custom scheme is required for Expo OAuth.');
+         }
++        const listenUri = isCustomUriScheme(redirectUri)
++            ? redirectUri
++            : this.#appReturnUri;
++        if (!listenUri) {
++            throw new TypeError('An app return URI is required for an https redirect.');
++        }
+         const url = await this.authorize(input, {
+             ...options,
+             redirect_uri: redirectUri,
+             display: options?.display ?? 'touch',
+         });
+-        const result = await openAuthSessionAsync(url.toString(), redirectUri, {
++        const result = await openAuthSessionAsync(url.toString(), listenUri, {
+             dismissButtonStyle: 'cancel', // iOS only
+             preferEphemeralSession: false, // iOS only
+         });

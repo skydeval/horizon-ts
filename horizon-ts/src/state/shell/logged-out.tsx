@@ -3,6 +3,8 @@ import {createContext, useContext, useMemo, useState} from 'react'
 import {useSession} from '#/state/session'
 import {useActiveLanding} from '#/state/shell/landing'
 import {IS_WEB} from '#/env'
+// HORIZON: quick reconnect opens the dropped account's sign-in
+import {recentDroppedAccount} from '#/horizon/session/dropped-account'
 
 type State = {
   showLoggedOut: boolean
@@ -69,10 +71,10 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
   const activeLanding = useActiveLanding()
   const {hasSession} = useSession()
 
-  const requestedAccount = getRequestedAccountFromLanding(
-    activeLanding,
-    hasSession,
-  )
+  const requestedAccount =
+    getRequestedAccountFromLanding(activeLanding, hasSession) ??
+    // HORIZON: quick reconnect: open the account whose session just ended
+    (hasSession ? undefined : recentDroppedAccount())
 
   const [state, setState] = useState<State>({
     showLoggedOut: Boolean(requestedAccount),

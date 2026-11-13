@@ -65,12 +65,34 @@ describe('preview build packaging', () => {
     )
   })
 
-  it('the client document is readable cross-origin and not cached', () => {
-    const block = PAGES_HEADERS.split('\n\n').find(b =>
-      b.startsWith('/oauth-client-metadata.json\n'),
+  it('the client documents and keys are readable cross-origin and not cached', () => {
+    for (const path of [
+      '/oauth-client-metadata.json',
+      '/oauth-client-metadata-android.json',
+      '/oauth/jwks.json',
+    ]) {
+      const block = PAGES_HEADERS.split('\n\n').find(b =>
+        b.startsWith(`${path}\n`),
+      )
+      expect(block).toContain('Access-Control-Allow-Origin: *')
+      expect(block).toContain('Cache-Control: no-cache')
+    }
+  })
+
+  it('only nearhorizon.app is a signed client; other previews are public', () => {
+    const live = previewClientMetadata(
+      committedProduction,
+      'https://nearhorizon.app',
     )
-    expect(block).toContain('Access-Control-Allow-Origin: *')
-    expect(block).toContain('Cache-Control: no-cache')
+    expect(live.token_endpoint_auth_method).toBe('private_key_jwt')
+    expect(live.jwks_uri).toBe('https://nearhorizon.app/oauth/jwks.json')
+    const other = previewClientMetadata(
+      committedProduction,
+      'https://horizon-preview2.pages.dev',
+    )
+    expect(other.token_endpoint_auth_method).toBe('none')
+    expect(other).not.toHaveProperty('jwks_uri')
+    expect(other).not.toHaveProperty('token_endpoint_auth_signing_alg')
   })
 
   it('the app document is never stored, so it stays out of the back/forward cache', () => {
@@ -83,6 +105,8 @@ describe('preview build packaging', () => {
     const others = blocks.slice(1).map(b => b.split('\n')[0])
     expect(others).toEqual([
       '/oauth-client-metadata.json',
+      '/oauth-client-metadata-android.json',
+      '/oauth/jwks.json',
       '/_expo/static/*',
       '/assets/*',
       '/assets/vendor/kryphocron-web/*',
