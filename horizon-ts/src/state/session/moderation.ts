@@ -3,6 +3,8 @@ import {type DidString} from '@atproto/syntax'
 import {api} from '@bsky/sdk'
 
 import {IS_TEST_USER} from '#/lib/constants'
+// HORIZON: the operator's cairn primary labeler
+import {cairnPrimaryLabeler} from '#/horizon/cairn/primary-labeler'
 // HORIZON: a kryphocron labeler never goes into the header
 import {
   subscribeKryphocronLabelers,
@@ -62,7 +64,12 @@ export function applyLabelersToClient(
   client.setLabelers(
     // HORIZON: a kryphocron labeler never goes into the header
     withoutKryphocronLabelers(
-      subscribedDids.filter(did => did !== api.moderation.did),
+      subscribedDids.filter(
+        did =>
+          did !== api.moderation.did &&
+          // HORIZON: the cairn primary is on the global list already
+          did !== cairnPrimaryLabeler(),
+      ),
     ) as DidString[],
   )
 }

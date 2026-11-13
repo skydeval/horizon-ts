@@ -1,5 +1,7 @@
 import {Client} from '@atproto/lex'
 
+// HORIZON: the operator's cairn primary labeler
+import {cairnPrimaryLabeler} from '#/horizon/cairn/primary-labeler'
 import {device} from '#/storage'
 
 export const BR_LABELER = 'did:plc:ekitcvx7uwnauoqy5oest3hm' // Brazil
@@ -111,5 +113,16 @@ export function configureAdditionalModerationAuthorities() {
  * their respective clients.
  */
 export function configureGlobalAppLabelers(dids: string[]) {
-  Client.configure({appLabelers: dids as `did:${string}:${string}`[]})
+  // HORIZON: the operator's cairn primary labeler is always on the list (start)
+  const primary = cairnPrimaryLabeler()
+  const next = dids.filter(did => did !== appliedCairnPrimary)
+  if (primary) next.push(primary)
+  appliedCairnPrimary = primary
+  // HORIZON: the operator's cairn primary labeler is always on the list (end)
+  Client.configure({
+    appLabelers: Array.from(new Set(next)) as `did:${string}:${string}`[],
+  })
 }
+
+// HORIZON: the primary last put on the list, so a dropped one comes off
+let appliedCairnPrimary: string | undefined

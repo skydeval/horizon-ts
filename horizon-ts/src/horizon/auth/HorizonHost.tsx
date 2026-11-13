@@ -28,6 +28,7 @@ import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
 import {BskyModerationSync} from '#/horizon/bsky-moderation'
+import {CairnLabelerSync} from '#/horizon/cairn/CairnLabelerSync'
 import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
 import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
@@ -123,6 +124,7 @@ export function HorizonHost() {
       <AppearanceSync />
       <OtherAppSpoilersSync />
       <BskyModerationSync />
+      <CairnLabelerSync />
       <SystemAccountsHost />
       <InPlaceSignInWindow />
       <PasswordGateDialog />

@@ -10,6 +10,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Horizon's own moderation is built in,** next to Bluesky's: always on,
+  and offered whenever you report something.
 - **Gallery or Carousel for 2 to 4 images.** A drop-down beside Labels in
   the composer shows posts with several images as a carousel instead of a
   grid.
