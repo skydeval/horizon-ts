@@ -3,7 +3,8 @@
  * hook TH-3): after the "Reply sorting" group, a divider, a group and one
  * item "Thread Lens" with an on/off pill toggle in its right slot, as
  * Horizon 1.0 had it. No label heading. Absent signed out, when the lens is
- * not served to the account (3.2), and on a private thread screen.
+ * not served to the account (3.2), and on a private thread screen. Under
+ * it, for an account prism grants aster, the aster switch, named by prism.
  *
  * The menu's content is portalled to the root on native ("Dialogs are
  * portal-ed to root", `Menu/index.tsx`), out of the screen's thread
@@ -22,7 +23,12 @@ import {useSession} from '#/state/session'
 import {useTheme} from '#/alf'
 import * as Menu from '#/components/Menu'
 import {isPrivatePostUri} from '#/horizon/private/uri'
-import {THREAD_LENS} from '#/horizon/switches'
+import {useAsterLabels} from '#/horizon/routing/aster'
+import {ASTER, THREAD_LENS} from '#/horizon/switches'
+import {
+  setAsterPreference,
+  useAsterPreference,
+} from '#/horizon/thread-lens/aster-preference'
 import {useLensServed} from '#/horizon/thread-lens/availability'
 import {
   setThreadLensPreference,
@@ -32,6 +38,8 @@ import {
   ANNOUNCE_OFF,
   ANNOUNCE_ON,
   CONTROL_NAME,
+  switchOff,
+  switchOn,
 } from '#/horizon/thread-lens/strings'
 
 /** The anchor a thread query key carries (stock or lens). */
@@ -53,33 +61,69 @@ export function useThreadLensMenuItem(): React.ReactNode {
   // Every store read runs on every render (rules of hooks).
   const served = useLensServed(did)
   const on = useThreadLensPreference(did)
+  const asterLabels = useAsterLabels(did)
+  const asterOn = useAsterPreference(did)
   const anchor = anchorOfThreadKey(context?.postThreadQueryKey)
-  if (!THREAD_LENS || !did || !served || !anchor || isPrivatePostUri(anchor)) {
-    return null
-  }
-  return <ThreadLensMenuItem did={did} on={on} />
+  if (!did || !anchor || isPrivatePostUri(anchor)) return null
+  const lens = THREAD_LENS && served
+  const aster = ASTER ? asterLabels?.setting : undefined
+  if (!lens && !aster) return null
+  return (
+    <ThreadLensMenuItem
+      did={did}
+      lens={lens ? on : undefined}
+      aster={aster !== undefined ? {name: aster, on: asterOn} : undefined}
+    />
+  )
 }
 
-function ThreadLensMenuItem({did, on}: {did: string; on: boolean}) {
+function ThreadLensMenuItem({
+  did,
+  lens,
+  aster,
+}: {
+  did: string
+  /** The lens value, when the lens item shows. */
+  lens: boolean | undefined
+  /** The aster switch's name and value, when its item shows. */
+  aster: {name: string; on: boolean} | undefined
+}) {
   const {i18n} = useLingui()
   const name = i18n._(CONTROL_NAME)
   return (
     <>
       <Menu.Divider />
       <Menu.Group>
-        <Menu.Item
-          label={name}
-          accessibilityRole="switch"
-          accessibilityState={{checked: on}}
-          onPress={() => {
-            setThreadLensPreference(did, !on)
-            AccessibilityInfo.announceForAccessibility(
-              i18n._(on ? ANNOUNCE_OFF : ANNOUNCE_ON),
-            )
-          }}>
-          <Menu.ItemText>{name}</Menu.ItemText>
-          <PillToggle enabled={on} />
-        </Menu.Item>
+        {lens !== undefined && (
+          <Menu.Item
+            label={name}
+            accessibilityRole="switch"
+            accessibilityState={{checked: lens}}
+            onPress={() => {
+              setThreadLensPreference(did, !lens)
+              AccessibilityInfo.announceForAccessibility(
+                i18n._(lens ? ANNOUNCE_OFF : ANNOUNCE_ON),
+              )
+            }}>
+            <Menu.ItemText>{name}</Menu.ItemText>
+            <PillToggle enabled={lens} />
+          </Menu.Item>
+        )}
+        {aster && (
+          <Menu.Item
+            label={aster.name}
+            accessibilityRole="switch"
+            accessibilityState={{checked: aster.on}}
+            onPress={() => {
+              setAsterPreference(did, !aster.on)
+              AccessibilityInfo.announceForAccessibility(
+                i18n._(aster.on ? switchOff(aster.name) : switchOn(aster.name)),
+              )
+            }}>
+            <Menu.ItemText>{aster.name}</Menu.ItemText>
+            <PillToggle enabled={aster.on} />
+          </Menu.Item>
+        )}
       </Menu.Group>
     </>
   )

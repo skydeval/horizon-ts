@@ -50,6 +50,7 @@ describe('the aster grant', () => {
       action: 'L1',
       undo: 'L2',
       marker: 'L3',
+      setting: 'L1',
     })
     answerAster(DID, {aster: true}, {labels: {...LABELS, undo: ''}})
     expect(getAsterLabels(DID)).toBeUndefined()
@@ -59,6 +60,13 @@ describe('the aster grant', () => {
     expect(getAsterLabels(DID)).toBeUndefined()
     answerAster(DID, undefined, undefined)
     expect(getAsterLabels(DID)).toBeUndefined()
+  })
+
+  it('names the switch from its own label, else the action’s', () => {
+    answerAster(DID, {aster: true}, {labels: {...LABELS, setting: 'L4'}})
+    expect(getAsterLabels(DID)?.setting).toBe('L4')
+    answerAster(DID, {aster: true}, {labels: {...LABELS, setting: ' '}})
+    expect(getAsterLabels(DID)?.setting).toBe('L1')
   })
 
   it('is per account, and a refused call clears it', () => {

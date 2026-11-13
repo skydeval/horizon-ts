@@ -217,3 +217,21 @@ export const ANNOUNCE_OFF = msg({
   message: 'Thread Lens off',
   comment: 'Thread Lens: announced when the setting is turned off',
 })
+
+/** Announced when a switch the server names, `name`, is turned on. */
+export function switchOn(name: string): MessageDescriptor {
+  return msg({
+    message: `${name} on`,
+    comment:
+      'Thread Lens: announced when an optional thread setting is turned on; the name is the setting’s',
+  })
+}
+
+/** Announced when a switch the server names, `name`, is turned off. */
+export function switchOff(name: string): MessageDescriptor {
+  return msg({
+    message: `${name} off`,
+    comment:
+      'Thread Lens: announced when an optional thread setting is turned off; the name is the setting’s',
+  })
+}

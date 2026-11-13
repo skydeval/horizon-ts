@@ -15,6 +15,8 @@ export type AsterLabels = {
   undo: string
   /** The line above an aster node. */
   marker: string
+  /** The switch's name; the action's label when prism sends none. */
+  setting: string
 }
 
 const grants = new Map<string, AsterLabels>()
@@ -28,11 +30,11 @@ function labelsOf(value: unknown): AsterLabels | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const labels = (value as {labels?: unknown}).labels
   if (typeof labels !== 'object' || labels === null) return undefined
-  const {action, undo, marker} = labels as Record<string, unknown>
+  const {action, undo, marker, setting} = labels as Record<string, unknown>
   const ok = (text: unknown): text is string =>
     typeof text === 'string' && text.trim().length > 0 && text.length <= 64
   return ok(action) && ok(undo) && ok(marker)
-    ? {action, undo, marker}
+    ? {action, undo, marker, setting: ok(setting) ? setting : action}
     : undefined
 }
 
@@ -55,7 +57,8 @@ export function answerAster(
     if (
       held?.action === labels.action &&
       held.undo === labels.undo &&
-      held.marker === labels.marker
+      held.marker === labels.marker &&
+      held.setting === labels.setting
     ) {
       return
     }

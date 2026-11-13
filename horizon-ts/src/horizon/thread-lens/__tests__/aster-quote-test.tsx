@@ -16,6 +16,7 @@ const URI = `at://${AUTHOR}/app.bsky.feed.post/3kaqpost22222`
 const LABELS = {action: 'Act', undo: 'Back', marker: 'Mark'}
 
 let mockLabels: typeof LABELS | undefined = LABELS
+let mockSwitchOn = true
 const mockGetPost = jest.fn<(...args: unknown[]) => Promise<unknown>>()
 
 jest.mock('#/state/session', () => ({
@@ -23,6 +24,9 @@ jest.mock('#/state/session', () => ({
 }))
 jest.mock('#/horizon/routing/aster', () => ({
   useAsterLabels: () => mockLabels,
+}))
+jest.mock('#/horizon/thread-lens/aster-preference', () => ({
+  useAsterPreference: () => mockSwitchOn,
 }))
 jest.mock('#/horizon/routing/current-clients', () => ({
   getCurrentClients: () => ({did: ME, prismClient: {}}),
@@ -108,6 +112,7 @@ function mount(uri = URI) {
 
 beforeEach(() => {
   mockLabels = LABELS
+  mockSwitchOn = true
   mockGetPost.mockReset()
   mockGetPost.mockResolvedValue({uri: URI, post: postView()})
 })
@@ -118,6 +123,47 @@ describe('AsterQuote', () => {
     const {view} = mount()
     expect(view.getByText('Blocked')).toBeTruthy()
     expect(view.queryByLabelText('Act')).toBeNull()
+  })
+
+  it('is the plain card with the grant while the switch is off', () => {
+    mockSwitchOn = false
+    const {view} = mount()
+    expect(view.getByText('Blocked')).toBeTruthy()
+    expect(view.queryByLabelText('Act')).toBeNull()
+  })
+
+  it('turning the switch off puts the card back, and on again starts over', async () => {
+    const {view} = mount()
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Act'))
+      await Promise.resolve()
+    })
+    expect(view.getByText(`quote of ${URI}`)).toBeTruthy()
+    mockSwitchOn = false
+    view.rerender(
+      <I18nProvider i18n={i18n}>
+        <AsterQuote
+          uri={URI}
+          placeholder={<Text>Blocked</Text>}
+          render={embed => <Text>{`quote of ${embed.view.uri}`}</Text>}
+        />
+      </I18nProvider>,
+    )
+    expect(view.getByText('Blocked')).toBeTruthy()
+    expect(view.queryByText(`quote of ${URI}`)).toBeNull()
+    mockSwitchOn = true
+    view.rerender(
+      <I18nProvider i18n={i18n}>
+        <AsterQuote
+          uri={URI}
+          placeholder={<Text>Blocked</Text>}
+          render={embed => <Text>{`quote of ${embed.view.uri}`}</Text>}
+        />
+      </I18nProvider>,
+    )
+    expect(view.getByText('Blocked')).toBeTruthy()
+    expect(view.getByLabelText('Act')).toBeTruthy()
+    expect(view.queryByText(`quote of ${URI}`)).toBeNull()
   })
 
   it('never offers on a blocked feed or list card', () => {

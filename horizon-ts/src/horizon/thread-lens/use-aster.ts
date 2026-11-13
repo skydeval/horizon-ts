@@ -13,6 +13,7 @@ import {getCurrentClients} from '#/horizon/routing/current-clients'
 import {ASTER} from '#/horizon/switches'
 import {getAsterPost} from '#/horizon/thread-lens/api'
 import {type AsterOutcome, asterOutcome} from '#/horizon/thread-lens/aster'
+import {useAsterPreference} from '#/horizon/thread-lens/aster-preference'
 import {type app} from '#/lexicons'
 
 export type AsterState =
@@ -31,16 +32,24 @@ export type UseAster = {
 
 /**
  * The aster action for the post at `uri`. `offered` is whether this kind of
- * placeholder offers it at all; the grant and the `ASTER` switch decide the
- * rest.
+ * placeholder offers it at all; the grant, the account's switch on this
+ * device (off until turned on) and the `ASTER` switch decide the rest.
  */
 export function useAster(uri: string, offered: boolean): UseAster {
   const {currentAccount} = useSession()
   const granted = useAsterLabels(currentAccount?.did)
-  const labels = ASTER && offered ? granted : undefined
+  const switchedOn = useAsterPreference(currentAccount?.did)
+  const labels = ASTER && offered && switchedOn ? granted : undefined
   const [state, setState] = useState<AsterState>({status: 'idle'})
   const abort = useRef<AbortController | undefined>(undefined)
   useEffect(() => () => abort.current?.abort(), [])
+  // Turning the switch off puts the placeholder back and drops the outcome
+  const active = labels !== undefined
+  useEffect(() => {
+    if (active) return
+    abort.current?.abort()
+    setState({status: 'idle'})
+  }, [active])
 
   const run = () => {
     const did = currentAccount?.did
