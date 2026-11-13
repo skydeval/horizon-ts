@@ -34,6 +34,9 @@ import {
   useDeviceGeolocationApi,
   useIsDeviceGeolocationGranted,
 } from '#/geolocation'
+// HORIZON: on the web, a bsky.social account is created on bsky.app
+import {BskySocialWebNote} from '#/horizon/signup/BskySocialWebNote'
+import {signupNeedsBskyApp} from '#/horizon/signup/needs-bsky-app'
 import {BackNextButtons} from '../BackNextButtons'
 
 function sanitizeDate(date: Date): Date {
@@ -101,6 +104,8 @@ export function StepInfo({
   const isDeviceGeolocationGranted = useIsDeviceGeolocationGranted()
 
   const [hasWarnedEmail, setHasWarnedEmail] = useState<boolean>(false)
+  // HORIZON: on the web, a bsky.social account is created on bsky.app
+  const needsBskyApp = signupNeedsBskyApp(state.serviceUrl)
 
   const tldtsRef = useRef<typeof tldts>(undefined)
   useEffect(() => {
@@ -195,7 +200,10 @@ export function StepInfo({
           serviceUrl={state.serviceUrl}
           onSelectServiceUrl={v => dispatch({type: 'setServiceUrl', value: v})}
         />
-        {state.isLoading || isLoadingStarterPack ? (
+        {needsBskyApp ? (
+          // HORIZON: bsky.social sign-up can't finish on another website
+          <BskySocialWebNote />
+        ) : state.isLoading || isLoadingStarterPack ? (
           <View style={[a.align_center]}>
             <Loader size="xl" />
           </View>
@@ -379,7 +387,7 @@ export function StepInfo({
         ) : undefined}
       </View>
       <BackNextButtons
-        hideNext={!isOverRegionMinAccessAge}
+        hideNext={!isOverRegionMinAccessAge || needsBskyApp}
         showRetry={isServerError}
         isLoading={state.isLoading}
         onBackPress={onPressBack}

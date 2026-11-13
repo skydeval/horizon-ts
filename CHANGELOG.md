@@ -83,6 +83,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Signing up for a bsky.social account on the web** no longer stops at a
+  blank captcha. Horizon's website now sends you to bsky.app to create the
+  account; then you sign in to Horizon as usual.
 - **Long scrolls on the web no longer run the browser out of memory.**
   Posts far above or below the screen are set aside and come back as you
   scroll to them, so memory stays about the same however far you go.
