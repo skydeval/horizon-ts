@@ -61,7 +61,8 @@ function checkPreviewOrigin(raw) {
 /**
  * The preview's client document: the production document with its client
  * ID, client URI and redirect URI moved to `origin` (same paths), and
- * " (preview)" after the client name. Everything else, scope included, is
+ * " (preview)" after the client name (not on the production origin itself,
+ * which the live site is built as). Everything else, scope included, is
  * the production document's, except that only the production origin keeps
  * the signed client fields (the signing key is deployed only there).
  *
@@ -75,18 +76,22 @@ function previewClientMetadata(production, origin) {
     const url = new URL(value)
     return `${origin}${url.pathname === '/' ? '' : url.pathname}${url.search}`
   }
+  // The live site is built as a preview of its own origin; it keeps the name.
+  const live = origin === new URL(production.client_uri).origin
   /** @type {T} */
   const document = {
     ...production,
     client_id: move(production.client_id),
-    client_name: `${production.client_name} (preview)`,
+    client_name: live
+      ? production.client_name
+      : `${production.client_name} (preview)`,
     client_uri: move(production.client_uri),
     redirect_uris: production.redirect_uris.map(move),
   }
   // Signed only where the signing key is deployed (nearhorizon.app); a
   // preview on another origin is a public client.
   if (production.jwks_uri) {
-    if (origin === new URL(production.client_uri).origin) {
+    if (live) {
       document.jwks_uri = move(production.jwks_uri)
     } else {
       document.token_endpoint_auth_method = 'none'

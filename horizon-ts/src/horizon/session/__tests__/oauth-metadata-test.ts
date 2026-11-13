@@ -126,11 +126,10 @@ describe('OAuth client metadata', () => {
     expect(createPreviewClientMetadata(PREVIEW).scope).toBe(OAUTH_SCOPE)
   })
 
-  it('the preview build on nearhorizon.app is signed', () => {
-    expect(createPreviewClientMetadata('https://nearhorizon.app')).toEqual({
-      ...PRODUCTION_CLIENT_METADATA,
-      client_name: 'Horizon (preview)',
-    })
+  it('the preview build on nearhorizon.app is the production document', () => {
+    expect(createPreviewClientMetadata('https://nearhorizon.app')).toEqual(
+      PRODUCTION_CLIENT_METADATA,
+    )
   })
 
   describe('selectOAuthClientMode', () => {

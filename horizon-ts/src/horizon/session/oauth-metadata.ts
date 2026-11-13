@@ -214,19 +214,21 @@ export const ANDROID_CLIENT_METADATA = createOAuthClientMetadata({
 /**
  * A preview build's document: the production document moved to `origin`
  * (an https origin with no trailing slash), under its own name so the
- * authorization page says which build is asking. Signed only on
- * nearhorizon.app, whose deployment holds the signing key; a preview on
- * another origin is a public client.
+ * authorization page says which build is asking. On nearhorizon.app itself
+ * (the live site is built this way) it keeps the plain name and is signed,
+ * since that deployment holds the signing key; a preview on another origin
+ * is a public client.
  */
 export function createPreviewClientMetadata(
   origin: string,
 ): OAuthClientMetadataDocument {
+  const live = origin === HORIZON_ORIGIN
   return createOAuthClientMetadata({
     clientId: `${origin}${CLIENT_METADATA_PATH}`,
     clientUri: origin,
     redirectUri: `${origin}${OAUTH_CALLBACK_PATH}`,
-    clientName: `${PRODUCT_NAME} (preview)`,
-    signed: origin === HORIZON_ORIGIN ? {jwksOrigin: origin} : undefined,
+    clientName: live ? PRODUCT_NAME : `${PRODUCT_NAME} (preview)`,
+    signed: live ? {jwksOrigin: origin} : undefined,
   })
 }
 

@@ -7,15 +7,18 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    "version": "0.1.23",
-    "build": 23,
-    "date": "2026-11-11",
-    "summary": "Performance improvements.",
+    "version": "0.1.24",
+    "build": 24,
+    "date": "2026-11-12",
+    "summary": "Longer sign-ins and reporting for kryphocron posts.",
     "sections": [
       {
         "kind": "fixes",
         "items": [
-          "Performance optimisations, especially for long scrolls on the web."
+          "Horizon no longer signs you out every week or two. After this update, the Android app asks you to sign in once more.",
+          "If a sign-in does end, signing back in is one tap.",
+          "Kryphocron posts can be reported from the ••• menu.",
+          "Creating a bsky.social account on the website now sends you to bsky.app, instead of stopping after the captcha."
         ]
       }
     ]

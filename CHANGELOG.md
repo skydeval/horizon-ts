@@ -83,6 +83,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Fixed
 
+- **Horizon no longer signs you out every week or two.** Sign-ins now last
+  much longer, and if one does end, signing back in is one tap. After the
+  next app update, the Android app asks you to sign in once more.
 - **Kryphocron posts can be reported** from the ••• menu, to the
   moderation services that can read them.
 - **Signing up for a bsky.social account on the web** no longer stops at a

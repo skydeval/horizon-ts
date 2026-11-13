@@ -86,6 +86,7 @@ describe('preview build packaging', () => {
     )
     expect(live.token_endpoint_auth_method).toBe('private_key_jwt')
     expect(live.jwks_uri).toBe('https://nearhorizon.app/oauth/jwks.json')
+    expect(live.client_name).toBe('Horizon')
     const other = previewClientMetadata(
       committedProduction,
       'https://horizon-preview2.pages.dev',
