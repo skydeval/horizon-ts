@@ -21,6 +21,7 @@ import {
 } from '@atproto/lex'
 
 import {logger} from '#/logger'
+import {answerKryphocronLabelers} from '#/horizon/kryphocron-labelers'
 import {nearhorizon} from '#/horizon/lexicons'
 import {devPrismFault, isRemovalFault} from '#/horizon/private/api/dev-fault'
 import {
@@ -512,6 +513,10 @@ export function startMembershipProbe(
     const {status, features, permissions, validForSecs} = res.body
     // The aster grant rides on every answer, whatever the status.
     if (!cancelled) answerAster(did, permissions, res.body.aster)
+    // A ready member's kryphocron labelers; absent on any other status
+    if (!cancelled && status === 'member') {
+      answerKryphocronLabelers(did, res.body.kryphocronLabelers)
+    }
     // The development fault switch (L-0): the probe answers `reindexing`.
     const fault = devPrismFault()
     const faulted = fault === 'reindexing' || fault === 'reindexing-bare'

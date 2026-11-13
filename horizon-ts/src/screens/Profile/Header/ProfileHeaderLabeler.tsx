@@ -32,12 +32,24 @@ import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_IOS} from '#/env'
+// HORIZON: no like or subscribe on a kryphocron labeler
+import {useIsKryphocronLabeler} from '#/horizon/kryphocron-labelers'
 import {type app} from '#/lexicons'
 import {ProfileHeaderDisplayName} from './DisplayName'
 import {EditProfileDialog} from './EditProfileDialog'
 import {ProfileHeaderHandle} from './Handle'
 import {ProfileHeaderMetrics} from './Metrics'
 import {ProfileHeaderShell} from './Shell'
+
+/**
+ * HORIZON: neither an app labeler nor a kryphocron labeler. A like would name
+ * a kryphocron labeler in public, and a subscription would put it in the
+ * labeler header.
+ */
+function useCanLikeOrSubscribe(did: string) {
+  const kryphocron = useIsKryphocronLabeler(did)
+  return !isAppLabeler(did) && !kryphocron
+}
 
 interface Props {
   profile: app.bsky.actor.defs.ProfileViewDetailed
@@ -64,6 +76,7 @@ let ProfileHeaderLabeler = ({
   const {currentAccount, hasSession} = useSession()
   const haptics = useHaptics()
   const isSelf = currentAccount?.did === profile.did
+  const canLike = useCanLikeOrSubscribe(profile.did)
 
   const moderation = useMemo(
     () => moderateProfile(profile, moderationOpts),
@@ -136,7 +149,7 @@ let ProfileHeaderLabeler = ({
                 />
               </View>
             ) : undefined}
-            {!isAppLabeler(profile.did) && (
+            {canLike && (
               <View style={[a.flex_row, a.gap_xs, a.align_center, a.pt_lg]}>
                 <Button
                   testID="toggleLikeBtn"
@@ -255,6 +268,7 @@ export function HeaderLabelerButtons({
   const cantSubscribePrompt = Prompt.usePromptControl()
 
   const isMe = currentAccount?.did === profile.did
+  const canSubscribe = useCanLikeOrSubscribe(profile.did)
 
   const onPressSubscribe = () =>
     requireAuth(async (): Promise<void> => {
@@ -305,7 +319,7 @@ export function HeaderLabelerButtons({
           </Button>
           <EditProfileDialog profile={profile} control={editProfileControl} />
         </>
-      ) : !isAppLabeler(profile.did) && !minimal ? (
+      ) : canSubscribe && !minimal ? (
         // hidden in the minimal header, because it's not shadowed so the two buttons
         // can get out of sync. if you want to reenable, you'll need to add shadowing
         // to the subscribed state -sfn

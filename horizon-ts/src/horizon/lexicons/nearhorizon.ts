@@ -284,6 +284,12 @@ export const getMembership = l.query(
     validForSecs: l.optional(l.integer()),
     /** The aster labels, sent only with `permissions.aster` (`routing/aster.ts`). */
     aster: l.optional(l.lexMap()),
+    /**
+     * A ready member's kryphocron labelers, by DID (`kryphocron-labelers/`).
+     * Plain strings here, checked where they are read, so an odd entry never
+     * fails the answer.
+     */
+    kryphocronLabelers: l.optional(l.array(l.string())),
   }),
   ['RateLimitExceeded'],
 )

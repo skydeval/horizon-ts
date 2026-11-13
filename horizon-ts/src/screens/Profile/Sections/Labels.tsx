@@ -20,6 +20,8 @@ import {Loader} from '#/components/Loader'
 import {LabelerLabelPreference} from '#/components/moderation/LabelPreference'
 import {Text} from '#/components/Typography'
 import {IS_IOS, IS_NATIVE} from '#/env'
+// HORIZON: no subscribe prompt on a kryphocron labeler
+import {useIsKryphocronLabeler} from '#/horizon/kryphocron-labelers'
 import {type app} from '#/lexicons'
 import {ErrorState} from '../ErrorState'
 import {type SectionRef} from './types'
@@ -167,6 +169,8 @@ export function LabelerListHeader({
 }) {
   const t = useTheme()
   const {_} = useLingui()
+  // HORIZON: a kryphocron labeler can't be subscribed to
+  const kryphocron = useIsKryphocronLabeler(labelerInfo?.creator.did ?? '')
 
   if (isLabelerLoading) {
     return (
@@ -221,7 +225,7 @@ export function LabelerListHeader({
             be active.
           </Trans>
         </Text>
-      ) : !isSubscribed ? (
+      ) : !isSubscribed && !kryphocron ? (
         <Text
           style={[
             a.pt_xl,

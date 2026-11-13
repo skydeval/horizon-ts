@@ -3,6 +3,11 @@ import {type DidString} from '@atproto/syntax'
 import {api} from '@bsky/sdk'
 
 import {IS_TEST_USER} from '#/lib/constants'
+// HORIZON: a kryphocron labeler never goes into the header
+import {
+  subscribeKryphocronLabelers,
+  withoutKryphocronLabelers,
+} from '#/horizon/kryphocron-labelers'
 import {com} from '#/lexicons'
 import {account as accountStorage} from '#/storage'
 import {
@@ -52,9 +57,36 @@ export function applyLabelersToClient(
   client: Client,
   subscribedDids: string[],
 ) {
+  // HORIZON: remembered, so a newly named kryphocron labeler leaves the header
+  rememberApplied(client, subscribedDids)
   client.setLabelers(
-    subscribedDids.filter(did => did !== api.moderation.did) as DidString[],
+    // HORIZON: a kryphocron labeler never goes into the header
+    withoutKryphocronLabelers(
+      subscribedDids.filter(did => did !== api.moderation.did),
+    ) as DidString[],
   )
+}
+
+/*
+ * HORIZON: the last subscriptions each recent client was given. When prism
+ * names a new kryphocron labeler, they are applied again without it. Only
+ * the latest few clients are kept (an account switch makes new ones).
+ */
+const applied = new Map<Client, string[]>()
+const APPLIED_KEPT = 4
+let watchingKryphocron = false
+
+function rememberApplied(client: Client, dids: string[]) {
+  applied.delete(client)
+  applied.set(client, dids)
+  if (applied.size > APPLIED_KEPT) {
+    applied.delete(applied.keys().next().value as Client)
+  }
+  if (watchingKryphocron) return
+  watchingKryphocron = true
+  subscribeKryphocronLabelers(() => {
+    for (const [each, dids] of [...applied]) applyLabelersToClient(each, dids)
+  })
 }
 
 export function configureModerationForGuest() {

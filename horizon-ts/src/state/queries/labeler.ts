@@ -11,6 +11,11 @@ import {
 } from '#/state/queries/preferences'
 import {createQueryKey} from '#/state/queries/util'
 import {useAppviewClient, usePdsClient} from '#/state/session'
+// HORIZON: never subscribe to a kryphocron labeler
+import {
+  isKryphocronLabeler,
+  KryphocronLabelerError,
+} from '#/horizon/kryphocron-labelers'
 import {app} from '#/lexicons'
 
 const labelerInfoQueryKeyRoot = 'labeler-info'
@@ -111,6 +116,11 @@ export function useLabelerSubscriptionMutation() {
         did: z.string(),
         subscribe: z.boolean(),
       }).parse({did, subscribe})
+
+      // HORIZON: a subscription would put a kryphocron labeler in the header
+      if (subscribe && isKryphocronLabeler(did)) {
+        throw new KryphocronLabelerError()
+      }
 
       /**
        * If a user has invalid/takendown/deactivated labelers, we need to
