@@ -43,21 +43,38 @@ jest.mock('#/alf', () => ({
 const mockRoot: {props?: {onChange: (value: string) => void; value: string}} =
   {}
 const mockItems = new Map<string, Record<string, unknown>>()
-jest.mock('#/components/forms/SegmentedControl', () => ({
-  Root: (props: {
-    onChange: (value: string) => void
-    value: string
-    children?: React.ReactNode
-  }) => {
-    mockRoot.props = props
-    return props.children ?? null
-  },
-  Item: (props: {testID: string; children?: React.ReactNode}) => {
-    mockItems.set(props.testID, props)
-    return props.children ?? null
-  },
-  ItemText: () => null,
-}))
+/*
+ * The mode drop-down: its radio group stands in for the old segmented
+ * control's root, so `onChange(value)` presses that value's item.
+ */
+jest.mock('#/components/Menu', () => {
+  const pass = (props: {children?: React.ReactNode}) => props.children ?? null
+  const itemId = (value: string) =>
+    value === 'public'
+      ? 'composerVisibilityPublic'
+      : 'composerVisibilityPrivate'
+  return {
+    Root: pass,
+    Outer: pass,
+    Trigger: () => null,
+    ItemText: () => null,
+    ItemIcon: () => null,
+    ItemRadio: () => null,
+    LabelText: () => null,
+    RadioGroup: (props: {value: string; children?: React.ReactNode}) => {
+      mockRoot.props = {
+        value: props.value,
+        onChange: (value: string) =>
+          (mockItems.get(itemId(value))?.onPress as () => void)(),
+      }
+      return props.children ?? null
+    },
+    RadioItem: (props: {testID: string; children?: React.ReactNode}) => {
+      mockItems.set(props.testID, props)
+      return props.children ?? null
+    },
+  }
+})
 jest.mock('#/components/Typography', () => {
   const {Text} = jest.requireActual<{
     Text: React.ComponentType<{testID?: string; children?: React.ReactNode}>

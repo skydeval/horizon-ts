@@ -68,6 +68,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Changed
 
+- **Public or Private is now a drop-down in the composer,** a small button
+  that shows the current choice and takes less room. It's filled in for
+  Private, so you can tell at a glance.
 - **Horizon's own look:** a sun-and-hills logo, the "Horizon" wordmark, new
   favicons and a meadow welcome screen replace Bluesky's butterfly and
   clouds. Icons throughout now come from Phosphor Icons.

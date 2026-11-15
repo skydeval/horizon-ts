@@ -2,11 +2,12 @@
  * The composer's audience pieces (4.2, as revised by skydeval's v2 live
  * check 1):
  *
- * - the **visibility control**: for members a Public | Private segmented
- *   control, centred in the footer row between the media tools and the
- *   language and character count, as in the old Horizon client (Comp 13); on
- *   a phone it takes its own centred row above the pills. A reply in a
- *   private thread or branch shows a locked label there instead;
+ * - the **visibility control**: for members a mode drop-down (Public,
+ *   Private; skydeval 2026-11-15, replacing the segmented control so more
+ *   modes take no more room), centred in the footer row between the media
+ *   tools and the language and character count, as in the old Horizon client
+ *   (Comp 13); on a phone it takes its own centred row above the pills. A
+ *   reply in a private thread or branch shows a locked label there instead;
  * - the **audience pill**: the shared drop-down (`AudienceMenu`), in the
  *   pills row above the footer where the stock interaction pill
  *   (`ThreadgateBtn`) sits (Comp 10), at every width. It sets who can reply
@@ -59,8 +60,11 @@ import {
   type ThreadDraft,
 } from '#/view/com/composer/state/composer'
 import {atoms as a, useBreakpoints, useTheme} from '#/alf'
-import * as SegmentedControl from '#/components/forms/SegmentedControl'
+import {Button, ButtonIcon, ButtonText} from '#/components/Button'
+import {TinyChevronBottom_Stroke2_Corner0_Rounded as TinyChevronIcon} from '#/components/icons/Chevron'
+import {Earth_Stroke2_Corner0_Rounded as EarthIcon} from '#/components/icons/Globe'
 import {Lock_Stroke2_Corner0_Rounded as LockIcon} from '#/components/icons/Lock'
+import * as Menu from '#/components/Menu'
 import {Text} from '#/components/Typography'
 import {usePostingAccount} from '#/horizon/posting-as/account'
 import {
@@ -323,13 +327,16 @@ export function ComposerAudienceSlot() {
 }
 
 /**
- * The Public | Private segmented control, or a locked reply's label. On
- * posting route `none` the Private segment stays focusable but choosing it
- * only shows the note, every time.
+ * The post's mode, a drop-down (skydeval, 2026-11-15: more modes must not
+ * take more room in the composer), or a locked reply's label. Modelled on the
+ * old client's mode drop-down: a small pill with the mode's name, outlined
+ * while Public and filled for any other mode, so a non-public post is plain
+ * at a glance. On posting route `none` the Private item stays listed and
+ * focusable, but choosing it only shows the note, every time.
  */
 function VisibilityControl() {
   const {t: l} = useLingui()
-  const {context, compose, showsSegments, locked, inert, held} =
+  const {context, compose, showsSegments, locked, inert, held, routes, handle} =
     useControlState()
   // The note never outlives the control (a remount, the composer closing).
   useEffect(() => () => setInertNoteShown(false), [])
@@ -344,40 +351,77 @@ function VisibilityControl() {
     )
   }
   if (!showsSegments) return null
+
+  const isPrivate = compose.visibility === 'private'
+  const modeName = isPrivate ? l`Private` : l`Public`
+  const label = l`Post visibility: ${modeName}`
+  const choose = (visibility: 'public' | 'private') => {
+    // Held until the posting account's reset has applied (P5R5-N1).
+    if (held) return
+    if (inert && visibility === 'private') {
+      setInertNoteShown(true)
+      return
+    }
+    chooseComposeVisibility({visibility})
+  }
+
   return (
-    <SegmentedControl.Root
-      type="radio"
-      size="small"
-      label={l`Post visibility`}
-      value={compose.visibility}
-      style={[{maxWidth: 160}]}
-      onChange={visibility => {
-        // Held until the posting account's reset has applied (P5R5-N1).
-        if (held) return
-        if (inert && visibility === 'private') {
-          setInertNoteShown(true)
-          return
-        }
-        chooseComposeVisibility({visibility})
-      }}>
-      <SegmentedControl.Item
-        testID="composerVisibilityPublic"
-        value="public"
-        disabled={held}
-        label={l`Public`}>
-        <SegmentedControl.ItemText>{l`Public`}</SegmentedControl.ItemText>
-      </SegmentedControl.Item>
-      <SegmentedControl.Item
-        testID="composerVisibilityPrivate"
-        value="private"
-        disabled={held}
-        label={l`Private`}
-        accessibilityHint={inert ? privateRouteHint() : undefined}
-        onFocus={inert ? () => setInertNoteShown(true) : undefined}
-        onBlur={inert ? () => setInertNoteShown(false) : undefined}>
-        <SegmentedControl.ItemText>{l`Private`}</SegmentedControl.ItemText>
-      </SegmentedControl.Item>
-    </SegmentedControl.Root>
+    <Menu.Root>
+      <Menu.Trigger
+        label={label}
+        hint={l`Opens a menu to choose who can see this post`}>
+        {({props}) => (
+          <Button
+            {...props}
+            testID="composerVisibilityButton"
+            label={label}
+            size="small"
+            color={isPrivate ? 'primary' : 'secondary'}
+            style={[a.flex_shrink]}>
+            <ButtonIcon icon={isPrivate ? LockIcon : EarthIcon} />
+            <ButtonText numberOfLines={1} maxFontSizeMultiplier={2}>
+              {modeName}
+            </ButtonText>
+            <ButtonIcon icon={TinyChevronIcon} size="2xs" />
+          </Button>
+        )}
+      </Menu.Trigger>
+      <Menu.Outer style={[{minWidth: 200}]}>
+        <Menu.RadioGroup label={l`Post visibility`} value={compose.visibility}>
+          <Menu.RadioItem
+            testID="composerVisibilityPublic"
+            value="public"
+            disabled={held}
+            label={l`Public`}
+            onPress={() => choose('public')}>
+            <Menu.ItemIcon icon={EarthIcon} />
+            <Menu.ItemText>{l`Public`}</Menu.ItemText>
+            <Menu.ItemRadio selected={!isPrivate} />
+          </Menu.RadioItem>
+          <Menu.RadioItem
+            testID="composerVisibilityPrivate"
+            value="private"
+            disabled={held}
+            label={l`Private`}
+            accessibilityHint={inert ? privateRouteHint() : undefined}
+            onFocus={inert ? () => setInertNoteShown(true) : undefined}
+            onBlur={inert ? () => setInertNoteShown(false) : undefined}
+            onPress={() => choose('private')}>
+            <Menu.ItemIcon icon={LockIcon} />
+            <Menu.ItemText>{l`Private`}</Menu.ItemText>
+            <Menu.ItemRadio selected={isPrivate} />
+          </Menu.RadioItem>
+        </Menu.RadioGroup>
+        {/*
+         * Why Private can't be chosen, in the menu itself: native menu items
+         * drop their hint, so this is what a screen reader reaches there.
+         * Outside the group, since a native group renders only its items.
+         */}
+        {inert ? (
+          <Menu.LabelText>{privateRouteNote(routes, handle)}</Menu.LabelText>
+        ) : null}
+      </Menu.Outer>
+    </Menu.Root>
   )
 }
 
