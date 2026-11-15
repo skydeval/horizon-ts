@@ -42,6 +42,10 @@ jest.mock('#/components/Menu', () => ({
   ItemIcon: () => null,
   ItemRadio: () => null,
   Divider: () => null,
+  // The visibility drop-down's choices
+  RadioGroup: (props: {children?: React.ReactNode}) => props.children ?? null,
+  RadioItem: (props: {children?: React.ReactNode}) => props.children ?? null,
+  LabelText: () => null,
 }))
 jest.mock('#/components/Typography', () => ({
   Text: () => null,
