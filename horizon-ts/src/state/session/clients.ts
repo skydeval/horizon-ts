@@ -7,6 +7,8 @@ import {
   PUBLIC_BSKY_SERVICE,
 } from '#/lib/constants'
 import {createLexClient} from '#/lib/lexClient'
+// HORIZON: a member's labelers' labels are added to AppView answers
+import {withMemberLabels} from '#/horizon/member-labelers/labels'
 // HORIZON: the public AppView is switchable (Bluesky's by default)
 import {
   getPublicAppviewService,
@@ -34,7 +36,8 @@ import {networkAwareFetch} from './network'
  * fetch, which is `networkAwareFetch` wrapped in the disposal kill switch.
  */
 export function buildAppviewClient(agent: Agent): Client {
-  return createLexClient(agent, {
+  // HORIZON: a member's labelers' labels are added to AppView answers
+  return createLexClient(withMemberLabels(agent), {
     // HORIZON: signed-in AppView reads are proxied to the chosen public AppView
     service: getPublicAppviewService(BLUESKY_PROXY_HEADER.get()),
     // HORIZON: no per-install analytics ids on any account's requests (SQ-10)

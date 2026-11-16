@@ -19,6 +19,8 @@ import {AppealForm} from '#/components/moderation/AppealForm'
 import {type AppModerationCause} from '#/components/Pills'
 import {Text} from '#/components/Typography'
 import {IS_NATIVE} from '#/env'
+// HORIZON: member labelers have no profile and take no appeals
+import {isMemberLabelerId} from '#/horizon/member-labelers/ids'
 
 export {useDialogControl as useModerationDetailsDialogControl} from '#/components/Dialog'
 
@@ -60,6 +62,8 @@ function ModerationDetailsDialogInner({
   const canAppeal =
     modcause?.type === 'label' &&
     !!currentAccount &&
+    // HORIZON: a member labeler takes no appeals
+    !isMemberLabelerId(modcause.label.src) &&
     modcause.label.src !== currentAccount.did &&
     (modcause.label.uri === currentAccount.did ||
       modcause.label.uri.startsWith(`at://${currentAccount.did}/`))
@@ -269,18 +273,23 @@ function ModerationDetailsDialogInner({
                     t.atoms.text_contrast_medium,
                   ]}
                   numberOfLines={1}>
-                  <Trans>
-                    Source:{' '}
-                    <InlineLinkText
-                      label={sourceName}
-                      to={makeProfileLink({
-                        did: modcause.label.src,
-                        handle: '',
-                      })}
-                      onPress={() => control.close()}>
-                      {sourceName}
-                    </InlineLinkText>
-                  </Trans>
+                  {/* HORIZON: a member labeler has no profile to link to */}
+                  {isMemberLabelerId(modcause.label.src) ? (
+                    <Trans>Source: {sourceName}</Trans>
+                  ) : (
+                    <Trans>
+                      Source:{' '}
+                      <InlineLinkText
+                        label={sourceName}
+                        to={makeProfileLink({
+                          did: modcause.label.src,
+                          handle: '',
+                        })}
+                        onPress={() => control.close()}>
+                        {sourceName}
+                      </InlineLinkText>
+                    </Trans>
+                  )}
                 </Text>
                 {modcause.label.exp && (
                   <View>

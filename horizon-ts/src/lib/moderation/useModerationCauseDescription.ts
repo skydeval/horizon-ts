@@ -13,6 +13,8 @@ import {type Props as SVGIconProps} from '#/components/icons/common'
 import {EyeSlash_Stroke2_Corner0_Rounded as EyeSlash} from '#/components/icons/EyeSlash'
 import {Warning_Stroke2_Corner0_Rounded as Warning} from '#/components/icons/Warning'
 import {type AppModerationCause} from '#/components/Pills'
+// HORIZON: a member labeler has a name but no account
+import {isMemberLabelerId} from '#/horizon/member-labelers/ids'
 import {useGlobalLabelStrings} from './useGlobalLabelStrings'
 import {getDefinition, getLabelStrings} from './useLabelInfo'
 
@@ -130,14 +132,21 @@ export function useModerationCauseDescription(
       const def = cause.labelDef || getDefinition(labelDefs, cause.label)
       const strings = getLabelStrings(i18n.locale, globalLabelStrings, def)
       const labeler = labelers.find(l => l.creator.did === cause.label.src)
+      // HORIZON: a member labeler has a name but no account
+      const memberLabeler = isMemberLabelerId(cause.label.src)
       let source = labeler
-        ? sanitizeHandle(labeler.creator.handle, '@')
+        ? memberLabeler
+          ? labeler.creator.displayName
+          : sanitizeHandle(labeler.creator.handle, '@')
         : undefined
       let sourceDisplayName = labeler?.creator.displayName
       if (!source) {
         if (cause.label.src === api.moderation.did) {
           source = 'moderation.bsky.app'
           sourceDisplayName = 'Bluesky Moderation Service'
+        } else if (memberLabeler) {
+          // HORIZON: never show a member labeler's id
+          source = _(msg`a labeler`)
         } else {
           source = _(msg`an unknown labeler`)
         }

@@ -38,6 +38,12 @@ import {Loader} from '#/components/Loader'
 import {Text} from '#/components/Typography'
 import {useAnalytics} from '#/analytics'
 import {IS_NATIVE} from '#/env'
+import {DirectReportError} from '#/horizon/member-labelers/reports'
+// HORIZON: a member's labelers take reports too
+import {
+  isMemberLabelerId,
+  useMemberLabelers,
+} from '#/horizon/member-labelers/store'
 import {
   canReceiveKryphocronReport,
   isKryphocronReportSubject,
@@ -165,11 +171,36 @@ function Inner(
   const {t: l} = useLingui()
   const ref = useRef<React.ComponentRef<typeof ScrollView>>(null)
   const {
-    data: allLabelers,
+    data: subscribedLabelers,
     isLoading: isLabelerLoading,
     error: labelersLoadError,
     refetch: refetchLabelers,
   } = useMyLabelersQuery({excludeNonConfigurableLabelers: true})
+  // HORIZON: a member's labelers take reports too (not on kryphocron or chat)
+  const memberLabelers = useMemberLabelers()
+  const takesMemberReports =
+    props.subject.type !== 'convo' &&
+    props.subject.type !== 'convoMessage' &&
+    !(
+      'nsid' in props.subject && isKryphocronReportSubject(props.subject.nsid)
+    )
+  const allLabelers = subscribedLabelers
+    ? takesMemberReports
+      ? [
+          ...subscribedLabelers,
+          ...memberLabelers
+            .filter(
+              labeler =>
+                labeler.kind === 'moderation' &&
+                !labeler.retired &&
+                !subscribedLabelers.some(
+                  view => view.creator.did === labeler.id,
+                ),
+            )
+            .map(labeler => labeler.view),
+        ]
+      : subscribedLabelers
+    : undefined
   const isLoading = useDelayedLoading(500, isLabelerLoading)
   const copy = useCopyForSubject(props.subject)
   const {categories, getCategory} = useReportOptions()
@@ -314,7 +345,10 @@ function Inner(
       const tags = {
         ...classification.tags,
         report_subject_type: props.subject.type,
-        report_labeler: state.selectedLabeler?.creator.did,
+        // HORIZON: a member labeler's id is never logged
+        report_labeler: isMemberLabelerId(state.selectedLabeler?.creator.did)
+          ? 'member-labeler'
+          : state.selectedLabeler?.creator.did,
         report_reason: state.selectedOption?.reason,
       }
 
@@ -337,6 +371,16 @@ function Inner(
         error = l`This moderation service does not support that report reason. Please choose a different reason or moderation service.`
       } else if (classification.kind === 'service-unavailable') {
         error = l`The moderation service is temporarily unavailable. Please try again later.`
+      }
+      // HORIZON: a member labeler's answers
+      if (e instanceof DirectReportError) {
+        if (e.notAvailable) {
+          error = l`This moderation service isn’t taking your reports. Please choose a different one.`
+        } else if (e.retryable) {
+          error = l`The moderation service is temporarily unavailable. Please try again later.`
+        } else if (e.error === 'InvalidReasonType') {
+          error = l`This moderation service does not support that report reason. Please choose a different reason or moderation service.`
+        }
       }
 
       dispatch({
@@ -1111,10 +1155,17 @@ function LabelerCard({
             <Text style={[a.text_md, a.font_semi_bold, a.leading_snug]}>
               {title}
             </Text>
-            <Text
-              style={[a.text_sm, a.leading_snug, t.atoms.text_contrast_medium]}>
-              <Trans>By {sanitizeHandle(labeler.creator.handle, '@')}</Trans>
-            </Text>
+            {/* HORIZON: a member labeler has no account to name */}
+            {!isMemberLabelerId(labeler.creator.did) && (
+              <Text
+                style={[
+                  a.text_sm,
+                  a.leading_snug,
+                  t.atoms.text_contrast_medium,
+                ]}>
+                <Trans>By {sanitizeHandle(labeler.creator.handle, '@')}</Trans>
+              </Text>
+            )}
           </View>
         </View>
       )}

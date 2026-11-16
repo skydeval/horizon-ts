@@ -1,9 +1,13 @@
 import {
   type Agent,
   type AgentOptions,
+  buildAgent,
   Client,
   type ClientOptions,
 } from '@atproto/lex'
+
+// HORIZON: no request ever names a member labeler
+import {withMemberLabelerGuard} from '#/horizon/member-labelers/guard'
 
 type CreateLexClientOptions = ClientOptions & {
   /**
@@ -33,7 +37,8 @@ export function createLexClient(
 ): Client {
   // HORIZON: no analytics ids on any request, whatever the caller asks
   const {includeDeviceSessionHeaders: _ignored, ...clientOptions} = options
-  return new Client(agent, {
+  // HORIZON: no request ever names a member labeler
+  return new Client(withMemberLabelerGuard(buildAgent(agent)), {
     strictResponseProcessing: false,
     ...clientOptions,
   })

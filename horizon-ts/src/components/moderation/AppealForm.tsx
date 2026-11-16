@@ -22,6 +22,8 @@ import {Loader} from '#/components/Loader'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
 import {IS_ANDROID} from '#/env'
+// HORIZON: member labelers take no appeals
+import {isMemberLabelerId} from '#/horizon/member-labelers/ids'
 import {type com, tools} from '#/lexicons'
 
 export function AppealForm({
@@ -47,6 +49,10 @@ export function AppealForm({
 
   const {mutate, isPending} = useMutation({
     mutationFn: async () => {
+      // HORIZON: a member labeler's id never goes to a server as a service
+      if (isMemberLabelerId(label.src)) {
+        throw new Error(_(msg`This labeler doesn’t take appeals.`))
+      }
       await client.call(
         tools.ozone.inbox.appealActionedSubject,
         {

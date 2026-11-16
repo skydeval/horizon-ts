@@ -127,6 +127,11 @@ export const PRISM_FEATURES = [
    * as it stands.
    */
   'account.systemAccounts',
+  /*
+   * Member labelers (`member-labelers/`): prism's labeler list, labels and
+   * labeler images for members. Listed only for members.
+   */
+  'umbrae.read',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

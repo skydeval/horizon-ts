@@ -1,6 +1,10 @@
 import {createContext, useContext, useMemo} from 'react'
 import {type InterpretedLabelValueDefinition} from '@bsky/sdk/moderation'
 
+import {useSession} from '#/state/session'
+// HORIZON: member labelers' names and definitions for the label UI
+import {withMemberLabelDefinitions} from '#/horizon/member-labelers/moderation'
+import {useMemberLabelersVersion} from '#/horizon/member-labelers/store'
 import {
   communityLabelInfo,
   useCommunityLabelerVersion,
@@ -26,19 +30,29 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
    * labels; the reader's own labelers win (refract client design 6)
    */
   const communityLabeler = useCommunityLabelerVersion()
+  // HORIZON: member labelers' names and definitions for the label UI
+  const memberLabelers = useMemberLabelersVersion()
+  const {currentAccount} = useSession()
+  const did = currentAccount?.did
   const state = useMemo(() => {
     void communityLabeler
+    void memberLabelers
     const community = communityLabelInfo()
-    if (community.labelers.length === 0) return stockState
-    const own = new Set(stockState.labelers.map(view => view.creator.did))
-    return {
-      labelDefs: {...community.labelDefs, ...stockState.labelDefs},
-      labelers: [
-        ...stockState.labelers,
-        ...community.labelers.filter(view => !own.has(view.creator.did)),
-      ],
+    if (community.labelers.length === 0) {
+      return withMemberLabelDefinitions(stockState, did)
     }
-  }, [stockState, communityLabeler])
+    const own = new Set(stockState.labelers.map(view => view.creator.did))
+    return withMemberLabelDefinitions(
+      {
+        labelDefs: {...community.labelDefs, ...stockState.labelDefs},
+        labelers: [
+          ...stockState.labelers,
+          ...community.labelers.filter(view => !own.has(view.creator.did)),
+        ],
+      },
+      did,
+    )
+  }, [stockState, communityLabeler, memberLabelers, did])
   return <stateContext.Provider value={state}>{children}</stateContext.Provider>
 }
 

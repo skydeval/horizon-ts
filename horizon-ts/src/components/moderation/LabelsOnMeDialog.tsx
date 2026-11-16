@@ -16,6 +16,8 @@ import * as Dialog from '#/components/Dialog'
 import {InlineLinkText} from '#/components/Link'
 import {AppealForm} from '#/components/moderation/AppealForm'
 import {Text} from '#/components/Typography'
+// HORIZON: member labelers have no profile and take no appeals
+import {isMemberLabelerId} from '#/horizon/member-labelers/ids'
 import {type com} from '#/lexicons'
 import {Divider} from '../Divider'
 
@@ -131,9 +133,13 @@ function Label({
   const t = useTheme()
   const {_} = useLingui()
   const {labeler, strings} = useLabelInfo(label)
-  const sourceName = labeler
-    ? sanitizeHandle(labeler.creator.handle, '@')
-    : label.src
+  // HORIZON: a member labeler is named, never linked, and takes no appeals
+  const memberLabeler = isMemberLabelerId(label.src)
+  const sourceName = memberLabeler
+    ? labeler?.creator.displayName || _(msg`a labeler`)
+    : labeler
+      ? sanitizeHandle(labeler.creator.handle, '@')
+      : label.src
   const timeDiff = useGetTimeAgo({future: true})
   return (
     <View
@@ -160,7 +166,7 @@ function Label({
             </Admonition>
           )}
         </View>
-        {!isSelfLabel && (
+        {!isSelfLabel && !memberLabeler && (
           <View>
             <Button
               variant="solid"
@@ -194,17 +200,21 @@ function Label({
             <Text
               style={[a.flex_1, a.leading_snug, t.atoms.text_contrast_medium]}
               numberOfLines={1}>
-              <Trans>
-                Source:{' '}
-                <InlineLinkText
-                  label={sourceName}
-                  to={makeProfileLink(
-                    labeler ? labeler.creator : {did: label.src, handle: ''},
-                  )}
-                  onPress={() => control.close()}>
-                  {sourceName}
-                </InlineLinkText>
-              </Trans>
+              {memberLabeler ? (
+                <Trans>Source: {sourceName}</Trans>
+              ) : (
+                <Trans>
+                  Source:{' '}
+                  <InlineLinkText
+                    label={sourceName}
+                    to={makeProfileLink(
+                      labeler ? labeler.creator : {did: label.src, handle: ''},
+                    )}
+                    onPress={() => control.close()}>
+                    {sourceName}
+                  </InlineLinkText>
+                </Trans>
+              )}
             </Text>
             {label.exp && (
               <View>

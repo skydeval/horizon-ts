@@ -6,6 +6,13 @@ import {useMutation} from '@tanstack/react-query'
 
 import {logger} from '#/logger'
 import {useAppviewClient} from '#/state/session'
+// HORIZON: a member labeler's reports go straight to cairn
+import {isMemberLabelerId} from '#/horizon/member-labelers/ids'
+import {
+  createDirectReport,
+  type DirectReportSubject,
+} from '#/horizon/member-labelers/reports'
+import {getCurrentPdsClient} from '#/horizon/routing/current-clients'
 import {com} from '#/lexicons'
 import {NEW_TO_OLD_REASONS_MAP, REPORT_MOD_TOOL_NAME} from './const'
 import {type ReportState} from './state'
@@ -133,6 +140,12 @@ export function useSubmitReportMutation() {
         }
       }
 
+      // HORIZON: a member labeler's reports go straight to cairn
+      if (isMemberLabelerId(labeler.creator.did)) {
+        await sendToMemberLabeler(labeler.creator.did, report)
+        return
+      }
+
       if (__DEV__) {
         logger.info('Submitting report (dry run)', {
           labeler: {
@@ -158,6 +171,40 @@ export function useSubmitReportMutation() {
         })
       }
     },
+  })
+}
+
+/**
+ * HORIZON: send `report` to a member labeler, straight to cairn with the
+ * member's own token. Only account and record subjects reach here (the dialog
+ * offers member labelers nothing else).
+ */
+async function sendToMemberLabeler(labeler: string, report: ReportInput) {
+  const pdsClient = getCurrentPdsClient()
+  if (!pdsClient) throw new Error('Not signed in')
+  const subject = report.subject as {
+    $type?: string
+    did?: string
+    uri?: string
+    cid?: string
+  }
+  let directSubject: DirectReportSubject
+  if (subject.$type === 'com.atproto.admin.defs#repoRef' && subject.did) {
+    directSubject = {$type: subject.$type, did: subject.did}
+  } else if (
+    subject.$type === 'com.atproto.repo.strongRef' &&
+    subject.uri &&
+    subject.cid
+  ) {
+    directSubject = {$type: subject.$type, uri: subject.uri, cid: subject.cid}
+  } else {
+    throw new Error('This labeler can’t take this report')
+  }
+  await createDirectReport(pdsClient, {
+    labeler,
+    subject: directSubject,
+    reasonType: report.reasonType,
+    ...(report.reason ? {reason: report.reason} : {}),
   })
 }
 

@@ -30,6 +30,7 @@ import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
 import {BskyModerationSync} from '#/horizon/bsky-moderation'
 import {CairnLabelerSync} from '#/horizon/cairn/CairnLabelerSync'
 import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
+import {MemberLabelersSync} from '#/horizon/member-labelers/MemberLabelersSync'
 import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {LeftoverAudienceCleanup} from '#/horizon/private/audiences/LeftoverAudienceCleanup'
@@ -125,6 +126,7 @@ export function HorizonHost() {
       <OtherAppSpoilersSync />
       <BskyModerationSync />
       <CairnLabelerSync />
+      <MemberLabelersSync />
       <SystemAccountsHost />
       <InPlaceSignInWindow />
       <PasswordGateDialog />
