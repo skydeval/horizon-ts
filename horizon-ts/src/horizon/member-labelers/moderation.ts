@@ -3,6 +3,10 @@
  * for everything (with its own defaults, as a labeler nobody configured),
  * and to the label definitions the label UI reads. They are never added to
  * the account's subscriptions or to any request header.
+ *
+ * Both take the store's snapshot as an argument rather than reading the
+ * store, so the providers that call them in render recompute when it
+ * changes (React Compiler caches plain store reads).
  */
 
 import {type DidString} from '@atproto/syntax'
@@ -12,17 +16,15 @@ import {
 } from '@bsky/sdk/moderation'
 
 import {type app} from '#/lexicons'
-import {getMemberLabelers, memberLabelersAccount} from './store'
+import {type MemberLabelersSnapshot} from './store'
 
 /** `opts` with the account's member labelers added, or `opts` itself. */
 export function withMemberLabelers(
   opts: ModerationOpts,
   did: string | undefined,
+  {account, labelers}: MemberLabelersSnapshot,
 ): ModerationOpts {
-  const labelers = getMemberLabelers()
-  if (!did || did !== memberLabelersAccount() || labelers.length === 0) {
-    return opts
-  }
+  if (!did || did !== account || labelers.length === 0) return opts
   const have = new Set(opts.prefs.labelers.map(entry => entry.did))
   const added = labelers.filter(labeler => !have.has(labeler.id as DidString))
   if (added.length === 0) return opts
@@ -47,11 +49,12 @@ export function withMemberLabelDefinitions<
     labelDefs: Record<string, InterpretedLabelValueDefinition[]>
     labelers: app.bsky.labeler.defs.LabelerViewDetailed[]
   },
->(state: T, did: string | undefined): T {
-  const labelers = getMemberLabelers()
-  if (!did || did !== memberLabelersAccount() || labelers.length === 0) {
-    return state
-  }
+>(
+  state: T,
+  did: string | undefined,
+  {account, labelers}: MemberLabelersSnapshot,
+): T {
+  if (!did || did !== account || labelers.length === 0) return state
   const labelDefs = {...state.labelDefs}
   for (const labeler of labelers) labelDefs[labeler.id] = labeler.defs
   return {

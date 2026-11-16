@@ -181,9 +181,7 @@ function Inner(
   const takesMemberReports =
     props.subject.type !== 'convo' &&
     props.subject.type !== 'convoMessage' &&
-    !(
-      'nsid' in props.subject && isKryphocronReportSubject(props.subject.nsid)
-    )
+    !('nsid' in props.subject && isKryphocronReportSubject(props.subject.nsid))
   const allLabelers = subscribedLabelers
     ? takesMemberReports
       ? [

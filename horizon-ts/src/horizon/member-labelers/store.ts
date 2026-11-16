@@ -68,9 +68,28 @@ const images = new Map<string, string>()
 const listeners = new Set<() => void>()
 let version = 0
 
+/**
+ * The account and its labelers as one immutable value, replaced on every
+ * change. Render code must read this (through {@link useMemberLabelersSnapshot})
+ * and pass it on, never read the store: React Compiler caches plain store
+ * reads in render.
+ */
+export type MemberLabelersSnapshot = {
+  account: string | undefined
+  labelers: readonly MemberLabeler[]
+}
+
+let snapshot: MemberLabelersSnapshot = {account: undefined, labelers: []}
+
 function notify() {
   version++
+  snapshot = {account, labelers}
   listeners.forEach(listener => listener())
+}
+
+/** The current snapshot. */
+export function getMemberLabelersSnapshot(): MemberLabelersSnapshot {
+  return snapshot
 }
 
 /** The current account's labelers. */
@@ -265,11 +284,7 @@ async function fetchAvatars(
     const key = `${raw.did} ${cid}`
     if (images.has(key)) continue
     try {
-      const {bytes, type} = await fetchers.fetchImage(
-        pdsClient,
-        raw.did,
-        cid,
-      )
+      const {bytes, type} = await fetchers.fetchImage(pdsClient, raw.did, cid)
       images.set(key, toDataUri(bytes, type))
       fetched = true
     } catch {
@@ -313,10 +328,15 @@ export function useMemberLabelersVersion(): number {
 
 /** The current list, re-rendering on change. */
 export function useMemberLabelers(): readonly MemberLabeler[] {
+  return useMemberLabelersSnapshot().labelers
+}
+
+/** The current snapshot, re-rendering on change. */
+export function useMemberLabelersSnapshot(): MemberLabelersSnapshot {
   return useSyncExternalStore(
     subscribeMemberLabelers,
-    getMemberLabelers,
-    getMemberLabelers,
+    getMemberLabelersSnapshot,
+    getMemberLabelersSnapshot,
   )
 }
 

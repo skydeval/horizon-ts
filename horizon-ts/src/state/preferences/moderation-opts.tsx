@@ -7,7 +7,7 @@ import {DEFAULT_LOGGED_OUT_LABEL_PREFERENCES} from '#/state/queries/preferences/
 import {useSession} from '#/state/session'
 // HORIZON: member labelers apply to everything a member reads
 import {withMemberLabelers} from '#/horizon/member-labelers/moderation'
-import {useMemberLabelersVersion} from '#/horizon/member-labelers/store'
+import {useMemberLabelersSnapshot} from '#/horizon/member-labelers/store'
 // HORIZON: C-8, a restored view's community labeler for members (refract client design 6)
 import {useCommunityLabelerVersion} from '#/horizon/refract/labeler'
 import {usePreferencesQuery} from '../queries/preferences'
@@ -49,15 +49,14 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
    * `restoredModerationOpts` (refract client design 6)
    */
   const communityLabeler = useCommunityLabelerVersion()
-  // HORIZON: a new object whenever the member labelers change
-  const memberLabelers = useMemberLabelersVersion()
+  // HORIZON: the member labelers, as a snapshot (never a store read in render)
+  const memberLabelers = useMemberLabelersSnapshot()
 
   const userDid = currentAccount?.did
   const moderationPrefs = prefs.data?.moderationPrefs
   const value = useMemo<ModerationOpts | undefined>(() => {
     // HORIZON: C-8: a new object for each community labeler version
     void communityLabeler
-    void memberLabelers
     if (!moderationPrefs) {
       return undefined
     }
@@ -81,7 +80,7 @@ export function Provider({children}: React.PropsWithChildren<{}>) {
       labelDefs,
     }
     // HORIZON: member labelers apply to everything a member reads
-    return withMemberLabelers(stock, userDid)
+    return withMemberLabelers(stock, userDid, memberLabelers)
   }, [
     userDid,
     labelDefs,

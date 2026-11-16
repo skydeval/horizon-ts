@@ -5,10 +5,7 @@ import {
   getCurrentClients,
   subscribeCurrentClients,
 } from '#/horizon/routing/current-clients'
-import {
-  servesFeature,
-  subscribePrismFeatures,
-} from '#/horizon/routing/features'
+import {servesFeature, subscribePrismFeatures} from '#/horizon/routing/features'
 import {
   isPrivateMember,
   subscribeMembership,

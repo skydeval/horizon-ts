@@ -40,12 +40,17 @@ jest.mock('../api', () => ({
   LABELS_BATCH: 100,
   fetchMemberLabelers: () => Promise.resolve(mockLabelers),
   fetchMemberLabelerImage: () =>
-    Promise.resolve({bytes: new Uint8Array([1, 2, 3]).buffer, type: 'image/png'}),
+    Promise.resolve({
+      bytes: new Uint8Array([1, 2, 3]).buffer,
+      type: 'image/png',
+    }),
   fetchMemberLabels: (_client: unknown, subjects: string[]) => {
     mockLabelCalls.push(subjects)
     const answer = mockLabels.filter(label => subjects.includes(label.uri))
     return mockLabelsDelayMs
-      ? new Promise(resolve => setTimeout(() => resolve(answer), mockLabelsDelayMs))
+      ? new Promise(resolve =>
+          setTimeout(() => resolve(answer), mockLabelsDelayMs),
+        )
       : Promise.resolve(answer)
   },
 }))
@@ -90,6 +95,7 @@ import {
 } from '../reports'
 import {
   getMemberLabeler,
+  getMemberLabelersSnapshot,
   hasMemberLabelers,
   loadMemberLabelers,
   refreshMemberLabelers,
@@ -221,7 +227,12 @@ describe('findSubjects', () => {
     }
     const found = findSubjects({
       feed: [
-        {post: postView(POST, {$type: 'app.bsky.embed.record#view', record: quoted})},
+        {
+          post: postView(POST, {
+            $type: 'app.bsky.embed.record#view',
+            record: quoted,
+          }),
+        },
       ],
     })
     expect([...found.keys()].sort()).toEqual([OTHER, POST, QUOTED].sort())
@@ -245,11 +256,14 @@ describe('labels on AppView answers', () => {
     ])
     const decision = moderatePost(
       body.thread.post as never,
-      withMemberLabelers(baseOpts, VIEWER),
+      withMemberLabelers(baseOpts, VIEWER, getMemberLabelersSnapshot()),
     )
     expect(decision.ui('contentList').filter).toBe(true)
     // Without the labeler in the options the same label does nothing.
-    expect(moderatePost(body.thread.post as never, baseOpts).ui('contentList').filter).toBe(false)
+    expect(
+      moderatePost(body.thread.post as never, baseOpts).ui('contentList')
+        .filter,
+    ).toBe(false)
   })
 
   it('labels accounts by DID, and asks only once a minute per subject', async () => {
@@ -328,10 +342,11 @@ describe('labelers', () => {
 
   it('member labelers join the moderation options of their own account only', async () => {
     await signInWithLabelers([rawLabeler(LABELER, 'moderation')])
-    const opts = withMemberLabelers(baseOpts, VIEWER)
+    const snapshot = getMemberLabelersSnapshot()
+    const opts = withMemberLabelers(baseOpts, VIEWER, snapshot)
     expect(opts.prefs.labelers.map(entry => entry.did)).toEqual([LABELER])
     expect(opts.labelDefs?.[LABELER]).toHaveLength(1)
-    expect(withMemberLabelers(baseOpts, OTHER)).toBe(baseOpts)
+    expect(withMemberLabelers(baseOpts, OTHER, snapshot)).toBe(baseOpts)
   })
 })
 
@@ -361,7 +376,9 @@ describe('guard', () => {
   })
 
   it('lets ordinary requests through as they are', () => {
-    const init = {headers: {'atproto-proxy': 'did:web:api.bsky.app#bsky_appview'}}
+    const init = {
+      headers: {'atproto-proxy': 'did:web:api.bsky.app#bsky_appview'},
+    }
     expect(
       guardRequest(`/xrpc/app.bsky.actor.getProfile?actor=${OTHER}`, init),
     ).toBe(init)

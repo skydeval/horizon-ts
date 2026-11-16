@@ -158,9 +158,7 @@ export async function fetchMemberLabels(
     pdsClient,
     METHODS.getLabels,
     {method: 'POST', body: {subjects}},
-    signal
-      ? (input, init) => fetchImpl(input, {...init, signal})
-      : fetchImpl,
+    signal ? (input, init) => fetchImpl(input, {...init, signal}) : fetchImpl,
   )
   if (!response.ok) throw await errorOf(response)
   const body = (await response.json()) as {labels?: unknown}
