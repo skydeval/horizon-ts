@@ -432,7 +432,7 @@ describe('Moderate dialog, member labelers', () => {
     })
   })
 
-  it('removes an audience label within its audience', async () => {
+  it('removes an audience label for everyone, sending no audience', async () => {
     mockDirectSubject = {
       labels: [{val: 'spoiler', cts: 'x', audience: 'g1'}],
       openReportCount: 0,
@@ -444,9 +444,9 @@ describe('Moderate dialog, member labelers', () => {
     fireEvent.press(remove[0])
     await waitFor(() => expect(mockSent).toHaveLength(1))
     expect(mockSent[0]).toMatchObject({
-      audience: 'g1',
       event: {negateLabelVals: ['spoiler'], createLabelVals: []},
     })
+    expect(mockSent[0].audience).toBeUndefined()
   })
 
   it('a labels-only labeler takes a label and nothing else', async () => {

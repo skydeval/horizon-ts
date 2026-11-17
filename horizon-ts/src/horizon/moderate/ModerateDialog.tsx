@@ -302,6 +302,11 @@ export function Actions({
       audience === NONE ? undefined : audience,
     )
   }
+  /*
+   * A removal never carries an audience (cairn): one limited to an audience
+   * could be filtered out for members outside it, who'd keep seeing an
+   * older unlimited label. Sent with none, it clears the value for everyone.
+   */
   const removeLabel = (label: SubjectLabel, subject: ModerationSubject) =>
     send(
       {
@@ -312,7 +317,6 @@ export function Actions({
       },
       l`Label removed`,
       subject,
-      label.audience,
     )
   const canRemove = (label: SubjectLabel) =>
     label.val.startsWith('!')
