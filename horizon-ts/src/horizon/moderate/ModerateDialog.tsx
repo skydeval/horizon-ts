@@ -105,7 +105,7 @@ function Inner({target}: {target: ModerateTarget}) {
           </Text>
         ) : (
           <>
-            {team.length > 1 && (
+            {team.length > 0 && (
               <View style={[a.gap_xs]}>
                 <Text style={[a.text_sm, a.font_semi_bold]}>
                   <Trans>Labeler</Trans>
