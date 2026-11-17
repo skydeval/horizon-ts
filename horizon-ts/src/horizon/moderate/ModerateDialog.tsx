@@ -20,6 +20,7 @@ import * as Dialog from '#/components/Dialog'
 import * as TextField from '#/components/forms/TextField'
 import * as Toggle from '#/components/forms/Toggle'
 import {Loader} from '#/components/Loader'
+import {useReportOptions} from '#/components/moderation/ReportDialog/utils/useReportOptions'
 import * as Prompt from '#/components/Prompt'
 import * as Select from '#/components/Select'
 import * as Toast from '#/components/Toast'
@@ -34,7 +35,16 @@ import {
   type QueriedLabel,
   subjectKey,
 } from './api'
-import {PERMISSIONS, SYSTEM_LABEL_VALUES, type TeamLabeler} from './permissions'
+import {
+  actionComment,
+  PERMISSIONS,
+  reasonFallbackName,
+  SYSTEM_LABEL_VALUES,
+  type TeamLabeler,
+} from './permissions'
+
+/** The reason drop-down's "none" value (a select can't hold an empty one). */
+const NO_REASON = 'none'
 import {useTeamLabelersQuery} from './team'
 
 /** What the dialog moderates. */
@@ -170,6 +180,21 @@ export function Actions({
   const [onAccount, setOnAccount] = useState(false)
   const [expiry, setExpiry] = useState<string>('0')
   const [note, setNote] = useState('')
+  const [reason, setReason] = useState<string>(NO_REASON)
+  const {categories} = useReportOptions()
+
+  // A reason's name: Horizon's own report wording when it knows the token.
+  const reasonNameOf = (token: string) => {
+    for (const category of categories) {
+      const option = category.options.find(each => each.reason === token)
+      if (option) return `${category.title}: ${option.title}`
+    }
+    return reasonFallbackName(token)
+  }
+  const chosenReason =
+    reason === NO_REASON
+      ? undefined
+      : {token: reason, name: reasonNameOf(reason)}
 
   const nameOf = (identifier: string) => {
     const def = labeler.defs.find(each => each.identifier === identifier)
@@ -220,7 +245,8 @@ export function Actions({
     },
   })
 
-  const comment = note.trim() ? {comment: note.trim()} : {}
+  const text = actionComment(chosenReason, note)
+  const comment = text ? {comment: text} : {}
   const send = (
     event: ModerationEvent,
     done: string,
@@ -333,6 +359,36 @@ export function Actions({
         </View>
       )}
 
+      {labeler.reasonTypes.length > 0 && (
+        <View style={[a.gap_xs]}>
+          <Text style={[a.text_sm, a.font_semi_bold]}>
+            <Trans>Reason (optional)</Trans>
+          </Text>
+          <Select.Root value={reason} onValueChange={setReason}>
+            <Select.Trigger label={l`Reason`}>
+              <Select.ValueText placeholder={l`No reason`} />
+              <Select.Icon />
+            </Select.Trigger>
+            <Select.Content
+              label={l`Reason`}
+              items={[
+                {label: l`No reason`, value: NO_REASON},
+                ...labeler.reasonTypes.map(token => ({
+                  label: reasonNameOf(token),
+                  value: token,
+                })),
+              ]}
+              renderItem={({label, value: item}) => (
+                <Select.Item value={item} label={label}>
+                  <Select.ItemIndicator />
+                  <Select.ItemText>{label}</Select.ItemText>
+                </Select.Item>
+              )}
+            />
+          </Select.Root>
+        </View>
+      )}
+
       <View style={[a.gap_xs]}>
         <TextField.LabelText>
           <Trans>Note (kept with the action)</Trans>
@@ -438,12 +494,12 @@ export function Actions({
           {can(PERMISSIONS.triage) && (
             <ActionButton
               label={l`Save note`}
-              disabled={isPending || !note.trim()}
+              disabled={isPending || !text}
               onPress={() =>
                 send(
                   {
                     $type: 'tools.ozone.moderation.defs#modEventComment',
-                    comment: note.trim(),
+                    comment: text ?? '',
                   },
                   l`Note saved`,
                 )

@@ -22,4 +22,35 @@ export type TeamLabeler = {
   permissions: ReadonlySet<string>
   /** The values it defines, interpreted, in its own order. */
   defs: InterpretedLabelValueDefinition[]
+  /** The report reasons it accepts (tokens), from its service record. */
+  reasonTypes: string[]
+}
+
+/**
+ * A reason token as readable text, when no name is known for it:
+ * `tools.ozone.report.defs#reasonMisleadingSpam` reads "Misleading spam".
+ */
+export function reasonFallbackName(token: string): string {
+  const name = (token.split('#')[1] ?? token).replace(/^reason/, '')
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .trim()
+  if (!words) return token
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
+}
+
+/**
+ * The text kept with an action: the chosen reason (name and token, so it
+ * reads and can be searched) above the moderator's note.
+ */
+export function actionComment(
+  reason: {token: string; name: string} | undefined,
+  note: string,
+): string | undefined {
+  const parts = [
+    reason ? `Reason: ${reason.name} (${reason.token})` : undefined,
+    note.trim() || undefined,
+  ].filter(Boolean)
+  return parts.length ? parts.join('\n') : undefined
 }

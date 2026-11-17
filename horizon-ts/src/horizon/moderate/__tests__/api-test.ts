@@ -8,6 +8,29 @@ import {
   hasOpenReports,
 } from '../api'
 import {isCairnHosted, labelerEndpoint} from '../hosts'
+import {actionComment, reasonFallbackName} from '../permissions'
+
+describe('reasons', () => {
+  it('read tokens as words when no name is known', () => {
+    expect(reasonFallbackName('tools.cairn.report.defs#reasonDogpiling')).toBe(
+      'Dogpiling',
+    )
+    expect(reasonFallbackName('tools.ozone.report.defs#reasonSexualNCII')).toBe(
+      'Sexual ncii',
+    )
+    expect(reasonFallbackName('com.atproto.moderation.defs#reasonSpam')).toBe(
+      'Spam',
+    )
+  })
+
+  it('go above the note in the kept text', () => {
+    expect(actionComment(undefined, '  ')).toBeUndefined()
+    expect(actionComment(undefined, 'n')).toBe('n')
+    expect(actionComment({token: 't#reasonX', name: 'X'}, '')).toBe(
+      'Reason: X (t#reasonX)',
+    )
+  })
+})
 
 const LABELER = 'did:plc:cairnlabeler'
 

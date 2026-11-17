@@ -275,6 +275,10 @@ function labeler(permissions: string[]): TeamLabeler {
         definedBy: LABELER,
       },
     ] as unknown as TeamLabeler['defs'],
+    reasonTypes: [
+      'tools.ozone.report.defs#reasonMisleadingSpam',
+      'tools.cairn.report.defs#reasonDogpiling',
+    ],
   }
 }
 
@@ -354,6 +358,26 @@ describe('Moderate dialog', () => {
       $type: 'com.atproto.admin.defs#repoRef',
       did: 'did:plc:author',
     })
+  })
+
+  it('keeps an optional reason, named, with the note', async () => {
+    const view = mount(['labels.apply'])
+    expect(
+      view.getByTestId('option:Reason:tools.cairn.report.defs#reasonDogpiling')
+        .props.accessibilityLabel,
+    ).toBe('Dogpiling')
+    fireEvent.press(view.getByTestId('option:Label:spoiler'))
+    fireEvent.press(
+      view.getByTestId(
+        'option:Reason:tools.ozone.report.defs#reasonMisleadingSpam',
+      ),
+    )
+    fireEvent.changeText(view.getByTestId('moderateNote'), 'context')
+    fireEvent.press(view.getByTestId('moderateApplyLabel'))
+    await waitFor(() => expect(mockSent).toHaveLength(1))
+    expect((mockSent[0].event as {comment?: string}).comment).toBe(
+      'Reason: Misleading: Spam (tools.ozone.report.defs#reasonMisleadingSpam)\ncontext',
+    )
   })
 
   it('removes a current label by negating it', async () => {

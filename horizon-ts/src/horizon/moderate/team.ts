@@ -76,6 +76,7 @@ export function useTeamLabelersQuery() {
             (view ? `@${view.creator.handle}` : labeler),
           permissions: new Set(permissions),
           defs: view ? interpretLabelValueDefinitions(view) : [],
+          reasonTypes: (view?.reasonTypes ?? []).map(String),
         }
       })
     },
