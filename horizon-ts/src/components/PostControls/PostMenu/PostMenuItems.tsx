@@ -76,6 +76,8 @@ import {
 import {PersonX_Stroke2_Corner0_Rounded as PersonX} from '#/components/icons/Person'
 import {Pin_Stroke2_Corner0_Rounded as PinIcon} from '#/components/icons/Pin'
 import {SettingsGear2_Stroke2_Corner0_Rounded as Gear} from '#/components/icons/SettingsGear2'
+// HORIZON: a cairn team member moderates from here
+import {Shield_Stroke2_Corner0_Rounded as ShieldIcon} from '#/components/icons/Shield'
 import {
   SpeakerVolumeFull_Stroke2_Corner0_Rounded as Unmute,
   SpeakerVolumeFull_Stroke2_Corner0_Rounded as UnmuteIcon,
@@ -93,6 +95,11 @@ import * as Prompt from '#/components/Prompt'
 import * as Toast from '#/components/Toast'
 import {useAnalytics} from '#/analytics'
 import {IS_INTERNAL} from '#/env'
+import {
+  ModerateDialog,
+  useModerateDialogControl,
+} from '#/horizon/moderate/ModerateDialog'
+import {useTeamLabelersQuery} from '#/horizon/moderate/team'
 // HORIZON: posting as import
 import {
   ActAsPostDialog,
@@ -167,6 +174,10 @@ let PostMenuItems = ({
   const {mutedWordsDialogControl} = useGlobalDialogsControlContext()
   const blockPromptControl = useDialogControl()
   const reportDialogControl = useReportDialogControl()
+  // HORIZON: a cairn team member moderates from here
+  const moderateDialogControl = useModerateDialogControl()
+  const {data: moderateTeam} = useTeamLabelersQuery()
+  const canModerate = (moderateTeam?.length ?? 0) > 0
   const deletePromptControl = useDialogControl()
   const hidePromptControl = useDialogControl()
   const postInteractionSettingsDialogControl = useDialogControl()
@@ -795,6 +806,23 @@ let PostMenuItems = ({
             </>
           )}
 
+        {/* HORIZON: a cairn team member moderates from here (start) */}
+        {hasSession && canModerate && !isPrivateDisplay(postUri) && (
+          <>
+            <Menu.Divider />
+            <Menu.Group>
+              <Menu.Item
+                testID="postDropdownModerateBtn"
+                label={l`Moderate`}
+                onPress={() => moderateDialogControl.open()}>
+                <Menu.ItemText>{l`Moderate`}</Menu.ItemText>
+                <Menu.ItemIcon icon={ShieldIcon} position="right" />
+              </Menu.Item>
+            </Menu.Group>
+          </>
+        )}
+        {/* HORIZON: a cairn team member moderates from here (end) */}
+
         {hasSession && (
           <>
             <Menu.Divider />
@@ -955,6 +983,18 @@ let PostMenuItems = ({
         profile={postAuthor}
         onBlock={onBlockAuthor}
       />
+      {/* HORIZON: a cairn team member moderates from here */}
+      {canModerate && (
+        <ModerateDialog
+          control={moderateDialogControl}
+          target={{
+            type: 'post',
+            uri: postUri,
+            cid: postCid,
+            authorDid: postAuthor.did,
+          }}
+        />
+      )}
     </>
   )
 }

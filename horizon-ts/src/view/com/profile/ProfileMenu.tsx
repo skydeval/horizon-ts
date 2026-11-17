@@ -42,6 +42,8 @@ import {
   Repost_Stroke2_Corner0_Rounded as RepostIcon,
   RepostStrike_Stroke2_Corner0_Rounded as RepostStrikeIcon,
 } from '#/components/icons/Repost'
+// HORIZON: a cairn team member moderates from here
+import {Shield_Stroke2_Corner0_Rounded as ShieldIcon} from '#/components/icons/Shield'
 import {SpeakerVolumeFull_Stroke2_Corner0_Rounded as UnmuteIcon} from '#/components/icons/Speaker'
 import {StarterPack_Stroke2_Corner0_Rounded as StarterPackIcon} from '#/components/icons/StarterPack'
 import * as Menu from '#/components/Menu'
@@ -65,6 +67,11 @@ import {
   ReportLinkDialog,
   useReportableProfileLinks,
 } from '#/features/profileLinks'
+import {
+  ModerateDialog,
+  useModerateDialogControl,
+} from '#/horizon/moderate/ModerateDialog'
+import {useTeamLabelersQuery} from '#/horizon/moderate/team'
 // HORIZON: posting as import
 import {
   ActAsFollowDialog,
@@ -85,6 +92,10 @@ let ProfileMenu = ({
   const {t: l} = useLingui()
   const {currentAccount, hasSession} = useSession()
   const reportDialogControl = useReportDialogControl()
+  // HORIZON: a cairn team member moderates from here
+  const moderateDialogControl = useModerateDialogControl()
+  const {data: moderateTeam} = useTeamLabelersQuery()
+  const canModerate = (moderateTeam?.length ?? 0) > 0
   const queryClient = useQueryClient()
   const navigation = useNavigation<NavigationProp>()
   const isSelf = currentAccount?.did === profile.did
@@ -562,6 +573,24 @@ let ProfileMenu = ({
               </Menu.Group>
             </>
           )}
+          {/* HORIZON: a cairn team member moderates from here (start) */}
+          {hasSession && canModerate && (
+            <>
+              <Menu.Divider />
+              <Menu.Group>
+                <Menu.Item
+                  testID="profileHeaderDropdownModerateBtn"
+                  label={l`Moderate`}
+                  onPress={() => moderateDialogControl.open()}>
+                  <Menu.ItemText>
+                    <Trans>Moderate</Trans>
+                  </Menu.ItemText>
+                  <Menu.ItemIcon icon={ShieldIcon} />
+                </Menu.Item>
+              </Menu.Group>
+            </>
+          )}
+          {/* HORIZON: a cairn team member moderates from here (end) */}
           {devModeEnabled ? (
             <>
               <Menu.Divider />
@@ -612,6 +641,13 @@ let ProfileMenu = ({
           $type: 'app.bsky.actor.defs#profileViewDetailed',
         }}
       />
+      {/* HORIZON: a cairn team member moderates from here */}
+      {canModerate && (
+        <ModerateDialog
+          control={moderateDialogControl}
+          target={{type: 'account', did: profile.did}}
+        />
+      )}
       {reportableLinks.length > 0 && (
         <ReportLinkDialog
           control={reportLinkDialogControl}
