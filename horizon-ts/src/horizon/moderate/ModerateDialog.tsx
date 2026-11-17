@@ -207,6 +207,11 @@ export function Actions({
   )
   const [flagReason, setFlagReason] = useState<string | undefined>()
   const [flagEscalate, setFlagEscalate] = useState(false)
+  /*
+   * A member labeler can't take anything down: "Request takedown" opens the
+   * flag to a public labeler that can, only when the moderator wants it.
+   */
+  const [requestingTakedown, setRequestingTakedown] = useState(false)
 
   const reasonNameOf = (token: string) => {
     if (labeler.reasonNames[token]) return labeler.reasonNames[token]
@@ -260,9 +265,12 @@ export function Actions({
         audience: limitTo,
         createdBy: currentAccount?.did ?? '',
       }),
-    onSuccess: (_answer, {done}) => {
+    onSuccess: (_answer, {done, event}) => {
       Toast.show(done, {type: 'success'})
       setNote('')
+      if (event.$type === 'tools.cairn.moderation.defs#flagEvent') {
+        setRequestingTakedown(false)
+      }
       void queryClient.invalidateQueries({
         queryKey: ['horizon-moderate-subject', labeler.did],
       })
@@ -324,6 +332,7 @@ export function Actions({
       : can(PERMISSIONS.labels)
 
   const target_ = labeler.flagTargets.find(each => each.did === flagTarget)
+  const canRequestTakedown = triage && labeler.flagTargets.length > 0
   const sendFlag = () => {
     if (!target_ || !flagReason) return
     send(
@@ -561,30 +570,54 @@ export function Actions({
                 }
               />
             )}
+            {canRequestTakedown && !requestingTakedown && (
+              <ActionButton
+                label={l`Request takedown`}
+                negative
+                disabled={isPending}
+                onPress={() => setRequestingTakedown(true)}
+              />
+            )}
           </View>
         </View>
       )}
 
-      {triage && labeler.flagTargets.length > 0 && (
+      {canRequestTakedown && requestingTakedown && (
         <View style={[a.gap_sm]}>
           <Text style={[a.text_lg, a.font_semi_bold]}>
-            <Trans>Flag to a public labeler</Trans>
+            <Trans>Request a takedown</Trans>
           </Text>
-          <Picker
-            heading={l`Flag to`}
-            value={flagTarget}
-            onChange={next => {
-              setFlagTarget(next)
-              setFlagReason(undefined)
-            }}
-            items={labeler.flagTargets.map(each => ({
-              label: each.name,
-              value: each.did,
-            }))}
-          />
+          {labeler.flagTargets.length > 1 ? (
+            <Picker
+              heading={l`Send to`}
+              value={flagTarget}
+              onChange={next => {
+                setFlagTarget(next)
+                setFlagReason(undefined)
+              }}
+              items={labeler.flagTargets.map(each => ({
+                label: each.name,
+                value: each.did,
+              }))}
+            />
+          ) : (
+            target_ && (
+              <Text
+                style={[
+                  a.text_sm,
+                  a.leading_snug,
+                  t.atoms.text_contrast_medium,
+                ]}>
+                <Trans>
+                  {target_.name} can take it down. This sends it to them with
+                  one of their reasons.
+                </Trans>
+              </Text>
+            )
+          )}
           {target_ && (
             <Picker
-              heading={l`Flag reason`}
+              heading={l`Takedown reason`}
               value={flagReason}
               onChange={setFlagReason}
               placeholder={l`Choose a reason`}
@@ -608,11 +641,18 @@ export function Actions({
               </Toggle.LabelText>
             </Toggle.Item>
           )}
-          <ActionButton
-            label={l`Flag`}
-            disabled={isPending || !target_ || !flagReason}
-            onPress={sendFlag}
-          />
+          <View style={[a.flex_row, a.flex_wrap, a.gap_sm]}>
+            <ActionButton
+              label={l`Send request`}
+              disabled={isPending || !target_ || !flagReason}
+              onPress={sendFlag}
+            />
+            <ActionButton
+              label={l`Cancel`}
+              disabled={isPending}
+              onPress={() => setRequestingTakedown(false)}
+            />
+          </View>
         </View>
       )}
 

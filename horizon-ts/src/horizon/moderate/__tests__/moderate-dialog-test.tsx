@@ -411,18 +411,31 @@ describe('Moderate dialog, member labelers', () => {
     ).toBe('Harm: Dogpiling')
   })
 
-  it('flags to a public labeler with one of its reasons, escalating if asked', async () => {
+  it('keeps the takedown request out of the way until asked for', () => {
     const view = mount(memberLabeler(all))
-    expect(view.getByLabelText('Flag').props.accessibilityState).toEqual(
-      expect.objectContaining({disabled: true}),
-    )
+    expect(view.queryByText('Request a takedown')).toBeNull()
+    expect(view.queryByLabelText('Send request')).toBeNull()
+    fireEvent.press(view.getByLabelText('Request takedown'))
+    expect(view.queryByText('Request a takedown')).not.toBeNull()
+    // One public labeler: no choice of where to send it.
+    expect(view.queryByTestId(`option:Send to:${LABELER}`)).toBeNull()
+    fireEvent.press(view.getByLabelText('Cancel'))
+    expect(view.queryByText('Request a takedown')).toBeNull()
+  })
+
+  it('requests a takedown from the public labeler with one of its reasons', async () => {
+    const view = mount(memberLabeler(all))
+    fireEvent.press(view.getByLabelText('Request takedown'))
+    expect(
+      view.getByLabelText('Send request').props.accessibilityState,
+    ).toEqual(expect.objectContaining({disabled: true}))
     fireEvent.press(
       view.getByTestId(
-        'option:Flag reason:tools.ozone.report.defs#reasonMisleadingSpam',
+        'option:Takedown reason:tools.ozone.report.defs#reasonMisleadingSpam',
       ),
     )
     fireEvent.press(view.getByTestId('moderateFlagEscalate'))
-    fireEvent.press(view.getByLabelText('Flag'))
+    fireEvent.press(view.getByLabelText('Send request'))
     await waitFor(() => expect(mockSent).toHaveLength(1))
     expect(mockSent[0].event).toEqual({
       $type: 'tools.cairn.moderation.defs#flagEvent',
@@ -454,7 +467,7 @@ describe('Moderate dialog, member labelers', () => {
     await waitFor(() => view.getByTestId('moderateApplyLabel'))
     expect(view.queryByTestId('moderateNote')).toBeNull()
     expect(view.queryByLabelText('Save note')).toBeNull()
-    expect(view.queryByLabelText('Flag')).toBeNull()
+    expect(view.queryByLabelText('Request takedown')).toBeNull()
     expect(view.queryByTestId('option:Label:!hide')).toBeNull()
   })
 
