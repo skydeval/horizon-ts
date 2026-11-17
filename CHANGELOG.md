@@ -10,9 +10,6 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
-- **Moderate from a post or profile.** Members of a moderation team get
-  Moderate in the three-dots menu, to label, take down or mute without
-  leaving Horizon.
 - **Horizon's own moderation is built in,** next to Bluesky's: always on,
   and offered whenever you report something.
 - **Your reports on kryphocron posts in the moderation inbox,** under Your
