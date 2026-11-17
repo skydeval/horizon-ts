@@ -17,13 +17,38 @@ export const SYSTEM_LABEL_VALUES = ['!hide', '!warn'] as const
 
 /** A labeler this account moderates for. */
 export type TeamLabeler = {
+  /**
+   * `public`: a labeler with an account, reached through the PDS proxy.
+   * `member`: one that exists only for Horizon members, reached through
+   * cairn's direct methods.
+   */
+  source: 'public' | 'member'
+  /** The DID, or a member labeler's opaque id. */
   did: string
   name: string
+  /** `labels_only` labelers only take a label, one value at a time. */
+  kind: 'moderation' | 'labels_only'
   permissions: ReadonlySet<string>
   /** The values it defines, interpreted, in its own order. */
   defs: InterpretedLabelValueDefinition[]
-  /** The report reasons it accepts (tokens), from its service record. */
+  /** The report reasons it accepts (tokens). */
   reasonTypes: string[]
+  /** Names for reason tokens the labeler itself gives (member labelers). */
+  reasonNames: Record<string, string>
+  /** Who a member labeler's label can be limited to. */
+  audiences: {id: string; name: string}[]
+  /** The public labelers a member labeler's moderators may flag to. */
+  flagTargets: {
+    did: string
+    name: string
+    reasonTypes: string[]
+    canEscalate: boolean
+  }[]
+}
+
+/** Whether a labeler takes takedowns and mutes (member labelers don't). */
+export function takesTakedowns(labeler: TeamLabeler): boolean {
+  return labeler.source === 'public'
 }
 
 /**

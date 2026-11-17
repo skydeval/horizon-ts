@@ -136,6 +136,14 @@ export type ModerationEvent =
   | {$type: 'tools.ozone.moderation.defs#modEventAcknowledge'; comment?: string}
   | {$type: 'tools.ozone.moderation.defs#modEventEscalate'; comment?: string}
   | {$type: 'tools.ozone.moderation.defs#modEventComment'; comment: string}
+  /** A member labeler flagging the subject to a public labeler. */
+  | {
+      $type: 'tools.cairn.moderation.defs#flagEvent'
+      target: string
+      reasonType: string
+      comment?: string
+      escalateTarget?: boolean
+    }
 
 export function emitEvent(
   pdsClient: Client,

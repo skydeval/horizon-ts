@@ -1,8 +1,16 @@
 /*
  * Moderate: what a member of a cairn labeler's team can do to a post or an
- * account while browsing, without opening cairn's own UI. Each action shows
- * only with the permission cairn grants for it on the chosen labeler; the
- * labeler checks the role again on every event.
+ * account while browsing, without opening cairn's own UI.
+ *
+ * - The labeler drop-down lists every labeler the account moderates for:
+ *   public ones and member labelers alike. Everything below it follows the
+ *   chosen labeler: its values, reasons, audiences and the actions it takes.
+ * - Each action shows only with the permission cairn grants for it there;
+ *   cairn checks the role again on every event.
+ * - Member labelers take labels (optionally limited to an audience),
+ *   notes, acknowledge, escalate and a flag to a public labeler, but no
+ *   takedowns or mutes. A labels-only labeler takes a label and nothing
+ *   else.
  */
 
 import {useState} from 'react'
@@ -25,27 +33,25 @@ import * as Prompt from '#/components/Prompt'
 import * as Select from '#/components/Select'
 import * as Toast from '#/components/Toast'
 import {Text} from '#/components/Typography'
+import {type ModerationEvent, type ModerationSubject, subjectKey} from './api'
 import {
-  emitEvent,
-  getCurrentLabels,
-  getSubjectStatus,
-  hasOpenReports,
-  type ModerationEvent,
-  type ModerationSubject,
-  type QueriedLabel,
-  subjectKey,
-} from './api'
+  loadSubject,
+  sendEvent,
+  type SubjectLabel,
+  type SubjectState,
+} from './backend'
 import {
   actionComment,
   PERMISSIONS,
   reasonFallbackName,
   SYSTEM_LABEL_VALUES,
+  takesTakedowns,
   type TeamLabeler,
 } from './permissions'
-
-/** The reason drop-down's "none" value (a select can't hold an empty one). */
-const NO_REASON = 'none'
 import {useTeamLabelersQuery} from './team'
+
+/** A select's "none" value (a select can't hold an empty one). */
+const NONE = 'none'
 
 /** What the dialog moderates. */
 export type ModerateTarget =
@@ -105,32 +111,12 @@ function Inner({target}: {target: ModerateTarget}) {
           </Text>
         ) : (
           <>
-            {team.length > 0 && (
-              <View style={[a.gap_xs]}>
-                <Text style={[a.text_sm, a.font_semi_bold]}>
-                  <Trans>Labeler</Trans>
-                </Text>
-                <Select.Root value={labeler.did} onValueChange={setChosen}>
-                  <Select.Trigger label={l`Labeler`}>
-                    <Select.ValueText placeholder={l`Labeler`} />
-                    <Select.Icon />
-                  </Select.Trigger>
-                  <Select.Content
-                    label={l`Labeler`}
-                    items={team.map(each => ({
-                      label: each.name,
-                      value: each.did,
-                    }))}
-                    renderItem={({label, value}) => (
-                      <Select.Item value={value} label={label}>
-                        <Select.ItemIndicator />
-                        <Select.ItemText>{label}</Select.ItemText>
-                      </Select.Item>
-                    )}
-                  />
-                </Select.Root>
-              </View>
-            )}
+            <Picker
+              heading={l`Labeler`}
+              value={labeler.did}
+              onChange={setChosen}
+              items={team.map(each => ({label: each.name, value: each.did}))}
+            />
             <Actions key={labeler.did} labeler={labeler} target={target} />
           </>
         )}
@@ -140,18 +126,49 @@ function Inner({target}: {target: ModerateTarget}) {
   )
 }
 
-function useLabelerState(labeler: string, subject: ModerationSubject) {
+/** A labelled drop-down. */
+function Picker({
+  heading,
+  value,
+  onChange,
+  items,
+  placeholder,
+}: {
+  heading: string
+  value: string | undefined
+  onChange: (value: string) => void
+  items: {label: string; value: string}[]
+  placeholder?: string
+}) {
+  return (
+    <View style={[a.gap_xs]}>
+      <Text style={[a.text_sm, a.font_semi_bold]}>{heading}</Text>
+      <Select.Root value={value} onValueChange={onChange}>
+        <Select.Trigger label={heading}>
+          <Select.ValueText placeholder={placeholder ?? heading} />
+          <Select.Icon />
+        </Select.Trigger>
+        <Select.Content
+          label={heading}
+          items={items}
+          renderItem={({label, value: item}) => (
+            <Select.Item value={item} label={label}>
+              <Select.ItemIndicator />
+              <Select.ItemText>{label}</Select.ItemText>
+            </Select.Item>
+          )}
+        />
+      </Select.Root>
+    </View>
+  )
+}
+
+function useSubjectState(labeler: TeamLabeler, subject: ModerationSubject) {
   const pdsClient = usePdsClient()
-  const key = subjectKey(subject)
-  const labels = useQuery({
-    queryKey: ['horizon-moderate-labels', labeler, key],
-    queryFn: () => getCurrentLabels(pdsClient, labeler, subject),
+  return useQuery({
+    queryKey: ['horizon-moderate-subject', labeler.did, subjectKey(subject)],
+    queryFn: () => loadSubject(pdsClient, labeler, subject),
   })
-  const status = useQuery({
-    queryKey: ['horizon-moderate-status', labeler, key],
-    queryFn: () => getSubjectStatus(pdsClient, labeler, subject),
-  })
-  return {labels, status}
 }
 
 /** The dialog's body for one labeler (exported for its render test). */
@@ -168,23 +185,31 @@ export function Actions({
   const pdsClient = usePdsClient()
   const queryClient = useQueryClient()
   const takedownPrompt = Prompt.usePromptControl()
+  const {categories} = useReportOptions()
   const can = (permission: string) => labeler.permissions.has(permission)
+  const labelsOnly = labeler.kind === 'labels_only'
+  const triage = can(PERMISSIONS.triage) && !labelsOnly
 
   const post = postSubject(target)
   const account = accountSubject(target)
-  const postState = useLabelerState(labeler.did, post)
-  const accountState = useLabelerState(labeler.did, account)
-  const status = postState.status.data
+  const postState = useSubjectState(labeler, post)
+  const accountState = useSubjectState(labeler, account)
+  const status = postState.data
 
   const [value, setValue] = useState<string | undefined>()
   const [onAccount, setOnAccount] = useState(false)
   const [expiry, setExpiry] = useState<string>('0')
+  const [audience, setAudience] = useState<string>(NONE)
   const [note, setNote] = useState('')
-  const [reason, setReason] = useState<string>(NO_REASON)
-  const {categories} = useReportOptions()
+  const [reason, setReason] = useState<string>(NONE)
+  const [flagTarget, setFlagTarget] = useState<string | undefined>(
+    labeler.flagTargets[0]?.did,
+  )
+  const [flagReason, setFlagReason] = useState<string | undefined>()
+  const [flagEscalate, setFlagEscalate] = useState(false)
 
-  // A reason's name: Horizon's own report wording when it knows the token.
   const reasonNameOf = (token: string) => {
+    if (labeler.reasonNames[token]) return labeler.reasonNames[token]
     for (const category of categories) {
       const option = category.options.find(each => each.reason === token)
       if (option) return `${category.title}: ${option.title}`
@@ -192,9 +217,9 @@ export function Actions({
     return reasonFallbackName(token)
   }
   const chosenReason =
-    reason === NO_REASON
-      ? undefined
-      : {token: reason, name: reasonNameOf(reason)}
+    reason === NONE ? undefined : {token: reason, name: reasonNameOf(reason)}
+  const text = labelsOnly ? undefined : actionComment(chosenReason, note)
+  const comment = text ? {comment: text} : {}
 
   const nameOf = (identifier: string) => {
     const def = labeler.defs.find(each => each.identifier === identifier)
@@ -203,55 +228,63 @@ export function Actions({
       def?.locales[0]
     return strings?.name || identifier
   }
+  const audienceName = (id: string | undefined) =>
+    id
+      ? (labeler.audiences.find(each => each.id === id)?.name ?? id)
+      : undefined
+  const labelName = (label: SubjectLabel) => {
+    const group = audienceName(label.audience)
+    return group ? `${nameOf(label.val)} (${group})` : nameOf(label.val)
+  }
   const values = [
     ...labeler.defs.map(def => def.identifier),
-    ...(can(PERMISSIONS.systemLabels) ? SYSTEM_LABEL_VALUES : []),
+    ...(can(PERMISSIONS.systemLabels) && !labelsOnly
+      ? SYSTEM_LABEL_VALUES
+      : []),
   ]
 
   const {mutate, isPending} = useMutation({
     mutationFn: ({
       event,
       subject,
+      audience: limitTo,
     }: {
       event: ModerationEvent
       subject: ModerationSubject
+      audience?: string
       done: string
     }) =>
-      emitEvent(pdsClient, labeler.did, {
+      sendEvent(pdsClient, labeler, {
         event,
         subject,
+        audience: limitTo,
         createdBy: currentAccount?.did ?? '',
       }),
     onSuccess: (_answer, {done}) => {
       Toast.show(done, {type: 'success'})
       setNote('')
       void queryClient.invalidateQueries({
-        queryKey: ['horizon-moderate-labels', labeler.did],
-      })
-      void queryClient.invalidateQueries({
-        queryKey: ['horizon-moderate-status', labeler.did],
+        queryKey: ['horizon-moderate-subject', labeler.did],
       })
     },
     onError: error => {
+      // Never the labeler's id or the subject: the error's name only.
       logger.warn('moderate: event refused', {
-        message: error instanceof Error ? error.message : 'unknown',
+        message: error instanceof Error ? error.name : 'unknown',
       })
       Toast.show(
         cleanError(error instanceof Error ? error.message : String(error)),
-        {
-          type: 'error',
-        },
+        {type: 'error'},
       )
     },
   })
 
-  const text = actionComment(chosenReason, note)
-  const comment = text ? {comment: text} : {}
   const send = (
     event: ModerationEvent,
     done: string,
     subject: ModerationSubject = post,
-  ) => mutate({event, subject, done})
+    limitTo?: string,
+  ) => mutate({event, subject, done, audience: limitTo})
 
   const applyLabel = () => {
     if (!value) return
@@ -266,9 +299,10 @@ export function Actions({
       },
       l`Label applied`,
       onAccount ? account : post,
+      audience === NONE ? undefined : audience,
     )
   }
-  const removeLabel = (label: QueriedLabel, subject: ModerationSubject) =>
+  const removeLabel = (label: SubjectLabel, subject: ModerationSubject) =>
     send(
       {
         $type: 'tools.ozone.moderation.defs#modEventLabel',
@@ -278,7 +312,27 @@ export function Actions({
       },
       l`Label removed`,
       subject,
+      label.audience,
     )
+  const canRemove = (label: SubjectLabel) =>
+    label.val.startsWith('!')
+      ? can(PERMISSIONS.systemLabels)
+      : can(PERMISSIONS.labels)
+
+  const target_ = labeler.flagTargets.find(each => each.did === flagTarget)
+  const sendFlag = () => {
+    if (!target_ || !flagReason) return
+    send(
+      {
+        $type: 'tools.cairn.moderation.defs#flagEvent',
+        target: target_.did,
+        reasonType: flagReason,
+        ...comment,
+        ...(flagEscalate && target_.canEscalate ? {escalateTarget: true} : {}),
+      },
+      l`Flagged to ${target_.name}`,
+    )
+  }
 
   const expiryLabels: Record<(typeof EXPIRY_HOURS)[number], string> = {
     '0': l`No expiry`,
@@ -310,6 +364,20 @@ export function Actions({
               )}
             />
           </Select.Root>
+          {labeler.audiences.length > 0 && (
+            <Picker
+              heading={l`Who sees it`}
+              value={audience}
+              onChange={setAudience}
+              items={[
+                {label: l`Everyone who sees this labeler`, value: NONE},
+                ...labeler.audiences.map(each => ({
+                  label: each.name,
+                  value: each.id,
+                })),
+              ]}
+            />
+          )}
           {target.type === 'post' && (
             <Toggle.Item
               testID="moderateOnAccount"
@@ -359,157 +427,192 @@ export function Actions({
         </View>
       )}
 
-      {labeler.reasonTypes.length > 0 && (
+      {!labelsOnly && labeler.reasonTypes.length > 0 && (
+        <Picker
+          heading={l`Reason (optional)`}
+          value={reason}
+          onChange={setReason}
+          placeholder={l`No reason`}
+          items={[
+            {label: l`No reason`, value: NONE},
+            ...labeler.reasonTypes.map(token => ({
+              label: reasonNameOf(token),
+              value: token,
+            })),
+          ]}
+        />
+      )}
+
+      {!labelsOnly && (
         <View style={[a.gap_xs]}>
-          <Text style={[a.text_sm, a.font_semi_bold]}>
-            <Trans>Reason (optional)</Trans>
-          </Text>
-          <Select.Root value={reason} onValueChange={setReason}>
-            <Select.Trigger label={l`Reason`}>
-              <Select.ValueText placeholder={l`No reason`} />
-              <Select.Icon />
-            </Select.Trigger>
-            <Select.Content
-              label={l`Reason`}
-              items={[
-                {label: l`No reason`, value: NO_REASON},
-                ...labeler.reasonTypes.map(token => ({
-                  label: reasonNameOf(token),
-                  value: token,
-                })),
-              ]}
-              renderItem={({label, value: item}) => (
-                <Select.Item value={item} label={label}>
-                  <Select.ItemIndicator />
-                  <Select.ItemText>{label}</Select.ItemText>
-                </Select.Item>
-              )}
+          <TextField.LabelText>
+            <Trans>Note (kept with the action)</Trans>
+          </TextField.LabelText>
+          <TextField.Root>
+            <Dialog.Input
+              testID="moderateNote"
+              label={l`Note`}
+              value={note}
+              multiline
+              onChangeText={setNote}
             />
-          </Select.Root>
+          </TextField.Root>
         </View>
       )}
 
-      <View style={[a.gap_xs]}>
-        <TextField.LabelText>
-          <Trans>Note (kept with the action)</Trans>
-        </TextField.LabelText>
-        <TextField.Root>
-          <Dialog.Input
-            testID="moderateNote"
-            label={l`Note`}
-            value={note}
-            multiline
-            onChangeText={setNote}
-          />
-        </TextField.Root>
-      </View>
-
       <CurrentLabels
         heading={target.type === 'post' ? l`On this post` : l`On this account`}
-        query={postState.labels}
-        nameOf={nameOf}
-        canRemove={label =>
-          label.val.startsWith('!')
-            ? can(PERMISSIONS.systemLabels)
-            : can(PERMISSIONS.labels)
-        }
+        state={postState}
+        labelName={labelName}
+        canRemove={canRemove}
         disabled={isPending}
         onRemove={label => removeLabel(label, post)}
       />
       {target.type === 'post' && (
         <CurrentLabels
           heading={l`On the account`}
-          query={accountState.labels}
-          nameOf={nameOf}
-          canRemove={label =>
-            label.val.startsWith('!')
-              ? can(PERMISSIONS.systemLabels)
-              : can(PERMISSIONS.labels)
-          }
+          state={accountState}
+          labelName={labelName}
+          canRemove={canRemove}
           disabled={isPending}
           onRemove={label => removeLabel(label, account)}
         />
       )}
 
-      <View style={[a.gap_sm]}>
-        <Text style={[a.text_lg, a.font_semi_bold]}>
-          <Trans>Actions</Trans>
-        </Text>
-        <View style={[a.flex_row, a.flex_wrap, a.gap_sm]}>
-          {can(PERMISSIONS.takedowns) &&
-            (status?.takendown ? (
+      {!labelsOnly && (
+        <View style={[a.gap_sm]}>
+          <Text style={[a.text_lg, a.font_semi_bold]}>
+            <Trans>Actions</Trans>
+          </Text>
+          <View style={[a.flex_row, a.flex_wrap, a.gap_sm]}>
+            {takesTakedowns(labeler) &&
+              can(PERMISSIONS.takedowns) &&
+              (status?.takendown ? (
+                <ActionButton
+                  label={l`Restore`}
+                  disabled={isPending}
+                  onPress={() =>
+                    send(
+                      {
+                        $type:
+                          'tools.ozone.moderation.defs#modEventReverseTakedown',
+                        ...comment,
+                      },
+                      l`Restored`,
+                    )
+                  }
+                />
+              ) : (
+                <ActionButton
+                  label={l`Take down`}
+                  negative
+                  disabled={isPending}
+                  onPress={() => takedownPrompt.open()}
+                />
+              ))}
+            {takesTakedowns(labeler) &&
+              can(PERMISSIONS.mutes) &&
+              (status?.muted ? (
+                <ActionButton
+                  label={l`Unmute reports`}
+                  disabled={isPending}
+                  onPress={() =>
+                    send(
+                      {
+                        $type: 'tools.ozone.moderation.defs#modEventUnmute',
+                        ...comment,
+                      },
+                      l`Reports unmuted`,
+                    )
+                  }
+                />
+              ) : (
+                <ActionButton
+                  label={l`Mute reports for 7 days`}
+                  disabled={isPending}
+                  onPress={() =>
+                    send(
+                      {
+                        $type: 'tools.ozone.moderation.defs#modEventMute',
+                        durationInHours: 168,
+                        ...comment,
+                      },
+                      l`Reports muted`,
+                    )
+                  }
+                />
+              ))}
+            {triage && (
               <ActionButton
-                label={l`Restore`}
-                disabled={isPending}
+                label={l`Save note`}
+                disabled={isPending || !text}
                 onPress={() =>
                   send(
                     {
-                      $type:
-                        'tools.ozone.moderation.defs#modEventReverseTakedown',
-                      ...comment,
+                      $type: 'tools.ozone.moderation.defs#modEventComment',
+                      comment: text ?? '',
                     },
-                    l`Restored`,
+                    l`Note saved`,
                   )
                 }
               />
-            ) : (
-              <ActionButton
-                label={l`Take down`}
-                negative
-                disabled={isPending}
-                onPress={() => takedownPrompt.open()}
-              />
-            ))}
-          {can(PERMISSIONS.mutes) &&
-            (status?.muteUntil && Date.parse(status.muteUntil) > Date.now() ? (
-              <ActionButton
-                label={l`Unmute reports`}
-                disabled={isPending}
-                onPress={() =>
-                  send(
-                    {
-                      $type: 'tools.ozone.moderation.defs#modEventUnmute',
-                      ...comment,
-                    },
-                    l`Reports unmuted`,
-                  )
-                }
-              />
-            ) : (
-              <ActionButton
-                label={l`Mute reports for 7 days`}
-                disabled={isPending}
-                onPress={() =>
-                  send(
-                    {
-                      $type: 'tools.ozone.moderation.defs#modEventMute',
-                      durationInHours: 168,
-                      ...comment,
-                    },
-                    l`Reports muted`,
-                  )
-                }
-              />
-            ))}
-          {can(PERMISSIONS.triage) && (
-            <ActionButton
-              label={l`Save note`}
-              disabled={isPending || !text}
-              onPress={() =>
-                send(
-                  {
-                    $type: 'tools.ozone.moderation.defs#modEventComment',
-                    comment: text ?? '',
-                  },
-                  l`Note saved`,
-                )
-              }
+            )}
+          </View>
+        </View>
+      )}
+
+      {triage && labeler.flagTargets.length > 0 && (
+        <View style={[a.gap_sm]}>
+          <Text style={[a.text_lg, a.font_semi_bold]}>
+            <Trans>Flag to a public labeler</Trans>
+          </Text>
+          <Picker
+            heading={l`Flag to`}
+            value={flagTarget}
+            onChange={next => {
+              setFlagTarget(next)
+              setFlagReason(undefined)
+            }}
+            items={labeler.flagTargets.map(each => ({
+              label: each.name,
+              value: each.did,
+            }))}
+          />
+          {target_ && (
+            <Picker
+              heading={l`Flag reason`}
+              value={flagReason}
+              onChange={setFlagReason}
+              placeholder={l`Choose a reason`}
+              items={target_.reasonTypes.map(token => ({
+                label: reasonNameOf(token),
+                value: token,
+              }))}
             />
           )}
+          {target_?.canEscalate && (
+            <Toggle.Item
+              testID="moderateFlagEscalate"
+              name="moderateFlagEscalate"
+              type="checkbox"
+              label={l`Escalate it there too`}
+              value={flagEscalate}
+              onChange={setFlagEscalate}>
+              <Toggle.Checkbox />
+              <Toggle.LabelText style={[a.flex_1, a.font_normal]}>
+                <Trans>Escalate it there too</Trans>
+              </Toggle.LabelText>
+            </Toggle.Item>
+          )}
+          <ActionButton
+            label={l`Flag`}
+            disabled={isPending || !target_ || !flagReason}
+            onPress={sendFlag}
+          />
         </View>
-      </View>
+      )}
 
-      {can(PERMISSIONS.triage) && hasOpenReports(status) && (
+      {triage && (status?.openReports ?? 0) > 0 && (
         <View style={[a.gap_sm]}>
           <Admonition type="warning">
             <Trans>This has open reports.</Trans>
@@ -552,23 +655,28 @@ export function Actions({
         </Trans>
       </Text>
 
-      <Prompt.Basic
-        control={takedownPrompt}
-        title={
-          target.type === 'post'
-            ? l`Take down this post?`
-            : l`Take down this account?`
-        }
-        description={l`It will be hidden wherever this labeler is used. You can restore it later.`}
-        confirmButtonCta={l`Take down`}
-        confirmButtonColor="negative"
-        onConfirm={() =>
-          send(
-            {$type: 'tools.ozone.moderation.defs#modEventTakedown', ...comment},
-            l`Taken down`,
-          )
-        }
-      />
+      {takesTakedowns(labeler) && (
+        <Prompt.Basic
+          control={takedownPrompt}
+          title={
+            target.type === 'post'
+              ? l`Take down this post?`
+              : l`Take down this account?`
+          }
+          description={l`It will be hidden wherever this labeler is used. You can restore it later.`}
+          confirmButtonCta={l`Take down`}
+          confirmButtonColor="negative"
+          onConfirm={() =>
+            send(
+              {
+                $type: 'tools.ozone.moderation.defs#modEventTakedown',
+                ...comment,
+              },
+              l`Taken down`,
+            )
+          }
+        />
+      )}
     </View>
   )
 }
@@ -598,40 +706,41 @@ function ActionButton({
 
 function CurrentLabels({
   heading,
-  query,
-  nameOf,
+  state,
+  labelName,
   canRemove,
   disabled,
   onRemove,
 }: {
   heading: string
-  query: {data?: QueriedLabel[]; isLoading: boolean; isError: boolean}
-  nameOf: (identifier: string) => string
-  canRemove: (label: QueriedLabel) => boolean
+  state: {data?: SubjectState; isLoading: boolean; isError: boolean}
+  labelName: (label: SubjectLabel) => string
+  canRemove: (label: SubjectLabel) => boolean
   disabled: boolean
-  onRemove: (label: QueriedLabel) => void
+  onRemove: (label: SubjectLabel) => void
 }) {
   const t = useTheme()
   const {t: l} = useLingui()
+  const labels = state.data?.labels ?? []
   return (
     <View style={[a.gap_xs]}>
       <Text style={[a.text_md, a.font_semi_bold]}>{heading}</Text>
-      {query.isLoading ? (
+      {state.isLoading ? (
         <Loader />
-      ) : query.isError ? (
+      ) : state.isError ? (
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
           <Trans>Couldn’t load this labeler’s labels.</Trans>
         </Text>
-      ) : (query.data ?? []).length === 0 ? (
+      ) : labels.length === 0 ? (
         <Text style={[a.text_sm, t.atoms.text_contrast_medium]}>
           <Trans>No labels from this labeler.</Trans>
         </Text>
       ) : (
-        (query.data ?? []).map(label => {
-          const name = nameOf(label.val)
+        labels.map(label => {
+          const name = labelName(label)
           return (
             <View
-              key={label.val}
+              key={`${label.val} ${label.audience ?? ''}`}
               style={[a.flex_row, a.align_center, a.justify_between, a.gap_sm]}>
               <Text style={[a.text_md, a.flex_1]}>{name}</Text>
               {canRemove(label) && (

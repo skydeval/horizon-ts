@@ -8,8 +8,39 @@ import {fireEvent, render, waitFor} from '@testing-library/react-native'
  * labeler is a fake.
  */
 
-type Sent = {labeler: string; event: {$type: string}; subject: unknown}
+type Sent = {
+  labeler: string
+  event: {$type: string}
+  subject: unknown
+  audience?: string
+  direct?: true
+}
 const mockSent: Sent[] = []
+let mockDirectSubject: {
+  labels: {val: string; cts: string; audience?: string}[]
+  openReportCount: number
+} = {labels: [], openReportCount: 0}
+jest.mock('#/horizon/moderate/direct', () => ({
+  emitDirectEvent: (
+    _client: unknown,
+    labeler: string,
+    {
+      event,
+      subject,
+      audience,
+    }: {event: {$type: string}; subject: unknown; audience?: string},
+  ) => {
+    mockSent.push({
+      labeler,
+      event,
+      subject,
+      ...(audience ? {audience} : {}),
+      direct: true,
+    })
+    return Promise.resolve({eventId: 1})
+  },
+  getDirectSubject: () => Promise.resolve(mockDirectSubject),
+}))
 let mockLabels: {src: string; uri: string; val: string; cts: string}[] = []
 let mockStatus: Record<string, unknown> | undefined
 jest.mock('#/horizon/moderate/api', () => {
@@ -257,8 +288,38 @@ const target = {
   authorDid: 'did:plc:author',
 }
 
+const MEMBER_LABELER = 'did:web:cairn.example.test:labeler:abc'
+
+function memberLabeler(
+  permissions: string[],
+  kind: TeamLabeler['kind'] = 'moderation',
+): TeamLabeler {
+  return {
+    ...labeler(permissions),
+    source: 'member',
+    did: MEMBER_LABELER,
+    name: 'Umbrae test',
+    kind,
+    reasonNames: {'tools.cairn.report.defs#reasonDogpiling': 'Harm: Dogpiling'},
+    audiences: [{id: 'g1', name: 'Group One'}],
+    flagTargets: [
+      {
+        did: LABELER,
+        name: 'Cairn labeler',
+        reasonTypes: ['tools.ozone.report.defs#reasonMisleadingSpam'],
+        canEscalate: true,
+      },
+    ],
+  }
+}
+
 function labeler(permissions: string[]): TeamLabeler {
   return {
+    source: 'public',
+    kind: 'moderation',
+    reasonNames: {},
+    audiences: [],
+    flagTargets: [],
     did: LABELER,
     name: 'Cairn labeler',
     permissions: new Set(permissions),
@@ -282,14 +343,15 @@ function labeler(permissions: string[]): TeamLabeler {
   }
 }
 
-function mount(permissions: string[]) {
+function mount(permissions: string[] | TeamLabeler) {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}},
   })
+  const chosen = Array.isArray(permissions) ? labeler(permissions) : permissions
   return render(
     <QueryClientProvider client={queryClient}>
       <I18nProvider i18n={i18n}>
-        <Actions labeler={labeler(permissions)} target={target} />
+        <Actions labeler={chosen} target={target} />
       </I18nProvider>
     </QueryClientProvider>,
   )
@@ -299,7 +361,108 @@ beforeEach(() => {
   mockSent.length = 0
   mockLabels = []
   mockStatus = undefined
+  mockDirectSubject = {labels: [], openReportCount: 0}
   mockToast.mockReset()
+})
+
+describe('Moderate dialog, member labelers', () => {
+  const all = [
+    'labels.apply',
+    'labels.system',
+    'takedowns',
+    'mutes',
+    'cases.triage',
+  ]
+
+  it('labels through cairn directly, limited to the chosen audience', async () => {
+    const view = mount(memberLabeler(all))
+    await waitFor(() =>
+      expect(view.getAllByText('No labels from this labeler.')).toHaveLength(2),
+    )
+    fireEvent.press(view.getByTestId('option:Label:spoiler'))
+    fireEvent.press(view.getByTestId('option:Who sees it:g1'))
+    fireEvent.press(view.getByTestId('moderateApplyLabel'))
+    await waitFor(() => expect(mockSent).toHaveLength(1))
+    expect(mockSent[0]).toMatchObject({
+      labeler: MEMBER_LABELER,
+      audience: 'g1',
+      direct: true,
+      event: {
+        $type: 'tools.ozone.moderation.defs#modEventLabel',
+        createLabelVals: ['spoiler'],
+      },
+    })
+  })
+
+  it('offers no takedown or mute, even with those permissions', async () => {
+    const view = mount(memberLabeler(all))
+    await waitFor(() => view.getByLabelText('Save note'))
+    expect(view.queryByLabelText('Take down')).toBeNull()
+    expect(view.queryByLabelText('Restore')).toBeNull()
+    expect(view.queryByLabelText('Mute reports for 7 days')).toBeNull()
+  })
+
+  it('names reasons as the labeler does', () => {
+    const view = mount(memberLabeler(all))
+    expect(
+      view.getByTestId(
+        'option:Reason (optional):tools.cairn.report.defs#reasonDogpiling',
+      ).props.accessibilityLabel,
+    ).toBe('Harm: Dogpiling')
+  })
+
+  it('flags to a public labeler with one of its reasons, escalating if asked', async () => {
+    const view = mount(memberLabeler(all))
+    expect(view.getByLabelText('Flag').props.accessibilityState).toEqual(
+      expect.objectContaining({disabled: true}),
+    )
+    fireEvent.press(
+      view.getByTestId(
+        'option:Flag reason:tools.ozone.report.defs#reasonMisleadingSpam',
+      ),
+    )
+    fireEvent.press(view.getByTestId('moderateFlagEscalate'))
+    fireEvent.press(view.getByLabelText('Flag'))
+    await waitFor(() => expect(mockSent).toHaveLength(1))
+    expect(mockSent[0].event).toEqual({
+      $type: 'tools.cairn.moderation.defs#flagEvent',
+      target: LABELER,
+      reasonType: 'tools.ozone.report.defs#reasonMisleadingSpam',
+      escalateTarget: true,
+    })
+  })
+
+  it('removes an audience label within its audience', async () => {
+    mockDirectSubject = {
+      labels: [{val: 'spoiler', cts: 'x', audience: 'g1'}],
+      openReportCount: 0,
+    }
+    const view = mount(memberLabeler(all))
+    const remove = await waitFor(() =>
+      view.getAllByLabelText('Remove Spoiler (Group One)'),
+    )
+    fireEvent.press(remove[0])
+    await waitFor(() => expect(mockSent).toHaveLength(1))
+    expect(mockSent[0]).toMatchObject({
+      audience: 'g1',
+      event: {negateLabelVals: ['spoiler'], createLabelVals: []},
+    })
+  })
+
+  it('a labels-only labeler takes a label and nothing else', async () => {
+    const view = mount(memberLabeler(all, 'labels_only'))
+    await waitFor(() => view.getByTestId('moderateApplyLabel'))
+    expect(view.queryByTestId('moderateNote')).toBeNull()
+    expect(view.queryByLabelText('Save note')).toBeNull()
+    expect(view.queryByLabelText('Flag')).toBeNull()
+    expect(view.queryByTestId('option:Label:!hide')).toBeNull()
+  })
+
+  it('shows open reports from cairn’s count', async () => {
+    mockDirectSubject = {labels: [], openReportCount: 2}
+    const view = mount(memberLabeler(all))
+    await waitFor(() => view.getByLabelText('Acknowledge'))
+  })
 })
 
 describe('Moderate dialog', () => {
@@ -363,13 +526,14 @@ describe('Moderate dialog', () => {
   it('keeps an optional reason, named, with the note', async () => {
     const view = mount(['labels.apply'])
     expect(
-      view.getByTestId('option:Reason:tools.cairn.report.defs#reasonDogpiling')
-        .props.accessibilityLabel,
+      view.getByTestId(
+        'option:Reason (optional):tools.cairn.report.defs#reasonDogpiling',
+      ).props.accessibilityLabel,
     ).toBe('Dogpiling')
     fireEvent.press(view.getByTestId('option:Label:spoiler'))
     fireEvent.press(
       view.getByTestId(
-        'option:Reason:tools.ozone.report.defs#reasonMisleadingSpam',
+        'option:Reason (optional):tools.ozone.report.defs#reasonMisleadingSpam',
       ),
     )
     fireEvent.changeText(view.getByTestId('moderateNote'), 'context')
