@@ -10,7 +10,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
     "version": "0.1.25",
     "build": 25,
     "date": "2026-11-20",
-    "summary": "Horizon's own moderation, more reliable blocks, and quieter threads.",
+    "summary": "Horizon's own moderation, longer sign-ins, more reliable blocks, and quieter threads.",
     "sections": [
       {
         "kind": "horizon",
@@ -23,6 +23,10 @@ export const PATCH_NOTES: readonly PatchNote[] = [
       {
         "kind": "fixes",
         "items": [
+          "Horizon no longer signs you out every week or two. After this update, the Android app asks you to sign in once more.",
+          "If a sign-in does end, signing back in is one tap.",
+          "Kryphocron posts can be reported from the ••• menu.",
+          "Creating a bsky.social account on the website now sends you to bsky.app, instead of stopping after the captcha.",
           "Blocks Bluesky misses now count. For members, Horizon also checks who blocks you and whom you block, including through lists Bluesky can't find.",
           "Threads no longer show a Thread Lens notice. When Thread Lens can't answer, the thread quietly tries again every few seconds."
         ]
