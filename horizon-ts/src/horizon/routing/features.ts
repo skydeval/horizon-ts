@@ -132,6 +132,11 @@ export const PRISM_FEATURES = [
    * labeler images for members. Listed only for members.
    */
   'umbrae.read',
+  /*
+   * Block state from prism (`blocks/`): `app.nearhorizon.blocks.check`,
+   * set on AppView answers. Listed only for members.
+   */
+  'blocks.check',
 ] as const
 
 export type PrismFeature = (typeof PRISM_FEATURES)[number]

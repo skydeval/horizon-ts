@@ -14,6 +14,8 @@ import {until} from '#/lib/async/until'
 import {type ImageMeta} from '#/state/gallery'
 import {STALE} from '#/state/queries'
 import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
+// HORIZON: a list unblock made here outweighs prism's cached copy of its blocks
+import {forgetBlockList} from '#/horizon/blocks/state'
 // HORIZON: list mutes made here change the device's copy, which Thread Lens applies
 import {withListMuteNoted} from '#/horizon/mutes/track'
 import {app, com} from '#/lexicons'
@@ -392,6 +394,8 @@ export function useListBlockMutation() {
       if (block) {
         await pdsClient.call(blockActorList, {list: uri as AtUriString})
       } else {
+        // HORIZON: prism's cached copy of this list's blocks no longer applies
+        if (pdsClient.did) forgetBlockList(pdsClient.did, uri)
         await pdsClient.call(unblockActorList, {list: uri as AtUriString})
       }
 

@@ -27,6 +27,7 @@ import {AppearanceSync} from '#/horizon/appearance/AppearanceSync'
 import {InPlaceSignInWindow} from '#/horizon/auth/InPlaceSignIn'
 import {PasswordGateDialog} from '#/horizon/auth/PasswordSessionGate'
 import {StalledSignInCheck} from '#/horizon/auth/StalledSignInCheck'
+import {BlockStateSync} from '#/horizon/blocks/BlockStateSync'
 import {BskyModerationSync} from '#/horizon/bsky-moderation'
 import {CairnLabelerSync} from '#/horizon/cairn/CairnLabelerSync'
 import {IdentityTokenPrefetch} from '#/horizon/identity/TokenPrefetch'
@@ -127,6 +128,7 @@ export function HorizonHost() {
       <BskyModerationSync />
       <CairnLabelerSync />
       <MemberLabelersSync />
+      <BlockStateSync />
       <SystemAccountsHost />
       <InPlaceSignInWindow />
       <PasswordGateDialog />

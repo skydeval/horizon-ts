@@ -41,6 +41,8 @@ import {useAppviewClient, usePdsClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {useAnalytics} from '#/analytics'
 import {type Metrics, toClout} from '#/analytics/metrics'
+// HORIZON: an unblock made here outweighs prism's cached copy of the block
+import {forgetBlock} from '#/horizon/blocks/state'
 // HORIZON: mutes made here change the device's copy, which Thread Lens applies
 import {withAccountMuteNoted} from '#/horizon/mutes/track'
 // HORIZON: a restored account's profile is read from prism when stock fails
@@ -707,10 +709,12 @@ function useProfileUnblockMutation() {
   const pdsClient = usePdsClient()
   const queryClient = useQueryClient()
   return useMutation<void, Error, {did: string; blockUri: string}>({
-    mutationFn: async ({blockUri}) => {
+    mutationFn: async ({did, blockUri}) => {
       if (!currentAccount) {
         throw new Error('Not signed in')
       }
+      // HORIZON: prism's cached copy of this block no longer applies
+      forgetBlock(currentAccount.did, did)
       const {rkeySafe: rkey} = new AtUri(blockUri)
       await pdsClient.delete(app.bsky.graph.block, {
         repo: currentAccount.did,
