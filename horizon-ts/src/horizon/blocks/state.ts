@@ -318,6 +318,72 @@ function merge(viewer: string, accounts: Map<string, Account[]>): boolean {
 }
 
 /**
+ * How `other` and the reader block each other, by prism's cached answer:
+ * `BlockedActor` when the reader blocks them, `BlockedByActor` when they
+ * block the reader (the AppView's own error names), or nothing.
+ */
+function blockBetween(
+  viewer: string,
+  other: string,
+): 'BlockedActor' | 'BlockedByActor' | undefined {
+  if (other === viewer) return undefined
+  const state = fresh(viewer, other, Date.now())?.state
+  if (!state || !found(state)) return undefined
+  if (state.blockedBy?.direct || state.blockedBy?.lists?.length) {
+    return 'BlockedByActor'
+  }
+  const direct = recent(forgotten, viewer, other)
+    ? undefined
+    : state.blocking?.direct
+  const list = state.blocking?.lists?.some(
+    l => typeof l?.uri === 'string' && !recent(forgottenLists, viewer, l.uri),
+  )
+  return direct || list ? 'BlockedActor' : undefined
+}
+
+/**
+ * Whether the signed-in reader and `other` block each other, by prism,
+ * waiting at most {@link BLOCKS_WAIT_MS} for an answer not cached. Nothing
+ * when prism doesn't serve block checks or can't answer in time.
+ */
+export async function checkBlockWith(
+  other: string,
+): Promise<'BlockedActor' | 'BlockedByActor' | undefined> {
+  if (!other.startsWith('did:')) return undefined
+  const current = getCurrentClients()
+  const viewer = current?.did
+  if (!current || !viewer || other === viewer) return undefined
+  if (!servesBlockChecks(viewer)) return undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    ensure(viewer, current.pdsClient, [other]),
+    new Promise<void>(resolve => {
+      timer = setTimeout(resolve, BLOCKS_WAIT_MS)
+    }),
+  ])
+  if (timer) clearTimeout(timer)
+  return blockBetween(viewer, other)
+}
+
+/**
+ * Leave out of a feed answer the reposts by accounts that block or are
+ * blocked by the reader, as the AppView does for blocks it knows. Returns
+ * whether any was left out.
+ */
+function dropBlockedReposts(viewer: string, body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false
+  const feed = (body as {feed?: unknown}).feed
+  if (!Array.isArray(feed)) return false
+  const kept = feed.filter(item => {
+    const by = (item as {reason?: {by?: {did?: unknown}}})?.reason?.by?.did
+    return typeof by !== 'string' || !blockBetween(viewer, by)
+  })
+  if (kept.length === feed.length) return false
+  ;(body as {feed: unknown[]}).feed = kept
+  return true
+}
+
+/**
  * Set prism's block state on an AppView answer for `viewer`, waiting at most
  * {@link BLOCKS_WAIT_MS}. Returns the answer, rebuilt when a block was set.
  */
@@ -347,7 +413,9 @@ export async function blockAnswer(
     }),
   ])
   if (timer) clearTimeout(timer)
-  if (!merge(viewer, accounts)) return response
+  const merged = merge(viewer, accounts)
+  const dropped = dropBlockedReposts(viewer, body)
+  if (!merged && !dropped) return response
   const headers = new Headers(response.headers)
   headers.delete('content-length')
   headers.delete('content-encoding')

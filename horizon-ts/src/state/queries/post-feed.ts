@@ -39,6 +39,9 @@ import {DEFAULT_LOGGED_OUT_PREFERENCES} from '#/state/queries/preferences/const'
 import {useAppviewClient, useSession} from '#/state/session'
 import * as userActionHistory from '#/state/userActionHistory'
 import {KnownError} from '#/view/com/posts/PostFeedErrorMessage'
+// HORIZON: private posts on profile feeds
+// HORIZON: a profile's tabs load nothing across a block only prism knows
+import {withBlockGate} from '#/horizon/blocks/feed-gate'
 // HORIZON: identity import
 import {
   isLaterPage,
@@ -54,7 +57,6 @@ import {carryTopFeedPage} from '#/horizon/private/feed/carry'
 import {anyPageDegraded, pageFlagsOf} from '#/horizon/private/feed/degraded'
 // HORIZON: private posts on profile feeds
 import {privateTabDid, withPrivateKey} from '#/horizon/private/feed/keys'
-// HORIZON: private posts on profile feeds
 import {horizonFeedApi} from '#/horizon/private/feed/legacy'
 // HORIZON: private posts on profile feeds
 import {usePrivateFeedSource} from '#/horizon/private/membership'
@@ -230,23 +232,27 @@ export function usePostFeedQuery(
       const {api, cursor} = pageParam
         ? pageParam
         : {
-            // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (start)
-            api: horizonFeedApi(
+            // HORIZON: a profile's tabs load nothing across a block only prism knows
+            api: withBlockGate(
               feedDesc,
-              privateSource,
-              // HORIZON: a restored account's tabs read prism's pages when stock fails
-              refractAuthorFeedApi(
+              // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (start)
+              horizonFeedApi(
                 feedDesc,
-                createApi({
+                privateSource,
+                // HORIZON: a restored account's tabs read prism's pages when stock fails
+                refractAuthorFeedApi(
                   feedDesc,
-                  feedParams: params || {},
-                  feedTuners,
-                  client,
-                  // Not in the query key because they don't change:
-                  userInterests,
-                  // Not in the query key. Reacting to it switching isn't important:
-                  enableFollowingToDiscoverFallback,
-                }),
+                  createApi({
+                    feedDesc,
+                    feedParams: params || {},
+                    feedTuners,
+                    client,
+                    // Not in the query key because they don't change:
+                    userInterests,
+                    // Not in the query key. Reacting to it switching isn't important:
+                    enableFollowingToDiscoverFallback,
+                  }),
+                ),
               ),
             ),
             // HORIZON: the Private tab reads prism; Posts and Replies merge private posts (end)

@@ -93,6 +93,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 - **Blocks Bluesky misses now count.** For members, Horizon also checks
   who blocks you and whom you block, including through lists Bluesky can't
   find, so a blocked profile shows as blocked and its posts stay hidden.
+- **A profile blocked either way loads none of its tabs,** as Bluesky does
+  for blocks it knows, and reposts by blocked accounts no longer show in
+  your feeds.
 - **Threads no longer show a Thread Lens notice.** When Thread Lens can't
   answer, the thread quietly tries again every few seconds.
 - **Horizon no longer signs you out every week or two.** Sign-ins now last

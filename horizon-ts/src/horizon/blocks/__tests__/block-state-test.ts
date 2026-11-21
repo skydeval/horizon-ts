@@ -24,8 +24,10 @@ jest.mock('#/horizon/routing/current-clients', () => ({
 
 import {moderatePost, type ModerationOpts} from '@bsky/sdk/moderation'
 
+import {getErrorName} from '#/lib/xrpc-error'
 import {app} from '#/lexicons'
 import * as bsky from '#/types/bsky'
+import {withBlockGate} from '../feed-gate'
 import {
   BLOCKS_WAIT_MS,
   type BlockState,
@@ -216,5 +218,87 @@ describe('withBlockState', () => {
     served = true
     await read(() => ({posts: [post(VIEWER)]}))
     expect(calls).toEqual([])
+  })
+})
+
+describe('blocked profiles and reposts', () => {
+  function feedApi() {
+    const fetched: unknown[] = []
+    return {
+      fetched,
+      api: {
+        peekLatest: () => Promise.reject(new Error('unused')),
+        fetch: (params: unknown) => {
+          fetched.push(params)
+          return Promise.resolve({feed: []})
+        },
+      },
+    }
+  }
+
+  it('refuses every tab of a profile that blocks the reader', async () => {
+    states = [{did: OTHER, blockedBy: {lists: [{uri: LIST}]}}]
+    for (const desc of [
+      `author|${OTHER}|posts_and_author_threads`,
+      `author|${OTHER}|horizon_private`,
+      `author|${OTHER}|posts_with_replies`,
+      `likes|${OTHER}`,
+    ]) {
+      const {api, fetched} = feedApi()
+      const error = await withBlockGate(desc, api as never)
+        .fetch({cursor: undefined, limit: 30})
+        .then(
+          () => undefined,
+          (e: unknown) => e,
+        )
+      expect(getErrorName(error)).toBe('BlockedByActor')
+      expect(fetched).toHaveLength(0)
+    }
+  })
+
+  it('refuses a profile the reader blocks by list, until they unblock it', async () => {
+    states = [{did: OTHER, blocking: {lists: [{uri: LIST}]}}]
+    const desc = `author|${OTHER}|posts_and_author_threads`
+    const first = await withBlockGate(desc, feedApi().api as never)
+      .fetch({cursor: undefined, limit: 30})
+      .catch((e: unknown) => e)
+    expect(getErrorName(first)).toBe('BlockedActor')
+    forgetBlockList(VIEWER, LIST)
+    const {api, fetched} = feedApi()
+    await withBlockGate(desc, api).fetch({
+      cursor: undefined,
+      limit: 30,
+    })
+    expect(fetched).toHaveLength(1)
+  })
+
+  it('loads a profile when prism finds no block, or only partly covers it', async () => {
+    states = [{did: OTHER, partial: true}]
+    const {api, fetched} = feedApi()
+    await withBlockGate(`author|${OTHER}|posts_and_author_threads`, api).fetch({
+      cursor: undefined,
+      limit: 30,
+    })
+    expect(fetched).toHaveLength(1)
+  })
+
+  it('leaves out reposts by an account that blocks the reader', async () => {
+    states = [{did: OTHER, blockedBy: {direct: true}}]
+    const response = await agent(() => ({
+      feed: [
+        {
+          post: post(THIRD),
+          reason: {
+            $type: 'app.bsky.feed.defs#reasonRepost',
+            by: {did: OTHER, handle: 'other.example.test'},
+            indexedAt: 'x',
+          },
+        },
+        {post: post(THIRD)},
+      ],
+    })).fetchHandler('/xrpc/app.bsky.feed.getTimeline', {method: 'GET'})
+    const body = (await response.json()) as {feed: {reason?: unknown}[]}
+    expect(body.feed).toHaveLength(1)
+    expect(body.feed[0].reason).toBeUndefined()
   })
 })

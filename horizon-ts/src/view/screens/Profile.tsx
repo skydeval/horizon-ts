@@ -156,11 +156,15 @@ function ProfileScreenInner({route}: Props) {
   }, [name, resolveError])
 
   // When we open the profile, we want to reset the posts query if we are blocked.
+  // HORIZON: also when the reader blocks them, for blocks only prism knows
+  const blockedEitherWay = !!(
+    profile?.viewer?.blockedBy || profile?.viewer?.blocking
+  )
   useEffect(() => {
-    if (resolvedDid && profile?.viewer?.blockedBy) {
+    if (resolvedDid && blockedEitherWay) {
       resetProfilePostsQueries(queryClient, resolvedDid)
     }
-  }, [queryClient, profile?.viewer?.blockedBy, resolvedDid])
+  }, [queryClient, blockedEitherWay, resolvedDid])
 
   // Most pushes will happen here, since we will have only placeholder data
   // A disabled dependent query remains pending, so only consider the profile
