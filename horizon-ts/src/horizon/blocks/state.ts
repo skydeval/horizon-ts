@@ -77,6 +77,8 @@ const PLACEHOLDER_CID =
 export type BlockStateSource = {
   serves(did: string): boolean
   fetchStates(pdsClient: Client, others: string[]): Promise<BlockState[]>
+  /** Whether the AppView still shows a list (not taken down or deleted). */
+  listShown(uri: string): Promise<boolean>
 }
 
 let source: BlockStateSource | undefined
@@ -90,9 +92,59 @@ function servesBlockChecks(did: string): boolean {
   return !!source?.serves(did)
 }
 
-function fetchStates(pdsClient: Client, others: string[]) {
-  if (!source) return Promise.resolve([])
-  return source.fetchStates(pdsClient, others)
+/** How long whether a list is shown is kept. */
+const LIST_TTL_MS = 10 * 60_000
+/** Whether each list is shown, by URI. */
+const listsShown = new Map<
+  string,
+  {shown: Promise<boolean>; at: number}
+>()
+
+function listShown(uri: string): Promise<boolean> {
+  const now = Date.now()
+  const known = listsShown.get(uri)
+  if (known && now - known.at < LIST_TTL_MS) return known.shown
+  const shown = source
+    ? source.listShown(uri).catch(() => false)
+    : Promise.resolve(false)
+  listsShown.set(uri, {shown, at: now})
+  return shown
+}
+
+/**
+ * `states` without the lists the AppView no longer shows: a list taken down
+ * by Bluesky's moderation (or deleted) blocks nobody, though its records
+ * remain where prism reads them.
+ */
+async function withShownLists(states: BlockState[]): Promise<BlockState[]> {
+  const uris = new Set<string>()
+  for (const state of states) {
+    for (const list of state.blocking?.lists ?? []) uris.add(list.uri)
+    for (const list of state.blockedBy?.lists ?? []) uris.add(list.uri)
+  }
+  if (uris.size === 0) return states
+  const shown = new Set<string>()
+  await Promise.all(
+    Array.from(uris).map(async uri => {
+      if (await listShown(uri)) shown.add(uri)
+    }),
+  )
+  const keep = (lists: BlockList[] | undefined) =>
+    lists?.filter(list => shown.has(list.uri))
+  return states.map(state => ({
+    ...state,
+    ...(state.blocking
+      ? {blocking: {...state.blocking, lists: keep(state.blocking.lists)}}
+      : {}),
+    ...(state.blockedBy
+      ? {blockedBy: {...state.blockedBy, lists: keep(state.blockedBy.lists)}}
+      : {}),
+  }))
+}
+
+async function fetchStates(pdsClient: Client, others: string[]) {
+  if (!source) return []
+  return withShownLists(await source.fetchStates(pdsClient, others))
 }
 
 type Entry = {state: BlockState; at: number; ttl: number}
@@ -136,6 +188,7 @@ export function forgetBlockList(viewer: string, list: string) {
 /** Drop every cached answer (sign-out, account switch). */
 export function dropBlockStates(viewer?: string) {
   if (viewer === undefined) {
+    listsShown.clear()
     cache.clear()
     pending.clear()
     backoffUntil.clear()

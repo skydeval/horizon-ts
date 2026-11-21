@@ -76,6 +76,8 @@ let delayMs = 0
 let fail = false
 let calls: string[][] = []
 let served = true
+/** Lists the AppView answers "List not found" for. */
+let takenDown = new Set<string>()
 
 function agent(body: () => unknown) {
   return withBlockState({
@@ -101,6 +103,7 @@ beforeEach(() => {
   fail = false
   calls = []
   served = true
+  takenDown = new Set()
   connectBlockState({
     serves: () => served,
     fetchStates: (_client, others) => {
@@ -111,6 +114,7 @@ beforeEach(() => {
         ? new Promise(resolve => setTimeout(() => resolve(answer), delayMs))
         : Promise.resolve(answer)
     },
+    listShown: uri => Promise.resolve(!takenDown.has(uri)),
   })
 })
 
@@ -270,6 +274,31 @@ describe('blocked profiles and reposts', () => {
       limit: 30,
     })
     expect(fetched).toHaveLength(1)
+  })
+
+  it('ignores a block through a list Bluesky took down, keeping a direct one', async () => {
+    takenDown = new Set([LIST])
+    states = [{did: OTHER, blockedBy: {lists: [{uri: LIST}]}}]
+    const {api, fetched} = feedApi()
+    await withBlockGate(`author|${OTHER}|posts_and_author_threads`, api).fetch({
+      cursor: undefined,
+      limit: 30,
+    })
+    expect(fetched).toHaveLength(1)
+    const body = await read(() => ({posts: [post()]}))
+    expect(body.posts[0].author.viewer).toEqual({})
+
+    resetBlockStates()
+    connectBlockState({
+      serves: () => true,
+      fetchStates: () =>
+        Promise.resolve([
+          {did: OTHER, blockedBy: {direct: true, lists: [{uri: LIST}]}},
+        ]),
+      listShown: () => Promise.resolve(false),
+    })
+    const direct = await read(() => ({posts: [post()]}))
+    expect(direct.posts[0].author.viewer).toEqual({blockedBy: true})
   })
 
   it('loads a profile when prism finds no block, or only partly covers it', async () => {

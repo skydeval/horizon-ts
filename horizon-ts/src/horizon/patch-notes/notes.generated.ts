@@ -27,7 +27,7 @@ export const PATCH_NOTES: readonly PatchNote[] = [
           "If a sign-in does end, signing back in is one tap.",
           "Kryphocron posts can be reported from the ••• menu.",
           "Creating a bsky.social account on the website now sends you to bsky.app, instead of stopping after the captcha.",
-          "Blocks Bluesky misses now count. For members, Horizon also checks who blocks you and whom you block, including through lists Bluesky can't find.",
+          "Blocks Bluesky misses now count. For members, Horizon also checks who blocks you and whom you block, including through lists Bluesky can't find. A list Bluesky's moderators took down blocks no one.",
           "A profile blocked either way now loads none of its tabs, and reposts by blocked accounts no longer show in your feeds.",
           "Threads no longer show a Thread Lens notice. When Thread Lens can't answer, the thread quietly tries again every few seconds."
         ]

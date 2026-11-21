@@ -95,7 +95,7 @@ Phase 6, optimisation, branding and tweaks, is under way.
   find, so a blocked profile shows as blocked and its posts stay hidden.
 - **A profile blocked either way loads none of its tabs,** as Bluesky does
   for blocks it knows, and reposts by blocked accounts no longer show in
-  your feeds.
+  your feeds. A list Bluesky's moderators took down blocks no one.
 - **Threads no longer show a Thread Lens notice.** When Thread Lens can't
   answer, the thread quietly tries again every few seconds.
 - **Horizon no longer signs you out every week or two.** Sign-ins now last

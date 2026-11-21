@@ -1,17 +1,22 @@
 import {useEffect} from 'react'
 
 import {
+  getCurrentAppviewClient,
   getCurrentClients,
   subscribeCurrentClients,
 } from '#/horizon/routing/current-clients'
 import {servesFeature} from '#/horizon/routing/features'
-import {fetchBlockStates} from './api'
+import {fetchBlockStates, fetchListShown} from './api'
 import {connectBlockState, dropBlockStates} from './state'
 
 // The AppView client's block state comes from here (see `state.ts`).
 connectBlockState({
   serves: did => servesFeature('blocks.check', did),
   fetchStates: (pdsClient, others) => fetchBlockStates(pdsClient, others),
+  listShown: uri => {
+    const appview = getCurrentAppviewClient()
+    return appview ? fetchListShown(appview, uri) : Promise.resolve(false)
+  },
 })
 
 /**
