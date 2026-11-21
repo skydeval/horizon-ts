@@ -6,39 +6,16 @@
  */
 
 import {type Client} from '@atproto/lex'
-import {type AtUriString, type NsidString} from '@atproto/syntax'
+import {type NsidString} from '@atproto/syntax'
 
 import {networkAwareFetch} from '#/state/session/network'
 import {PRISM_URL} from '#/horizon/routing/prism'
 import {getDirectPrismToken} from '#/horizon/routing/prism-direct'
-import {app} from '#/lexicons'
 import {type BlockState} from './state'
 
 export const BLOCKS_CHECK_LXM = 'app.nearhorizon.blocks.check' as NsidString
 
 type Fetch = typeof fetch
-
-/**
- * Whether the AppView still shows the list at `uri`. A list Bluesky's
- * moderation took down stays in its owner's repo, where prism reads it, but
- * the AppView answers "List not found" and no longer enforces it; nor does
- * Horizon. An answer that isn't a clear yes is treated as no: a block that
- * can't be confirmed never counts.
- */
-export async function fetchListShown(
-  appviewClient: Client,
-  uri: string,
-): Promise<boolean> {
-  try {
-    await appviewClient.call(app.bsky.graph.getList, {
-      list: uri as AtUriString,
-      limit: 1,
-    })
-    return true
-  } catch {
-    return false
-  }
-}
 
 /** Ask prism for the reader's block state with `others` (at most 100). */
 export async function fetchBlockStates(
