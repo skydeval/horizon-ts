@@ -8,17 +8,25 @@
  *   kryphocron post is never looked up, not even its author.
  * - `/profile/:name`: a link fetcher gets the profile's card page; anyone
  *   else gets the app, untouched.
- * - `/profile/:name/lists/:rkey`: a link fetcher gets the list's card
- *   page; anyone else gets the app, untouched.
+ * - `/profile/:name/lists/:rkey`, `/profile/:name/feed/:rkey` and
+ *   `/starter-pack/:name/:rkey`: a link fetcher gets the list's, feed's or
+ *   starter pack's card page; anyone else gets the app, untouched.
  * - `/api/v1/statuses/:id`: the Mastodon-shaped status the card page's
- *   alternate link leads Discord to; public posts, profiles and lists only.
+ *   alternate link leads Discord to; public posts, profiles, lists, feeds
+ *   and starter packs only.
  *
  * A failure on the card side falls back to the app (pages) or a 404
  * (status), never an error page. Relative imports only (see `status.ts`).
  */
 
-import {loadListCard, loadPostCard, loadProfileCard} from './fetch'
-import {decodeListStatusId, listCardPage, toMastodonListStatus} from './list'
+import {
+  collectionCardPage,
+  type CollectionType,
+  collectionUrl,
+  decodeCollectionStatusId,
+  toMastodonCollectionStatus,
+} from './collection'
+import {loadCollectionCard, loadPostCard, loadProfileCard} from './fetch'
 import {isLinkFetcher, linkCardPage} from './page'
 import {
   decodeProfileStatusId,
@@ -89,8 +97,12 @@ export async function handleProfilePage(
   }
 }
 
-/** `/profile/:name/lists/:rkey` */
-export async function handleListPage(
+/**
+ * `/profile/:name/lists/:rkey`, `/profile/:name/feed/:rkey`,
+ * `/starter-pack/:name/:rkey`
+ */
+export async function handleCollectionPage(
+  type: CollectionType,
   ctx: PagesContext,
   fetchImpl: Fetch = fetch,
 ): Promise<Response> {
@@ -99,9 +111,9 @@ export async function handleListPage(
     const origin = new URL(ctx.request.url).origin
     const name = param(ctx, 'name')
     const rkey = param(ctx, 'rkey')
-    const url = `${origin}/profile/${encodeURIComponent(name)}/lists/${encodeURIComponent(rkey)}`
-    const card = await loadListCard({name, rkey, url, fetchImpl})
-    return cardResponse(listCardPage(card, origin))
+    const url = collectionUrl(type, origin, name, rkey)
+    const card = await loadCollectionCard({type, name, rkey, url, fetchImpl})
+    return cardResponse(collectionCardPage(card, origin))
   } catch {
     return ctx.next()
   }
@@ -150,21 +162,26 @@ export async function handleStatus(
       return notFound()
     }
   }
-  const listId = decodeListStatusId(id)
-  if (listId) {
+  const collectionId = decodeCollectionStatusId(id)
+  if (collectionId) {
     try {
       const origin = new URL(ctx.request.url).origin
-      const card = await loadListCard({
-        name: listId.did,
-        rkey: listId.rkey,
+      const {type, did, rkey} = collectionId
+      const card = await loadCollectionCard({
+        type,
+        name: did,
+        rkey,
         url: '',
         fetchImpl,
       })
-      if (card.kind !== 'list') return notFound()
-      card.url = `${origin}/profile/${encodeURIComponent(
+      if (card.kind !== 'collection') return notFound()
+      card.url = collectionUrl(
+        type,
+        origin,
         card.author.handle || card.author.did,
-      )}/lists/${encodeURIComponent(listId.rkey)}`
-      return json(toMastodonListStatus(card, {id, origin}))
+        rkey,
+      )
+      return json(toMastodonCollectionStatus(card, {id, origin}))
     } catch {
       return notFound()
     }

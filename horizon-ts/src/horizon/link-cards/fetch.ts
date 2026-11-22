@@ -7,7 +7,14 @@
  * without the network. Relative imports only (see `status.ts`).
  */
 
-import {buildListCard, type ListCard, type MissingListCard} from './list'
+import {
+  buildFeedCard,
+  buildListCard,
+  buildStarterPackCard,
+  type CollectionCard,
+  type CollectionType,
+  type MissingCollectionCard,
+} from './collection'
 import {
   buildProfileCard,
   type MissingProfileCard,
@@ -210,35 +217,72 @@ export async function loadProfileCard({
   return buildProfileCard({profile, url, pronouns})
 }
 
+/** Per kind: the record's collection, the AppView call, and the builder. */
+const COLLECTION_LOOKUPS: Record<
+  CollectionType,
+  {
+    collection: string
+    path: (uri: string) => string
+    build: (
+      body: Record<string, unknown> | undefined,
+      url: string,
+      pronouns: string | undefined,
+    ) => CollectionCard | MissingCollectionCard
+  }
+> = {
+  list: {
+    collection: 'app.bsky.graph.list',
+    path: uri =>
+      `app.bsky.graph.getList?list=${encodeURIComponent(uri)}&limit=1`,
+    build: (body, url, pronouns) =>
+      buildListCard({list: body?.list, url, pronouns}),
+  },
+  feed: {
+    collection: 'app.bsky.feed.generator',
+    path: uri =>
+      `app.bsky.feed.getFeedGenerator?feed=${encodeURIComponent(uri)}`,
+    build: (body, url, pronouns) =>
+      buildFeedCard({feed: body?.view, url, pronouns}),
+  },
+  'starter-pack': {
+    collection: 'app.bsky.graph.starterpack',
+    path: uri =>
+      `app.bsky.graph.getStarterPack?starterPack=${encodeURIComponent(uri)}`,
+    build: (body, url, pronouns) =>
+      buildStarterPackCard({pack: body?.starterPack, url, pronouns}),
+  },
+}
+
 /**
- * The card for a list link, `/profile/<name>/lists/<rkey>`: the list from
- * the public AppView, and the owner's Horizon pronouns from their repo.
- * `url` is the link as the card names it.
+ * The card for a list, custom feed or starter pack link: the record's view
+ * from the public AppView, and the owner's Horizon pronouns from their
+ * repo. `url` is the link as the card names it.
  */
-export async function loadListCard({
+export async function loadCollectionCard({
+  type,
   name,
   rkey,
   url,
   fetchImpl,
 }: {
+  type: CollectionType
   name: string
   rkey: string
   url: string
   fetchImpl: Fetch
-}): Promise<ListCard | MissingListCard> {
-  if (!RKEY_RE.test(rkey)) return {kind: 'missing-list', url}
+}): Promise<CollectionCard | MissingCollectionCard> {
+  const missing = {kind: 'missing-collection', type, url} as const
+  if (!RKEY_RE.test(rkey)) return missing
   const did = await resolveName(name, fetchImpl)
-  if (!did) return {kind: 'missing-list', url}
-  const uri = `at://${did}/app.bsky.graph.list/${rkey}`
+  if (!did) return missing
+  const lookup = COLLECTION_LOOKUPS[type]
+  const uri = `at://${did}/${lookup.collection}/${rkey}`
   const [body, pds] = await Promise.all([
-    getJson(
-      fetchImpl,
-      `${PUBLIC_APPVIEW}/xrpc/app.bsky.graph.getList?list=${encodeURIComponent(uri)}&limit=1`,
-    ),
+    getJson(fetchImpl, `${PUBLIC_APPVIEW}/xrpc/${lookup.path(uri)}`),
     resolvePds(did, fetchImpl),
   ])
   const pronouns = pds ? await fetchPronouns(pds, did, fetchImpl) : undefined
-  return buildListCard({list: body?.list, url, pronouns})
+  return lookup.build(body, url, pronouns)
 }
 
 /**

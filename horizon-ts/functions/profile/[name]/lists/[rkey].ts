@@ -5,8 +5,9 @@
  */
 
 import {
-  handleListPage,
+  handleCollectionPage,
   type PagesContext,
 } from '../../../../src/horizon/link-cards/handlers'
 
-export const onRequestGet = (ctx: PagesContext) => handleListPage(ctx)
+export const onRequestGet = (ctx: PagesContext) =>
+  handleCollectionPage('list', ctx)
