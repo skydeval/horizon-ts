@@ -7,6 +7,7 @@
  * without the network. Relative imports only (see `status.ts`).
  */
 
+import {buildListCard, type ListCard, type MissingListCard} from './list'
 import {
   buildProfileCard,
   type MissingProfileCard,
@@ -207,6 +208,37 @@ export async function loadProfileCard({
   ])
   const pronouns = pds ? await fetchPronouns(pds, did, fetchImpl) : undefined
   return buildProfileCard({profile, url, pronouns})
+}
+
+/**
+ * The card for a list link, `/profile/<name>/lists/<rkey>`: the list from
+ * the public AppView, and the owner's Horizon pronouns from their repo.
+ * `url` is the link as the card names it.
+ */
+export async function loadListCard({
+  name,
+  rkey,
+  url,
+  fetchImpl,
+}: {
+  name: string
+  rkey: string
+  url: string
+  fetchImpl: Fetch
+}): Promise<ListCard | MissingListCard> {
+  if (!RKEY_RE.test(rkey)) return {kind: 'missing-list', url}
+  const did = await resolveName(name, fetchImpl)
+  if (!did) return {kind: 'missing-list', url}
+  const uri = `at://${did}/app.bsky.graph.list/${rkey}`
+  const [body, pds] = await Promise.all([
+    getJson(
+      fetchImpl,
+      `${PUBLIC_APPVIEW}/xrpc/app.bsky.graph.getList?list=${encodeURIComponent(uri)}&limit=1`,
+    ),
+    resolvePds(did, fetchImpl),
+  ])
+  const pronouns = pds ? await fetchPronouns(pds, did, fetchImpl) : undefined
+  return buildListCard({list: body?.list, url, pronouns})
 }
 
 /**

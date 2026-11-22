@@ -10,6 +10,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **List links show a card in Discord and other chat apps:** the list's
+  name, owner, description, size and picture.
 - **Horizon's own moderation is built in,** next to Bluesky's: always on,
   and offered whenever you report something.
 - **Your reports on kryphocron posts in the moderation inbox,** under Your

@@ -8,14 +8,17 @@
  *   kryphocron post is never looked up, not even its author.
  * - `/profile/:name`: a link fetcher gets the profile's card page; anyone
  *   else gets the app, untouched.
+ * - `/profile/:name/lists/:rkey`: a link fetcher gets the list's card
+ *   page; anyone else gets the app, untouched.
  * - `/api/v1/statuses/:id`: the Mastodon-shaped status the card page's
- *   alternate link leads Discord to; public posts and profiles only.
+ *   alternate link leads Discord to; public posts, profiles and lists only.
  *
  * A failure on the card side falls back to the app (pages) or a 404
  * (status), never an error page. Relative imports only (see `status.ts`).
  */
 
-import {loadPostCard, loadProfileCard} from './fetch'
+import {loadListCard, loadPostCard, loadProfileCard} from './fetch'
+import {decodeListStatusId, listCardPage, toMastodonListStatus} from './list'
 import {isLinkFetcher, linkCardPage} from './page'
 import {
   decodeProfileStatusId,
@@ -86,6 +89,24 @@ export async function handleProfilePage(
   }
 }
 
+/** `/profile/:name/lists/:rkey` */
+export async function handleListPage(
+  ctx: PagesContext,
+  fetchImpl: Fetch = fetch,
+): Promise<Response> {
+  if (!isLinkFetcher(ctx.request.headers.get('user-agent'))) return ctx.next()
+  try {
+    const origin = new URL(ctx.request.url).origin
+    const name = param(ctx, 'name')
+    const rkey = param(ctx, 'rkey')
+    const url = `${origin}/profile/${encodeURIComponent(name)}/lists/${encodeURIComponent(rkey)}`
+    const card = await loadListCard({name, rkey, url, fetchImpl})
+    return cardResponse(listCardPage(card, origin))
+  } catch {
+    return ctx.next()
+  }
+}
+
 /** `/profile/:name/ppost/:rkey` */
 export async function handlePrivatePostPage(
   ctx: PagesContext,
@@ -125,6 +146,25 @@ export async function handleStatus(
         card.author.handle || card.author.did,
       )}`
       return json(toMastodonProfileStatus(card, {id, origin}))
+    } catch {
+      return notFound()
+    }
+  }
+  const listId = decodeListStatusId(id)
+  if (listId) {
+    try {
+      const origin = new URL(ctx.request.url).origin
+      const card = await loadListCard({
+        name: listId.did,
+        rkey: listId.rkey,
+        url: '',
+        fetchImpl,
+      })
+      if (card.kind !== 'list') return notFound()
+      card.url = `${origin}/profile/${encodeURIComponent(
+        card.author.handle || card.author.did,
+      )}/lists/${encodeURIComponent(listId.rkey)}`
+      return json(toMastodonListStatus(card, {id, origin}))
     } catch {
       return notFound()
     }
