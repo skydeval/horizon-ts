@@ -7,29 +7,21 @@ import {type PatchNote} from './types'
 
 export const PATCH_NOTES: readonly PatchNote[] = [
   {
-    "version": "0.1.26",
-    "build": 26,
-    "date": "2026-11-20",
-    "summary": "Horizon's own moderation, longer sign-ins, more reliable blocks, and quieter threads.",
+    "version": "0.1.27",
+    "build": 27,
+    "date": "2026-11-21",
+    "summary": "Cards for lists, feeds and starter packs in Discord and other chat apps, and a blocks fix.",
     "sections": [
       {
         "kind": "horizon",
         "items": [
-          "Horizon's own moderation is built in next to Bluesky's: always on, and offered whenever you report something.",
-          "Your reports on kryphocron posts appear in the moderation inbox under Your reports → Private, with their review status and outcome.",
-          "Public or Private is now a small drop-down in the composer that shows the current choice. It's filled in for Private, so you can tell at a glance."
+          "List, custom feed and starter pack links now show a card in Discord and other chat apps: the name, owner, description and size, with the list's or feed's picture or a starter pack's first members."
         ]
       },
       {
         "kind": "fixes",
         "items": [
-          "Horizon no longer signs you out every week or two. After this update, the Android app asks you to sign in once more.",
-          "If a sign-in does end, signing back in is one tap.",
-          "Kryphocron posts can be reported from the ••• menu.",
-          "Creating a bsky.social account on the website now sends you to bsky.app, instead of stopping after the captcha.",
-          "Blocks Bluesky misses now count. For members, Horizon also checks who blocks you and whom you block, including through lists Bluesky can't find. A list Bluesky's moderators took down blocks no one.",
-          "A profile blocked either way now loads none of its tabs, and reposts by blocked accounts no longer show in your feeds.",
-          "Threads no longer show a Thread Lens notice. When Thread Lens can't answer, the thread quietly tries again every few seconds."
+          "A list Bluesky's moderators took down no longer blocks anyone."
         ]
       }
     ]
