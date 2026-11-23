@@ -33,6 +33,7 @@ import {
   PRIVATE_LOOKBACK_MS,
   PRIVATE_SEEN_MAX,
 } from '../feed/cursor'
+import {prefetchPrivateTop, resetPrivatePrefetch} from '../feed/prefetch'
 import {
   PRIVATE_SINCE_MAX_PAGES,
   rejectMergeCursors,
@@ -514,6 +515,32 @@ describe('withPrivateTimeline', () => {
     expect(prism.cursors).toEqual(['', 'a', 'b', 'c'])
     // No load came back empty while items remained.
     expect(responses.slice(0, -1).every(res => res.feed.length > 0)).toBe(true)
+  })
+
+  it('takes a first private page read ahead, once, and reads afresh after', async () => {
+    const stock = fakeStock({
+      '': {feed: [publicItem('p100', 100), publicItem('p1', 1)]},
+    })
+    const prism = timelinePrism({
+      '': {feed: [privateView('3k90', {minutes: 90})]},
+    })
+    resetPrivatePrefetch()
+    prefetchPrivateTop({
+      did: DID,
+      prism: prism.client,
+      appview: fakeAppview().client,
+    })
+    const api = merged(stock.api, prism)
+    const first = await api.fetch({cursor: undefined, limit: 30})
+    expect(first.feed.map(item => item.post.uri.split('/').pop())).toEqual([
+      'p100',
+      '3k90',
+      'p1',
+    ])
+    // The merge asked prism nothing itself: the prefetch's one read
+    expect(prism.cursors).toEqual([''])
+    await api.fetch({cursor: undefined, limit: 30})
+    expect(prism.cursors).toEqual(['', ''])
   })
 })
 

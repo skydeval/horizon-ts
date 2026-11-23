@@ -36,6 +36,7 @@ import {MuteCacheHost} from '#/horizon/mutes/MuteCacheHost'
 import {usePrivateActivityPrefetch} from '#/horizon/private/activity-subscriptions/private-state'
 import {LeftoverAudienceCleanup} from '#/horizon/private/audiences/LeftoverAudienceCleanup'
 import {startFeedMembershipSync} from '#/horizon/private/feed/membership-sync'
+import {PrivateTimelinePrefetch} from '#/horizon/private/feed/PrivateTimelinePrefetch'
 import {usePrivateFeedSource} from '#/horizon/private/membership'
 import {usePrivateNotificationsTokenPrefetch} from '#/horizon/private/notifications/direct'
 import {OutboxHost} from '#/horizon/private/outbox/OutboxHost'
@@ -117,6 +118,7 @@ export function HorizonHost() {
       <FeedMembershipSync />
       <WriteRouteResolver />
       <DirectPrismPrefetch />
+      <PrivateTimelinePrefetch source={privateSource} />
       <RefractHost />
       <ThreadLensTokenPrefetch />
       <MuteCacheHost />

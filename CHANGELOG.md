@@ -71,6 +71,9 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Changed
 
+- **Following opens faster for members.** Horizon starts reading your
+  kryphocron posts as soon as the app opens, so Following no longer waits
+  for them.
 - **Public or Private is now a drop-down in the composer,** a small button
   that shows the current choice and takes less room. It's filled in for
   Private, so you can tell at a glance.

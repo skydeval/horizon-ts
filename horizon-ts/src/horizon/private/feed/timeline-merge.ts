@@ -58,10 +58,11 @@ import {
   type SortKey,
   withDeadline,
 } from '#/horizon/private/feed/merge-core'
+import {fetchUntilBoundary} from '#/horizon/private/feed/paging'
 import {
-  fetchUntilBoundary,
-  fetchUntilItems,
-} from '#/horizon/private/feed/paging'
+  readPrivatePage,
+  takePrefetchedPrivateTop,
+} from '#/horizon/private/feed/prefetch'
 import {isOwnPrivateUri, noteMiss} from '#/horizon/private/known'
 import {withPrivateQuotes} from '#/horizon/private/quotes/resolve'
 import {getPendingPost, getPendingPosts} from '#/horizon/private/store'
@@ -506,17 +507,18 @@ class PrivateTimelineFeedAPI implements FeedAPI {
       if (priv.buf.length === 0 && !priv.done && !priv.failed) {
         try {
           // A short or empty page with a cursor is followed (feed/paging.ts).
+          const fresh = () =>
+            readPrivatePage(this.source.prism, priv.cursor ?? undefined)
+          // The top's first page may already be read (`prefetch.ts`)
+          const prefetched =
+            isFirst && priv.cursor == null
+              ? takePrefetchedPrivateTop(this.source.did)
+              : undefined
           const page = await withDeadline(
-            fetchUntilItems(async pageCursor => {
-              const {body: res, answer} = await getPrivateTimelineAnswered(
-                this.source.prism,
-                {limit: PRIVATE_PAGE_LIMIT, cursor: pageCursor},
-              )
-              answers.push(answer)
-              return {items: res.feed, cursor: res.cursor}
-            }, priv.cursor ?? undefined),
+            prefetched ? prefetched.catch(fresh) : fresh(),
             PRIVATE_DEADLINE_MS,
           )
+          answers.push(...page.answers)
           read = page.items.map(view => ({view}))
           readCursor = page.cursor
           priv.buf.push(...read)
