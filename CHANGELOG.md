@@ -10,6 +10,8 @@ Phase 6, optimisation, branding and tweaks, is under way.
 
 ### Added
 
+- **Verification badges from Horizon's verifiers,** after names, each in
+  its own shape and colour. Tap one to see what it means and who gave it.
 - **List, feed and starter pack links show a card in Discord and other
   chat apps:** the name, owner, description and size, with the list's or
   feed's picture or a starter pack's first members.

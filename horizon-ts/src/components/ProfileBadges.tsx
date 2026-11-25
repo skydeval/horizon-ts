@@ -8,6 +8,8 @@ import {BotBadge, BotBadgeButton, isBotAccount} from '#/components/BotBadge'
 import {useSimpleVerificationState} from '#/components/verification'
 import {VerificationCheck} from '#/components/verification/VerificationCheck'
 import {VerificationCheckButton} from '#/components/verification/VerificationCheckButton'
+import {useShownBadges} from '#/horizon/verification/hooks'
+import {HorizonBadges} from '#/horizon/verification/HorizonBadges'
 import type * as bsky from '#/types/bsky'
 import {BetaBadge, BetaBadgeButton, useIsBetaBadgeVisible} from './BetaBadge'
 
@@ -74,8 +76,13 @@ export function ProfileBadges({
 }) {
   const shadowed = useProfileShadow(profile)
   const verification = useSimpleVerificationState({profile})
+  // prism's badges; its default badge stands in for the stock check
+  const horizonBadges = useShownBadges(profile.did)
+  const hasHorizonDefault = horizonBadges.some(b => b.badge.isDefault)
+  const showStockCheck = verification.showBadge && !hasHorizonDefault
   const badgeVisibility = [
-    verification.showBadge,
+    showStockCheck,
+    horizonBadges.length > 0,
     useIsBetaBadgeVisible(profile),
     isBotAccount(shadowed),
   ]
@@ -130,31 +137,46 @@ export function ProfileBadges({
       ]}>
       {interactive ? (
         <>
-          <VerificationCheckButton
+          {hasHorizonDefault ? null : (
+            <VerificationCheckButton
+              profile={shadowed}
+              width={verificationIconWidth}
+              hitSlop={hitSlops[0]}
+            />
+          )}
+          <HorizonBadges
+            badges={horizonBadges}
             profile={shadowed}
             width={verificationIconWidth}
-            hitSlop={hitSlops[0]}
+            interactive
+            hitSlop={hitSlops[1]}
           />
           <BetaBadgeButton
             profile={shadowed}
             width={betaIconWidth}
             padding={betaBadgeScaledPadding}
-            hitSlop={hitSlops[1]}
+            hitSlop={hitSlops[2]}
           />
           <BotBadgeButton
             profile={shadowed}
             width={botIconWidth}
-            hitSlop={hitSlops[2]}
+            hitSlop={hitSlops[3]}
           />
         </>
       ) : (
         <>
-          {verification.showBadge ? (
+          {showStockCheck ? (
             <VerificationCheck
               verifier={verification.role === 'verifier'}
               width={verificationIconWidth}
             />
           ) : null}
+          <HorizonBadges
+            badges={horizonBadges}
+            profile={shadowed}
+            width={verificationIconWidth}
+            interactive={false}
+          />
           <BetaBadge
             profile={shadowed}
             width={betaIconWidth}
