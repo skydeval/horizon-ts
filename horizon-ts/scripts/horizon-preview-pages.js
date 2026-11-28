@@ -63,21 +63,25 @@ function checkPreviewOrigin(raw) {
  * ID, client URI and redirect URI moved to `origin` (same paths), and
  * " (preview)" after the client name (not on the production origin itself,
  * which the live site is built as). Everything else, scope included, is
- * the production document's, except that only the production origin keeps
- * the signed client fields (the signing key is deployed only there).
+ * the production document's, except that only SIGNED_ORIGINS keep the
+ * signed client fields (the signing key is deployed only there).
  *
  * @template {{client_id: string, client_name: string, client_uri: string, redirect_uris: string[], token_endpoint_auth_method: string, token_endpoint_auth_signing_alg?: string, jwks_uri?: string}} T
  * @param {T} production
  * @param {string} origin
  * @returns {T}
  */
+/** The origins whose deployments hold the signing key (oauth-metadata.ts). */
+const SIGNED_ORIGINS = ['https://nearhorizon.app', 'https://classic.nearhorizon.app']
+
 function previewClientMetadata(production, origin) {
   const move = (/** @type {string} */ value) => {
     const url = new URL(value)
     return `${origin}${url.pathname === '/' ? '' : url.pathname}${url.search}`
   }
-  // The live site is built as a preview of its own origin; it keeps the name.
-  const live = origin === new URL(production.client_uri).origin
+  // The live sites are built as previews of their own origins; they keep the
+  // name, and hold the signing key.
+  const live = SIGNED_ORIGINS.includes(origin)
   /** @type {T} */
   const document = {
     ...production,
@@ -88,7 +92,7 @@ function previewClientMetadata(production, origin) {
     client_uri: move(production.client_uri),
     redirect_uris: production.redirect_uris.map(move),
   }
-  // Signed only where the signing key is deployed (nearhorizon.app); a
+  // Signed only where the signing key is deployed (SIGNED_ORIGINS); a
   // preview on another origin is a public client.
   if (production.jwks_uri) {
     if (live) {

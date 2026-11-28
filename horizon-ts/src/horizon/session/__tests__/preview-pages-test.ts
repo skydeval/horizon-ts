@@ -14,6 +14,7 @@ const ORIGINS = [
   'https://preview.example.invalid',
   'https://horizon-preview2.pages.dev',
   'https://nearhorizon.app',
+  'https://classic.nearhorizon.app',
   'https://preview.example.invalid:8443',
 ]
 
@@ -79,7 +80,7 @@ describe('preview build packaging', () => {
     }
   })
 
-  it('only nearhorizon.app is a signed client; other previews are public', () => {
+  it('only the signed origins are signed clients; other previews are public', () => {
     const live = previewClientMetadata(
       committedProduction,
       'https://nearhorizon.app',
@@ -87,6 +88,17 @@ describe('preview build packaging', () => {
     expect(live.token_endpoint_auth_method).toBe('private_key_jwt')
     expect(live.jwks_uri).toBe('https://nearhorizon.app/oauth/jwks.json')
     expect(live.client_name).toBe('Horizon')
+    const classic = previewClientMetadata(
+      committedProduction,
+      'https://classic.nearhorizon.app',
+    )
+    expect(classic.token_endpoint_auth_method).toBe('private_key_jwt')
+    expect(classic.jwks_uri).toBe(
+      'https://classic.nearhorizon.app/oauth/jwks.json',
+    )
+    expect(classic.client_id).toBe(
+      'https://classic.nearhorizon.app/oauth-client-metadata.json',
+    )
     const other = previewClientMetadata(
       committedProduction,
       'https://horizon-preview2.pages.dev',

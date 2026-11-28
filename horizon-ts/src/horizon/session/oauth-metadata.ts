@@ -28,6 +28,12 @@ export const OAUTH_SCOPE =
 export const HORIZON_ORIGIN = 'https://nearhorizon.app'
 
 /**
+ * The origins whose deployments hold the signing key, so their web
+ * documents are signed clients. Each serves its own signer and key set.
+ */
+export const SIGNED_ORIGINS = [HORIZON_ORIGIN, 'https://classic.nearhorizon.app']
+
+/**
  * The callback route, the same for every client mode.
  */
 export const OAUTH_CALLBACK_PATH = '/auth/web/callback'
@@ -215,14 +221,14 @@ export const ANDROID_CLIENT_METADATA = createOAuthClientMetadata({
  * A preview build's document: the production document moved to `origin`
  * (an https origin with no trailing slash), under its own name so the
  * authorization page says which build is asking. On nearhorizon.app itself
- * (the live site is built this way) it keeps the plain name and is signed,
- * since that deployment holds the signing key; a preview on another origin
- * is a public client.
+ * and the other origins in {@link SIGNED_ORIGINS} (the live sites are built
+ * this way) it keeps the plain name and is signed, since those deployments
+ * hold the signing key; a preview on another origin is a public client.
  */
 export function createPreviewClientMetadata(
   origin: string,
 ): OAuthClientMetadataDocument {
-  const live = origin === HORIZON_ORIGIN
+  const live = SIGNED_ORIGINS.includes(origin)
   return createOAuthClientMetadata({
     clientId: `${origin}${CLIENT_METADATA_PATH}`,
     clientUri: origin,
