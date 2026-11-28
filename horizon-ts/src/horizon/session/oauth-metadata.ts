@@ -31,10 +31,7 @@ export const HORIZON_ORIGIN = 'https://nearhorizon.app'
  * The origins whose deployments hold the signing key, so their web
  * documents are signed clients. Each serves its own signer and key set.
  */
-export const SIGNED_ORIGINS = [
-  HORIZON_ORIGIN,
-  'https://classic.nearhorizon.app',
-]
+export const SIGNED_ORIGINS = [HORIZON_ORIGIN, 'https://classic.nearhorizon.app']
 
 /**
  * The callback route, the same for every client mode.
@@ -196,55 +193,29 @@ export const NATIVE_CLIENT_METADATA = createOAuthClientMetadata({
 })
 
 /**
- * The Android app's signed document for a signed origin: its client ID
- * beside the web document, returning through that origin's return page
- * (`oauth-signer/app-callback.ts`), which forwards to
- * {@link NATIVE_REDIRECT_URI}. A signed client must be a web client, and a
- * web client returns to an https address.
+ * The Android app's signed document's client ID, beside the others.
  */
-export function createAndroidClientMetadata(
-  origin: string,
-): OAuthClientMetadataDocument {
-  return createOAuthClientMetadata({
-    clientId: `${origin}${ANDROID_CLIENT_METADATA_PATH}`,
-    clientUri: origin,
-    redirectUri: `${origin}${ANDROID_CALLBACK_PATH}`,
-    clientName: PRODUCT_NAME,
-    signed: {jwksOrigin: origin},
-  })
-}
-
-/** Where a signed origin serves the Android app's document. */
-export const ANDROID_CLIENT_METADATA_PATH =
-  '/oauth-client-metadata-android.json'
-
-/** The Android app's return page on a signed origin. */
-export const ANDROID_CALLBACK_PATH = '/auth/app/callback'
+export const ANDROID_CLIENT_ID = `${HORIZON_ORIGIN}/oauth-client-metadata-android.json`
 
 /**
- * The signed origin the Android app signs in through, chosen at build time
- * (`EXPO_PUBLIC_APP_ORIGIN`, one of {@link SIGNED_ORIGINS});
- * nearhorizon.app when unset or not a signed origin.
+ * The Android app's return page (`oauth-signer/app-callback.ts`), which
+ * forwards to {@link NATIVE_REDIRECT_URI}. A signed client must be a web
+ * client, and a web client returns to an https address.
  */
-export const APP_ORIGIN = pickAppOrigin(process.env.EXPO_PUBLIC_APP_ORIGIN)
-
-export function pickAppOrigin(requested: string | undefined) {
-  return requested && SIGNED_ORIGINS.includes(requested)
-    ? requested
-    : HORIZON_ORIGIN
-}
+export const ANDROID_REDIRECT_URI = `${HORIZON_ORIGIN}/auth/app/callback`
 
 /**
  * The Android app's document, served at
- * `<APP_ORIGIN>/oauth-client-metadata-android.json`: a signed web client.
+ * `https://nearhorizon.app/oauth-client-metadata-android.json`: a signed
+ * web client that returns through {@link ANDROID_REDIRECT_URI}.
  */
-export const ANDROID_CLIENT_METADATA = createAndroidClientMetadata(APP_ORIGIN)
-
-/** The Android app's client ID. */
-export const ANDROID_CLIENT_ID = ANDROID_CLIENT_METADATA.client_id
-
-/** The Android app's return page. */
-export const ANDROID_REDIRECT_URI = `${APP_ORIGIN}${ANDROID_CALLBACK_PATH}`
+export const ANDROID_CLIENT_METADATA = createOAuthClientMetadata({
+  clientId: ANDROID_CLIENT_ID,
+  clientUri: HORIZON_ORIGIN,
+  redirectUri: ANDROID_REDIRECT_URI,
+  clientName: PRODUCT_NAME,
+  signed: {jwksOrigin: HORIZON_ORIGIN},
+})
 
 /**
  * A preview build's document: the production document moved to `origin`

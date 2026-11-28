@@ -28,12 +28,8 @@ const NATIVE_LINK_ACTION_CONFIG = {
 }
 
 export const LINKING = {
-  // HORIZON: Horizon's scheme (app.config.js) and sites, not Bluesky's
-  prefixes: [
-    'app.nearhorizon://',
-    'https://nearhorizon.app',
-    'https://classic.nearhorizon.app',
-  ],
+  // HORIZON: Horizon's scheme (app.config.js) and site, not Bluesky's
+  prefixes: ['app.nearhorizon://', 'https://nearhorizon.app'],
 
   getPathFromState(state: State) {
     // find the current node in the navigation tree
