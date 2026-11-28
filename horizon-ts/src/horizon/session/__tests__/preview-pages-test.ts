@@ -1,14 +1,20 @@
 import {describe, expect, it} from '@jest/globals'
 
+import committedAndroid from '../../../../public/oauth-client-metadata-android.json'
 import committedProduction from '../../../../public/oauth-client-metadata.json'
 import {
+  androidClientMetadata,
   checkPreviewOrigin,
   PAGES_HEADERS,
   PAGES_REDIRECTS,
   previewClientMetadata,
 } from '../../../../scripts/horizon-preview-pages'
 import {readPreviewOrigin} from '../../preview'
-import {createPreviewClientMetadata} from '../oauth-metadata'
+import {
+  createAndroidClientMetadata,
+  createPreviewClientMetadata,
+  pickAppOrigin,
+} from '../oauth-metadata'
 
 const ORIGINS = [
   'https://preview.example.invalid',
@@ -36,6 +42,33 @@ describe('preview build packaging', () => {
         createPreviewClientMetadata(origin),
       )
     }
+  })
+
+  it('a signed origin serves the Android document the app signs in with', () => {
+    for (const origin of [
+      'https://nearhorizon.app',
+      'https://classic.nearhorizon.app',
+    ]) {
+      expect(androidClientMetadata(committedAndroid, origin)).toEqual(
+        createAndroidClientMetadata(origin),
+      )
+    }
+    expect(
+      androidClientMetadata(
+        committedAndroid,
+        'https://preview.example.invalid',
+      ),
+    ).toBeNull()
+  })
+
+  it('the app signs in through a signed origin only', () => {
+    expect(pickAppOrigin(undefined)).toBe('https://nearhorizon.app')
+    expect(pickAppOrigin('https://classic.nearhorizon.app')).toBe(
+      'https://classic.nearhorizon.app',
+    )
+    expect(pickAppOrigin('https://preview.example.invalid')).toBe(
+      'https://nearhorizon.app',
+    )
   })
 
   it('the build script and the app accept the same origins', () => {

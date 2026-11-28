@@ -240,6 +240,11 @@ module.exports = function (_config) {
                 // HORIZON: Horizon's links, not bsky.app's
                 host: 'nearhorizon.app',
               },
+              {
+                scheme: 'https',
+                // HORIZON: Horizon's links, not bsky.app's
+                host: 'classic.nearhorizon.app',
+              },
               ...(IS_DEV
                 ? [
                     {

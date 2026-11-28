@@ -72,7 +72,10 @@ function checkPreviewOrigin(raw) {
  * @returns {T}
  */
 /** The origins whose deployments hold the signing key (oauth-metadata.ts). */
-const SIGNED_ORIGINS = ['https://nearhorizon.app', 'https://classic.nearhorizon.app']
+const SIGNED_ORIGINS = [
+  'https://nearhorizon.app',
+  'https://classic.nearhorizon.app',
+]
 
 function previewClientMetadata(production, origin) {
   const move = (/** @type {string} */ value) => {
@@ -104,6 +107,32 @@ function previewClientMetadata(production, origin) {
     }
   }
   return document
+}
+
+/**
+ * The Android app's document on a signed origin: the committed document with
+ * its client ID, client URI, redirect URI and key set moved to `origin`.
+ * Kept equal to createAndroidClientMetadata by the unit test. Null on any
+ * other origin, which cannot sign.
+ *
+ * @template {{client_id: string, client_uri: string, redirect_uris: string[], jwks_uri?: string}} T
+ * @param {T} android
+ * @param {string} origin
+ * @returns {T | null}
+ */
+function androidClientMetadata(android, origin) {
+  if (!SIGNED_ORIGINS.includes(origin)) return null
+  const move = (/** @type {string} */ value) => {
+    const url = new URL(value)
+    return `${origin}${url.pathname === '/' ? '' : url.pathname}${url.search}`
+  }
+  return {
+    ...android,
+    client_id: move(android.client_id),
+    client_uri: move(android.client_uri),
+    redirect_uris: android.redirect_uris.map(move),
+    ...(android.jwks_uri ? {jwks_uri: move(android.jwks_uri)} : {}),
+  }
 }
 
 /**
@@ -237,6 +266,24 @@ function main() {
   )
   console.log(`Wrote oauth-client-metadata.json for ${document.client_id}`)
   fs.rmSync(path.join(distDir, 'oauth-client-metadata-dev.json'), {force: true})
+  const android = androidClientMetadata(
+    JSON.parse(
+      fs.readFileSync(
+        path.join(projectRoot, 'public', 'oauth-client-metadata-android.json'),
+        'utf8',
+      ),
+    ),
+    origin,
+  )
+  if (android) {
+    fs.writeFileSync(
+      path.join(distDir, 'oauth-client-metadata-android.json'),
+      `${JSON.stringify(android, null, 2)}\n`,
+    )
+    console.log(
+      `Wrote oauth-client-metadata-android.json for ${android.client_id}`,
+    )
+  }
 
   fs.writeFileSync(path.join(distDir, '_redirects'), PAGES_REDIRECTS)
   fs.writeFileSync(path.join(distDir, '_headers'), PAGES_HEADERS)
@@ -265,6 +312,7 @@ function main() {
 module.exports = {
   checkPreviewOrigin,
   previewClientMetadata,
+  androidClientMetadata,
   PAGES_REDIRECTS,
   PAGES_HEADERS,
 }
